@@ -1,0 +1,51 @@
+{
+  "name": "invoices",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@emotion/cache": "^11.14.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^6.4.0",
+    "@mui/material": "^6.4.0",
+    "@reduxjs/toolkit": "^2.5.0",
+    "axios": "^1.5.0",
+    "date-fns": "^4.1.0",
+    "flatpickr": "^4.6.13",
+    "js-cookie": "^3.0.5",
+    "lottie-react": "^2.4.1",
+    "moment-hijri": "^3.0.0",
+    "react": "^19.2.1",
+    "react-auth-kit": "^2.12.7",
+    "react-csv": "^2.2.2",
+    "react-dom": "^19.2.1",
+    "react-hook-form": "^7.46.1",
+    "react-redux": "^9.1.0",
+    "react-router-dom": "^6.15.0",
+    "react-toastify": "^10.0.5",
+    "sass": "^1.83.0",
+    "sass-embedded": "^1.83.0",
+    "stylis": "^4.3.6",
+    "stylis-plugin-rtl": "^2.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.27",
+    "eslint": "^8.45.0",
+    "eslint-plugin-react": "^7.32.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.3",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.19",
+    "vite": "^6.0.3"
+  }
+}
