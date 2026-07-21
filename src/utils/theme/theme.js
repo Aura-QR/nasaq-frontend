@@ -1,108 +1,143 @@
-import rtlPlugin from "stylis-plugin-rtl";
-import { prefixer } from "stylis";
-import createCache from "@emotion/cache";
-import { createTheme } from "@mui/material";
-
-export const cacheRtl = createCache({
-  key: "muirtl",
-  stylisPlugins: [prefixer, rtlPlugin],
-});
+import { createTheme } from "@mui/material/styles";
 
 export const theme = createTheme({
   direction: "rtl",
 
-  palette: {
-    primary: {
-      main: "#318dce",
-      secondary: "#323449",
-      border: "#DEE3E2",
-      icons: "#71748E",
-      logo: "#818282",
-      whiteBg: "#FCFDFD",
-      bg: "#f4f6f5",
-      inputs: "#EEF1F1",
-      errorBg: "#F7E8F1",
-      successBg: "#E0F5E6",
-      background: "#ECEFF9",
-      white: "#f7faff",
-    },
-    secondary: {
-      main: "#323449",
-    },
-    text: {
-      primary: "#050F0D",
-      secondary: "#35413E",
-      third: "#6E7775",
-      placeholder: "#E6EAE9",
-      light: "#F7F8F8",
-    },
-  },
-
   typography: {
-    fontFamily: "'Cairo', sans-serif",
+    fontFamily: '"Cairo", "Tajawal", Arial, sans-serif',
+
     h1: {
-      fontSize: "64px",
-      fontWeight: "600",
-      lineHeight: "140%",
+      fontWeight: 800,
     },
+
     h2: {
-      fontSize: "32px",
-      fontWeight: "600",
-      lineHeight: "140%",
+      fontWeight: 800,
     },
+
     h3: {
-      fontSize: "24px",
-      fontWeight: "600",
-      lineHeight: "150%",
+      fontWeight: 800,
     },
-    h4: {
-      fontSize: 22,
-      fontWeight: "500",
-      lineHeight: "160%",
-    },
-    h5: {
-      fontSize: "20px",
-      fontWeight: "500",
-      lineHeight: "140%",
-    },
-    title: {
-      fontSize: "18px",
-      fontWeight: "500",
-      lineHeight: "140%",
-    },
-    subtitle: {
-      fontSize: "16px",
-      fontWeight: "500",
-      lineHeight: "140%",
-    },
+
     button: {
-      fontSize: "16px",
-      fontWeight: "500",
-      textTransform: "capitalize",
-      lineHeight: "auto",
-      color: "text.light",
-    },
-    breadcrumbs: {
-      fontSize: "14px",
-      fontWeight: "500",
-      lineHeight: "auto",
-    },
-    body: {
-      fontSize: "14px",
-      fontWeight: "400",
-      lineHeight: "140%",
-    },
-    inputs: {
-      fontSize: "14px",
-      fontWeight: "400",
-      lineHeight: "auto",
-    },
-    label: {
-      fontSize: "14px",
-      fontWeight: "400",
-      lineHeight: "140%",
+      fontWeight: 700,
+      textTransform: "none",
     },
   },
 
-  spacing: 2,
+  palette: {
+    mode: "light",
+
+    primary: {
+      main: "#249B91",
+      dark: "#177C75",
+      light: "#BEE9E4",
+      contrastText: "#FFFFFF",
+    },
+
+    secondary: {
+      main: "#14344A",
+      dark: "#0B2435",
+      contrastText: "#FFFFFF",
+    },
+
+    warning: {
+      main: "#D9A640",
+    },
+
+    error: {
+      main: "#D65353",
+    },
+
+    background: {
+      default: "#EDF7F5",
+      paper: "#FFFFFF",
+    },
+
+    text: {
+      primary: "#173447",
+      secondary: "#71838D",
+    },
+
+    divider: "#DCE9E6",
+  },
+
+  shape: {
+    borderRadius: 14,
+  },
+
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        html: {
+          direction: "rtl",
+        },
+
+        body: {
+          direction: "rtl",
+          margin: 0,
+          fontFamily: '"Cairo", "Tajawal", Arial, sans-serif',
+        },
+      },
+    },
+
+    MuiButton: {
+      defaultProps: {
+        disableElevation: true,
+      },
+
+      styleOverrides: {
+        root: {
+          fontFamily: '"Cairo", "Tajawal", Arial, sans-serif',
+          textTransform: "none",
+        },
+      },
+    },
+
+    MuiTextField: {
+      defaultProps: {
+        variant: "outlined",
+      },
+    },
+
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          fontFamily: '"Cairo", "Tajawal", Arial, sans-serif',
+        },
+
+        input: {
+          textAlign: "right",
+        },
+      },
+    },
+
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          fontFamily: '"Cairo", "Tajawal", Arial, sans-serif',
+          transformOrigin: "top right",
+        },
+      },
+    },
+
+    MuiFormHelperText: {
+      styleOverrides: {
+        root: {
+          fontFamily: '"Cairo", "Tajawal", Arial, sans-serif',
+          textAlign: "right",
+          marginRight: 0,
+          marginLeft: 0,
+        },
+      },
+    },
+
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          fontFamily: '"Cairo", "Tajawal", Arial, sans-serif',
+          direction: "rtl",
+        },
+      },
+    },
+  },
 });

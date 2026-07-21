@@ -1,62 +1,72 @@
-import MenuOpenIcon from '@mui/icons-material/MenuOpen';
-import { IconButton, Stack, Typography } from '@mui/material';
-import "./Navbar.scss"
-import { Person } from '@mui/icons-material';
-import logoImg from "@/images/logo.png";
-import { useAuthUser } from 'react-auth-kit';
+import { Box } from "@mui/material";
 
+import afaqLogo from "../../images/afaq-logo.png";
 
-
-const Navbar = ({active , setActive , noSidebar}) => {
-  const authState = useAuthUser()?.();
-  const currentUser = authState?.user;
-
-  const roleLabelMap = {
-    ADMIN: "مدير النظام",
-    TEACHER: "معلم",
-    STUDENT: "طالب",
-  };
-
-  const displayName =
-    currentUser?.name ||
-    currentUser?.fullName ||
-    currentUser?.username ||
-    currentUser?.email?.split("@")[0] ||
-    "مستخدم";
-
-  const displayRole = roleLabelMap[currentUser?.role] || "مستخدم النظام";
-  
+const Navbar = () => {
   return (
-    <div className='Navbar'>
-      <Stack direction={{xs: "row-reverse", sm: "row"}} alignItems={"center"} justifyContent={"space-between"} height={"100%"} px={{xs : 4 , sm : 16}} py={9} spacing={{xs : 4 , md : 12}} >
+    <Box
+      component="nav"
+      dir="rtl"
+      sx={{
+        position: "relative",
+        zIndex: 20,
 
-        {/* Toggle Sidebar */}
-        {noSidebar ? <Stack maxWidth={60} mx={"auto"}>
-            <img src={logoImg} alt="logo" width={"100%"} />
-          </Stack> : <IconButton color='primary' 
-        sx={{borderRadius : "8px"}}
-        onClick={() => setActive(!active)} 
-        >
-          <MenuOpenIcon sx={{
-            transition : ".5s",
-            rotate : active ? "180deg" : "0deg",
-          }} />
-        </IconButton>}
+        width: "100%",
+        minHeight: {
+          xs: 76,
+          md: 88,
+        },
 
-        {/* Profile */}
-        <Stack direction={"row"} spacing={4} alignItems={"center"}>
-          <Stack width={{xs : "40px" , sm : "60px"}} height={{xs : "40px" , sm : "60px"}} borderRadius={"50%"} bgcolor={"primary.background"} alignItems={"center"} justifyContent={"center"} color={"primary.main"} fontSize={{xs : "20px" , sm :"24px"}} fontWeight={500}>
-            <Person fontSize='30' color='primary' />
-          </Stack>
-          <Stack display={{xs : "none" , sm : "flex"}} >
-            <Typography variant='subtitle'>{displayName}</Typography>
-            <Typography variant='body' color={"text.secondary"}> {displayRole} </Typography>
-          </Stack>
-        </Stack>
+        px: {
+          xs: 2,
+          sm: 3,
+          md: 5,
+        },
 
-      </Stack>  
-    </div>
-  )
-}
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-start",
 
-export default Navbar
+        backgroundColor: "rgba(255, 252, 247, 0.92)",
+
+        borderBottom:
+          "1px solid rgba(36, 74, 112, 0.08)",
+
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+
+        boxShadow:
+          "0 8px 30px rgba(36, 74, 112, 0.06)",
+      }}
+    >
+      <Box
+        component="img"
+        src={afaqLogo}
+        alt="شعار منصة آفاق"
+        sx={{
+          display: "block",
+
+          width: {
+            xs: 118,
+            sm: 135,
+            md: 150,
+          },
+
+          height: {
+            xs: 52,
+            sm: 58,
+            md: 64,
+          },
+
+          objectFit: "contain",
+          objectPosition: "right center",
+
+          userSelect: "none",
+          pointerEvents: "none",
+        }}
+      />
+    </Box>
+  );
+};
+
+export default Navbar;
