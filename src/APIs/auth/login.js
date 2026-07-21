@@ -1,13 +1,21 @@
-﻿import {api} from '../Axios';
+﻿import { api } from "../Axios";
 
-const ENDPOINT = '/auth/login';
+const ENDPOINT = "/auth/login";
 
-// Login API that can login with (phone or email) and password 
+// تسجيل الدخول باستخدام البريد الإلكتروني أو رقم الهاتف مع كلمة المرور
 export const loginRequest = async (identifier, password) => {
-    try {
-        const response = await api.post(ENDPOINT , {identifier,password})
-        return response.data;
-    } catch (err) {
-        return err?.response?.data?.message || "حدث خطأ ما";
-    }
-}
+  const normalizedIdentifier = identifier?.trim();
+
+  if (!normalizedIdentifier || !password) {
+    throw new Error(
+      "البريد الإلكتروني أو رقم الهاتف وكلمة المرور مطلوبان"
+    );
+  }
+
+  const response = await api.post(ENDPOINT, {
+    identifier: normalizedIdentifier,
+    password,
+  });
+
+  return response.data;
+};
