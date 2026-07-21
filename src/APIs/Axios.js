@@ -1,16 +1,13 @@
 import axios from "axios";
 import Cookies from "js-cookie";
 
-const rawApiUrl = import.meta.env.VITE_API;
+const API_BASE_URL = String(import.meta.env.VITE_API || "")
+  .trim()
+  .replace(/\/+$/, "");
 
-if (!rawApiUrl) {
-  throw new Error(
-    "VITE_API is missing. Add it to the environment variables before building."
-  );
+if (!API_BASE_URL) {
+  throw new Error("VITE_API is not defined");
 }
-
-// منع تكرار / بين الـ baseURL والـ endpoint
-const API_BASE_URL = rawApiUrl.replace(/\/+$/, "");
 
 console.log("Current API URL:", API_BASE_URL);
 
@@ -28,7 +25,6 @@ api.interceptors.request.use(
     const authToken = Cookies.get("_auth");
 
     if (authToken) {
-      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${authToken}`;
     }
 
@@ -41,30 +37,19 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401) {
-      const cookieNames = [
+      [
         "_auth",
         "_auth_state",
         "_auth_storage",
         "_auth_type",
-      ];
-
-      cookieNames.forEach((cookieName) => {
-        // حذف الكوكي سواء اتعملت بـ domain أو من غيره
-        Cookies.remove(cookieName, {
-          path: "/",
-        });
-
-        Cookies.remove(cookieName, {
-          path: "/",
-          domain: window.location.hostname,
-        });
+      ].forEach((cookieName) => {
+        Cookies.remove(cookieName, { path: "/" });
       });
 
       localStorage.removeItem("permissions");
 
       if (window.location.pathname !== "/login") {
         window.location.replace("/login");
-
         return new Promise(() => {});
       }
     }
