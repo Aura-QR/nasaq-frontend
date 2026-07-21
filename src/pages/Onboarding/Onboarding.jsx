@@ -105,7 +105,7 @@ const stepMeta = [
   },
   {
     eyebrow: "كل شيء جاهز",
-    title: "بداية منظّمة مع وَدْق",
+    title: "بداية منظّمة مع نَسّق",
     subtitle: "تم تجهيز مساحتك الأولى ويمكنك البدء الآن.",
   },
 ];
@@ -152,7 +152,7 @@ const Logo = () => {
       </span>
 
       <span>
-        <strong>وَدْق</strong>
+        <strong>نَسّق</strong>
         <small>منصة المعلم الذكية</small>
       </span>
     </div>
@@ -842,7 +842,7 @@ const Onboarding = () => {
 
     window.localStorage.removeItem(STORAGE_KEY);
 
-    toast.success("تم تجهيز حسابك في وَدْق بنجاح");
+    toast.success("تم تجهيز حسابك في نَسّق بنجاح");
 
     navigate(TEACHER_DASHBOARD_PATH, {
       replace: true,

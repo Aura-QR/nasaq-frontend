@@ -20,6 +20,7 @@ import Home from "./pages/Home/Home";
 import Login from "./pages/Login/Login";
 import Register from "./pages/Register/Register";
 import Onboarding from "./pages/Onboarding/Onboarding";
+import TeacherDashboard from "./pages/TeacherDashboard/TeacherDashboard";
 import NoAccess from "./pages/Others/NoAccess";
 
 import { theme } from "@/utils/theme/theme";
@@ -62,18 +63,25 @@ function App() {
               />
 
               {/*
-                مؤقتًا بدون RequireAuth لأن Register الحالي
-                لا يحفظ Token بعد إنشاء الحساب.
-
-                بعد ربط API التسجيل وحفظ الـToken،
-                استبدلي هذا Route بالنسخة المحمية الموجودة أسفل الكود.
+                الـOnboarding للحساب الجديد فقط.
+                Login لا يوجّه إليه نهائيًا.
               */}
               <Route
                 path="/onboarding"
                 element={<Onboarding />}
               />
 
-              {/* Protected routes */}
+              {/* Teacher dashboard */}
+              <Route
+                path="/teacher/dashboard"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <TeacherDashboard />
+                  </RequireAuth>
+                }
+              />
+
+              {/* Other protected routes */}
               <Route
                 path="/no-access"
                 element={

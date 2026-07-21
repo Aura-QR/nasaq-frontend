@@ -136,7 +136,7 @@ const Register = () => {
   return (
     <AuthLayout
       activeMode="register"
-      title="ابدأ رحلتك مع وَدْق"
+      title="ابدأ رحلتك مع نَسّق"
       description="أنشئ حساب معلم وابدأ تنظيم حصصك وخططك ومهامك من مكان واحد."
     >
       <Box

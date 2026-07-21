@@ -191,7 +191,7 @@ function WadqLogo({ light = false }) {
       </span>
 
       <span className="wadq-logo__copy">
-        <strong>وَدْق</strong>
+        <strong>نَسّق</strong>
         <small>منصة المعلم الذكية</small>
       </span>
     </Link>
@@ -576,7 +576,7 @@ function Home() {
               كيف تعمل؟
             </a>
             <a href="#tools" onClick={closeMenu}>
-              أدوات وَدْق
+              أدوات نَسّق
             </a>
             <a href="#difference" onClick={closeMenu}>
               الفرق
@@ -651,13 +651,13 @@ function Home() {
               </motion.h1>
 
               <motion.p variants={reveal}>
-                وَدْق تجمع التحضير والتنظيم والمتابعة في رحلة واحدة واضحة،
+                نَسّق تجمع التحضير والتنظيم والمتابعة في رحلة واحدة واضحة،
                 لتمنحك وقتًا أكبر للشرح وصناعة أثر حقيقي داخل الفصل.
               </motion.p>
 
               <motion.div className="hero-copy__actions" variants={reveal}>
                 <Link className="button button--gold" to="/register">
-                  ابدأ مع وَدْق
+                  ابدأ مع نَسّق
                   <ArrowBackRounded />
                 </Link>
 
@@ -781,7 +781,7 @@ function Home() {
                 أكثر من أداة في تجربة واحدة
               </span>
               <h2>
-                وَدْق تعمل معك
+                نَسّق تعمل معك
                 <span>قبل الحصة وبعدها</span>
               </h2>
               <p>
@@ -886,7 +886,7 @@ function Home() {
               </h2>
 
               <p>
-                وَدْق هي المطر الهادئ الذي يترك أثره. ومن هنا صممنا المنصة:
+                نَسّق هي المطر الهادئ الذي يترك أثره. ومن هنا صممنا المنصة:
                 فكرة صغيرة تدخلها، فتتحول إلى تحضير واضح وحصة أكثر ثراءً وأثرًا.
               </p>
 
@@ -926,7 +926,7 @@ function Home() {
                 <span>إلى يوم منظم</span>
               </h2>
               <p>
-                حرّك المؤشر وشاهد كيف تجمع وَدْق الخطوات المتفرقة داخل رحلة
+                حرّك المؤشر وشاهد كيف تجمع نَسّق الخطوات المتفرقة داخل رحلة
                 واحدة.
               </p>
             </motion.div>
@@ -936,7 +936,7 @@ function Home() {
               style={{ "--comparison-position": `${comparison}%` }}
             >
               <div className="comparison-card__after">
-                <div className="comparison-card__label">مع وَدْق</div>
+                <div className="comparison-card__label">مع نَسّق</div>
                 <div className="comparison-card__content">
                   <span className="comparison-card__icon comparison-card__icon--after">
                     <AutoAwesomeRounded />
@@ -955,7 +955,7 @@ function Home() {
               </div>
 
               <div className="comparison-card__before">
-                <div className="comparison-card__label">قبل وَدْق</div>
+                <div className="comparison-card__label">قبل نَسّق</div>
                 <div className="comparison-card__content">
                   <span className="comparison-card__icon">
                     <DescriptionRounded />
@@ -1039,7 +1039,7 @@ function Home() {
 
               <div className="final-paper final-paper--front">
                 <div className="final-paper__top">
-                  <span>وَدْق</span>
+                  <span>نَسّق</span>
                   <small>تحضير درس</small>
                 </div>
                 <strong>التغيرات في الأنظمة البيئية</strong>
@@ -1066,7 +1066,7 @@ function Home() {
             <a href="#difference">الفرق</a>
           </div>
 
-          <p>جميع الحقوق محفوظة لمنصة وَدْق © {new Date().getFullYear()}</p>
+          <p>جميع الحقوق محفوظة لمنصة نَسّق © {new Date().getFullYear()}</p>
         </div>
       </footer>
     </div>

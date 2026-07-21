@@ -327,7 +327,7 @@ const Brand = () => {
             lineHeight: 1,
           }}
         >
-          وَدْق
+          نَسّق
         </Typography>
 
         <Typography
@@ -894,7 +894,7 @@ const AnimatedVisual = () => {
                 fontWeight: 800,
               }}
             >
-              وَدْق لكل احتياجات المعلم
+              نَسّق لكل احتياجات المعلم
             </Typography>
 
             <Typography
@@ -1143,7 +1143,7 @@ const AnimatedVisual = () => {
                       fontWeight: 700,
                     }}
                   >
-                    مساعد وَدْق
+                    مساعد نَسّق
                   </Typography>
                 </Box>
               </Stack>
@@ -1616,7 +1616,7 @@ const AnimatedVisual = () => {
                 color: authColors.goldLight,
               }}
             >
-              ودع التنظيم على وَدْق.
+              ودع التنظيم على نَسّق.
             </Box>
           </Typography>
 
@@ -1638,7 +1638,7 @@ const AnimatedVisual = () => {
             }}
           >
             حضّر دروسك ونظّم جدولك وتابع مهامك
-            وتقاريرك بسهولة مع منصة وَدْق.
+            وتقاريرك بسهولة مع منصة نَسّق.
           </Typography>
         </Box>
       </Box>
@@ -1979,7 +1979,7 @@ const AuthLayout = ({
                 fontSize: "9px",
               }}
             >
-              جميع الحقوق محفوظة لمنصة وَدْق ©{" "}
+              جميع الحقوق محفوظة لمنصة نَسّق ©{" "}
               {new Date().getFullYear()}
             </Typography>
           </Box>
