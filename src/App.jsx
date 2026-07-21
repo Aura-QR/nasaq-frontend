@@ -1,31 +1,103 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { AuthProvider, RequireAuth } from "react-auth-kit";
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+} from "react-router-dom";
+
+import {
+  AuthProvider,
+  RequireAuth,
+} from "react-auth-kit";
+
 import { Provider } from "react-redux";
-import store from "./store";
-import Login from "./pages/Login/Login";
-import { CacheProvider } from "@emotion/react";
-import { theme, cacheRtl } from "@/utils/theme/theme";
-import { ThemeProvider } from "@mui/material";
+import { ThemeProvider } from "@mui/material/styles";
 import { ToastContainer } from "react-toastify";
-import { appRoutes } from "./routes";
-import "react-toastify/dist/ReactToastify.css";
+
+import store from "./store";
+
+import Home from "./pages/Home/Home";
+import Login from "./pages/Login/Login";
+import Register from "./pages/Register/Register";
+import Onboarding from "./pages/Onboarding/Onboarding";
 import NoAccess from "./pages/Others/NoAccess";
+
+import { theme } from "@/utils/theme/theme";
+import { appRoutes } from "./routes";
+
+import "react-toastify/dist/ReactToastify.css";
 
 function App() {
   return (
-    <AuthProvider authType="cookie" authName="_auth" cookieDomain={window.location.hostname}>
-      <CacheProvider value={cacheRtl}>
-        <ThemeProvider theme={theme}>
-          <Provider store={store}>
-            <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<Login />} />
-                <Route path="/no-access" element={
-                  <RequireAuth loginPath="/"> <NoAccess /> </RequireAuth>
-                } />
-                {appRoutes}
-              </Routes>
-            </BrowserRouter>
+    <AuthProvider
+      authType="cookie"
+      authName="_auth"
+      cookieDomain={window.location.hostname}
+      cookieSecure={window.location.protocol === "https:"}
+    >
+      <ThemeProvider theme={theme}>
+        <Provider store={store}>
+          <BrowserRouter
+            future={{
+              v7_startTransition: true,
+              v7_relativeSplatPath: true,
+            }}
+          >
+            <Routes>
+              {/* Public landing page */}
+              <Route
+                path="/"
+                element={<Home />}
+              />
+
+              {/* Authentication */}
+              <Route
+                path="/login"
+                element={<Login />}
+              />
+
+              <Route
+                path="/register"
+                element={<Register />}
+              />
+
+              {/*
+                مؤقتًا بدون RequireAuth لأن Register الحالي
+                لا يحفظ Token بعد إنشاء الحساب.
+
+                بعد ربط API التسجيل وحفظ الـToken،
+                استبدلي هذا Route بالنسخة المحمية الموجودة أسفل الكود.
+              */}
+              <Route
+                path="/onboarding"
+                element={<Onboarding />}
+              />
+
+              {/* Protected routes */}
+              <Route
+                path="/no-access"
+                element={
+                  <RequireAuth loginPath="/login">
+                    <NoAccess />
+                  </RequireAuth>
+                }
+              />
+
+              {/* Existing application routes */}
+              {appRoutes}
+
+              {/* Unknown routes */}
+              <Route
+                path="*"
+                element={
+                  <Navigate
+                    to="/"
+                    replace
+                  />
+                }
+              />
+            </Routes>
+
             <ToastContainer
               position="top-right"
               autoClose={5000}
@@ -36,10 +108,11 @@ function App() {
               pauseOnFocusLoss
               draggable
               pauseOnHover
+              theme="colored"
             />
-          </Provider>
-        </ThemeProvider>
-      </CacheProvider>
+          </BrowserRouter>
+        </Provider>
+      </ThemeProvider>
     </AuthProvider>
   );
 }
