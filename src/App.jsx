@@ -20,8 +20,8 @@ import Home from "./pages/Home/Home";
 import Login from "./pages/Login/Login";
 import Register from "./pages/Register/Register";
 import Onboarding from "./pages/Onboarding/Onboarding";
-import TeacherDashboard from "./pages/TeacherDashboard/TeacherDashboard";
 import NoAccess from "./pages/Others/NoAccess";
+import TeacherDashboard from "./pages/TeacherDashboard/TeacherDashboard";
 
 import { theme } from "@/utils/theme/theme";
 import { appRoutes } from "./routes";
@@ -34,7 +34,9 @@ function App() {
       authType="cookie"
       authName="_auth"
       cookieDomain={window.location.hostname}
-      cookieSecure={window.location.protocol === "https:"}
+      cookieSecure={
+        window.location.protocol === "https:"
+      }
     >
       <ThemeProvider theme={theme}>
         <Provider store={store}>
@@ -62,16 +64,22 @@ function App() {
                 element={<Register />}
               />
 
-              {/*
-                الـOnboarding للحساب الجديد فقط.
-                Login لا يوجّه إليه نهائيًا.
-              */}
+              {/* Onboarding للحساب الجديد فقط */}
               <Route
                 path="/onboarding"
                 element={<Onboarding />}
               />
 
-              {/* Teacher dashboard */}
+              {/*
+                معاينة مؤقتة للداشبورد
+                بدون تسجيل دخول
+              */}
+              <Route
+                path="/preview/teacher-dashboard"
+                element={<TeacherDashboard />}
+              />
+
+              {/* المسار الحقيقي المحمي */}
               <Route
                 path="/teacher/dashboard"
                 element={

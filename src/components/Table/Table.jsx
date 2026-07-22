@@ -1,257 +1,578 @@
 import {
+  Box,
   IconButton,
   Skeleton,
   Stack,
   Tooltip,
   Typography,
 } from "@mui/material";
+
 import Person4Icon from "@mui/icons-material/Person4";
+import {
+  DeleteOutline,
+  Edit,
+  EventAvailable,
+} from "@mui/icons-material";
+
 import { Link } from "react-router-dom";
-import { DeleteOutline, Edit, EventAvailable } from "@mui/icons-material";
 import { useState } from "react";
+
 import Popup from "../Popup/Popup";
 
-const Table = ({ headers, data, body, edit, profile, loading, deleteFn , schedule , addFn , editBtn }) => {
-  const [activeDelete, setActiveDelete] = useState(false);
-  const [deleteId, setDeleteId] = useState(null);
+const ACTION_BUTTON_SIZE = 34;
+
+const actionButtonSx = {
+  width: ACTION_BUTTON_SIZE,
+  height: ACTION_BUTTON_SIZE,
+  padding: 0,
+
+  borderRadius: "10px",
+  border: "1px solid rgba(36, 74, 112, 0.09)",
+
+  transition:
+    "transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease",
+
+  "&:hover": {
+    transform: "translateY(-1px)",
+  },
+
+  "& svg": {
+    fontSize: 19,
+  },
+};
+
+const cellTextSx = {
+  minWidth: 0,
+  overflow: "hidden",
+  color: "var(--color-muted)",
+  fontSize: "12px",
+  fontWeight: 600,
+  lineHeight: 1.5,
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const Table = ({
+  headers,
+  data,
+  body,
+  edit,
+  profile,
+  loading,
+  deleteFn,
+  schedule,
+  addFn,
+  editBtn,
+}) => {
+  const [activeDelete, setActiveDelete] =
+    useState(false);
+
+  const [deleteId, setDeleteId] =
+    useState(null);
+
+  const hasActions = Boolean(
+    edit ||
+      profile ||
+      deleteFn ||
+      schedule ||
+      addFn ||
+      editBtn
+  );
 
   if (loading) {
     return (
-      <Stack spacing={2} width="100%" py={4}>
-        {/* Skeleton Rows */}
-        {[...Array(5)].map((_, i) => (
+      <Stack
+        spacing={1}
+        width="100%"
+        py={1}
+      >
+        {[...Array(5)].map((_, index) => (
           <Skeleton
-            key={i}
-            variant="rectangular"
-            height={56}
+            key={index}
+            variant="rounded"
+            height={54}
             animation="wave"
             sx={{
-              background: "linear-gradient(135deg, rgba(49,141,206,0.15), rgba(50,52,73,0.1))",
-              boxShadow: "0 2px 8px rgba(49,141,206,0.1)",
               borderRadius: "12px",
-              backdropFilter: "blur(8px)",
+              backgroundColor:
+                "rgba(36, 74, 112, 0.07)",
             }}
           />
         ))}
       </Stack>
     );
-  } else {
-    return data?.length > 0 ? (
-      <>
+  }
+
+  if (!data?.length) {
+    return (
+      <Box
+        sx={{
+          minHeight: 180,
+          display: "grid",
+          placeItems: "center",
+          px: 2,
+          py: 4,
+        }}
+      >
         <Stack
-          width={"100%"}
-          borderRadius={"16px"}
-          pb={8}
-          pr={2}
-          className="Table"
-          sx={{ overflow: "scroll" }}
-          maxHeight={"450px"}
+          alignItems="center"
+          spacing={0.7}
         >
-          <Stack
-            minWidth={{ xs: "900px", md: "400px" }}
-            position={"relative"}
-            maxWidth={"100%"}
+          <Typography
+            sx={{
+              color:
+                "var(--color-navy-deep)",
+              fontSize: "15px",
+              fontWeight: 800,
+            }}
           >
-            {/* Head */}
-            <TableHeader
-              headers={headers}
+            لا توجد بيانات لعرضها
+          </Typography>
+
+          <Typography
+            sx={{
+              color: "var(--color-muted)",
+              fontSize: "11px",
+            }}
+          >
+            غيّر الفلاتر أو أضف بيانات جديدة.
+          </Typography>
+        </Stack>
+      </Box>
+    );
+  }
+
+  return (
+    <>
+      <Box
+        className="Table"
+        sx={{
+          width: "100%",
+          maxHeight: 390,
+          overflow: "auto",
+          pr: 0.5,
+          pb: 0.5,
+
+          scrollbarWidth: "thin",
+          scrollbarColor:
+            "rgba(36, 74, 112, 0.22) transparent",
+
+          "&::-webkit-scrollbar": {
+            width: 6,
+            height: 7,
+          },
+
+          "&::-webkit-scrollbar-track": {
+            background: "transparent",
+          },
+
+          "&::-webkit-scrollbar-thumb": {
+            borderRadius: 999,
+            backgroundColor:
+              "rgba(36, 74, 112, 0.20)",
+          },
+        }}
+      >
+        <Stack
+          spacing={1}
+          sx={{
+            minWidth: {
+              xs: 920,
+              md: 840,
+            },
+            width: "100%",
+          }}
+        >
+          <TableHeader
+            headers={headers}
+            hasActions={hasActions}
+          />
+
+          {data.map((item, index) => (
+            <TableItem
+              key={item.id ?? index}
+              item={item}
+              index={index}
+              body={body}
               edit={edit}
               profile={profile}
-              isDelete={deleteFn ? true : false}
+              setActiveDelete={
+                setActiveDelete
+              }
+              hasDelete={Boolean(deleteFn)}
+              setDeleteId={setDeleteId}
               schedule={schedule}
+              addFn={addFn}
+              editBtn={editBtn}
+              hasActions={hasActions}
             />
-            {/* Body */}
-            <Stack spacing={4}>
-              {data?.length > 0 &&
-                data?.map((item, i) => {
-                  return (
-                    <TableItem
-                      key={item.id}
-                      item={item}
-                      i={i}
-                      body={body}
-                      edit={edit}
-                      profile={profile}
-                      setActiveDelete={setActiveDelete}
-                      isDelete={deleteFn ? true : false}
-                      setDeleteId={setDeleteId}
-                      schedule={schedule}
-                      addFn={addFn}
-                      editBtn={editBtn}
-                    />
-                  );
-                })}
-            </Stack>
-          </Stack>
+          ))}
         </Stack>
-        {/* Delete Popup */}
+      </Box>
+
+      {deleteFn && (
         <Popup
           open={activeDelete}
           setOpen={setActiveDelete}
-          message={"هل أنت متأكد أنك تريد حذف هذا؟"}
+          message="هل أنت متأكد أنك تريد حذف هذا العنصر؟"
           type="delete"
-          fn={() => deleteFn(deleteId , setActiveDelete)}
+          fn={() =>
+            deleteFn(
+              deleteId,
+              setActiveDelete
+            )
+          }
         />
-      </>
-    ) : (
-      <Typography textAlign={"center"} pt={40} fontWeight={500}>
-        لا توجد بيانات لعرضها
-      </Typography>
-    );
-  }
+      )}
+    </>
+  );
 };
 
-const TableHeader = ({ headers, edit, profile, isDelete , schedule }) => {
+const TableHeader = ({
+  headers,
+  hasActions,
+}) => {
   return (
     <Stack
-      direction={"row"}
-      py={8}
-      px={8}
-      spacing={4}
-      position={"sticky"}
+      direction="row"
+      alignItems="center"
+      gap={1}
+      px={1.5}
+      py={1.25}
+      position="sticky"
       top={0}
-      sx={{
-        background: "linear-gradient(135deg, #f9fafc 0%, #e9eef5 100%)",
-        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-        border: "1px solid rgba(255, 255, 255, 0.4)",
-        backdropFilter: "saturate(180%)",
-        transition: "all 0.3s ease",
-        position: "sticky",
-        top: 0,
-        zIndex: 3,
-      }}
       zIndex={3}
-      borderRadius={"12px"}
-      mb={8}
+      sx={{
+        minHeight: 50,
+
+        color: "var(--color-navy-deep)",
+        background:
+          "linear-gradient(135deg, #f5f7fb 0%, #e9eef5 100%)",
+
+        border:
+          "1px solid rgba(36, 74, 112, 0.08)",
+        borderRadius: "12px",
+
+        boxShadow:
+          "0 5px 14px rgba(18, 47, 77, 0.07)",
+
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter:
+          "blur(12px)",
+      }}
     >
-      <Typography variant="breadcrumbs" flex={1}>
-        الترتيب
-      </Typography>
-      {headers?.length > 0 &&
-        headers.map((header, i) => {
-          return (
-            <Typography variant="breadcrumbs" flex={2} key={i}>
-              {header}
-            </Typography>
-          );
-        })}
-      {(edit || profile || isDelete || schedule) && (
-        <Typography variant="breadcrumbs" flex={2}>
-          الإجراءات
-        </Typography>
+      <HeaderCell
+        flex={0.65}
+        text="الترتيب"
+      />
+
+      {headers?.map((header) => (
+        <HeaderCell
+          key={header}
+          flex={2}
+          text={header}
+        />
+      ))}
+
+      {hasActions && (
+        <HeaderCell
+          flex={1.45}
+          text="الإجراءات"
+        />
       )}
     </Stack>
   );
 };
 
+const HeaderCell = ({ text, flex }) => (
+  <Typography
+    sx={{
+      flex,
+      minWidth: 0,
+
+      color: "var(--color-navy-deep)",
+      fontSize: "11.5px",
+      fontWeight: 800,
+      lineHeight: 1.4,
+
+      textAlign: "center",
+      whiteSpace: "nowrap",
+    }}
+  >
+    {text}
+  </Typography>
+);
+
 const TableItem = ({
   item,
-  i,
+  index,
   body,
   edit,
   profile,
   setActiveDelete,
-  isDelete,
+  hasDelete,
   setDeleteId,
   schedule,
-  editBtn
+  addFn,
+  editBtn,
+  hasActions,
 }) => {
+  const openDeletePopup = () => {
+    setDeleteId(item.id);
+    setActiveDelete(true);
+  };
+
   return (
     <Stack
-      py={4}
-      direction={"row"}
-      px={8}
-      spacing={4}
-      whiteSpace={"nowrap"}
-      bgcolor={
-        i % 2 === 0
-          ? "rgba(49, 141, 206, 0.08)" // soft blue tint
-          : "rgba(50, 52, 73, 0.04)"   // soft gray tint
-      }
-      alignItems={"center"}
-      maxWidth={"100%"}
-      minHeight={"56px"}
-      borderRadius={"12px"}
-      position={"relative"}
-      overflow={"hidden"}
+      direction="row"
+      alignItems="center"
+      gap={1}
+      px={1.5}
+      py={1}
+      minHeight={54}
+      position="relative"
+      overflow="hidden"
       className="tableItem"
-    >
-      {/* Hover Effect */}
-      <div className="tableHover"></div>
+      sx={{
+        backgroundColor:
+          index % 2 === 0
+            ? "rgba(36, 74, 112, 0.045)"
+            : "rgba(255, 252, 247, 0.92)",
 
-      <Typography variant="breadcrumbs" zIndex={2} color={"text.secondary"} flex={1}>
-        {i + 1}
+        border:
+          "1px solid rgba(36, 74, 112, 0.065)",
+        borderRadius: "12px",
+
+        transition:
+          "transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease",
+
+        "&:hover": {
+          backgroundColor:
+            "rgba(251, 240, 216, 0.48)",
+          borderColor:
+            "rgba(211, 164, 79, 0.22)",
+          boxShadow:
+            "0 7px 18px rgba(18, 47, 77, 0.06)",
+          transform: "translateY(-1px)",
+        },
+      }}
+    >
+      <Typography
+        sx={{
+          ...cellTextSx,
+          flex: 0.65,
+          textAlign: "center",
+          color:
+            "var(--color-navy-deep)",
+          fontWeight: 800,
+        }}
+      >
+        {index + 1}
       </Typography>
 
-      {body?.map((key, i) => {
+      {body?.map((key) => {
+        const value =
+          item?.[key] === null ||
+          item?.[key] === undefined ||
+          item?.[key] === ""
+            ? "—"
+            : String(item[key]);
+
         return (
-          <Typography
-            zIndex={2}
-            key={i}
-            variant="breadcrumbs"
-            fontWeight={"500"}
-            color={"text.secondary"}
-            flex={2}
-            pr={4}
-            noWrap
+          <Tooltip
+            key={key}
+            title={value}
+            arrow
           >
-            <Tooltip title={item[key] && item[key]}>
-              {item[key] && item[key]?.toString().slice(0, 20)}{" "}
-            </Tooltip>
-          </Typography>
+            <Typography
+              sx={{
+                ...cellTextSx,
+                flex: 2,
+                px: 0.4,
+                textAlign: "center",
+              }}
+            >
+              {value.length > 20
+                ? `${value.slice(0, 20)}…`
+                : value}
+            </Typography>
+          </Tooltip>
         );
       })}
 
-      {(edit || profile || isDelete || schedule) && (
-        <Typography zIndex={2} variant="breadcrumbs" color={"text.secondary"} flex={2}>
-          <Stack direction={"row"} spacing={1} alignItems={"center"}>
-            {schedule && (
-              <Link to={`${item?.id?.toString()}/schedule`}>
-                <Tooltip title="الجدول الدراسي">
-                  <IconButton color="warning">
-                    <EventAvailable fontSize="medium" />
-                  </IconButton>
-                </Tooltip>
-              </Link>
-            )}
-            {edit && (
-              editBtn ? (
-                editBtn
-              ) : (
-                <Link to={"edit/" + item?.id}>
-                  <Tooltip title="تعديل">
-                    <IconButton sx={{ color: "#32C652" }}>
-                      <Edit />
-                    </IconButton>
-                  </Tooltip>
-                </Link>
-              )
-            )}
-            {profile && (
-              <Link to={item?.id?.toString()}>
-                <Tooltip title="تفاصيل اكثر">
-                  <IconButton color="primary">
-                    <Person4Icon />
-                  </IconButton>
-                </Tooltip>
-              </Link>
-            )}
-            {isDelete && (
-              <div
-                onClick={() => {
-                  setActiveDelete(true);
-                  setDeleteId(item.id);
+      {hasActions && (
+        <Box
+          sx={{
+            flex: 1.45,
+            minWidth: 148,
+
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 0.9,
+          }}
+        >
+          {schedule && (
+            <Tooltip
+              title="الجدول الدراسي"
+              arrow
+            >
+              <IconButton
+                component={Link}
+                to={`${item?.id}/schedule`}
+                aria-label="الجدول الدراسي"
+                sx={{
+                  ...actionButtonSx,
+                  color: "#a96d0b",
+                  backgroundColor:
+                    "rgba(211, 164, 79, 0.12)",
+
+                  "&:hover": {
+                    ...actionButtonSx[
+                      "&:hover"
+                    ],
+                    backgroundColor:
+                      "rgba(211, 164, 79, 0.22)",
+                    borderColor:
+                      "rgba(211, 164, 79, 0.32)",
+                  },
                 }}
               >
-                <Tooltip title="حذف">
-                  <IconButton>
-                    <DeleteOutline color="error" />
-                  </IconButton>
-                </Tooltip>
-              </div>
+                <EventAvailable />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {addFn &&
+            typeof addFn === "function" && (
+              <Tooltip
+                title="إضافة"
+                arrow
+              >
+                <IconButton
+                  onClick={() =>
+                    addFn(item)
+                  }
+                  aria-label="إضافة"
+                  sx={{
+                    ...actionButtonSx,
+                    color:
+                      "var(--color-navy)",
+                    backgroundColor:
+                      "rgba(36, 74, 112, 0.07)",
+                  }}
+                >
+                  <Person4Icon />
+                </IconButton>
+              </Tooltip>
             )}
-          </Stack>
-        </Typography>
+
+          {edit &&
+            (editBtn ? (
+              <Box
+                sx={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                {editBtn}
+              </Box>
+            ) : (
+              <Tooltip
+                title="تعديل"
+                arrow
+              >
+                <IconButton
+                  component={Link}
+                  to={`edit/${item?.id}`}
+                  aria-label="تعديل"
+                  sx={{
+                    ...actionButtonSx,
+                    color: "#238f55",
+                    backgroundColor:
+                      "rgba(35, 143, 85, 0.09)",
+
+                    "&:hover": {
+                      ...actionButtonSx[
+                        "&:hover"
+                      ],
+                      backgroundColor:
+                        "rgba(35, 143, 85, 0.17)",
+                      borderColor:
+                        "rgba(35, 143, 85, 0.23)",
+                    },
+                  }}
+                >
+                  <Edit />
+                </IconButton>
+              </Tooltip>
+            ))}
+
+          {profile && (
+            <Tooltip
+              title="عرض التفاصيل"
+              arrow
+            >
+              <IconButton
+                component={Link}
+                to={String(item?.id)}
+                aria-label="عرض التفاصيل"
+                sx={{
+                  ...actionButtonSx,
+                  color:
+                    "var(--color-navy)",
+                  backgroundColor:
+                    "rgba(36, 74, 112, 0.07)",
+
+                  "&:hover": {
+                    ...actionButtonSx[
+                      "&:hover"
+                    ],
+                    backgroundColor:
+                      "rgba(36, 74, 112, 0.14)",
+                    borderColor:
+                      "rgba(36, 74, 112, 0.20)",
+                  },
+                }}
+              >
+                <Person4Icon />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {hasDelete && (
+            <Tooltip
+              title="حذف"
+              arrow
+            >
+              <IconButton
+                type="button"
+                onClick={openDeletePopup}
+                aria-label="حذف"
+                sx={{
+                  ...actionButtonSx,
+                  color:
+                    "var(--color-danger)",
+                  backgroundColor:
+                    "rgba(201, 79, 79, 0.07)",
+
+                  "&:hover": {
+                    ...actionButtonSx[
+                      "&:hover"
+                    ],
+                    color: "#ffffff",
+                    backgroundColor:
+                      "var(--color-danger)",
+                    borderColor:
+                      "var(--color-danger)",
+                  },
+                }}
+              >
+                <DeleteOutline />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
       )}
     </Stack>
   );

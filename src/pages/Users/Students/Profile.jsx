@@ -1,250 +1,700 @@
 import {
+  Avatar,
   Box,
-  Divider,
+  Button,
+  Chip,
   Grid,
   IconButton,
   Paper,
+  Skeleton,
   Stack,
   Tooltip,
   Typography,
-  Chip,
 } from "@mui/material";
+
+import {
+  BadgeOutlined,
+  CalendarMonthOutlined,
+  DeleteOutlineRounded,
+  EditRounded,
+  EmailOutlined,
+  HomeOutlined,
+  LocalPhoneOutlined,
+  PaymentsOutlined,
+  PersonOutlineRounded,
+  SchoolOutlined,
+  ToggleOnRounded,
+} from "@mui/icons-material";
+
+import {
+  Link,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+
+import { useState } from "react";
+import { toast } from "react-toastify";
+
 import Container from "@/components/Container/Container";
 import Back from "@/components/Back/Back";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { useState } from "react";
 import Popup from "@/components/Popup/Popup";
-import { Delete, Edit } from "@mui/icons-material";
-import { toast } from "react-toastify";
-import { deleteStudent } from "@/APIs/users/students";
+
+import {
+  deleteStudent,
+  toggleActiveStudent,
+} from "@/APIs/users/students";
+
 import { formatDate } from "@/utils/helpers/dateUtils";
-import { toggleActiveStudent } from "@/APIs/users/students";
 import { useStudent } from "@/utils/hooks/apis/useStudent";
-import Loading from "@/components/Loading";
 import usePermissions from "@/utils/hooks/usePermissions";
 import { useInstallmentPlan } from "@/utils/hooks/apis/financials/useInstallmentPlan";
+
+const infoCardSx = {
+  p: 1.5,
+  minHeight: 88,
+
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 1.1,
+
+  border: "1px solid rgba(36, 74, 112, 0.075)",
+  borderRadius: "15px",
+
+  backgroundColor: "var(--color-white)",
+
+  transition:
+    "transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease",
+
+  "&:hover": {
+    transform: "translateY(-2px)",
+    borderColor: "rgba(211, 164, 79, 0.22)",
+    boxShadow: "0 10px 22px rgba(18, 47, 77, 0.07)",
+  },
+};
+
+const DetailCard = ({
+  icon,
+  label,
+  value,
+}) => (
+  <Paper elevation={0} sx={infoCardSx}>
+    <Box
+      sx={{
+        width: 36,
+        height: 36,
+
+        display: "grid",
+        placeItems: "center",
+        flexShrink: 0,
+
+        color: "var(--color-gold-dark)",
+        backgroundColor: "var(--color-gold-soft)",
+
+        border: "1px solid rgba(211, 164, 79, 0.20)",
+        borderRadius: "11px",
+
+        "& svg": {
+          fontSize: 19,
+        },
+      }}
+    >
+      {icon}
+    </Box>
+
+    <Box sx={{ minWidth: 0 }}>
+      <Typography
+        sx={{
+          color: "var(--color-muted)",
+          fontSize: "9.5px",
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </Typography>
+
+      <Typography
+        sx={{
+          mt: 0.55,
+          overflow: "hidden",
+
+          color: "var(--color-navy-deep)",
+          fontSize: "12.5px",
+          fontWeight: 800,
+          lineHeight: 1.6,
+
+          textOverflow: "ellipsis",
+          wordBreak: "break-word",
+        }}
+      >
+        {value || "—"}
+      </Typography>
+    </Box>
+  </Paper>
+);
 
 const Profile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // calling the useStudent hook to fetch the student data
-  const { student, setStudent , loading } = useStudent(id);
+  const {
+    student,
+    setStudent,
+    loading,
+  } = useStudent(id);
 
-  // handle delete
-  const [open, setOpen] = useState(false);
+  const permissions =
+    usePermissions("students");
+
+  const [deleteOpen, setDeleteOpen] =
+    useState(false);
+
+  const [toggleLoading, setToggleLoading] =
+    useState(false);
+
   const handleDelete = async () => {
-    const res = await deleteStudent(id);
-    if (res.status) {
+    try {
+      const response = await deleteStudent(id);
+
+      if (!response?.status) {
+        toast.error(
+          response?.message ||
+            response ||
+            "حدث خطأ أثناء حذف الطالب"
+        );
+        return;
+      }
+
       toast.success("تم حذف الطالب بنجاح");
-      navigate("/users/students");
-    } else {
-      toast.error(res || "حدث خطأ ما أثناء حذف الطالب");
+
+      navigate("/users/students", {
+        replace: true,
+      });
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          "حدث خطأ أثناء حذف الطالب"
+      );
     }
   };
 
-  // Handle Toggle Status
-  const [toggleLoading, setToggleLoading] = useState(false);
   const handleToggleStatus = async () => {
-    setToggleLoading(true);
-    const res = await toggleActiveStudent(id);
-    if (res.status) {
-      toast.success("تم تغيير حالة الطالب بنجاح");
-      setStudent((prev) => ({ ...prev, isActive: !prev.isActive })); // Toggle the status
-    } else {
-      toast.error(res || "حدث خطأ ما أثناء تغيير حالة الطالب");
+    try {
+      setToggleLoading(true);
+
+      const response =
+        await toggleActiveStudent(id);
+
+      if (!response?.status) {
+        toast.error(
+          response?.message ||
+            response ||
+            "تعذر تغيير حالة الطالب"
+        );
+        return;
+      }
+
+      setStudent((previous) => ({
+        ...previous,
+        isActive: !previous.isActive,
+      }));
+
+      toast.success(
+        "تم تغيير حالة الطالب بنجاح"
+      );
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          "تعذر تغيير حالة الطالب"
+      );
+    } finally {
+      setToggleLoading(false);
     }
-    setToggleLoading(false);
   };
 
-  const permissions = usePermissions("students");
-
-
-  // Show loading state
   if (loading) {
-    return <Container>  <Loading/> </Container>;
-  }
-
-  // error state if student not found
-  if (!student && !loading) {
     return (
       <Container>
-        <Typography>لم يتم العثور على بيانات الطالب</Typography>
+        <Stack spacing={1.4}>
+          <Skeleton
+            variant="rounded"
+            height={145}
+            sx={{ borderRadius: "20px" }}
+          />
+          <Grid container spacing={1.3}>
+            {[...Array(9)].map((_, index) => (
+              <Grid
+                item
+                xs={12}
+                sm={6}
+                lg={4}
+                key={index}
+              >
+                <Skeleton
+                  variant="rounded"
+                  height={88}
+                  sx={{
+                    borderRadius: "15px",
+                  }}
+                />
+              </Grid>
+            ))}
+          </Grid>
+        </Stack>
       </Container>
     );
   }
 
+  if (!student) {
+    return (
+      <Container>
+        <Paper
+          elevation={0}
+          sx={{
+            minHeight: 220,
+            display: "grid",
+            placeItems: "center",
+            borderRadius: "18px",
+          }}
+        >
+          <Typography
+            sx={{
+              color:
+                "var(--color-navy-deep)",
+              fontWeight: 800,
+            }}
+          >
+            لم يتم العثور على بيانات الطالب
+          </Typography>
+        </Paper>
+      </Container>
+    );
+  }
+
+  const fullName = [
+    student.firstName,
+    student.fatherName,
+    student.familyName,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <Container>
-      {/* Header */}
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={{ xs: 4, sm: 0 }}
-        justifyContent={"space-between"}
-        alignItems={"center"}
-      >
-        <Back title={"تفاصيل الطالب"} />
-        {/* Status */}
-        {permissions.edit && <Tooltip title={"تغيير حالة الطالب"}>
-          <Chip
-            label={student?.isActive ? "نشط" : "غير نشط"}
-            color={student?.isActive ? "success" : "error"}
-            sx={{ fontSize: "14px", fontWeight: "bold", px: 2, py: 1, borderRadius: "8px" }}
-            onClick={handleToggleStatus}
-            clickable
-            disabled={toggleLoading}
-          />
-        </Tooltip>}
-      </Stack>
-      {/* Box Content */}
-      {student && (
-        <Details
-          item={student}
-          setOpen={setOpen}
+      <Stack spacing={1.5}>
+        <Back title="تفاصيل الطالب" />
+
+        <StudentHeader
+          student={student}
+          fullName={fullName}
           permissions={permissions}
+          toggleLoading={toggleLoading}
+          onToggleStatus={handleToggleStatus}
+          onDelete={() => setDeleteOpen(true)}
         />
-      )}
-      {/* Popup */}
-      <Popup open={open} setOpen={setOpen} message={"هل انت متأكد من انك تريد حذف هذا الطالب؟"} type={"delete"} fn={handleDelete} />
+
+        <StudentDetails
+          student={student}
+        />
+      </Stack>
+
+      <Popup
+        open={deleteOpen}
+        setOpen={setDeleteOpen}
+        message={`هل أنت متأكد من حذف الطالب «${fullName}»؟`}
+        type="delete"
+        fn={handleDelete}
+      />
     </Container>
   );
 };
 
-const Details = ({ item, setOpen , permissions }) => {
-  const currentInstallmentPlanId = item?.installmentPlanId
+const StudentHeader = ({
+  student,
+  fullName,
+  permissions,
+  toggleLoading,
+  onToggleStatus,
+  onDelete,
+}) => (
+  <Paper
+    elevation={0}
+    sx={{
+      p: {
+        xs: 1.7,
+        md: 2.2,
+      },
 
-  const { installmentPlan, loading: installmentPlanLoading } = useInstallmentPlan(currentInstallmentPlanId);
+      display: "flex",
+      flexDirection: {
+        xs: "column",
+        md: "row",
+      },
+      alignItems: {
+        xs: "stretch",
+        md: "center",
+      },
+      justifyContent: "space-between",
+      gap: 2,
+
+      border: "1px solid rgba(36, 74, 112, 0.08)",
+      borderRadius: "20px",
+
+      background:
+        "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.48))",
+
+      boxShadow: "0 12px 28px rgba(18, 47, 77, 0.07)",
+    }}
+  >
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={1.4}
+    >
+      <Avatar
+        sx={{
+          width: 58,
+          height: 58,
+
+          color: "var(--color-navy-deep)",
+          backgroundColor: "var(--color-gold-soft)",
+
+          border: "1px solid rgba(211, 164, 79, 0.26)",
+
+          fontSize: "21px",
+          fontWeight: 800,
+        }}
+      >
+        {fullName.charAt(0)}
+      </Avatar>
+
+      <Box sx={{ minWidth: 0 }}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          flexWrap="wrap"
+          gap={0.8}
+        >
+          <Typography
+            component="h1"
+            sx={{
+              color: "var(--color-navy-deep)",
+              fontSize: {
+                xs: "20px",
+                md: "25px",
+              },
+              fontWeight: 800,
+            }}
+          >
+            {fullName}
+          </Typography>
+
+          <Chip
+            label={
+              student.isActive
+                ? "طالب نشط"
+                : "غير نشط"
+            }
+            size="small"
+            sx={{
+              color: student.isActive
+                ? "#287a51"
+                : "var(--color-danger)",
+
+              backgroundColor: student.isActive
+                ? "rgba(116, 201, 154, 0.16)"
+                : "rgba(201, 79, 79, 0.10)",
+
+              border: `1px solid ${
+                student.isActive
+                  ? "rgba(116, 201, 154, 0.24)"
+                  : "rgba(201, 79, 79, 0.18)"
+              }`,
+
+              fontSize: "9.5px",
+              fontWeight: 800,
+            }}
+          />
+        </Stack>
+
+        <Typography
+          sx={{
+            mt: 0.45,
+            color: "var(--color-muted)",
+            fontSize: "10.5px",
+          }}
+        >
+          {student.academicYear || "بدون صف"}
+          {" • "}
+          {student.class?.roomNumber
+            ? `الفصل ${student.class.roomNumber}`
+            : "بدون فصل"}
+        </Typography>
+      </Box>
+    </Stack>
+
+    <Stack
+      direction={{
+        xs: "column",
+        sm: "row",
+      }}
+      spacing={1}
+      sx={{
+        flexShrink: 0,
+      }}
+    >
+      {permissions.edit && (
+        <>
+          <Button
+            type="button"
+            disabled={toggleLoading}
+            onClick={onToggleStatus}
+            startIcon={<ToggleOnRounded />}
+            variant="outlined"
+            sx={{
+              minHeight: 42,
+              px: 1.7,
+
+              borderRadius: "12px",
+
+              color: "var(--color-navy)",
+              borderColor: "rgba(36, 74, 112, 0.16)",
+
+              fontSize: "11px",
+              fontWeight: 800,
+              textTransform: "none",
+
+              "& .MuiButton-startIcon": {
+                marginLeft: "6px",
+                marginRight: 0,
+              },
+            }}
+          >
+            تغيير الحالة
+          </Button>
+
+          <Button
+            component={Link}
+            to={`/users/students/edit/${student._id}`}
+            startIcon={<EditRounded />}
+            variant="contained"
+            sx={{
+              minHeight: 42,
+              px: 1.9,
+
+              borderRadius: "12px",
+
+              color: "var(--color-white)",
+              background:
+                "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
+
+              boxShadow: "0 8px 18px rgba(18, 47, 77, 0.16)",
+
+              fontSize: "11px",
+              fontWeight: 800,
+              textTransform: "none",
+
+              "& .MuiButton-startIcon": {
+                marginLeft: "6px",
+                marginRight: 0,
+              },
+            }}
+          >
+            تعديل البيانات
+          </Button>
+        </>
+      )}
+
+      {permissions.delete && (
+        <Tooltip title="حذف الطالب">
+          <IconButton
+            type="button"
+            onClick={onDelete}
+            sx={{
+              width: 42,
+              height: 42,
+
+              color: "var(--color-danger)",
+              backgroundColor: "rgba(201, 79, 79, 0.07)",
+
+              border: "1px solid rgba(201, 79, 79, 0.13)",
+              borderRadius: "12px",
+
+              "&:hover": {
+                color: "var(--color-white)",
+                backgroundColor: "var(--color-danger)",
+              },
+            }}
+          >
+            <DeleteOutlineRounded />
+          </IconButton>
+        </Tooltip>
+      )}
+    </Stack>
+  </Paper>
+);
+
+const StudentDetails = ({ student }) => {
+  const currentInstallmentPlanId =
+    student?.installmentPlanId;
+
+  const {
+    installmentPlan,
+    loading: installmentPlanLoading,
+  } = useInstallmentPlan(
+    currentInstallmentPlanId
+  );
+
+  const classValue = student?.class
+    ? `${student.class.academicYear || ""} - ${
+        student.class.roomNumber || ""
+      } - ${
+        student.class.gender === "male"
+          ? "بنين"
+          : "بنات"
+      }`
+    : "لا يوجد";
+
+  const installmentValue =
+    installmentPlanLoading
+      ? "جاري تحميل الخطة..."
+      : installmentPlan
+      ? `${installmentPlan.name} (${installmentPlan.numberOfInstallments} قسط)`
+      : currentInstallmentPlanId
+      ? "خطة غير معروفة"
+      : "كاش بدون تقسيط";
 
   const data = [
-    { key: "الاسم الكامل", value: `${item?.firstName} ${item?.fatherName} ${item?.familyName}`},
-    { key: "تاريخ الميلاد", value: item?.birthDate ? formatDate(new Date(item.birthDate), "eee, dd MMM yyyy") : "—"},
-    { key: "النوع", value: item?.gender === "male" ? "ولد" : "بنت" },
-    { key: "الجنسية", value: item?.nationality },
-    { key: "الصف الدراسي", value: item?.academicYear },
-    { key: "الفصل", value: item?.class ? `${item?.class?.academicYear} - ${item?.class?.roomNumber} - ${item?.class?.gender === "male" ? "بنين" : "بنات" }` : "لا يوجد" },
-    { key: "رقم الهاتف", value: item?.phoneNumber || "لا يوجد" },
-    { key: "البريد الإلكتروني", value: item?.email },
-    { key: "العنوان", value: item?.address },
-    { key: "المدرسة السابقة", value: item?.previousSchool || "لا يوجد" },
     {
-      key: "خطة التقسيط",
-      value: installmentPlanLoading
-        ? "جاري تحميل الخطة..."
-        : installmentPlan
-        ? `${installmentPlan.name} (${installmentPlan.numberOfInstallments} قسط)`
-        : currentInstallmentPlanId
-          ? "خطة غير معروفة"
-          : "كاش بدون تقسيط",
+      label: "تاريخ الميلاد",
+      value: student.birthDate
+        ? formatDate(
+            new Date(student.birthDate),
+            "eee, dd MMM yyyy"
+          )
+        : "—",
+      icon: <CalendarMonthOutlined />,
     },
-    { key: "الحالة", value: item?.isActive ? "نشط" : "غير نشط" },
-    { key: "تاريخ التسجيل", value: item?.registrationDate ? formatDate(new Date(item.registrationDate), "eee, dd MMM yyyy") : "—" },
+    {
+      label: "النوع",
+      value:
+        student.gender === "male"
+          ? "ولد"
+          : "بنت",
+      icon: <PersonOutlineRounded />,
+    },
+    {
+      label: "الجنسية",
+      value: student.nationality || "—",
+      icon: <BadgeOutlined />,
+    },
+    {
+      label: "الصف الدراسي",
+      value: student.academicYear || "—",
+      icon: <SchoolOutlined />,
+    },
+    {
+      label: "الفصل",
+      value: classValue,
+      icon: <SchoolOutlined />,
+    },
+    {
+      label: "رقم الهاتف",
+      value:
+        student.phoneNumber || "لا يوجد",
+      icon: <LocalPhoneOutlined />,
+    },
+    {
+      label: "البريد الإلكتروني",
+      value: student.email || "—",
+      icon: <EmailOutlined />,
+    },
+    {
+      label: "العنوان",
+      value: student.address || "—",
+      icon: <HomeOutlined />,
+    },
+    {
+      label: "المدرسة السابقة",
+      value:
+        student.previousSchool || "لا يوجد",
+      icon: <SchoolOutlined />,
+    },
+    {
+      label: "خطة التقسيط",
+      value: installmentValue,
+      icon: <PaymentsOutlined />,
+    },
+    {
+      label: "تاريخ التسجيل",
+      value: student.registrationDate
+        ? formatDate(
+            new Date(student.registrationDate),
+            "eee, dd MMM yyyy"
+          )
+        : "—",
+      icon: <CalendarMonthOutlined />,
+    },
   ];
 
   return (
     <Paper
       elevation={0}
       sx={{
-        bgcolor: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        boxShadow: "0px 1px 2px 0px #0000000D",
-        p: 12,
-        borderRadius: "16px",
-        mt: 10,
+        p: {
+          xs: 1.5,
+          md: 1.9,
+        },
+
+        border: "1px solid rgba(36, 74, 112, 0.08)",
+        borderRadius: "20px",
+
+        backgroundColor: "var(--color-cream)",
+
+        boxShadow: "0 10px 24px rgba(18, 47, 77, 0.055)",
       }}
     >
-      {/* Header */}
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={{ xs: 4, sm: 0 }}
-        justifyContent={"space-between"}
-        alignItems={{ xs: "flex-start", sm: "center" }}
-      >
-        <Stack spacing={1}>
-          <Typography
-            variant="h4"
-            fontWeight="bold"
-          >{`${item?.firstName} ${item?.fatherName} ${item?.familyName}`}</Typography>
-        </Stack>
+      <Box sx={{ mb: 1.5 }}>
+        <Typography
+          component="h2"
+          sx={{
+            color: "var(--color-navy-deep)",
+            fontSize: "16px",
+            fontWeight: 800,
+          }}
+        >
+          بيانات الطالب
+        </Typography>
 
-        <Stack direction="row" spacing={2}>
-          {permissions.edit && <Tooltip title={"تعديل بيانات الطالب"}>
-            <Link to={`/users/students/edit/${item._id}`}>
-              <IconButton color="success" size="large">
-                <Edit />
-              </IconButton>
-            </Link>
-          </Tooltip>}
-          {permissions.delete && <Tooltip title={"حذف الطالب"}>
-            <IconButton
-              color="error"
-              size="large"
-              onClick={() => setOpen(true)}
-            >
-              <Delete />
-            </IconButton>
-          </Tooltip>}
-        </Stack>
-      </Stack>
-      <Divider sx={{ my: 10 }} />
-      {/* Body */}
-      <Grid container spacing={4}>
-        {data.map((field, i) => (
-          <Grid item xs={12} md={6} lg={4} key={i}>
-            <Box
-              sx={{
-                p: 2,
-                borderRadius: "10px",
-                bgcolor: i % 2 === 0 ? "primary.white" : "white",
-                transition: ".5s",
-                "&:hover": { bgcolor: "grey.100" },
-              }}
-            >
-              <Typography
-                variant="label"
-                color="text.secondary"
-                sx={{ mb: 0.5, fontWeight: 500, fontSize: "12px" }}
-              >
-                {field.key}
-              </Typography>
-              <Typography
-                variant="subtitle"
-                sx={{
-                  display: "block",
-                  fontWeight: 500,
-                  color: "text.primary",
-                }}
-              >
-                {field.value}
-              </Typography>
-            </Box>
+        <Typography
+          sx={{
+            mt: 0.25,
+            color: "var(--color-muted)",
+            fontSize: "9.5px",
+          }}
+        >
+          البيانات الشخصية والدراسية وبيانات التواصل.
+        </Typography>
+      </Box>
+
+      <Grid container spacing={1.2}>
+        {data.map((field) => (
+          <Grid
+            item
+            xs={12}
+            sm={6}
+            lg={4}
+            key={field.label}
+          >
+            <DetailCard {...field} />
           </Grid>
         ))}
-        {/* Notes */}
+
         <Grid item xs={12}>
-          <Box
-            sx={{
-              p: 2,
-              borderRadius: "10px",
-              bgcolor: "transparent",
-              transition: ".5s",
-              "&:hover": { bgcolor: "grey.100" },
-            }}
-          >
-            <Typography
-              variant="label"
-              color="text.secondary"
-              sx={{ mb: 0.5, fontWeight: 500, fontSize: "12px" }}
-            >
-              ملاحظات
-            </Typography>
-            <Typography
-              variant="subtitle"
-              sx={{ display: "block", fontWeight: 500, color: "text.primary" }}
-            >
-              {item?.notes || "—"}
-            </Typography>
-          </Box>
+          <DetailCard
+            icon={<BadgeOutlined />}
+            label="ملاحظات"
+            value={student.notes || "—"}
+          />
         </Grid>
       </Grid>
     </Paper>

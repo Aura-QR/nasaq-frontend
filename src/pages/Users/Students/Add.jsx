@@ -1,19 +1,29 @@
-import { Box, Grid, Typography } from "@mui/material";
-import Back from "@/components/Back/Back";
-import Container from "@/components/Container/Container";
+import {
+  Box,
+  Button,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
+
+import {
+  ArrowForwardIosRounded,
+  PersonAddAlt1Rounded,
+} from "@mui/icons-material";
+
 import { useForm } from "react-hook-form";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import SubmitSection from "@/components/SubmitSection";
+import {
+  Link,
+  useNavigate,
+} from "react-router-dom";
 import { toast } from "react-toastify";
+
+import Container from "@/components/Container/Container";
+import StudentForm from "@/components/Students/StudentForm";
+import StudentFormActions from "@/components/Students/StudentFormActions";
+
 import { addStudent } from "@/APIs/users/students";
-import Input from "@/components/Input/Input";
-import Select from "@/components/Select/Select";
-import Status from "@/utils/constants/Status";
-import SingleSelect from "@/components/SingleSelect/SingleSelect";
-import Countries from "@/utils/constants/Countries";
-import ClassSelector from "@/components/Selector/ClassSelector";
-import InstallmentPlanSelector from "@/components/Selector/InstallmentPlanSelector";
 
 const Add = () => {
   const {
@@ -23,215 +33,227 @@ const Add = () => {
     setValue,
   } = useForm({
     defaultValues: {
-      registrationDate: new Date().toISOString().split("T")[0],
+      registrationDate: new Date()
+        .toISOString()
+        .split("T")[0],
       isActive: 1,
     },
   });
+
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const onSubmit = async (data) => {
-    setLoading(true);
-    // Convert isActive to boolean
-    data.isActive = data.isActive == 1 ? true : false;
-    // Remove classId if empty
-    if (!data.classId) {
-      delete data.classId;
+  const onSubmit = async (formData) => {
+    try {
+      setLoading(true);
+
+      const payload = {
+        ...formData,
+        isActive: formData.isActive == 1,
+      };
+
+      if (!payload.classId) {
+        delete payload.classId;
+      }
+
+      if (
+        !payload.installmentPlanId ||
+        payload.installmentPlanId === "null"
+      ) {
+        delete payload.installmentPlanId;
+      }
+
+      const response = await addStudent(payload);
+
+      if (!response?.status) {
+        toast.error(
+          response?.message ||
+            response ||
+            "حدث خطأ أثناء إضافة الطالب"
+        );
+        return;
+      }
+
+      toast.success("تمت إضافة الطالب بنجاح");
+
+      navigate(
+        `/users/students/${response.data._id}`,
+        {
+          replace: true,
+        }
+      );
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          "حدث خطأ أثناء إضافة الطالب"
+      );
+    } finally {
+      setLoading(false);
     }
-    // Omit installment plan to allow default system plan
-    if (!data.installmentPlanId || data.installmentPlanId === "null") {
-      delete data.installmentPlanId;
-    }
-    const response = await addStudent(data);
-    if (response.status) {
-      toast.success("تم إضافة الطالب بنجاح");
-      navigate("/users/students/" + response.data._id);
-    } else {
-      toast.error(response || "حدث خطأ ما!");
-    }
-    setLoading(false);
   };
 
   return (
     <Container>
-      <Back title={"إضافة طالب"} />
       <Box
-        bgcolor={"primary.white"}
-        p={"32px 16px"}
-        borderRadius={"12px"}
-        my={8}
+        component="form"
+        noValidate
+        autoComplete="off"
+        onSubmit={handleSubmit(onSubmit)}
       >
-        <Typography variant="title" fontWeight={"500"}>
-          تفاصيل الطالب
-        </Typography>
-        <DataInputs
-          register={register}
-          errors={errors}
-          setValue={setValue}
-        />
-      </Box>
-      <SubmitSection onSubmit={onSubmit} handleSubmit={handleSubmit} loading={loading} />
-    </Container>
-  );
-};
-
-const DataInputs = ({ register, errors, setValue }) => {
-  const [nationality, setNationality] = useState(null);
-  const [nationalityInput, setNationalityInput] = useState("");
-
-  return (
-    <Grid container mt={8} spacing={8}>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"firstName"}
-          error={errors.firstName?.message}
-          label={"الاسم الأول"}
-          required={true}
-          type={"text"}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"fatherName"}
-          error={errors.fatherName?.message}
-          label={"اسم الأب"}
-          required={true}
-          type={"text"}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"familyName"}
-          error={errors.familyName?.message}
-          label={"اسم العائلة"}
-          required={true}
-          type={"text"}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"birthDate"}
-          error={errors.birthDate?.message}
-          label={"تاريخ الميلاد"}
-          required={true}
-          type={"date"}
-        />
-      </Grid>
-      {/* ClassSelector with gender and academic year filter */}
-      <ClassSelector
-        register={register}
-        errors={errors}
-        setValue={setValue}
-        showGender={true}
-        isAcademicYearRequired={true}
-        isClassRequired={false}
-        gridProps={{ xs: 12, sm: 6, md: 4, lg: 3 }}
-        defaultSelect="بدون فصل"
-      />
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <SingleSelect
-          value={nationality}
-          onChange={(_, newValue) => {
-            setNationality(newValue);
-            setValue("nationality", newValue ? newValue.name : "");
+        {/*
+          حقول وهمية مخفية تمنع المتصفح من وضع بيانات
+          حساب الأدمن داخل بريد وكلمة مرور الطالب الجديد.
+        */}
+        <Box
+          aria-hidden="true"
+          sx={{
+            position: "fixed",
+            top: -10000,
+            left: -10000,
+            width: 1,
+            height: 1,
+            overflow: "hidden",
+            opacity: 0,
+            pointerEvents: "none",
           }}
-          inputValue={nationalityInput}
-          onInputChange={(_, newInputValue) => setNationalityInput(newInputValue)}
-          options={Countries}
-          label={"الجنسية"}
-          placeholder={"ابحث عن الجنسية..."}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"phoneNumber"}
-          error={errors.phoneNumber?.message}
-          label={"رقم الهاتف"}
-          required={true}
-          type={"number"}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"email"}
-          error={errors.email?.message}
-          label={"البريد الإلكتروني"}
-          required={true}
-          type={"email"}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"password"}
-          error={errors.password?.message}
-          label={"كلمة المرور"}
-          required={true}
-          type={"password"}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"address"}
-          error={errors.address?.message}
-          label={"العنوان"}
-          required={true}
-          type={"text"}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"previousSchool"}
-          error={errors.previousSchool?.message}
-          label={"المدرسة السابقة"}
-          type={"text"}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"registrationDate"}
-          error={errors.registrationDate?.message}
-          label={"تاريخ التسجيل"}
-          type={"date"}
-          required={true}
-          defaultValue={new Date().toISOString().split("T")[0]}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <InstallmentPlanSelector register={register} errors={errors} required={false} />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Select
-          register={register}
-          registerName={"isActive"}
-          data={Status}
-          defaultValue={1}
-          name="label"
-          error={errors.isActive?.message}
-          label={"الحالة"}
-          required={true}
-        />
-      </Grid>
-      <Grid item xs={12}>
-        <Input
-          register={register}
-          registerName={"notes"}
-          error={errors.notes?.message}
-          label={"ملاحظات"}
-          type={"text"}
-          multiline={true}
-        />
-      </Grid>
-    </Grid>
+        >
+          <input
+            type="text"
+            name="nasaq-hidden-username"
+            autoComplete="username"
+            tabIndex={-1}
+          />
+
+          <input
+            type="password"
+            name="nasaq-hidden-password"
+            autoComplete="new-password"
+            tabIndex={-1}
+          />
+        </Box>
+        <Stack spacing={1}>
+          <Button
+            component={Link}
+            to="/users/students"
+            startIcon={<ArrowForwardIosRounded />}
+            sx={{
+              width: "fit-content",
+              minHeight: 34,
+              px: 1.1,
+
+              color: "var(--color-navy)",
+              backgroundColor: "rgba(36, 74, 112, 0.045)",
+              borderRadius: "10px",
+
+              fontSize: "10.5px",
+              fontWeight: 800,
+              textTransform: "none",
+
+              "& .MuiButton-startIcon": {
+                marginLeft: "5px",
+                marginRight: 0,
+              },
+
+              "& svg": {
+                fontSize: "15px",
+              },
+
+              "&:hover": {
+                color: "var(--color-gold-dark)",
+                backgroundColor: "var(--color-gold-soft)",
+              },
+            }}
+          >
+            العودة إلى الطلاب
+          </Button>
+
+          <Paper
+            elevation={0}
+            sx={{
+              p: {
+                xs: 1.25,
+                md: 1.5,
+              },
+
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+
+              border: "1px solid rgba(36, 74, 112, 0.08)",
+              borderRadius: "16px",
+
+              background:
+                "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.38))",
+
+              boxShadow: "0 8px 20px rgba(18,47,77,0.05)",
+            }}
+          >
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+
+                color: "var(--color-gold-dark)",
+                backgroundColor: "var(--color-gold-soft)",
+
+                border: "1px solid rgba(211,164,79,0.21)",
+                borderRadius: "12px",
+
+                "& svg": {
+                  fontSize: 21,
+                },
+              }}
+            >
+              <PersonAddAlt1Rounded />
+            </Box>
+
+            <Box>
+              <Typography
+                component="h1"
+                sx={{
+                  color: "var(--color-navy-deep)",
+                  fontSize: {
+                    xs: "19px",
+                    md: "22px",
+                  },
+                  fontWeight: 800,
+                  lineHeight: 1.25,
+                }}
+              >
+                إضافة طالب جديد
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.15,
+                  color: "var(--color-muted)",
+                  fontSize: "9.5px",
+                  lineHeight: 1.5,
+                }}
+              >
+                أدخل البيانات الأساسية والدراسية لإنشاء حساب الطالب.
+              </Typography>
+            </Box>
+          </Paper>
+
+          <StudentForm
+            mode="add"
+            register={register}
+            errors={errors}
+            setValue={setValue}
+          />
+
+          <StudentFormActions
+            loading={loading}
+            submitLabel="حفظ الطالب"
+          />
+        </Stack>
+      </Box>
+    </Container>
   );
 };
 

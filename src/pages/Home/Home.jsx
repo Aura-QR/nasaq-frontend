@@ -21,7 +21,7 @@ import {
 } from "@mui/icons-material";
 
 import "./Home.css";
-import wadqLogo from "../../images/wadq-logo.png";
+import nasaqLogo from "../../images/wadq-logo.png";
 
 const preparationStages = [
   {
@@ -179,21 +179,18 @@ const reveal = {
   },
 };
 
-function WadqLogo({ light = false }) {
+function NasaqLogo({ light = false }) {
   return (
     <Link
       to="/"
-      className={`wadq-logo ${light ? "wadq-logo--light" : ""}`}
+      className={`nasaq-logo ${light ? "nasaq-logo--light" : ""}`}
       aria-label="العودة إلى الصفحة الرئيسية"
     >
-      <span className="wadq-logo__icon-crop" aria-hidden="true">
-        <img src={wadqLogo} alt="" />
-      </span>
-
-      <span className="wadq-logo__copy">
-        <strong>نَسّق</strong>
-        <small>منصة المعلم الذكية</small>
-      </span>
+      <img
+        className="nasaq-logo__image"
+        src={nasaqLogo}
+        alt="شعار منصة نَسّق"
+      />
     </Link>
   );
 }
@@ -569,7 +566,7 @@ function Home() {
     <div className="wadq-home">
       <header className={`site-header ${isScrolled ? "is-scrolled" : ""}`}>
         <div className="site-header__inner">
-          <WadqLogo />
+          <NasaqLogo />
 
           <nav className={`site-nav ${menuOpen ? "is-open" : ""}`}>
             <a href="#journey" onClick={closeMenu}>
@@ -1058,7 +1055,7 @@ function Home() {
 
       <footer className="site-footer">
         <div className="page-container site-footer__inner">
-          <WadqLogo />
+          <NasaqLogo />
 
           <div className="site-footer__links">
             <a href="#journey">كيف تعمل؟</a>

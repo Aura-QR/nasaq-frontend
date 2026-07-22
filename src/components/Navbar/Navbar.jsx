@@ -1,70 +1,171 @@
-import { Box } from "@mui/material";
+import { useState } from "react";
+import {
+  Box,
+  Button,
+  IconButton,
+} from "@mui/material";
+import {
+  ArrowBackRounded,
+  CloseRounded,
+  MenuRounded,
+} from "@mui/icons-material";
+import { Link } from "react-router-dom";
 
 import afaqLogo from "../../images/afaq-logo.png";
+import "./Navbar.scss";
+
+const NAV_LINKS = [
+  {
+    label: "كيف تعمل؟",
+    href: "#how-it-works",
+  },
+  {
+    label: "أدوات نَسّق",
+    href: "#tools",
+  },
+  {
+    label: "الفِرَق",
+    href: "#teams",
+  },
+  {
+    label: "عن المنصة",
+    href: "#about",
+  },
+];
 
 const Navbar = () => {
+  const [mobileMenuOpen, setMobileMenuOpen] =
+    useState(false);
+
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false);
+  };
+
   return (
     <Box
-      component="nav"
+      component="header"
+      className="nasaq-navbar-shell"
       dir="rtl"
-      sx={{
-        position: "relative",
-        zIndex: 20,
-
-        width: "100%",
-        minHeight: {
-          xs: 76,
-          md: 88,
-        },
-
-        px: {
-          xs: 2,
-          sm: 3,
-          md: 5,
-        },
-
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "flex-start",
-
-        backgroundColor: "rgba(255, 252, 247, 0.92)",
-
-        borderBottom:
-          "1px solid rgba(36, 74, 112, 0.08)",
-
-        backdropFilter: "blur(16px)",
-        WebkitBackdropFilter: "blur(16px)",
-
-        boxShadow:
-          "0 8px 30px rgba(36, 74, 112, 0.06)",
-      }}
     >
       <Box
-        component="img"
-        src={afaqLogo}
-        alt="شعار منصة آفاق"
-        sx={{
-          display: "block",
+        component="nav"
+        className="nasaq-navbar"
+        aria-label="التنقل الرئيسي"
+      >
+        <Link
+          to="/"
+          className="nasaq-navbar__brand"
+          aria-label="العودة إلى الصفحة الرئيسية"
+          onClick={closeMobileMenu}
+        >
+          <Box
+            component="img"
+            src={afaqLogo}
+            alt="شعار منصة نَسّق"
+            className="nasaq-navbar__logo"
+          />
+        </Link>
 
-          width: {
-            xs: 118,
-            sm: 135,
-            md: 150,
-          },
+        <Box className="nasaq-navbar__links">
+          {NAV_LINKS.map((link) => (
+            <Box
+              key={link.href}
+              component="a"
+              href={link.href}
+              className="nasaq-navbar__link"
+            >
+              {link.label}
+            </Box>
+          ))}
+        </Box>
 
-          height: {
-            xs: 52,
-            sm: 58,
-            md: 64,
-          },
+        <Box className="nasaq-navbar__actions">
+          <Button
+            component={Link}
+            to="/login"
+            className="nasaq-navbar__login"
+            onClick={closeMobileMenu}
+          >
+            تسجيل الدخول
+          </Button>
 
-          objectFit: "contain",
-          objectPosition: "right center",
+          <Button
+            component={Link}
+            to="/register"
+            className="nasaq-navbar__start"
+            onClick={closeMobileMenu}
+          >
+            <span>ابدأ الآن</span>
+            <ArrowBackRounded />
+          </Button>
+        </Box>
 
-          userSelect: "none",
-          pointerEvents: "none",
-        }}
-      />
+        <IconButton
+          type="button"
+          className="nasaq-navbar__menu-button"
+          aria-label={
+            mobileMenuOpen
+              ? "إغلاق القائمة"
+              : "فتح القائمة"
+          }
+          aria-expanded={mobileMenuOpen}
+          onClick={() =>
+            setMobileMenuOpen((previous) => !previous)
+          }
+        >
+          {mobileMenuOpen ? (
+            <CloseRounded />
+          ) : (
+            <MenuRounded />
+          )}
+        </IconButton>
+
+        <Box
+          className={[
+            "nasaq-navbar__mobile-menu",
+            mobileMenuOpen
+              ? "nasaq-navbar__mobile-menu--open"
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          <Box className="nasaq-navbar__mobile-links">
+            {NAV_LINKS.map((link) => (
+              <Box
+                key={link.href}
+                component="a"
+                href={link.href}
+                className="nasaq-navbar__mobile-link"
+                onClick={closeMobileMenu}
+              >
+                {link.label}
+              </Box>
+            ))}
+          </Box>
+
+          <Box className="nasaq-navbar__mobile-actions">
+            <Button
+              component={Link}
+              to="/login"
+              className="nasaq-navbar__login"
+              onClick={closeMobileMenu}
+            >
+              تسجيل الدخول
+            </Button>
+
+            <Button
+              component={Link}
+              to="/register"
+              className="nasaq-navbar__start"
+              onClick={closeMobileMenu}
+            >
+              <span>ابدأ الآن</span>
+              <ArrowBackRounded />
+            </Button>
+          </Box>
+        </Box>
+      </Box>
     </Box>
   );
 };
