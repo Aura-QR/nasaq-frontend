@@ -1,7 +1,7 @@
 import axios from "axios";
 import Cookies from "js-cookie";
 
-const API_BASE_URL = String(import.meta.env.VITE_API || "")
+const API_BASE_URL = String(import.meta.env.VITE_API || "http://api.nasaq.185.170.196.120.sslip.io")
   .trim()
   .replace(/\/+$/, "");
 
