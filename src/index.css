@@ -146,6 +146,21 @@ img {
 ::-webkit-scrollbar-thumb:hover {
   background-color: var(--color-navy);
 }
+/* Hide the browser's native password reveal icon */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+/* Hide browser autofill/password controls */
+input[type="password"]::-webkit-credentials-auto-fill-button,
+input[type="password"]::-webkit-contacts-auto-fill-button {
+  visibility: hidden;
+  display: none !important;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
 
 @media (prefers-reduced-motion: reduce) {
   html {

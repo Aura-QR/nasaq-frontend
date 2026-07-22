@@ -1,528 +1,956 @@
-import { useNavigate, useParams } from "react-router-dom";
-import Container from "@/components/Container/Container";
-import { useEffect, useState } from "react";
-import { toast } from "react-toastify";
-import Loading from "@/components/Loading";
 import {
   Box,
   Button,
+  Chip,
   IconButton,
   Paper,
+  Skeleton,
   Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
-import { Add, Delete, DeleteOutlineOutlined } from "@mui/icons-material";
-import AlertDialog from "@/components/Popup/Popup";
-import { deleteLecture, fetchLectures } from "@/APIs/school/lectures";
+
+import {
+  AddRounded,
+  CalendarMonthRounded,
+  DeleteOutlineRounded,
+  EditRounded,
+  VisibilityRounded,
+} from "@mui/icons-material";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  Link,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+
+import { toast } from "react-toastify";
+
+import Container from "@/components/Container/Container";
+import Popup from "@/components/Popup/Popup";
+
+import {
+  deleteLecture,
+  fetchLectures,
+} from "@/APIs/school/lectures";
+
+import { deletePreparation } from "@/APIs/school/preparation";
+
 import Slots from "@/utils/constants/Slots";
 import Days from "@/utils/constants/Days";
 import { translateGender } from "@/utils/helpers/translateGender";
 import usePermissions from "@/utils/hooks/usePermissions";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import { deletePreparation } from "@/APIs/school/preparation";
 import { useTeacher } from "@/utils/hooks/apis/useTeacher";
-
 
 const TeacherSchedule = () => {
   const { id } = useParams();
 
-  // Fetch Teacher Data
-  const {teacher , loading} = useTeacher(id);
+  const {
+    teacher,
+    loading,
+  } = useTeacher(id);
 
-  // Show loading while fetching teacher data
   if (loading) {
     return (
       <Container>
-        <Loading />
+        <Skeleton
+          variant="rounded"
+          height={520}
+          sx={{
+            borderRadius: "20px",
+          }}
+        />
       </Container>
     );
   }
 
-  // Show error if teacher data not found
   if (!teacher) {
     return (
       <Container>
-        <Typography color="error" sx={{ mt: 10, textAlign: "center" }}>
-          لم يتم العثور على بيانات المعلم
-        </Typography>
+        <Paper
+          elevation={0}
+          sx={{
+            minHeight: 220,
+            display: "grid",
+            placeItems: "center",
+            borderRadius: "18px",
+          }}
+        >
+          <Typography
+            sx={{
+              color:
+                "var(--color-navy-deep)",
+              fontWeight: 800,
+            }}
+          >
+            لم يتم العثور على بيانات المعلم
+          </Typography>
+        </Paper>
       </Container>
     );
   }
 
-  console.log(teacher)
-
   return (
     <Container>
-      {/* Timetable */}
-      <Schedule teacherData={teacher} />
+      <Schedule
+        teacherData={teacher}
+      />
     </Container>
   );
 };
 
-const Schedule = ({ teacherData }) => {
-  const [weeklySchedule, setWeeklySchedule] = useState([]);
-  const [lectures, setLectures] = useState([]);
-  const [loading, setLoading] = useState(true);
+const Schedule = ({
+  teacherData,
+}) => {
+  const [lectures, setLectures] =
+    useState([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [deleteOpen, setDeleteOpen] =
+    useState(false);
+
+  const [
+    selectedLectureId,
+    setSelectedLectureId,
+  ] = useState(null);
+
   const navigate = useNavigate();
 
-  // fetch schedule data
-  useEffect(() => {
-    const fetchScheduleData = async () => {
-      setLoading(true);
-      // Fetch lectures with filters
-      const response = await fetchLectures({teacherId : teacherData._id});
-      console.log(response)
-      if (response?.status) {
-        setLectures(response.data);
+  const lecturePermissions =
+    usePermissions("lectures");
 
-        // Transform API data into schedule format
-        const mappedSchedule = mapLecturesToSchedule(response.data);
-        setWeeklySchedule(mappedSchedule);
-      } else {
-        toast.error(response?.message || "حدث خطأ ما أثناء جلب الجدول الدراسي");
+  const fetchScheduleData =
+    async () => {
+      try {
+        setLoading(true);
+
+        const response =
+          await fetchLectures({
+            teacherId:
+              teacherData._id,
+          });
+
+        if (!response?.status) {
+          toast.error(
+            response?.message ||
+              "حدث خطأ أثناء جلب الجدول الدراسي"
+          );
+          setLectures([]);
+          return;
+        }
+
+        setLectures(
+          Array.isArray(
+            response.data
+          )
+            ? response.data
+            : []
+        );
+      } catch (error) {
+        toast.error(
+          error?.response?.data
+            ?.message ||
+            "حدث خطأ أثناء جلب الجدول الدراسي"
+        );
         setLectures([]);
-        setWeeklySchedule([]);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
+  useEffect(() => {
     if (teacherData?._id) {
       fetchScheduleData();
     }
-  }, [teacherData]);
+  }, [teacherData?._id]);
 
-  // Transform lectures data to schedule
-  const mapLecturesToSchedule = (lectures) => {
-    // Initialize empty schedule using Slots
-    const schedule = Slots.map((slot) => {
-      const scheduleSlot = {
-        time: slot.name,
-      };
-      // Add empty object for each day
-      Days.forEach((day) => {
-        scheduleSlot[day.day] = {};
-      });
-      return scheduleSlot;
-    });
+  const weeklySchedule =
+    useMemo(() => {
+      const schedule = Slots.map(
+        (slot) => {
+          const row = {
+            time: slot.name,
+          };
 
-    // Fill schedule with lecture data
-    lectures.forEach((lecture) => {
-      // Find matching day in Arabic
-      const dayObj = Days.find(
-        (d) => d.id === lecture.dayOfWeek?.toLowerCase()
+          Days.forEach((day) => {
+            row[day.day] = null;
+          });
+
+          return row;
+        }
       );
-      const slotIndex = lecture.slot - 1; // slot is 1-indexed
-      if (dayObj && slotIndex >= 0 && slotIndex < schedule.length) {
-        const teacherName = lecture.teacher.name;
-        schedule[slotIndex][dayObj.day] = {
+
+      lectures.forEach((lecture) => {
+        const day = Days.find(
+          (item) =>
+            item.id ===
+            lecture.dayOfWeek?.toLowerCase()
+        );
+
+        const slotIndex =
+          Number(lecture.slot) - 1;
+
+        if (
+          !day ||
+          slotIndex < 0 ||
+          slotIndex >=
+            schedule.length
+        ) {
+          return;
+        }
+
+        schedule[slotIndex][
+          day.day
+        ] = {
           id: lecture._id,
-          name: teacherName,
-          subject: lecture.subject?.subjectName,
-          info: `${lecture.class?.academicYear} - ${lecture.class?.roomNumber} - ${translateGender(lecture.class?.gender, "class")}`,
-          preparation: lecture.preparation,
+          subject:
+            lecture.subject
+              ?.subjectName ||
+            "مادة غير محددة",
+          info: lecture.class
+            ? `${lecture.class.academicYear} - ${lecture.class.roomNumber} - ${translateGender(
+                lecture.class.gender,
+                "class"
+              )}`
+            : "بدون فصل",
+          preparation:
+            lecture.preparation,
         };
+      });
+
+      return schedule;
+    }, [lectures]);
+
+  const handleDeleteLecture =
+    async () => {
+      if (!selectedLectureId) {
+        return;
       }
-    });
 
-    return schedule;
-  };
+      try {
+        const response =
+          await deleteLecture(
+            selectedLectureId
+          );
 
+        if (!response?.status) {
+          toast.error(
+            response?.message ||
+              "حدث خطأ أثناء حذف الحصة"
+          );
+          return;
+        }
 
-  // Handle Delete
-  const [open, setOpen] = useState(false);
-  const [selectedLectureId, setSelectedLectureId] = useState(null);
-  const handleDelete = async () => {
-    const response = await deleteLecture(selectedLectureId);
-    if (response.status) {
-      toast.success("تم الحذف بنجاح");
-      // Refresh schedule
-      const updatedLectures = lectures.filter(
-        (lec) => lec._id !== selectedLectureId
-      );
-      setLectures(updatedLectures);
-      const mappedSchedule = mapLecturesToSchedule(updatedLectures);
-      setWeeklySchedule(mappedSchedule);
-      setOpen(false);
-    } else {
-      toast.error("حدث خطأ ما اثناء حذف الحصة");
-    }
-  };
+        setLectures(
+          (previous) =>
+            previous.filter(
+              (lecture) =>
+                lecture._id !==
+                selectedLectureId
+            )
+        );
 
-  // Permission
-  const permissions = usePermissions("lectures");
+        setDeleteOpen(false);
+        setSelectedLectureId(
+          null
+        );
 
-  // showing loading state
+        toast.success(
+          "تم حذف الحصة بنجاح"
+        );
+      } catch (error) {
+        toast.error(
+          error?.response?.data
+            ?.message ||
+            "حدث خطأ أثناء حذف الحصة"
+        );
+      }
+    };
+
   if (loading) {
-    return <Loading />;
-  }
-
-  if (!weeklySchedule.length) {
     return (
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 3, md: 8, lg: 16 },
-          borderRadius: "16px",
-          border: "1px solid",
-          mt: 10,
-          borderColor: "primary.border",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "400px",
-        }}
-      >
-        <Typography color="text.secondary">
-          {" "}
-          لا توجد محاضرات لهذا المعلم
-        </Typography>
-      </Paper>
+      <Stack spacing={1}>
+        <Skeleton
+          variant="rounded"
+          height={92}
+          sx={{
+            borderRadius: "18px",
+          }}
+        />
+
+        <Skeleton
+          variant="rounded"
+          height={480}
+          sx={{
+            borderRadius: "18px",
+          }}
+        />
+      </Stack>
     );
   }
 
   return (
-    <div>
-      {/* Weekly Schedule Section */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 3, md: 8, lg: 16 },
-          borderRadius: "16px",
-          border: "1px solid",
-          mt: 10,
-          borderColor: "primary.border",
-        }}
-      >
-        <Stack
-          direction={"row"}
-          justifyContent={"space-between"}
-          alignItems={"center"}
-          mb={{ xs: 8, md: 16 }}
-        >
-          {/* Title */}
-          <Typography variant="h6" fontWeight={600}>
-            الجدول الدراسي الأسبوعي
-          </Typography>
-          {/* Teacher */}
-          {teacherData && (
-            <Typography variant="subtitle1" color={"text.secondary"}>
-              أ/ {teacherData.name}
-            </Typography>
-          )}
-        </Stack>
-
-        <Box
+    <>
+      <Stack spacing={1.25}>
+        <Paper
+          elevation={0}
           sx={{
-            overflowX: "auto",
+            p: {
+              xs: 1.5,
+              md: 1.9,
+            },
+
+            display: "flex",
+            flexDirection: {
+              xs: "column",
+              sm: "row",
+            },
+            alignItems: {
+              xs: "stretch",
+              sm: "center",
+            },
+            justifyContent:
+              "space-between",
+            gap: 1.2,
+
+            border:
+              "1px solid rgba(36, 74, 112, 0.08)",
+            borderRadius: "18px",
+
+            background:
+              "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.42))",
+
+            boxShadow:
+              "0 10px 24px rgba(18,47,77,0.06)",
           }}
         >
           <Stack
-            direction={"row"}
-            sx={{
-              "& > *": {
-                minWidth: { xs: "100px", sm: "110px", md: "130px" },
-              },
-            }}
+            direction="row"
+            alignItems="center"
+            spacing={1}
           >
-            {/* Time Column */}
-            <Stack
-              flex={1}
-              borderRight={"1px solid"}
-              borderColor={"primary.border"}
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+
+                display: "grid",
+                placeItems: "center",
+
+                color:
+                  "var(--color-gold-dark)",
+                backgroundColor:
+                  "var(--color-gold-soft)",
+
+                border:
+                  "1px solid rgba(211,164,79,0.22)",
+                borderRadius: "12px",
+              }}
             >
-              <Box
+              <CalendarMonthRounded />
+            </Box>
+
+            <Box>
+              <Typography
+                component="h1"
                 sx={{
-                  position: "relative",
-                  height: "60px",
-                  bgcolor: "#F6F8F9",
-                  borderRadius: "8px 0 0 0",
-                  overflow: "hidden",
+                  color:
+                    "var(--color-navy-deep)",
+                  fontSize: {
+                    xs: "19px",
+                    md: "22px",
+                  },
+                  fontWeight: 800,
                 }}
               >
-                {/* Diagonal Line */}
-                <Box
-                  sx={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    "&::before": {
-                      content: '""',
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      background:
-                        "linear-gradient(to top right, transparent calc(50% - .5px), #DEE3E2 calc(50% - .5px), #d1d5db calc(50% + .5px), transparent calc(50% + .5px))",
-                    },
-                  }}
-                />
-                {/* الوقت*/}
-                <Typography
-                  sx={{
-                    position: "absolute",
-                    bottom: 8,
-                    left: { xs: 6, md: 12 },
-                    fontWeight: 600,
-                    fontSize: { xs: "12px", md: "14px" },
-                    color: "text.primary",
-                  }}
-                >
-                  الوقت
-                </Typography>
-                {/* اليوم  */}
-                <Typography
-                  sx={{
-                    position: "absolute",
-                    top: 8,
-                    right: { xs: 6, md: 12 },
-                    fontWeight: 600,
-                    fontSize: { xs: "12px", md: "14px" },
-                    color: "text.primary",
-                  }}
-                >
-                  اليوم
-                </Typography>
-              </Box>
-              {weeklySchedule.map((slot, index) => (
-                <Box
-                  key={index}
-                  sx={{
-                    p: { xs: 6, md: 7 },
-                    minHeight: "120px",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    bgcolor: "#F6F8F9",
-                    borderBottom: "1px solid #e8ebf0",
-                    fontWeight: 600,
-                    color: "text.secondary",
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      fontSize: { xs: "11px", md: "14px" },
-                      fontWeight: 600,
-                      mb: 1,
-                      textAlign: "center",
-                    }}
-                  >
-                    {slot.time}
-                  </Typography>
-                </Box>
-              ))}
-            </Stack>
+                الجدول الدراسي الأسبوعي
+              </Typography>
 
-            {/* Day Columns */}
-            {Days.map((dayObj) => {
-              console.log(dayObj.id);
-              return (
-                <Stack key={dayObj.id} flex={2}>
-                  <Box
-                    sx={{
-                      p: { xs: 2, md: 8 },
-                      height: "60px",
-                      bgcolor: "#F6F8F9",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textAlign: "center",
-                      fontWeight: 600,
-                      fontSize: { xs: "12px", md: "14px" },
-                      color: "text.primary",
-                      borderBottom: "1px solid",
-                      borderColor: "primary.border",
-                      position: "relative",
-                      flexDirection: "column",
-                    }}
-                  >
-                    {dayObj.day}
-                  </Box>
-                  {weeklySchedule.map((slot, slotIndex) => {
-                    const lesson = slot[dayObj.day];
-                    const hasLesson =
-                      lesson?.name && lesson.name !== "غير محدد";
-                    return (
-                      <Box
-                        key={slotIndex}
-                        sx={{
-                          position: "relative",
-                          textAlign: "center",
-                          p: { xs: 4, md: 6 },
-                          minHeight: "120px",
-                          bgcolor: hasLesson ? "white" : "#F6F8F9",
-                          borderBottom: "1px solid #e8ebf0",
-                          borderRight: "1px solid #e8ebf0",
-                          transition: "0.2s",
-                          cursor: hasLesson ? "pointer" : "default",
-                          "&:hover": {
-                            bgcolor: "#f0f7ff",
-                            boxShadow: "inset 0 0 0 2px #3B82F61F",
-                          }, 
-                        }}
-                        onClick={() => {
-                          teacherData &&
-                            (hasLesson
-                              ? permissions.edit && navigate(
-                                  `/school/lectures/edit/${lesson.id}?isComingFromTeacher=true`
-                                )
-                              : permissions.add && navigate(
-                                  `/school/lectures/add?teacherId=${
-                                    teacherData._id
-                                  }&day=${dayObj.id}&slot=${slotIndex + 1}`
-                                ));
-                        }}
-                      >
-                        {hasLesson && (
-                          <Stack
-                            spacing={{ xs: 2, md: 2 }}
-                            alignItems="center"
-                            justifyContent={"center"}
-                            height={"100%"}
-                          >
-                            <Typography
-                              fontWeight={600}
-                              fontSize={{ xs: "12px", md: "14px" }}
-                              color={"text.primary"}
-                              noWrap
-                            >
-                              {lesson.subject}
-                            </Typography>
-                            {teacherData && (
-                              <Typography
-                                fontSize={"10px"}
-                                color={"primary.main"}
-                                sx={{paddingY:{xs:"4px",md:"8px"}, marginTop:"0px !important"}}
-                              >
-                                {lesson.info}
-                              </Typography>
-                            )}
-                            <LecturePreparation lectureId={lesson.id} preparation={lesson.preparation}/>
-                          </Stack>
-                        )}
-                        {/* Delete Icon */}
-                        {hasLesson && permissions.delete && (
-                          <IconButton
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedLectureId(lesson.id);
-                              setOpen(true);
-                            }}
-                            color="error"
-                            sx={{
-                              position: "absolute",
-                              left: 4,
-                              top: 4,
-                            }}
-                          >
-                            {" "}
-                            <Delete sx={{ width: 16, height: 16 }} />{" "}
-                          </IconButton>
-                        )}
-                      </Box>
-                    );
-                  })}
-                </Stack>
-              );
-            })}
+              <Typography
+                sx={{
+                  mt: 0.2,
+                  color:
+                    "var(--color-muted)",
+                  fontSize: "10px",
+                }}
+              >
+                أ/ {teacherData.name}
+              </Typography>
+            </Box>
           </Stack>
-        </Box>
-      </Paper>
-      {/* Pop up delete */}
-      <AlertDialog
-        open={open}
-        setOpen={setOpen}
-        message={"هل انت متأكد من انك تريد حذف هذه الحصة؟"}
-        type={"delete"}
-        fn={handleDelete}
+
+          <Button
+            component={Link}
+            to={`/users/teachers/${teacherData._id}`}
+            variant="outlined"
+            sx={{
+              minHeight: 40,
+              px: 1.6,
+
+              borderRadius: "12px",
+
+              color:
+                "var(--color-navy)",
+              borderColor:
+                "rgba(36, 74, 112, 0.16)",
+
+              fontSize: "11px",
+              fontWeight: 800,
+              textTransform: "none",
+            }}
+          >
+            تفاصيل المعلم
+          </Button>
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: {
+              xs: 0.8,
+              md: 1.2,
+            },
+
+            overflow: "hidden",
+
+            border:
+              "1px solid rgba(36, 74, 112, 0.08)",
+            borderRadius: "18px",
+
+            backgroundColor:
+              "var(--color-cream)",
+
+            boxShadow:
+              "0 10px 24px rgba(18,47,77,0.055)",
+          }}
+        >
+          <Box
+            sx={{
+              overflowX: "auto",
+              pb: 0.5,
+
+              scrollbarWidth: "thin",
+              scrollbarColor:
+                "rgba(36,74,112,0.22) transparent",
+
+              "&::-webkit-scrollbar":
+                {
+                  height: 7,
+                },
+
+              "&::-webkit-scrollbar-thumb":
+                {
+                  borderRadius: 999,
+                  backgroundColor:
+                    "rgba(36,74,112,0.20)",
+                },
+            }}
+          >
+            <Box
+              sx={{
+                minWidth: 1040,
+
+                display: "grid",
+                gridTemplateColumns:
+                  "110px repeat(5, minmax(176px, 1fr))",
+
+                border:
+                  "1px solid rgba(36,74,112,0.08)",
+                borderRadius: "14px",
+
+                overflow: "hidden",
+              }}
+            >
+              <ScheduleHeaderCell>
+                الوقت
+              </ScheduleHeaderCell>
+
+              {Days.map((day) => (
+                <ScheduleHeaderCell
+                  key={day.id}
+                >
+                  {day.day}
+                </ScheduleHeaderCell>
+              ))}
+
+              {weeklySchedule.map(
+                (slot, slotIndex) => (
+                  <ScheduleRow
+                    key={slotIndex}
+                    slot={slot}
+                    slotIndex={
+                      slotIndex
+                    }
+                    teacherData={
+                      teacherData
+                    }
+                    permissions={
+                      lecturePermissions
+                    }
+                    navigate={
+                      navigate
+                    }
+                    onDelete={(
+                      lectureId
+                    ) => {
+                      setSelectedLectureId(
+                        lectureId
+                      );
+                      setDeleteOpen(
+                        true
+                      );
+                    }}
+                  />
+                )
+              )}
+            </Box>
+          </Box>
+        </Paper>
+      </Stack>
+
+      <Popup
+        open={deleteOpen}
+        setOpen={setDeleteOpen}
+        message="هل أنت متأكد من حذف هذه الحصة؟"
+        type="delete"
+        fn={handleDeleteLecture}
       />
-    </div>
+    </>
   );
 };
 
- // to get preparation data
-  const LecturePreparation = ({ lectureId, preparation }) => {
+const ScheduleHeaderCell = ({
+  children,
+}) => (
+  <Box
+    sx={{
+      minHeight: 52,
+
+      display: "grid",
+      placeItems: "center",
+
+      color:
+        "var(--color-navy-deep)",
+      background:
+        "linear-gradient(135deg, #f5f7fb, #e9eef5)",
+
+      borderBottom:
+        "1px solid rgba(36,74,112,0.08)",
+      borderLeft:
+        "1px solid rgba(36,74,112,0.07)",
+
+      fontSize: "11.5px",
+      fontWeight: 800,
+    }}
+  >
+    {children}
+  </Box>
+);
+
+const ScheduleRow = ({
+  slot,
+  slotIndex,
+  teacherData,
+  permissions,
+  navigate,
+  onDelete,
+}) => {
+  return (
+    <>
+      <Box
+        sx={{
+          minHeight: 126,
+
+          display: "grid",
+          placeItems: "center",
+
+          color:
+            "var(--color-navy-deep)",
+          backgroundColor:
+            "rgba(36,74,112,0.045)",
+
+          borderBottom:
+            "1px solid rgba(36,74,112,0.07)",
+          borderLeft:
+            "1px solid rgba(36,74,112,0.07)",
+
+          fontSize: "11px",
+          fontWeight: 800,
+          textAlign: "center",
+        }}
+      >
+        {slot.time}
+      </Box>
+
+      {Days.map((day) => {
+        const lesson =
+          slot[day.day];
+
+        const hasLesson =
+          Boolean(lesson?.id);
+
+        return (
+          <Box
+            key={day.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              if (
+                hasLesson &&
+                permissions.edit
+              ) {
+                navigate(
+                  `/school/lectures/edit/${lesson.id}?isComingFromTeacher=true`
+                );
+                return;
+              }
+
+              if (
+                !hasLesson &&
+                permissions.add
+              ) {
+                navigate(
+                  `/school/lectures/add?teacherId=${teacherData._id}&day=${day.id}&slot=${
+                    slotIndex + 1
+                  }`
+                );
+              }
+            }}
+            onKeyDown={(event) => {
+              if (
+                event.key ===
+                  "Enter" ||
+                event.key === " "
+              ) {
+                event.preventDefault();
+                event.currentTarget.click();
+              }
+            }}
+            sx={{
+              position: "relative",
+              minHeight: 126,
+              p: 1,
+
+              display: "flex",
+              alignItems: "center",
+              justifyContent:
+                "center",
+
+              backgroundColor:
+                hasLesson
+                  ? "var(--color-white)"
+                  : "rgba(36,74,112,0.025)",
+
+              borderBottom:
+                "1px solid rgba(36,74,112,0.07)",
+              borderLeft:
+                "1px solid rgba(36,74,112,0.07)",
+
+              cursor:
+                hasLesson ||
+                permissions.add
+                  ? "pointer"
+                  : "default",
+
+              transition:
+                "background-color 180ms ease, box-shadow 180ms ease",
+
+              "&:hover": {
+                backgroundColor:
+                  hasLesson
+                    ? "rgba(251,240,216,0.52)"
+                    : permissions.add
+                    ? "rgba(36,74,112,0.045)"
+                    : undefined,
+                boxShadow:
+                  hasLesson ||
+                  permissions.add
+                    ? "inset 0 0 0 2px rgba(211,164,79,0.15)"
+                    : "none",
+              },
+            }}
+          >
+            {hasLesson ? (
+              <Stack
+                alignItems="center"
+                justifyContent="center"
+                spacing={0.65}
+                sx={{
+                  width: "100%",
+                }}
+              >
+                <Typography
+                  sx={{
+                    maxWidth: "100%",
+                    overflow: "hidden",
+
+                    color:
+                      "var(--color-navy-deep)",
+                    fontSize: "12px",
+                    fontWeight: 800,
+
+                    textOverflow:
+                      "ellipsis",
+                    whiteSpace:
+                      "nowrap",
+                  }}
+                >
+                  {lesson.subject}
+                </Typography>
+
+                <Chip
+                  label={lesson.info}
+                  size="small"
+                  sx={{
+                    maxWidth: "100%",
+                    height: 24,
+
+                    color:
+                      "var(--color-navy)",
+                    backgroundColor:
+                      "rgba(36,74,112,0.065)",
+
+                    fontSize: "8.5px",
+                    fontWeight: 700,
+
+                    "& .MuiChip-label":
+                      {
+                        overflow:
+                          "hidden",
+                        textOverflow:
+                          "ellipsis",
+                      },
+                  }}
+                />
+
+                <LecturePreparation
+                  lectureId={
+                    lesson.id
+                  }
+                  preparation={
+                    lesson.preparation
+                  }
+                />
+
+                {permissions.delete && (
+                  <Tooltip title="حذف الحصة">
+                    <IconButton
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onDelete(
+                          lesson.id
+                        );
+                      }}
+                      sx={{
+                        position:
+                          "absolute",
+                        top: 6,
+                        left: 6,
+
+                        width: 30,
+                        height: 30,
+
+                        color:
+                          "var(--color-danger)",
+                        backgroundColor:
+                          "rgba(201,79,79,0.07)",
+
+                        border:
+                          "1px solid rgba(201,79,79,0.12)",
+                        borderRadius:
+                          "9px",
+
+                        "&:hover": {
+                          color: "#ffffff",
+                          backgroundColor:
+                            "var(--color-danger)",
+                        },
+                      }}
+                    >
+                      <DeleteOutlineRounded
+                        sx={{
+                          fontSize: 17,
+                        }}
+                      />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Stack>
+            ) : permissions.add ? (
+              <Stack
+                alignItems="center"
+                spacing={0.45}
+                sx={{
+                  color:
+                    "var(--color-muted)",
+                }}
+              >
+                <AddRounded
+                  sx={{
+                    fontSize: 20,
+                  }}
+                />
+
+                <Typography
+                  sx={{
+                    fontSize: "9.5px",
+                    fontWeight: 700,
+                  }}
+                >
+                  إضافة حصة
+                </Typography>
+              </Stack>
+            ) : null}
+          </Box>
+        );
+      })}
+    </>
+  );
+};
+
+const LecturePreparation = ({
+  lectureId,
+  preparation,
+}) => {
   const navigate = useNavigate();
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const permissions = usePermissions("preparation");
 
-  const hasPreparation = preparation && Object.keys(preparation).length !== 0;
+  const [
+    deleteDialogOpen,
+    setDeleteDialogOpen,
+  ] = useState(false);
 
-  const handleClick = (e, path) => {
-    e.stopPropagation();
-    navigate(path);
-  };
+  const [loading, setLoading] =
+    useState(false);
 
-  const handleDelete = async (e) => {
-    e?.stopPropagation();
-    setLoading(true);
+  const permissions =
+    usePermissions("preparation");
 
-    const response = await deletePreparation(preparation[0]._id);
+  const preparationItem =
+    Array.isArray(preparation)
+      ? preparation[0]
+      : preparation;
 
-    if (response.status) {
-      toast.success("تم حذف التحضير بنجاح");
-      setDeleteDialogOpen(false);
-      window.location.reload();
-    } else {
-      toast.error(response?.message || "حدث خطأ أثناء حذف التحضير");
-    }
-    setLoading(false);
-  };
+  const hasPreparation =
+    Boolean(preparationItem?._id);
 
-  if (!preparation) {
+  const handleDelete =
+    async () => {
+      if (!preparationItem?._id) {
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        const response =
+          await deletePreparation(
+            preparationItem._id
+          );
+
+        if (!response?.status) {
+          toast.error(
+            response?.message ||
+              "حدث خطأ أثناء حذف التحضير"
+          );
+          return;
+        }
+
+        setDeleteDialogOpen(
+          false
+        );
+
+        toast.success(
+          "تم حذف التحضير بنجاح"
+        );
+
+        window.location.reload();
+      } catch (error) {
+        toast.error(
+          error?.response?.data
+            ?.message ||
+            "حدث خطأ أثناء حذف التحضير"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  if (preparation === undefined) {
     return (
-      <Typography fontSize="10px" color="text.secondary">
-        جاري التحميل...
+      <Typography
+        sx={{
+          color:
+            "var(--color-muted)",
+          fontSize: "8.5px",
+        }}
+      >
+        جاري تحميل التحضير...
       </Typography>
     );
   }
 
   return (
     <>
-      {hasPreparation && (
-        <Box
+      {hasPreparation ? (
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="center"
+          spacing={0.5}
           sx={{
-            display: "flex",
-            gap: {xs:1,md:3},
-            alignItems: "center",
             width: "100%",
-            justifyContent: "center",
           }}
         >
           {permissions.edit && (
             <Button
+              type="button"
               size="small"
               variant="contained"
               startIcon={
-                <VisibilityIcon sx={{ fontSize: "14px !important" }} />
+                <VisibilityRounded />
               }
-              onClick={(e) =>
-                handleClick(e, `/school/preparation/edit/${preparation[0]._id}`)
-              }
+              onClick={(event) => {
+                event.stopPropagation();
+
+                navigate(
+                  `/school/preparation/edit/${preparationItem._id}`
+                );
+              }}
               sx={{
-                flex: 1,
-                px: {xs:2,md:5},
-                py: {xs:2, md:2.5},
-                fontSize: {xs: "10px",sm:"12px", md:"12px"},
-                fontWeight: 500,
-                textTransform: "none",
-                bgcolor: "primary.success",
-                color: "white",
-                "&:hover": {
-                  transition: "all 0.4s",
-                  bgcolor: "primary.dark",
-                },
-                "& .MuiButton-startIcon": {
-                  mr: {
-                    xs: "5px",
-                    sm: "4px", // small tablets
-                    md: "4px", // medium screens
-                    lg: "8px", // keep default on large
+                minHeight: 30,
+                px: 1,
+
+                borderRadius: "9px",
+
+                color:
+                  "var(--color-white)",
+                backgroundColor:
+                  "#287a51",
+
+                fontSize: "9px",
+                fontWeight: 800,
+                textTransform:
+                  "none",
+
+                "& .MuiButton-startIcon":
+                  {
+                    marginLeft:
+                      "4px",
+                    marginRight: 0,
                   },
+
+                "& svg": {
+                  fontSize:
+                    "14px !important",
                 },
               }}
             >
@@ -531,76 +959,90 @@ const Schedule = ({ teacherData }) => {
           )}
 
           {permissions.delete && (
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDeleteDialogOpen(true);
-              }}
-              disabled={loading}
-              sx={{
-                color: "error.main",
-                border: {
-                  xs: "none",   // phones
-                  md: "1px solid",
-                },
-                borderColor: "error.main",
-                borderRadius: "4px",
-                padding: "2.5px",
-                "&:hover": {
-                  borderColor: "error.dark",
-                },
-              }}
-            >
-              <DeleteOutlineOutlined sx={{ fontSize: "21px" }} />
-            </IconButton>
-          )}
-        </Box>
-      )}
+            <Tooltip title="حذف التحضير">
+              <IconButton
+                type="button"
+                disabled={loading}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDeleteDialogOpen(
+                    true
+                  );
+                }}
+                sx={{
+                  width: 30,
+                  height: 30,
 
-      {!hasPreparation && permissions.add && (
+                  color:
+                    "var(--color-danger)",
+                  backgroundColor:
+                    "rgba(201,79,79,0.06)",
+
+                  border:
+                    "1px solid rgba(201,79,79,0.12)",
+                  borderRadius: "9px",
+                }}
+              >
+                <DeleteOutlineRounded
+                  sx={{
+                    fontSize: 16,
+                  }}
+                />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Stack>
+      ) : permissions.add ? (
         <Button
+          type="button"
           size="small"
           variant="outlined"
-          startIcon={<Add sx={{ fontSize: {xs:"13px !important",md:"16px !important" }}} />}
-          onClick={(e) =>
-            handleClick(e, `/school/preparation/add/?lectureId=${lectureId}`)
-          }
+          startIcon={<AddRounded />}
+          onClick={(event) => {
+            event.stopPropagation();
+
+            navigate(
+              `/school/preparation/add/?lectureId=${lectureId}`
+            );
+          }}
           sx={{
-            width: "50%",
-            px: 5,
-            py: {xs:2,sm:2, md:2.5},
-            fontSize: {xs: "10px",sm:"12px", md:"12px"},
-            fontWeight: 500,
+            minHeight: 30,
+            px: 1,
+
+            borderRadius: "9px",
+
+            color:
+              "var(--color-navy)",
+            borderColor:
+              "rgba(36,74,112,0.18)",
+
+            fontSize: "9px",
+            fontWeight: 800,
             textTransform: "none",
-            borderColor: "primary.main",
-            color: "primary.main",
-            "&:hover": {
-              transition: "all 0.4s",
-              borderColor: "primary.dark",
-              bgcolor: "primary.light",
-              color: "white",
-            },
-            "& .MuiButton-startIcon": {
-              mr: {
-                xs: "2px",
-                sm: "2px", // small tablets
-                md: "3px", // medium screens
-                lg: "4px", // keep default on large
+
+            "& .MuiButton-startIcon":
+              {
+                marginLeft: "4px",
+                marginRight: 0,
               },
+
+            "& svg": {
+              fontSize:
+                "14px !important",
             },
           }}
         >
-          التحضير
+          إضافة تحضير
         </Button>
-      )}
+      ) : null}
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog
+      <Popup
         open={deleteDialogOpen}
-        setOpen={setDeleteDialogOpen}
-        message={"هل أنت متأكد من حذف هذا التحضير؟"}
-        type={"delete"}
+        setOpen={
+          setDeleteDialogOpen
+        }
+        message="هل أنت متأكد من حذف هذا التحضير؟"
+        type="delete"
         fn={handleDelete}
       />
     </>
@@ -608,4 +1050,3 @@ const Schedule = ({ teacherData }) => {
 };
 
 export default TeacherSchedule;
-

@@ -1,128 +1,314 @@
-import { Box, Grid, Typography } from "@mui/material";
-import Back from "@/components/Back/Back";
-import Container from "@/components/Container/Container";
-import Input from "@/components/Input/Input";
+import {
+  Box,
+  Button,
+  Paper,
+  Skeleton,
+  Stack,
+  Typography,
+} from "@mui/material";
+
+import {
+  ArrowForwardIosRounded,
+  EditNoteRounded,
+} from "@mui/icons-material";
+
 import { useForm } from "react-hook-form";
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import SubmitSection from "@/components/SubmitSection";
+import {
+  useEffect,
+  useState,
+} from "react";
+import {
+  Link,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import { toast } from "react-toastify";
+
+import Container from "@/components/Container/Container";
+import SubjectForm from "@/components/Subjects/SubjectForm";
+import SubjectFormActions from "@/components/Subjects/SubjectFormActions";
+
 import { editSubject } from "@/APIs/school/subjects";
 import { getChangedValues } from "@/utils/helpers/getChangedValues";
 import { useSubject } from "@/utils/hooks/apis/useSubject";
 
 const Edit = () => {
-  // USE FORM
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
   } = useForm();
-  const [loading, setLoading] = useState(false);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [
+    defaultValues,
+    setDefaultValues,
+  ] = useState(null);
+
   const navigate = useNavigate();
   const { id } = useParams();
 
-  // Reference to default values coming from the API
-  const [defaultValues, setDefaultValues] = useState(null);
+  const {
+    subject,
+    loading: subjectLoading,
+  } = useSubject(id);
 
-  // Fetch teacher data using the useTeacher custom hook
-  const { subject, loading: subjectLoading } = useSubject(id);
-
-  // set default values when subject data is loaded
   useEffect(() => {
-    if (subject) {
-      reset(subject);
-      setDefaultValues(subject);
-    } 
-  }, [subject, reset]);
+    if (!subject) return;
 
-  // Handle Submit
-  const onSubmit = async (data) => {
-    setLoading(true);
-
-    const normalizedData = {
-      ...data,
-      subjectName: data.subjectName?.trim(),
-      subjectCode: data.subjectCode?.trim() || undefined,
+    const normalizedSubject = {
+      ...subject,
+      subjectName:
+        subject.subjectName?.trim() ||
+        "",
+      subjectCode:
+        subject.subjectCode?.trim() ||
+        "",
     };
 
-    // Get only changed fields
-    const changedData = getChangedValues(normalizedData, defaultValues , ["classIds"]);
-    if (Object.keys(changedData).length === 0) {
-      toast.info("لم تحدث أي بيانات للتعديل");
+    reset(normalizedSubject);
+    setDefaultValues(
+      normalizedSubject
+    );
+  }, [subject, reset]);
+
+  const onSubmit = async (
+    formData
+  ) => {
+    if (!defaultValues) return;
+
+    try {
+      setLoading(true);
+
+      const normalizedData = {
+        ...formData,
+        subjectName:
+          formData.subjectName?.trim(),
+        subjectCode:
+          formData.subjectCode?.trim() ||
+          "",
+      };
+
+      const changedData =
+        getChangedValues(
+          normalizedData,
+          defaultValues,
+          ["classIds"]
+        );
+
+      if (
+        Object.keys(changedData)
+          .length === 0
+      ) {
+        toast.info(
+          "لم يتم إجراء أي تغييرات على البيانات"
+        );
+        return;
+      }
+
+      if (
+        "subjectCode" in
+          changedData &&
+        !changedData.subjectCode
+      ) {
+        changedData.subjectCode =
+          undefined;
+      }
+
+      const response =
+        await editSubject(
+          changedData,
+          id
+        );
+
+      if (!response?.status) {
+        toast.error(
+          response?.message ||
+            response ||
+            "حدث خطأ أثناء تعديل بيانات المادة"
+        );
+        return;
+      }
+
+      toast.success(
+        "تم تعديل بيانات المادة بنجاح"
+      );
+
+      navigate("/school/subjects", {
+        replace: true,
+      });
+    } catch (error) {
+      toast.error(
+        error?.response?.data
+          ?.message ||
+          "حدث خطأ أثناء تعديل بيانات المادة"
+      );
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const response = await editSubject(changedData, id);
-    console.log(response);
-    if (response.status) {
-      toast.success("تم تعديل بيانات المادة بنجاح");
-      navigate("/School/subjects");
-    } else {
-      toast.error(response || "حدث خطأ ما أثناء تعديل بيانات المادة");
-    }
-
-    setLoading(false);
   };
 
   return (
     <Container>
-      {/* Back */}
-      <Back title={"تعديل المادة"} />
-      {/* Client Data */}
       <Box
-        bgcolor={"primary.white"}
-        p={"32px 16px"}
-        borderRadius={"12px"}
-        my={8}
-      >
-        <Typography variant="title" fontWeight={"500"}>
-          بيانات المادة
-        </Typography>
-        {defaultValues && (
-          <DataInputs
-            register={register}
-            errors={errors}
-            defaultValues={defaultValues}
-          />
+        component="form"
+        noValidate
+        onSubmit={handleSubmit(
+          onSubmit
         )}
+      >
+        <Stack spacing={1}>
+          <Button
+            component={Link}
+            to="/school/subjects"
+            startIcon={
+              <ArrowForwardIosRounded />
+            }
+            sx={{
+              width: "fit-content",
+              minHeight: 34,
+              px: 1.1,
+
+              color:
+                "var(--color-navy)",
+              backgroundColor:
+                "rgba(36, 74, 112, 0.045)",
+              borderRadius: "10px",
+
+              fontSize: "10.5px",
+              fontWeight: 800,
+              textTransform: "none",
+
+              "& .MuiButton-startIcon":
+                {
+                  marginLeft: "5px",
+                  marginRight: 0,
+                },
+
+              "& svg": {
+                fontSize: "15px",
+              },
+
+              "&:hover": {
+                color:
+                  "var(--color-gold-dark)",
+                backgroundColor:
+                  "var(--color-gold-soft)",
+              },
+            }}
+          >
+            العودة إلى المواد
+          </Button>
+
+          <Paper
+            elevation={0}
+            sx={{
+              p: {
+                xs: 1.25,
+                md: 1.5,
+              },
+
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+
+              border:
+                "1px solid rgba(36, 74, 112, 0.08)",
+              borderRadius: "16px",
+
+              background:
+                "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.38))",
+
+              boxShadow:
+                "0 8px 20px rgba(18,47,77,0.05)",
+            }}
+          >
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+
+                color:
+                  "var(--color-gold-dark)",
+                backgroundColor:
+                  "var(--color-gold-soft)",
+
+                border:
+                  "1px solid rgba(211,164,79,0.21)",
+                borderRadius: "12px",
+
+                "& svg": {
+                  fontSize: 21,
+                },
+              }}
+            >
+              <EditNoteRounded />
+            </Box>
+
+            <Box>
+              <Typography
+                component="h1"
+                sx={{
+                  color:
+                    "var(--color-navy-deep)",
+                  fontSize: {
+                    xs: "19px",
+                    md: "22px",
+                  },
+                  fontWeight: 800,
+                  lineHeight: 1.25,
+                }}
+              >
+                تعديل المادة الدراسية
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.15,
+                  color:
+                    "var(--color-muted)",
+                  fontSize: "9.5px",
+                  lineHeight: 1.5,
+                }}
+              >
+                عدّل اسم المادة أو الكود
+                ثم احفظ التغييرات.
+              </Typography>
+            </Box>
+          </Paper>
+
+          {subjectLoading ||
+          !defaultValues ? (
+            <Skeleton
+              variant="rounded"
+              height={132}
+              sx={{
+                borderRadius: "16px",
+              }}
+            />
+          ) : (
+            <>
+              <SubjectForm
+                register={register}
+                errors={errors}
+              />
+
+              <SubjectFormActions
+                loading={loading}
+                submitLabel="حفظ التعديلات"
+              />
+            </>
+          )}
+        </Stack>
       </Box>
-      {/* Submit */}
-      <SubmitSection
-        onSubmit={onSubmit}
-        handleSubmit={handleSubmit}
-        loading={loading || subjectLoading}
-      />
     </Container>
-  );
-};
-
-const DataInputs = ({ register, errors }) => {
-
-  return (
-    <Grid container mt={8} spacing={8}>
-      <Grid item xs={12} sm={6}>
-        <Input
-          register={register}
-          registerName={"subjectName"}
-          error={errors.subjectName?.message}
-          label={"اسم المادة"}
-          required={true}
-          type={"text"}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6}>
-        <Input
-          register={register}
-          registerName={"subjectCode"}
-          error={errors.subjectCode?.message}
-          label={"كود المادة"}
-          type={"text"}
-        />
-      </Grid>
-    </Grid>
   );
 };
 
