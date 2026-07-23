@@ -1,20 +1,39 @@
-﻿import { api } from "@/shared/api/client";
-import { getApiError } from "@/shared/api/getApiError";
+﻿import {
+  api,
+} from "@/shared/api/client";
+
+import {
+  getApiError,
+} from "@/shared/api/getApiError";
 
 const ENDPOINT = "/auth/login";
 
 export const loginRequest = async (
   identifier,
-  password
+  password,
+  options = {}
 ) => {
   try {
+    const payload = {
+      identifier: String(identifier || "").trim(),
+      password: String(password || ""),
+    };
+
+    if (options?.schoolSlug) {
+      payload.schoolSlug = String(
+        options.schoolSlug
+      ).trim();
+    }
+
+    if (options?.schoolId) {
+      payload.schoolId = String(
+        options.schoolId
+      ).trim();
+    }
+
     const response = await api.post(
       ENDPOINT,
-      {
-        identifier:
-          identifier?.trim() || "",
-        password,
-      }
+      payload
     );
 
     return {

@@ -11,16 +11,14 @@ import Onboarding from "@/pages/Onboarding/Onboarding";
 import NoAccess from "@/pages/Others/NoAccess";
 import TeacherDashboard from "@/pages/TeacherDashboard/TeacherDashboard";
 
-import PlatformLogin from "@/pages/PlatformLogin/PlatformLogin";
 import PlatformDashboard from "@/pages/PlatformDashboard/PlatformDashboard";
 import PlatformSchools from "@/pages/PlatformSchools/PlatformSchools";
 import PlatformSchoolDetails from "@/pages/PlatformSchoolDetails/PlatformSchoolDetails";
 
 import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
 
-import SchoolDashboardPage from "@/modules/school/dashboard/pages/SchoolDashboardPage";
-import StudentDashboardPage from "@/modules/student/dashboard/pages/StudentDashboardPage";
-
+import SchoolDashboardPage from "@/pages/SchoolDashboardPage/SchoolDashboardPage";
+import StudentDashboardPage from "@/pages/StudentDashboardPage/StudentDashboardPage";
 import AuthenticatedRoute from "@/shared/guards/AuthenticatedRoute";
 import GuestRoute from "@/shared/guards/GuestRoute";
 import RoleRoute from "@/shared/guards/RoleRoute";
@@ -43,9 +41,27 @@ const AppRouter = () => {
       />
 
       <Route
+        path="/onboarding"
+        element={<Onboarding />}
+      />
+
+      <Route
+        path="/no-access"
+        element={<NoAccess />}
+      />
+
+      <Route
+        path="/platform/login"
         element={
-          <GuestRoute />
+          <Navigate
+            to="/login"
+            replace
+          />
         }
+      />
+
+      <Route
+        element={<GuestRoute />}
       >
         <Route
           path="/login"
@@ -56,23 +72,11 @@ const AppRouter = () => {
           path="/register"
           element={<Register />}
         />
-
-        <Route
-          path="/platform/login"
-          element={
-            <PlatformLogin />
-          }
-        />
       </Route>
 
       <Route
-        path="/onboarding"
-        element={<Onboarding />}
-      />
-
-      <Route
         element={
-          <AuthenticatedRoute loginPath="/platform/login" />
+          <AuthenticatedRoute loginPath="/login" />
         }
       >
         <Route
@@ -179,11 +183,6 @@ const AppRouter = () => {
             }
           />
         </Route>
-
-        <Route
-          path="/no-access"
-          element={<NoAccess />}
-        />
 
         {appRoutes}
       </Route>

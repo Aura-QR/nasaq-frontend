@@ -7,7 +7,7 @@ import {
   normalizeRole,
 } from "@/shared/auth/roles";
 
-const ROLE_HOME_PATHS = {
+const ROLE_HOME_PATHS = Object.freeze({
   [ROLES.SUPER_ADMIN]:
     ROUTES.PLATFORM_DASHBOARD,
 
@@ -25,15 +25,20 @@ const ROLE_HOME_PATHS = {
 
   [ROLES.STUDENT]:
     ROUTES.STUDENT_DASHBOARD,
-};
+});
 
 export const getRoleHomePath = (
   role
-) =>
-  ROLE_HOME_PATHS[
-    normalizeRole(role)
-  ] ||
-  ROUTES.NO_ACCESS;
+) => {
+  const normalizedRole =
+    normalizeRole(role);
+
+  return (
+    ROLE_HOME_PATHS[
+      normalizedRole
+    ] || ROUTES.NO_ACCESS
+  );
+};
 
 export {
   ROLE_HOME_PATHS,

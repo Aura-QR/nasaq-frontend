@@ -16,6 +16,20 @@ import {
   getStoredRole,
 } from "@/shared/auth/session";
 
+import {
+  normalizeRole,
+} from "@/shared/auth/roles";
+
+const resolveAuthRole = (
+  authState
+) =>
+  normalizeRole(
+    authState?.user?.role ||
+      authState?.role ||
+      authState?.user?.user?.role ||
+      getStoredRole()
+  );
+
 const GuestRoute = () => {
   const isAuthenticated =
     useIsAuthenticated();
@@ -31,9 +45,13 @@ const GuestRoute = () => {
     getAuthUser();
 
   const role =
-    authState?.user?.role ||
-    authState?.role ||
-    getStoredRole();
+    resolveAuthRole(
+      authState
+    );
+
+  if (!role) {
+    return <Outlet />;
+  }
 
   return (
     <Navigate

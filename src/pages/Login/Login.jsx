@@ -44,94 +44,221 @@ import {
   loginRequest,
 } from "@/APIs/auth/login";
 
+import {
+  getRoleHomePath,
+} from "@/app/roleRedirects";
+
+import {
+  normalizePermissions,
+} from "@/shared/auth/permissions";
+
+import {
+  normalizeRole,
+} from "@/shared/auth/roles";
+
+import {
+  persistSessionMeta,
+} from "@/shared/auth/session";
+
 import AuthLayout, {
   AuthField,
   authColors,
 } from "../Auth/AuthLayout";
 
-const ROLE_HOME_PATHS = {
-  SUPER_ADMIN:
-    "/platform/dashboard",
 
-  OWNER:
-    "/users/students",
-
-  SUPERVISOR:
-    "/users/students",
-
-  MANAGER:
-    "/users/students",
-
-  /*
-   * دعم الحساب الإداري القديم.
-   */
-  ADMIN:
-    "/users/students",
-
-  TEACHER:
-    "/teacher/dashboard",
-
-  STUDENT:
-    "/student-dashboard",
-};
-
-const FULL_ACCESS_ROLES = [
-  "OWNER",
-  "SUPERVISOR",
-  "ADMIN",
+const LOGIN_CONTAINER_KEYS = [
+  "data",
+  "result",
+  "payload",
+  "response",
 ];
 
-const normalizeRole = (role) =>
-  String(role || "")
-    .trim()
-    .toUpperCase();
+const LOGIN_USER_KEYS = [
+  "user",
+  "profile",
+  "account",
+  "platformAdmin",
+  "admin",
+  "teacher",
+  "student",
+];
 
-const normalizePermissions = (
-  permissions,
-  role
-) => {
-  if (
-    Array.isArray(permissions)
-  ) {
+const getLoginObjects = (source) => {
+  const objects = [];
+  const queue = [source];
+  const visited = new Set();
+
+  while (queue.length && objects.length < 12) {
+    const current = queue.shift();
+
     if (
-      permissions.length === 0 &&
-      FULL_ACCESS_ROLES.includes(
-        role
-      )
+      !current ||
+      typeof current !== "object" ||
+      Array.isArray(current) ||
+      visited.has(current)
     ) {
-      return ["*"];
+      continue;
     }
 
-    return permissions;
+    visited.add(current);
+    objects.push(current);
+
+    LOGIN_CONTAINER_KEYS.forEach((key) => {
+      const child = current?.[key];
+
+      if (
+        child &&
+        typeof child === "object" &&
+        !Array.isArray(child)
+      ) {
+        queue.push(child);
+      }
+    });
   }
 
-  if (
-    typeof permissions ===
-      "string" &&
-    permissions.trim()
-  ) {
-    return [
-      permissions.trim(),
-    ];
+  return objects;
+};
+
+const getFirstValue = (objects, keys) => {
+  for (const object of objects) {
+    for (const key of keys) {
+      const value = object?.[key];
+
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== ""
+      ) {
+        return value;
+      }
+    }
   }
 
-  if (
-    permissions &&
-    typeof permissions ===
-      "object"
-  ) {
-    return permissions;
+  return null;
+};
+
+const decodeJwtPayload = (token) => {
+  try {
+    const payloadPart = String(token || "").split(".")[1];
+
+    if (!payloadPart) {
+      return null;
+    }
+
+    const normalized = payloadPart
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(
+        Math.ceil(payloadPart.length / 4) * 4,
+        "="
+      );
+
+    const decoded = decodeURIComponent(
+      window
+        .atob(normalized)
+        .split("")
+        .map(
+          (character) =>
+            `%${character
+              .charCodeAt(0)
+              .toString(16)
+              .padStart(2, "0")}`
+        )
+        .join("")
+    );
+
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+};
+
+const extractLoginSession = (response) => {
+  const objects = getLoginObjects(response);
+
+  const token = getFirstValue(objects, [
+    "accessToken",
+    "access_token",
+    "token",
+    "jwt",
+    "jwtToken",
+  ]);
+
+  const tokenPayload = decodeJwtPayload(token);
+
+  let rawUser = null;
+
+  for (const object of objects) {
+    for (const key of LOGIN_USER_KEYS) {
+      const possibleUser = object?.[key];
+
+      if (
+        possibleUser &&
+        typeof possibleUser === "object" &&
+        !Array.isArray(possibleUser)
+      ) {
+        rawUser = possibleUser;
+        break;
+      }
+    }
+
+    if (rawUser) {
+      break;
+    }
   }
 
-  if (
-    FULL_ACCESS_ROLES.includes(
-      role
-    )
-  ) {
-    return ["*"];
-  }
+  const role = normalizeRole(
+    rawUser?.role ||
+      getFirstValue(objects, ["role"]) ||
+      tokenPayload?.role
+  );
 
-  return [];
+  const schoolId =
+    rawUser?.schoolId ||
+    getFirstValue(objects, ["schoolId"]) ||
+    tokenPayload?.schoolId ||
+    null;
+
+  const normalizedPermissions =
+    normalizePermissions(
+      rawUser?.permissions ??
+        getFirstValue(objects, [
+          "permissions",
+          "managerPermissions",
+        ]) ??
+        tokenPayload?.permissions ??
+        tokenPayload?.managerPermissions
+    );
+
+  const permissions =
+    ["OWNER", "SUPERVISOR"].includes(role) &&
+    normalizedPermissions.length === 0
+      ? ["*"]
+      : normalizedPermissions;
+
+  const fallbackUser =
+    tokenPayload && typeof tokenPayload === "object"
+      ? tokenPayload
+      : null;
+
+  const user =
+    rawUser || fallbackUser
+      ? {
+          ...(fallbackUser || {}),
+          ...(rawUser || {}),
+          role,
+          schoolId,
+          permissions,
+        }
+      : null;
+
+  return {
+    token,
+    user,
+    role,
+    schoolId,
+    permissions,
+  };
 };
 
 const Login = () => {
@@ -181,14 +308,15 @@ const Login = () => {
           normalizeRole(rawRole);
 
         const destination =
-          ROLE_HOME_PATHS[role];
+          getRoleHomePath(role);
 
-        if (!destination) {
+        if (
+          destination ===
+          "/no-access"
+        ) {
           toast.error(
-            "نوع الحساب غير مدعوم في لوحة الدخول الحالية"
+            "نوع الحساب غير مدعوم"
           );
-
-          return;
         }
 
         navigate(destination, {
@@ -256,7 +384,10 @@ const Login = () => {
           data.password
         );
 
-      if (!response?.status) {
+      if (
+        response?.status ===
+        false
+      ) {
         toast.error(
           response?.message ||
             "البيانات غير صحيحة، يرجى المحاولة مرة أخرى"
@@ -265,49 +396,22 @@ const Login = () => {
         return;
       }
 
-      const token =
-        response?.data
-          ?.accessToken;
+      const {
+        token,
+        user,
+        role,
+        schoolId,
+        permissions,
+      } = extractLoginSession(response);
 
-      const rawUser =
-        response?.data?.user;
-
-      const role =
-        normalizeRole(
-          rawUser?.role ||
-            response?.data?.role
+      if (!token || !user || !role) {
+        console.error(
+          "Incomplete login response:",
+          response
         );
 
-      const schoolId =
-        rawUser?.schoolId ||
-        response?.data
-          ?.schoolId ||
-        null;
-
-      const permissions =
-        normalizePermissions(
-          response?.data
-            ?.permissions ??
-            rawUser?.permissions,
-          role
-        );
-
-      const user =
-        rawUser
-          ? {
-              ...rawUser,
-              role,
-              schoolId,
-            }
-          : null;
-
-      if (
-        !token ||
-        !user ||
-        !role
-      ) {
         toast.error(
-          "بيانات تسجيل الدخول غير مكتملة"
+          "استجابة تسجيل الدخول من الخادم غير مكتملة"
         );
 
         return;
@@ -344,33 +448,12 @@ const Login = () => {
         return;
       }
 
-      localStorage.setItem(
-        "user",
-        JSON.stringify(user)
-      );
-
-      localStorage.setItem(
-        "role",
-        role
-      );
-
-      localStorage.setItem(
-        "permissions",
-        JSON.stringify(
-          permissions
-        )
-      );
-
-      if (schoolId) {
-        localStorage.setItem(
-          "schoolId",
-          schoolId
-        );
-      } else {
-        localStorage.removeItem(
-          "schoolId"
-        );
-      }
+      persistSessionMeta({
+        user,
+        role,
+        permissions,
+        schoolId,
+      });
 
       toast.success(
         "تم تسجيل الدخول بنجاح"
