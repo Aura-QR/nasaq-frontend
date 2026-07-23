@@ -28,27 +28,124 @@ import {
   useSignIn,
 } from "react-auth-kit";
 
-import { useNavigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
-import { toast } from "react-toastify";
+import {
+  useNavigate,
+} from "react-router-dom";
 
-import { loginRequest } from "@/APIs/auth/login";
+import {
+  useForm,
+} from "react-hook-form";
+
+import {
+  toast,
+} from "react-toastify";
+
+import {
+  loginRequest,
+} from "@/APIs/auth/login";
 
 import AuthLayout, {
   AuthField,
   authColors,
 } from "../Auth/AuthLayout";
 
-const TEACHER_DASHBOARD_PATH =
-  "/teacher/dashboard";
+const ROLE_HOME_PATHS = {
+  SUPER_ADMIN:
+    "/platform/dashboard",
+
+  OWNER:
+    "/users/students",
+
+  SUPERVISOR:
+    "/users/students",
+
+  MANAGER:
+    "/users/students",
+
+  /*
+   * دعم الحساب الإداري القديم.
+   */
+  ADMIN:
+    "/users/students",
+
+  TEACHER:
+    "/teacher/dashboard",
+
+  STUDENT:
+    "/student-dashboard",
+};
+
+const FULL_ACCESS_ROLES = [
+  "OWNER",
+  "SUPERVISOR",
+  "ADMIN",
+];
+
+const normalizeRole = (role) =>
+  String(role || "")
+    .trim()
+    .toUpperCase();
+
+const normalizePermissions = (
+  permissions,
+  role
+) => {
+  if (
+    Array.isArray(permissions)
+  ) {
+    if (
+      permissions.length === 0 &&
+      FULL_ACCESS_ROLES.includes(
+        role
+      )
+    ) {
+      return ["*"];
+    }
+
+    return permissions;
+  }
+
+  if (
+    typeof permissions ===
+      "string" &&
+    permissions.trim()
+  ) {
+    return [
+      permissions.trim(),
+    ];
+  }
+
+  if (
+    permissions &&
+    typeof permissions ===
+      "object"
+  ) {
+    return permissions;
+  }
+
+  if (
+    FULL_ACCESS_ROLES.includes(
+      role
+    )
+  ) {
+    return ["*"];
+  }
+
+  return [];
+};
 
 const Login = () => {
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
-  const signIn = useSignIn();
+  const signIn =
+    useSignIn();
+
   const isAuthenticated =
     useIsAuthenticated();
-  const getAuthUser = useAuthUser();
+
+  const getAuthUser =
+    useAuthUser();
 
   const [loading, setLoading] =
     useState(false);
@@ -67,61 +164,74 @@ const Login = () => {
     register,
     handleSubmit,
 
-    formState: { errors },
+    formState: {
+      errors,
+    },
   } = useForm({
     defaultValues: {
-      email: "",
+      identifier: "",
       password: "",
     },
   });
 
-  const navigateByRole = useCallback(
-    (role) => {
-      if (role === "ADMIN") {
-        navigate("/users/students", {
+  const navigateByRole =
+    useCallback(
+      (rawRole) => {
+        const role =
+          normalizeRole(rawRole);
+
+        const destination =
+          ROLE_HOME_PATHS[role];
+
+        if (!destination) {
+          toast.error(
+            "نوع الحساب غير مدعوم في لوحة الدخول الحالية"
+          );
+
+          return;
+        }
+
+        navigate(destination, {
           replace: true,
         });
+      },
 
-        return;
-      }
+      [navigate]
+    );
 
-      if (role === "TEACHER") {
-        /*
-         * تسجيل الدخول العادي يذهب
-         * إلى لوحة المعلم مباشرة.
-         *
-         * الـOnboarding للحساب الجديد
-         * من Register فقط.
-         */
-        navigate(
-          TEACHER_DASHBOARD_PATH,
-          {
-            replace: true,
-          }
-        );
+  useEffect(() => {
+    const authError =
+      sessionStorage.getItem(
+        "authError"
+      );
 
-        return;
-      }
+    if (authError) {
+      toast.info(authError);
 
-      navigate("/student-dashboard", {
-        replace: true,
-      });
-    },
-    [navigate]
-  );
+      sessionStorage.removeItem(
+        "authError"
+      );
+    }
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated()) {
       return;
     }
 
-    const authState = getAuthUser();
+    const authState =
+      getAuthUser();
 
     const currentUser =
-      authState?.user || authState;
+      authState?.user ||
+      authState;
 
     const role =
-      currentUser?.role;
+      currentUser?.role ||
+      authState?.role ||
+      localStorage.getItem(
+        "role"
+      );
 
     if (!role) {
       return;
@@ -134,20 +244,21 @@ const Login = () => {
     navigateByRole,
   ]);
 
-  const onSubmit = async (data) => {
+  const onSubmit = async (
+    data
+  ) => {
     try {
       setLoading(true);
 
       const response =
         await loginRequest(
-          data.email.trim(),
+          data.identifier,
           data.password
         );
 
       if (!response?.status) {
         toast.error(
           response?.message ||
-            response ||
             "البيانات غير صحيحة، يرجى المحاولة مرة أخرى"
         );
 
@@ -155,15 +266,46 @@ const Login = () => {
       }
 
       const token =
-        response?.data?.accessToken;
+        response?.data
+          ?.accessToken;
 
-      const user =
+      const rawUser =
         response?.data?.user;
 
-      const permissions =
-        response?.data?.permissions || [];
+      const role =
+        normalizeRole(
+          rawUser?.role ||
+            response?.data?.role
+        );
 
-      if (!token || !user) {
+      const schoolId =
+        rawUser?.schoolId ||
+        response?.data
+          ?.schoolId ||
+        null;
+
+      const permissions =
+        normalizePermissions(
+          response?.data
+            ?.permissions ??
+            rawUser?.permissions,
+          role
+        );
+
+      const user =
+        rawUser
+          ? {
+              ...rawUser,
+              role,
+              schoolId,
+            }
+          : null;
+
+      if (
+        !token ||
+        !user ||
+        !role
+      ) {
         toast.error(
           "بيانات تسجيل الدخول غير مكتملة"
         );
@@ -171,25 +313,28 @@ const Login = () => {
         return;
       }
 
-      const signedIn = signIn({
-        token,
+      const signedIn =
+        signIn({
+          token,
 
-        /*
-         * react-auth-kit يحسب expiresIn بالدقائق:
-         * 30 يومًا عند تفعيل تذكرني.
-         * 10 ساعات بدون تذكرني.
-         */
-        expiresIn: rememberMe
-          ? 60 * 24 * 30
-          : 600,
+          /*
+           * react-auth-kit يستخدم
+           * expiresIn بالدقائق.
+           */
+          expiresIn: rememberMe
+            ? 60 * 24 * 30
+            : 600,
 
-        tokenType: "Bearer",
+          tokenType:
+            "Bearer",
 
-        authState: {
-          user,
-          permissions,
-        },
-      });
+          authState: {
+            user,
+            role,
+            schoolId,
+            permissions,
+          },
+        });
 
       if (!signedIn) {
         toast.error(
@@ -200,15 +345,38 @@ const Login = () => {
       }
 
       localStorage.setItem(
-        "permissions",
-        JSON.stringify(permissions)
+        "user",
+        JSON.stringify(user)
       );
+
+      localStorage.setItem(
+        "role",
+        role
+      );
+
+      localStorage.setItem(
+        "permissions",
+        JSON.stringify(
+          permissions
+        )
+      );
+
+      if (schoolId) {
+        localStorage.setItem(
+          "schoolId",
+          schoolId
+        );
+      } else {
+        localStorage.removeItem(
+          "schoolId"
+        );
+      }
 
       toast.success(
         "تم تسجيل الدخول بنجاح"
       );
 
-      navigateByRole(user.role);
+      navigateByRole(role);
     } catch (error) {
       console.error(
         "Login error:",
@@ -216,7 +384,8 @@ const Login = () => {
       );
 
       toast.error(
-        error?.response?.data?.message ||
+        error?.response?.data
+          ?.message ||
           error?.message ||
           "حدث خطأ أثناء تسجيل الدخول، حاول مرة أخرى"
       );
@@ -234,28 +403,34 @@ const Login = () => {
       <Box
         component="form"
         noValidate
-        onSubmit={handleSubmit(onSubmit)}
+        onSubmit={handleSubmit(
+          onSubmit
+        )}
       >
         <Stack spacing={2.2}>
           <AuthField
-            label="البريد الإلكتروني"
-            type="email"
-            placeholder="name@example.com"
-            autoComplete="email"
-            icon={<EmailOutlined />}
-            error={errors.email?.message}
+            label="البريد الإلكتروني أو اسم المستخدم"
+            type="text"
+            placeholder="name@example.com أو username"
+            autoComplete="username"
+            icon={
+              <EmailOutlined />
+            }
+            error={
+              errors.identifier
+                ?.message
+            }
             registration={register(
-              "email",
+              "identifier",
               {
                 required:
-                  "البريد الإلكتروني مطلوب",
+                  "البريد الإلكتروني أو اسم المستخدم مطلوب",
 
-                pattern: {
-                  value:
-                    /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                minLength: {
+                  value: 3,
 
                   message:
-                    "أدخل بريدًا إلكترونيًا صحيحًا",
+                    "أدخل 3 أحرف على الأقل",
                 },
               }
             )}
@@ -270,9 +445,12 @@ const Login = () => {
             }
             placeholder="أدخل كلمة المرور"
             autoComplete="current-password"
-            icon={<LockOutlined />}
+            icon={
+              <LockOutlined />
+            }
             error={
-              errors.password?.message
+              errors.password
+                ?.message
             }
             registration={register(
               "password",
@@ -342,7 +520,8 @@ const Login = () => {
               sx={{
                 p: 0.4,
 
-                color: authColors.gold,
+                color:
+                  authColors.gold,
 
                 "&.Mui-checked": {
                   color:
@@ -356,7 +535,8 @@ const Login = () => {
                 color:
                   authColors.muted,
 
-                fontSize: "11px",
+                fontSize:
+                  "11px",
               }}
             >
               تذكرني
@@ -369,11 +549,16 @@ const Login = () => {
               p: 0,
               minWidth: 0,
 
-              color: authColors.navy,
+              color:
+                authColors.navy,
 
-              fontSize: "11px",
+              fontSize:
+                "11px",
+
               fontWeight: 700,
-              textTransform: "none",
+
+              textTransform:
+                "none",
 
               "&:hover": {
                 color:
@@ -397,7 +582,8 @@ const Login = () => {
             mt: 3,
             px: 2,
 
-            borderRadius: "15px",
+            borderRadius:
+              "15px",
 
             color:
               authColors.goldSoft,
@@ -411,7 +597,8 @@ const Login = () => {
             boxShadow:
               "0 15px 32px rgba(7,22,41,0.24)",
 
-            textTransform: "none",
+            textTransform:
+              "none",
 
             transition:
               "transform 0.2s ease, box-shadow 0.2s ease",
@@ -434,7 +621,8 @@ const Login = () => {
               color:
                 "rgba(255,255,255,0.8)",
 
-              background: "#8893A1",
+              background:
+                "#8893A1",
             },
           }}
         >
@@ -451,8 +639,11 @@ const Login = () => {
               sx={{
                 width: "100%",
 
-                display: "flex",
-                alignItems: "center",
+                display:
+                  "flex",
+
+                alignItems:
+                  "center",
 
                 justifyContent:
                   "space-between",
@@ -461,8 +652,12 @@ const Login = () => {
               <Typography
                 sx={{
                   flex: 1,
-                  fontSize: "15px",
-                  fontWeight: 800,
+
+                  fontSize:
+                    "15px",
+
+                  fontWeight:
+                    800,
                 }}
               >
                 تسجيل الدخول
@@ -473,10 +668,14 @@ const Login = () => {
                   width: 38,
                   height: 38,
 
-                  display: "grid",
-                  placeItems: "center",
+                  display:
+                    "grid",
 
-                  borderRadius: "50%",
+                  placeItems:
+                    "center",
+
+                  borderRadius:
+                    "50%",
 
                   border: `1px solid ${authColors.gold}`,
 
@@ -484,7 +683,8 @@ const Login = () => {
                     authColors.gold,
 
                   "& svg": {
-                    fontSize: 20,
+                    fontSize:
+                      20,
                   },
                 }}
               >

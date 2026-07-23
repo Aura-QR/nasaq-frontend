@@ -1,40 +1,24 @@
+import { api } from "../Axios";
+import { getApiError } from "../helpers/getApiError";
+
+const ENDPOINT = "/schools/register";
+
 export const registerRequest = async (payload) => {
   try {
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/auth/register`,
-      {
-        method: "POST",
+    const response = await api.post(ENDPOINT, {
+      name: payload?.name?.trim(),
+      email: payload?.email?.trim().toLowerCase(),
+      phone: payload?.phone?.trim(),
+      address: payload?.address?.trim(),
+    });
 
-        headers: {
-          "Content-Type": "application/json",
-        },
-
-        body: JSON.stringify(payload),
-      }
-    );
-
-    const data = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      return {
-        status: false,
-        message:
-          data?.message ||
-          "تعذر إنشاء الحساب",
-      };
-    }
-
-    return {
-      status: true,
-      data,
-    };
+    return response.data;
   } catch (error) {
-    console.error("Register error:", error);
-
-    return {
-      status: false,
-      message:
-        "تعذر الاتصال بالخادم، حاول مرة أخرى",
-    };
+    return getApiError(
+      error,
+      "تعذر تسجيل المدرسة"
+    );
   }
 };
+
+export default registerRequest;

@@ -23,6 +23,15 @@ import Onboarding from "./pages/Onboarding/Onboarding";
 import NoAccess from "./pages/Others/NoAccess";
 import TeacherDashboard from "./pages/TeacherDashboard/TeacherDashboard";
 
+import PlatformLogin from "./pages/PlatformLogin/PlatformLogin";
+import PlatformDashboard from "./pages/PlatformDashboard/PlatformDashboard";
+import PlatformSchools from "./pages/PlatformSchools/PlatformSchools";
+import PlatformSchoolDetails from "./pages/PlatformSchoolDetails/PlatformSchoolDetails";
+import PlatformSettings from "./pages/PlatformSettings/PlatformSettings";
+
+import PlatformLayout from "./layouts/PlatformLayout/PlatformLayout";
+import SuperAdminRoute from "./components/guards/SuperAdminRoute";
+
 import { theme } from "@/utils/theme/theme";
 import { appRoutes } from "./routes";
 
@@ -33,27 +42,31 @@ function App() {
     <AuthProvider
       authType="cookie"
       authName="_auth"
-      cookieDomain={window.location.hostname}
+      cookieDomain={
+        window.location.hostname
+      }
       cookieSecure={
-        window.location.protocol === "https:"
+        window.location.protocol ===
+        "https:"
       }
     >
       <ThemeProvider theme={theme}>
         <Provider store={store}>
           <BrowserRouter
             future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true,
+              v7_startTransition:
+                true,
+
+              v7_relativeSplatPath:
+                true,
             }}
           >
             <Routes>
-              {/* Public landing page */}
               <Route
                 path="/"
                 element={<Home />}
               />
 
-              {/* Authentication */}
               <Route
                 path="/login"
                 element={<Login />}
@@ -64,22 +77,25 @@ function App() {
                 element={<Register />}
               />
 
-              {/* Onboarding للحساب الجديد فقط */}
+              <Route
+                path="/platform/login"
+                element={
+                  <PlatformLogin />
+                }
+              />
+
               <Route
                 path="/onboarding"
                 element={<Onboarding />}
               />
 
-              {/*
-                معاينة مؤقتة للداشبورد
-                بدون تسجيل دخول
-              */}
               <Route
                 path="/preview/teacher-dashboard"
-                element={<TeacherDashboard />}
+                element={
+                  <TeacherDashboard />
+                }
               />
 
-              {/* المسار الحقيقي المحمي */}
               <Route
                 path="/teacher/dashboard"
                 element={
@@ -89,7 +105,57 @@ function App() {
                 }
               />
 
-              {/* Other protected routes */}
+              <Route
+                element={
+                  <SuperAdminRoute />
+                }
+              >
+                <Route
+                  path="/platform"
+                  element={
+                    <PlatformLayout />
+                  }
+                >
+                  <Route
+                    index
+                    element={
+                      <Navigate
+                        to="dashboard"
+                        replace
+                      />
+                    }
+                  />
+
+                  <Route
+                    path="dashboard"
+                    element={
+                      <PlatformDashboard />
+                    }
+                  />
+
+                  <Route
+                    path="schools"
+                    element={
+                      <PlatformSchools />
+                    }
+                  />
+
+                  <Route
+                    path="schools/:schoolId"
+                    element={
+                      <PlatformSchoolDetails />
+                    }
+                  />
+
+                  <Route
+                    path="settings"
+                    element={
+                      <PlatformSettings />
+                    }
+                  />
+                </Route>
+              </Route>
+
               <Route
                 path="/no-access"
                 element={
@@ -99,10 +165,8 @@ function App() {
                 }
               />
 
-              {/* Existing application routes */}
               {appRoutes}
 
-              {/* Unknown routes */}
               <Route
                 path="*"
                 element={
