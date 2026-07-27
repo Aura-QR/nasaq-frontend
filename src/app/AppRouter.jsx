@@ -15,13 +15,23 @@ import PlatformDashboard from "@/pages/PlatformDashboard/PlatformDashboard";
 import PlatformSchools from "@/pages/PlatformSchools/PlatformSchools";
 import PlatformSchoolDetails from "@/pages/PlatformSchoolDetails/PlatformSchoolDetails";
 
-import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
-
 import SchoolDashboardPage from "@/pages/SchoolDashboardPage/SchoolDashboardPage";
+import SchoolManagers from "@/pages/SchoolManagers/SchoolManagers";
+import SchoolStudents from "@/pages/SchoolStudents/SchoolStudents";
+import SchoolStudentDetails from "@/pages/SchoolStudentDetails/SchoolStudentDetails";
+import SchoolTeachers from "@/pages/SchoolTeachers/SchoolTeachers";
+import SchoolTeacherDetails from "@/pages/SchoolTeacherDetails/SchoolTeacherDetails";
+import SchoolClasses from "@/pages/SchoolClasses/SchoolClasses";
+import SchoolClassDetails from "@/pages/SchoolClassDetails/SchoolClassDetails";
 import StudentDashboardPage from "@/pages/StudentDashboardPage/StudentDashboardPage";
+
+import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
+import SchoolLayout from "@/layouts/SchoolLayout/SchoolLayout";
+
 import AuthenticatedRoute from "@/shared/guards/AuthenticatedRoute";
 import GuestRoute from "@/shared/guards/GuestRoute";
 import RoleRoute from "@/shared/guards/RoleRoute";
+import PermissionRoute from "@/shared/guards/PermissionRoute";
 
 import {
   ROLES,
@@ -126,13 +136,7 @@ const AppRouter = () => {
             />
           </Route>
         </Route>
-      </Route>
 
-      <Route
-        element={
-          <AuthenticatedRoute loginPath="/login" />
-        }
-      >
         <Route
           element={
             <RoleRoute
@@ -143,11 +147,118 @@ const AppRouter = () => {
           }
         >
           <Route
-            path="/school/dashboard"
+            path="/school"
             element={
-              <SchoolDashboardPage />
+              <SchoolLayout />
             }
-          />
+          >
+            <Route
+              index
+              element={
+                <Navigate
+                  to="dashboard"
+                  replace
+                />
+              }
+            />
+
+            <Route
+              path="dashboard"
+              element={
+                <SchoolDashboardPage />
+              }
+            />
+
+            <Route
+              element={
+                <RoleRoute
+                  allowedRoles={[
+                    ROLES.OWNER,
+                    ROLES.SUPERVISOR,
+                  ]}
+                />
+              }
+            >
+              <Route
+                path="managers"
+                element={
+                  <SchoolManagers />
+                }
+              />
+            </Route>
+
+            <Route
+              element={
+                <PermissionRoute
+                  permissions={[
+                    "school.students.read",
+                  ]}
+                />
+              }
+            >
+              <Route
+                path="students"
+                element={
+                  <SchoolStudents />
+                }
+              />
+
+              <Route
+                path="students/:studentId"
+                element={
+                  <SchoolStudentDetails />
+                }
+              />
+            </Route>
+
+            <Route
+              element={
+                <PermissionRoute
+                  permissions={[
+                    "school.teachers.read",
+                  ]}
+                />
+              }
+            >
+              <Route
+                path="teachers"
+                element={
+                  <SchoolTeachers />
+                }
+              />
+
+              <Route
+                path="teachers/:teacherId"
+                element={
+                  <SchoolTeacherDetails />
+                }
+              />
+            </Route>
+
+            <Route
+              element={
+                <PermissionRoute
+                  permissions={[
+                    "school.classes.read",
+                  ]}
+                />
+              }
+            >
+              <Route
+                path="classes"
+                element={
+                  <SchoolClasses />
+                }
+              />
+
+              <Route
+                path="classes/:classId"
+                element={
+                  <SchoolClassDetails />
+                }
+              />
+            </Route>
+          </Route>
         </Route>
 
         <Route
