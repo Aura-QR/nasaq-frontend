@@ -2,7 +2,6 @@ import {
   Box,
   Button,
   Chip,
-  Grid,
   Paper,
   Stack,
   Typography,
@@ -83,15 +82,8 @@ const List = () => {
   const [items, setItems] =
     useState([]);
 
-  const [
-    searchSubjectName,
-    setSearchSubjectName,
-  ] = useState("");
-
-  const [
-    searchSubjectCode,
-    setSearchSubjectCode,
-  ] = useState("");
+  const [search, setSearch] =
+    useState("");
 
   const [limit, setLimit] =
     useState(10);
@@ -104,34 +96,54 @@ const List = () => {
     setLocalPagination,
   ] = useState(null);
 
-  const debouncedSearchName =
-    useDebounce(
-      searchSubjectName,
-      700
-    );
+  const debouncedSearch =
+    useDebounce(search, 700);
 
-  const debouncedSearchCode =
-    useDebounce(
-      searchSubjectCode,
-      700
-    );
+  /*
+   * حقل بحث واحد للاسم أو الكود.
+   *
+   * لأن الـAPI الحالي يستخدم فلترين منفصلين
+   * subjectName وsubjectCode، نحدد الفلتر
+   * تلقائيًا من شكل القيمة المكتوبة:
+   *
+   * - الأكواد غالبًا تحتوي أرقامًا أو شرطة،
+   *   أو تكون أحرفًا إنجليزية كبيرة.
+   * - باقي القيم يتم البحث بها كاسم مادة.
+   */
+  const searchFilters = useMemo(() => {
+    const value =
+      debouncedSearch.trim();
+
+    if (!value) {
+      return {};
+    }
+
+    const looksLikeCode =
+      /\d/.test(value) ||
+      /[-_/]/.test(value) ||
+      /^[A-Z]{2,}[A-Z0-9\s-]*$/.test(
+        value
+      );
+
+    return looksLikeCode
+      ? {
+          subjectCode: value,
+        }
+      : {
+          subjectName: value,
+        };
+  }, [debouncedSearch]);
 
   const filters = useMemo(
     () => ({
       page,
       limit,
-      subjectName:
-        debouncedSearchName ||
-        undefined,
-      subjectCode:
-        debouncedSearchCode ||
-        undefined,
+      ...searchFilters,
     }),
     [
       page,
       limit,
-      debouncedSearchName,
-      debouncedSearchCode,
+      searchFilters,
     ]
   );
 
@@ -160,18 +172,15 @@ const List = () => {
     setPage(1);
   }, [
     limit,
-    debouncedSearchName,
-    debouncedSearchCode,
+    debouncedSearch,
   ]);
 
   const currentPagination =
     localPagination ||
     pagination;
 
-  const activeFiltersCount = [
-    searchSubjectName,
-    searchSubjectCode,
-  ].filter(Boolean).length;
+  const activeFiltersCount =
+    search.trim() ? 1 : 0;
 
   const stats = useMemo(() => {
     const coded = items.filter(
@@ -211,8 +220,7 @@ const List = () => {
   );
 
   const resetFilters = () => {
-    setSearchSubjectName("");
-    setSearchSubjectCode("");
+    setSearch("");
     setPage(1);
   };
 
@@ -681,13 +689,13 @@ const List = () => {
             mb: 1.25,
 
             px: {
-              xs: 1.5,
-              md: 1.75,
+              xs: 1.25,
+              md: 1.5,
             },
 
             py: {
-              xs: 1.4,
-              md: 1.55,
+              xs: 1.1,
+              md: 1.15,
             },
 
             border:
@@ -707,12 +715,12 @@ const List = () => {
 
             "& .MuiInputBase-root, & .MuiOutlinedInput-root":
               {
-                minHeight: 48,
-                height: 48,
+                minHeight: 44,
+                height: 44,
 
                 backgroundColor:
                   "var(--color-white)",
-                borderRadius: "13px",
+                borderRadius: "12px",
                 fontSize: "12px",
               },
 
@@ -730,8 +738,8 @@ const List = () => {
               },
 
             "& .MuiInputBase-input": {
-              py: 0.8,
-              px: 1.5,
+              py: 0.7,
+              px: 1.4,
               fontSize: "12px",
             },
           }}
@@ -739,26 +747,32 @@ const List = () => {
           <Stack
             direction={{
               xs: "column",
-              sm: "row",
+              md: "row",
             }}
             alignItems={{
               xs: "stretch",
-              sm: "center",
+              md: "center",
             }}
-            justifyContent="space-between"
-            gap={1}
-            sx={{
-              mb: 1.25,
+            gap={{
+              xs: 1,
+              md: 1.4,
             }}
           >
-            <Box>
+            <Box
+              sx={{
+                minWidth: {
+                  md: 205,
+                },
+                flexShrink: 0,
+              }}
+            >
               <Typography
                 sx={{
                   color:
                     "var(--color-navy-deep)",
-                  fontSize: "15px",
+                  fontSize: "14px",
                   fontWeight: 800,
-                  lineHeight: 1.35,
+                  lineHeight: 1.3,
                 }}
               >
                 البحث في المواد
@@ -766,16 +780,34 @@ const List = () => {
 
               <Typography
                 sx={{
-                  mt: 0.2,
+                  mt: 0.15,
                   color:
                     "var(--color-muted)",
-                  fontSize: "9.5px",
-                  lineHeight: 1.5,
+                  fontSize: "9px",
+                  lineHeight: 1.45,
                 }}
               >
-                ابحث باسم المادة أو
-                بالكود الكامل.
+                ابحث بالاسم أو الكود.
               </Typography>
+            </Box>
+
+            <Box
+              sx={{
+                width: "100%",
+                maxWidth: {
+                  md: 590,
+                  xl: 670,
+                },
+                flex: {
+                  md: 1,
+                },
+              }}
+            >
+              <SearchFilter
+                value={search}
+                onChange={setSearch}
+                placeholder="ابحث باسم المادة أو كود المادة..."
+              />
             </Box>
 
             <Button
@@ -789,12 +821,14 @@ const List = () => {
                 <RestartAltRounded />
               }
               sx={{
-                minHeight: 36,
+                minWidth: 108,
+                minHeight: 40,
                 px: 1.25,
+                flexShrink: 0,
 
                 alignSelf: {
                   xs: "flex-start",
-                  sm: "center",
+                  md: "center",
                 },
 
                 color:
@@ -827,47 +861,6 @@ const List = () => {
               مسح البحث
             </Button>
           </Stack>
-
-          <Grid
-            container
-            spacing={{
-              xs: 1.5,
-              md: 1.35,
-            }}
-            alignItems="center"
-          >
-            <Grid
-              item
-              xs={12}
-              sm={6}
-            >
-              <SearchFilter
-                value={
-                  searchSubjectName
-                }
-                onChange={
-                  setSearchSubjectName
-                }
-                placeholder="ابحث باسم المادة..."
-              />
-            </Grid>
-
-            <Grid
-              item
-              xs={12}
-              sm={6}
-            >
-              <SearchFilter
-                value={
-                  searchSubjectCode
-                }
-                onChange={
-                  setSearchSubjectCode
-                }
-                placeholder="ابحث بكود المادة..."
-              />
-            </Grid>
-          </Grid>
         </Paper>
 
         <Paper

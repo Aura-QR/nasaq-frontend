@@ -15,23 +15,11 @@ import PlatformDashboard from "@/pages/PlatformDashboard/PlatformDashboard";
 import PlatformSchools from "@/pages/PlatformSchools/PlatformSchools";
 import PlatformSchoolDetails from "@/pages/PlatformSchoolDetails/PlatformSchoolDetails";
 
-import SchoolDashboardPage from "@/pages/SchoolDashboardPage/SchoolDashboardPage";
-import SchoolManagers from "@/pages/SchoolManagers/SchoolManagers";
-import SchoolStudents from "@/pages/SchoolStudents/SchoolStudents";
-import SchoolStudentDetails from "@/pages/SchoolStudentDetails/SchoolStudentDetails";
-import SchoolTeachers from "@/pages/SchoolTeachers/SchoolTeachers";
-import SchoolTeacherDetails from "@/pages/SchoolTeacherDetails/SchoolTeacherDetails";
-import SchoolClasses from "@/pages/SchoolClasses/SchoolClasses";
-import SchoolClassDetails from "@/pages/SchoolClassDetails/SchoolClassDetails";
-import StudentDashboardPage from "@/pages/StudentDashboardPage/StudentDashboardPage";
-
 import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
-import SchoolLayout from "@/layouts/SchoolLayout/SchoolLayout";
 
 import AuthenticatedRoute from "@/shared/guards/AuthenticatedRoute";
 import GuestRoute from "@/shared/guards/GuestRoute";
 import RoleRoute from "@/shared/guards/RoleRoute";
-import PermissionRoute from "@/shared/guards/PermissionRoute";
 
 import {
   ROLES,
@@ -45,10 +33,25 @@ import {
 const AppRouter = () => {
   return (
     <Routes>
+      {/* Public routes */}
       <Route
         path="/"
         element={<Home />}
       />
+      <Route
+  path="/platform"
+  element={<PlatformLayout />}
+>
+  <Route
+    path="schools"
+    element={<PlatformSchools />}
+  />
+
+  <Route
+    path="schools/:schoolId"
+    element={<PlatformSchoolDetails />}
+  />
+</Route>
 
       <Route
         path="/onboarding"
@@ -60,6 +63,12 @@ const AppRouter = () => {
         element={<NoAccess />}
       />
 
+      {/*
+       * Unified authentication:
+       * /auth/login is used by all roles,
+       * so the old platform login URL now
+       * redirects to the normal login page.
+       */}
       <Route
         path="/platform/login"
         element={
@@ -70,6 +79,7 @@ const AppRouter = () => {
         }
       />
 
+      {/* Guest-only routes */}
       <Route
         element={<GuestRoute />}
       >
@@ -84,6 +94,7 @@ const AppRouter = () => {
         />
       </Route>
 
+      {/* Super Admin / Platform routes */}
       <Route
         element={
           <AuthenticatedRoute loginPath="/login" />
@@ -136,7 +147,15 @@ const AppRouter = () => {
             />
           </Route>
         </Route>
+      </Route>
 
+      {/* School-scoped authenticated routes */}
+      <Route
+        element={
+          <AuthenticatedRoute loginPath="/login" />
+        }
+      >
+        {/* Owner / Supervisor / Manager */}
         <Route
           element={
             <RoleRoute
@@ -147,120 +166,17 @@ const AppRouter = () => {
           }
         >
           <Route
-            path="/school"
+            path="/school/dashboard"
             element={
-              <SchoolLayout />
+              <Navigate
+                to="/users/students"
+                replace
+              />
             }
-          >
-            <Route
-              index
-              element={
-                <Navigate
-                  to="dashboard"
-                  replace
-                />
-              }
-            />
-
-            <Route
-              path="dashboard"
-              element={
-                <SchoolDashboardPage />
-              }
-            />
-
-            <Route
-              element={
-                <RoleRoute
-                  allowedRoles={[
-                    ROLES.OWNER,
-                    ROLES.SUPERVISOR,
-                  ]}
-                />
-              }
-            >
-              <Route
-                path="managers"
-                element={
-                  <SchoolManagers />
-                }
-              />
-            </Route>
-
-            <Route
-              element={
-                <PermissionRoute
-                  permissions={[
-                    "school.students.read",
-                  ]}
-                />
-              }
-            >
-              <Route
-                path="students"
-                element={
-                  <SchoolStudents />
-                }
-              />
-
-              <Route
-                path="students/:studentId"
-                element={
-                  <SchoolStudentDetails />
-                }
-              />
-            </Route>
-
-            <Route
-              element={
-                <PermissionRoute
-                  permissions={[
-                    "school.teachers.read",
-                  ]}
-                />
-              }
-            >
-              <Route
-                path="teachers"
-                element={
-                  <SchoolTeachers />
-                }
-              />
-
-              <Route
-                path="teachers/:teacherId"
-                element={
-                  <SchoolTeacherDetails />
-                }
-              />
-            </Route>
-
-            <Route
-              element={
-                <PermissionRoute
-                  permissions={[
-                    "school.classes.read",
-                  ]}
-                />
-              }
-            >
-              <Route
-                path="classes"
-                element={
-                  <SchoolClasses />
-                }
-              />
-
-              <Route
-                path="classes/:classId"
-                element={
-                  <SchoolClassDetails />
-                }
-              />
-            </Route>
-          </Route>
+          />
         </Route>
 
+        {/* Teacher */}
         <Route
           element={
             <RoleRoute
@@ -278,6 +194,7 @@ const AppRouter = () => {
           />
         </Route>
 
+        {/* Student */}
         <Route
           element={
             <RoleRoute
@@ -290,14 +207,24 @@ const AppRouter = () => {
           <Route
             path="/student/dashboard"
             element={
-              <StudentDashboardPage />
+              <Navigate
+                to="/student-dashboard"
+                replace
+              />
             }
           />
         </Route>
 
+        {/*
+         * Temporary compatibility with
+         * existing protected application routes.
+         * These routes can later be moved into
+         * their corresponding modules.
+         */}
         {appRoutes}
       </Route>
 
+      {/* Unknown routes */}
       <Route
         path="*"
         element={

@@ -59,19 +59,133 @@ import preparationIcon from "@/icons/preparation.json";
 import HoverLottie from "../HoverLottie";
 import usePermissions from "@/utils/hooks/usePermissions";
 
+const normalizeRole = (role) =>
+  String(role || "")
+    .trim()
+    .toUpperCase();
+
+const getAuthenticatedUser = (authState) => {
+  const candidates = [
+    authState?.user,
+    authState?.admin,
+    authState?.data?.user,
+    authState?.data?.admin,
+    authState?.data?.data?.user,
+    authState?.data?.data?.admin,
+    authState,
+  ];
+
+  return (
+    candidates.find(
+      (candidate) =>
+        candidate &&
+        typeof candidate === "object" &&
+        (candidate.role ||
+          candidate.email ||
+          candidate.username ||
+          candidate.name ||
+          candidate.fullName)
+    ) || {}
+  );
+};
+
+const getDisplayName = (user) => {
+  const emailName = user?.email
+    ? String(user.email).split("@")[0]
+    : "";
+
+  return String(
+    user?.username ||
+      user?.name ||
+      user?.fullName ||
+      user?.ownerName ||
+      user?.firstName ||
+      emailName ||
+      "المستخدم"
+  ).trim();
+};
+
+const ROLE_LABELS = {
+  OWNER: "مالك المدرسة",
+  SUPERVISOR: "مشرف المدرسة",
+  MANAGER: "مدير المدرسة",
+  TEACHER: "معلم",
+  STUDENT: "طالب",
+  SUPER_ADMIN: "مدير المنصة",
+};
+
 const Sidebar = ({ active }) => {
-  const permissions = usePermissions();
+  /*
+   * نظام الصلاحيات الجديد يخزن الصلاحيات كمصفوفة:
+   * ["school.students.read", ...]
+   *
+   * نطلب صلاحيات كل قسم منفصلة حتى يظل تصميم
+   * الـSidebar القديم كما هو بدون أي تغيير بصري.
+   */
+  const studentsPermissions =
+    usePermissions("students");
+
+  const teachersPermissions =
+    usePermissions("teachers");
+
+  const subjectsPermissions =
+    usePermissions("subjects");
+
+  const classesPermissions =
+    usePermissions("classes");
+
+  const lecturesPermissions =
+    usePermissions("lectures");
+
+  const gradesCriteriaPermissions =
+    usePermissions("gradesCriteria");
+
+  const examsPermissions =
+    usePermissions("exams");
+
+  const projectsPermissions =
+    usePermissions("projects");
+
+  const attendancePermissions =
+    usePermissions("attendance");
+
+  const preparationPermissions =
+    usePermissions("preparation");
+
+  const libraryPermissions =
+    usePermissions("library");
+
+  const financialPermissions =
+    usePermissions("financial");
+
+  const expensesPermissions =
+    usePermissions("expenses");
+
   const getAuthUser = useAuthUser();
   const signOut = useSignOut();
   const navigate = useNavigate();
   const location = useLocation();
   const sidebarRef = useRef(null);
 
-  const authState = getAuthUser?.();
-  const user =
-    authState?.user || authState || {};
+  const authState = getAuthUser?.() || {};
+  const user = getAuthenticatedUser(authState);
 
-  const isTeacher = user?.role === "TEACHER";
+  const role = normalizeRole(
+    user?.role || authState?.role
+  );
+
+  const displayName = getDisplayName(user);
+
+  const roleLabel =
+    ROLE_LABELS[role] || "مستخدم";
+
+  const userId =
+    user?._id ||
+    user?.id ||
+    user?.userId ||
+    "";
+
+  const isTeacher = role === "TEACHER";
 
   const categories = useMemo(() => {
     const baseCategories = [
@@ -82,13 +196,13 @@ const Sidebar = ({ active }) => {
             name: "إدارة الطلاب",
             icon: userIcon,
             to: "/users/students",
-            show: permissions?.students?.read,
+            show: studentsPermissions.read,
           },
           {
             name: "إدارة المعلمين",
             icon: teacherIcon,
             to: "/users/teachers",
-            show: permissions?.teachers?.read,
+            show: teachersPermissions.read,
           },
         ],
       },
@@ -99,19 +213,19 @@ const Sidebar = ({ active }) => {
             name: "إدارة المواد",
             icon: subjectIcon,
             to: "/school/subjects",
-            show: permissions?.subjects?.read,
+            show: subjectsPermissions.read,
           },
           {
             name: "إدارة الفصول",
             icon: userIcon,
             to: "/school/classes",
-            show: permissions?.classes?.read,
+            show: classesPermissions.read,
           },
           {
             name: "إدارة الحصص",
             icon: lectureIcon,
             to: "/school/lectures",
-            show: permissions?.lectures?.read,
+            show: lecturesPermissions.read,
           },
         ],
       },
@@ -122,19 +236,19 @@ const Sidebar = ({ active }) => {
             name: "توزيع الدرجات",
             icon: gradesCriteriaIcon,
             to: "/school/gradesCriteria",
-            show: permissions?.gradesCriteria?.read,
+            show: gradesCriteriaPermissions.read,
           },
           {
             name: "إدارة الاختبارات",
             icon: examsIcon,
             to: "/school/exams",
-            show: permissions?.exams?.read,
+            show: examsPermissions.read,
           },
           {
             name: "إدارة المشروعات",
             icon: projectsIcon,
             to: "/school/projects",
-            show: permissions?.projects?.read,
+            show: projectsPermissions.read,
           },
         ],
       },
@@ -145,19 +259,19 @@ const Sidebar = ({ active }) => {
             name: "إدارة الحضور",
             icon: absenceIcon,
             to: "/school/attendance",
-            show: permissions?.attendance?.read,
+            show: attendancePermissions.read,
           },
           {
             name: "إدارة التحضير",
             icon: preparationIcon,
             to: "/school/preparation",
-            show: permissions?.preparation?.read,
+            show: preparationPermissions.read,
           },
           {
             name: "إدارة المكتبة",
             icon: booksIcon,
             to: "/school/library",
-            show: permissions?.library?.read,
+            show: libraryPermissions.read,
           },
         ],
       },
@@ -169,49 +283,49 @@ const Sidebar = ({ active }) => {
             Icon: FolderCopyOutlined,
             iconType: "mui",
             to: "/financial/all-records",
-            show: permissions?.financial?.read,
+            show: financialPermissions.read,
           },
           {
             name: "مصاريف الطلاب",
             Icon: AccountBalanceWallet,
             iconType: "mui",
             to: "/financial/records",
-            show: permissions?.financial?.read,
+            show: financialPermissions.read,
           },
           {
             name: "الباص",
             Icon: DirectionsBus,
             iconType: "mui",
             to: "/financial/bus",
-            show: permissions?.financial?.read,
+            show: financialPermissions.read,
           },
           {
             name: "الرحلات",
             Icon: Route,
             iconType: "mui",
             to: "/financial/trips",
-            show: permissions?.financial?.read,
+            show: financialPermissions.read,
           },
           {
             name: "إعدادات الرسوم",
             Icon: ReceiptLong,
             iconType: "mui",
             to: "/financial/fee-configs",
-            show: permissions?.financial?.read,
+            show: financialPermissions.read,
           },
           {
             name: "خطط التقسيط",
             Icon: ViewList,
             iconType: "mui",
             to: "/financial/installment-plans",
-            show: permissions?.financial?.read,
+            show: financialPermissions.read,
           },
           {
             name: "الخصومات",
             Icon: LocalOffer,
             iconType: "mui",
             to: "/financial/discounts",
-            show: permissions?.financial?.read,
+            show: financialPermissions.read,
           },
         ],
       },
@@ -223,14 +337,14 @@ const Sidebar = ({ active }) => {
             Icon: MoneyOff,
             iconType: "mui",
             to: "/expenses",
-            show: permissions?.financial?.read,
+            show: expensesPermissions.read,
           },
           {
             name: "تصنيفات المصروفات",
             Icon: CategoryIcon,
             iconType: "mui",
             to: "/expenses/categories",
-            show: permissions?.financial?.read,
+            show: expensesPermissions.read,
           },
         ],
       },
@@ -243,7 +357,7 @@ const Sidebar = ({ active }) => {
           {
             name: "جدولي",
             icon: scheduleIcon,
-            to: `/users/teachers/${user?.id}/schedule`,
+            to: `/users/teachers/${userId}/schedule`,
             show: true,
           },
         ],
@@ -251,15 +365,25 @@ const Sidebar = ({ active }) => {
     }
 
     return baseCategories;
-  }, [isTeacher, permissions, user?.id]);
+  }, [
+    isTeacher,
+    userId,
+    studentsPermissions.read,
+    teachersPermissions.read,
+    subjectsPermissions.read,
+    classesPermissions.read,
+    lecturesPermissions.read,
+    gradesCriteriaPermissions.read,
+    examsPermissions.read,
+    projectsPermissions.read,
+    attendancePermissions.read,
+    preparationPermissions.read,
+    libraryPermissions.read,
+    financialPermissions.read,
+    expensesPermissions.read,
+  ]);
 
   const handleSignOut = () => {
-    const displayName =
-      user?.name ||
-      user?.fullName ||
-      user?.firstName ||
-      "المستخدم";
-
     toast.info(
       `تم تسجيل خروجك بنجاح، وداعًا ${displayName}`
     );
@@ -280,6 +404,8 @@ const Sidebar = ({ active }) => {
     });
 
     localStorage.removeItem("permissions");
+    localStorage.removeItem("role");
+    localStorage.removeItem("user");
 
     navigate("/", { replace: true });
   };
@@ -321,28 +447,12 @@ const Sidebar = ({ active }) => {
         <div className="sidebar-footer">
           <div className="sidebar-user">
             <span className="sidebar-user__avatar">
-              {String(
-                user?.name ||
-                  user?.fullName ||
-                  user?.firstName ||
-                  "م"
-              )
-                .trim()
-                .charAt(0)}
+              {displayName.charAt(0) || "م"}
             </span>
 
             <span className="sidebar-user__copy">
-              <strong>
-                {user?.name ||
-                  user?.fullName ||
-                  user?.firstName ||
-                  "مدير النظام"}
-              </strong>
-              <small>
-                {user?.role === "ADMIN"
-                  ? "مسؤول المنصة"
-                  : "مستخدم"}
-              </small>
+              <strong>{displayName}</strong>
+              <small>{roleLabel}</small>
             </span>
           </div>
 

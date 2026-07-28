@@ -1,19 +1,35 @@
-import { Navigate } from "react-router-dom";
+import {
+  Navigate,
+  useLocation,
+} from "react-router-dom";
+
 import usePermissions from "@/utils/hooks/usePermissions";
 
-const RequirePermission = ({ module, operation, children }) => {
-  const hasPermission = usePermissions(module, operation);
+const RequirePermission = ({
+  module,
+  operation,
+  children,
+}) => {
+  const location = useLocation();
 
-  // null = permissions missing entirely (e.g. token expired, stale session)
-  if (hasPermission === null) {
-    return <Navigate to="/" replace />;
+  const allowed = usePermissions(
+    module,
+    operation
+  );
+
+  if (!allowed) {
+    return (
+      <Navigate
+        to="/no-access"
+        replace
+        state={{
+          from: location.pathname,
+        }}
+      />
+    );
   }
 
-  if (hasPermission) {
-    return children;
-  }
-
-  return <Navigate to="/no-access" replace />;
+  return children;
 };
 
 export default RequirePermission;

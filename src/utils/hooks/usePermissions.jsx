@@ -24,12 +24,6 @@ const EMPTY_MODULE_PERMISSIONS = {
 const FULL_SCHOOL_ACCESS_ROLES = [
   "OWNER",
   "SUPERVISOR",
-
-  /*
-   * دعم مؤقت للحسابات القديمة
-   * قبل تحويل ADMIN إلى OWNER.
-   */
-  "ADMIN",
 ];
 
 const safeJsonParse = (
