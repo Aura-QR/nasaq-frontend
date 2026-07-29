@@ -1,771 +1,1196 @@
 import {
   Box,
-  Divider,
-  Grid,
+  Button,
+  Chip,
+  CircularProgress,
   IconButton,
   Paper,
   Stack,
+  TextField,
   Tooltip,
   Typography,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Button,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import {
+  AssignmentRounded,
+  CalendarMonthRounded,
+  CheckCircleRounded,
+  CloudUploadRounded,
+  DeleteOutlineRounded,
+  DownloadRounded,
+  EditRounded,
+  GradeRounded,
+  GroupsRounded,
+  MenuBookRounded,
+  PendingActionsRounded,
+  PictureAsPdfRounded,
+  SchoolRounded,
+  StarRounded,
+} from "@mui/icons-material";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "react-toastify";
+import { format, isValid } from "date-fns";
+import { ar } from "date-fns/locale";
+
 import Container from "@/components/Container/Container";
 import Back from "@/components/Back/Back";
-import { useNavigate, useParams } from "react-router-dom";
 import Popup from "@/components/Popup/Popup";
-import {
-  Delete,
-  Download,
-  Edit,
-  PictureAsPdf,
-  CloudUpload,
-  Assignment,
-  Star,
-} from "@mui/icons-material";
-import { Link } from "react-router-dom";
-import { toast } from "react-toastify";
+import Loading from "@/components/Loading";
 import { useProject } from "@/utils/hooks/apis/useProject";
-import { deleteProject } from "@/APIs/school/projects";
 import {
-  removeFileFromProject,
   addFilesToProject,
+  deleteProject,
   fetchProjectSubmissions,
   gradeSubmission,
+  removeFileFromProject,
 } from "@/APIs/school/projects";
 import { translateGender } from "@/utils/helpers/translateGender";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { format } from "date-fns";
-import { ar } from "date-fns/locale";
-import Loading from "@/components/Loading";
 import usePermissions from "@/utils/hooks/usePermissions";
+
+const MAX_FILES = 10;
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
+
+const getArray = (value) => (Array.isArray(value) ? value : []);
+
+const getResponseData = (response) =>
+  response?.data?.data || response?.data || response;
+
+const getResponseList = (response) => {
+  const payload = getResponseData(response);
+  if (Array.isArray(payload)) return payload;
+  return payload?.docs || payload?.items || payload?.results || [];
+};
+
+const getErrorMessage = (response, fallback) =>
+  response?.message ||
+  response?.data?.message ||
+  (typeof response === "string" ? response : fallback);
+
+const formatDate = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (!isValid(date)) return "—";
+  return format(date, "eee، d MMM yyyy", { locale: ar });
+};
+
+const getClassLabel = (item) => {
+  if (!item) return "—";
+  if (typeof item === "string") return item;
+  return [
+    item?.academicYear,
+    item?.roomNumber,
+    translateGender(item?.gender, "class"),
+  ]
+    .filter(Boolean)
+    .join(" - ");
+};
+
+const SectionHeader = ({ icon, title, description, endContent }) => (
+  <Stack
+    direction={{ xs: "column", sm: "row" }}
+    alignItems={{ xs: "stretch", sm: "center" }}
+    justifyContent="space-between"
+    gap={1}
+    sx={{
+      pb: 1.25,
+      mb: 1.5,
+      borderBottom: "1px solid rgba(36,74,112,.07)",
+    }}
+  >
+    <Stack direction="row" alignItems="center" spacing={1}>
+      <Box
+        sx={{
+          width: 40,
+          height: 40,
+          display: "grid",
+          placeItems: "center",
+          color: "var(--color-gold-dark)",
+          backgroundColor: "var(--color-gold-soft)",
+          borderRadius: "12px",
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </Box>
+      <Box>
+        <Typography
+          sx={{
+            color: "var(--color-navy-deep)",
+            fontSize: "16px",
+            fontWeight: 800,
+          }}
+        >
+          {title}
+        </Typography>
+        {!!description && (
+          <Typography
+            sx={{
+              mt: 0.2,
+              color: "var(--color-muted)",
+              fontSize: "10px",
+            }}
+          >
+            {description}
+          </Typography>
+        )}
+      </Box>
+    </Stack>
+    {endContent}
+  </Stack>
+);
+
+const DetailCard = ({ icon, label, value, wide }) => (
+  <Paper
+    elevation={0}
+    sx={{
+      minHeight: 82,
+      p: 1.25,
+      display: "grid",
+      gridTemplateColumns: "40px minmax(0,1fr)",
+      alignItems: "center",
+      gap: 1,
+      gridColumn: wide ? { xs: "span 2", md: "span 2" } : "auto",
+      border: "1px solid rgba(36,74,112,.08)",
+      borderRadius: "14px",
+      backgroundColor: "var(--color-white)",
+      transition: "transform .18s ease, box-shadow .18s ease",
+      "&:hover": {
+        transform: "translateY(-2px)",
+        boxShadow: "0 10px 22px rgba(18,47,77,.08)",
+      },
+    }}
+  >
+    <Box
+      sx={{
+        width: 40,
+        height: 40,
+        display: "grid",
+        placeItems: "center",
+        color: "var(--color-gold-dark)",
+        backgroundColor: "var(--color-gold-soft)",
+        borderRadius: "12px",
+      }}
+    >
+      {icon}
+    </Box>
+    <Box sx={{ minWidth: 0 }}>
+      <Typography
+        sx={{
+          color: "var(--color-muted)",
+          fontSize: "9.5px",
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </Typography>
+      <Typography
+        title={String(value || "—")}
+        sx={{
+          mt: 0.25,
+          color: "var(--color-navy-deep)",
+          fontSize: "12px",
+          fontWeight: 800,
+          lineHeight: 1.6,
+          overflowWrap: "anywhere",
+        }}
+      >
+        {value || "—"}
+      </Typography>
+    </Box>
+  </Paper>
+);
 
 const Profile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { project, loading } = useProject(id);
+  const [item, setItem] = useState(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const permissions = usePermissions("projects");
 
-  const { project, loading: projectLoading } = useProject(id);
+  useEffect(() => {
+    if (project) setItem(project);
+  }, [project]);
 
-  const [open, setOpen] = useState(false);
   const handleDelete = async () => {
-    const res = await deleteProject(id);
-    if (res.status) {
+    try {
+      const response = await deleteProject(id);
+
+      if (!response?.status) {
+        toast.error(getErrorMessage(response, "تعذر حذف المشروع"));
+        return;
+      }
+
       toast.success("تم حذف المشروع بنجاح");
       navigate("/school/projects");
-    } else {
-      toast.error(res || "حدث خطأ ما أثناء حذف المشروع");
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          "حدث خطأ أثناء حذف المشروع"
+      );
     }
   };
 
-  //permissions
-  const permissions = usePermissions("projects");
+  if (loading) return <Loading />;
 
-  if (projectLoading) {
-    return <Loading />;
+  if (!item) {
+    return (
+      <Container>
+        <Paper
+          elevation={0}
+          sx={{
+            minHeight: 300,
+            display: "grid",
+            placeItems: "center",
+            border: "1px solid rgba(36,74,112,.08)",
+            borderRadius: "18px",
+            backgroundColor: "var(--color-cream)",
+          }}
+        >
+          <Typography sx={{ color: "var(--color-muted)", fontWeight: 700 }}>
+            لم يتم العثور على بيانات المشروع
+          </Typography>
+        </Paper>
+      </Container>
+    );
   }
+
+  const subject = item?.subject || {};
+  const subjectLabel = [
+    subject?.subjectName || subject?.name,
+    subject?.subjectCode || subject?.code,
+  ]
+    .filter(Boolean)
+    .join(" - ") || "—";
+
+  const classes = getArray(
+    item?.classes?.length ? item.classes : item?.classIds
+  );
+  const classesLabel = classes.length
+    ? classes.map(getClassLabel).filter(Boolean).join(" / ")
+    : "—";
+
+  const details = [
+    ["المادة", subjectLabel, <MenuBookRounded />],
+    ["السنة الدراسية", item?.academicYear || "—", <SchoolRounded />],
+    ["تاريخ التسليم", formatDate(item?.dueDate), <CalendarMonthRounded />],
+    ["درجة المشروع", `${Number(item?.grade || 0)} درجة`, <GradeRounded />],
+    ["الفصول", classesLabel, <GroupsRounded />, true],
+  ];
 
   return (
     <Container>
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={{ xs: 4, sm: 0 }}
-        justifyContent={"space-between"}
-        alignItems={"center"}
-      >
-        <Back title={"تفاصيل المشروع"} />
-      </Stack>
-      {project && (
-        <Details item={project} setOpen={setOpen} permissions={permissions} />
-      )}
-      <Popup
-        open={open}
-        setOpen={setOpen}
-        message={"هل انت متأكد من انك تريد حذف هذا المشروع؟"}
-        type={"delete"}
-        fn={handleDelete}
-      />
+      <Box dir="rtl" sx={{ pb: 4 }}>
+        <Back title="تفاصيل المشروع" />
+
+        <Paper
+          elevation={0}
+          sx={{
+            mt: 1.25,
+            mb: 1.25,
+            p: { xs: 1.5, md: 2 },
+            border: "1px solid rgba(36,74,112,.08)",
+            borderRadius: "18px",
+            background:
+              "linear-gradient(135deg, rgba(255,252,247,.98), rgba(251,240,216,.42))",
+            boxShadow: "0 12px 28px rgba(18,47,77,.065)",
+          }}
+        >
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ xs: "stretch", sm: "center" }}
+            justifyContent="space-between"
+            gap={1.5}
+          >
+            <Box>
+              <Typography
+                component="h1"
+                sx={{
+                  color: "var(--color-navy-deep)",
+                  fontSize: { xs: "20px", md: "24px" },
+                  fontWeight: 800,
+                }}
+              >
+                {item?.title || "تفاصيل المشروع"}
+              </Typography>
+              <Typography
+                sx={{
+                  mt: 0.35,
+                  color: "var(--color-muted)",
+                  fontSize: "10.5px",
+                }}
+              >
+                {`${item?.academicYear || "—"} - ${subjectLabel}`}
+              </Typography>
+            </Box>
+
+            <Stack direction="row" gap={0.8} flexWrap="wrap">
+              <Chip
+                label={`${getArray(item?.files).length} ملف`}
+                sx={{
+                  height: 38,
+                  color: "var(--color-navy)",
+                  backgroundColor: "var(--color-gold-soft)",
+                  border: "1px solid rgba(211,164,79,.24)",
+                  fontSize: "11px",
+                  fontWeight: 800,
+                }}
+              />
+
+              {permissions.edit && (
+                <Tooltip title="تعديل المشروع">
+                  <IconButton
+                    component={Link}
+                    to={`/school/projects/edit/${item._id}`}
+                    sx={{
+                      width: 38,
+                      height: 38,
+                      color: "var(--color-navy)",
+                      backgroundColor: "rgba(36,74,112,.07)",
+                      borderRadius: "11px",
+                    }}
+                  >
+                    <EditRounded fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {permissions.delete && (
+                <Tooltip title="حذف المشروع">
+                  <IconButton
+                    onClick={() => setDeleteOpen(true)}
+                    sx={{
+                      width: 38,
+                      height: 38,
+                      color: "var(--color-danger)",
+                      backgroundColor: "rgba(201,79,79,.07)",
+                      borderRadius: "11px",
+                    }}
+                  >
+                    <DeleteOutlineRounded fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          </Stack>
+        </Paper>
+
+        <Box
+          sx={{
+            mb: 1.25,
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "repeat(2,minmax(0,1fr))",
+              md: "repeat(3,minmax(0,1fr))",
+              xl: "repeat(5,minmax(0,1fr))",
+            },
+            gap: 1,
+          }}
+        >
+          {details.map(([label, value, icon, wide]) => (
+            <DetailCard
+              key={label}
+              label={label}
+              value={value}
+              icon={icon}
+              wide={wide}
+            />
+          ))}
+        </Box>
+
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 1.25,
+            p: { xs: 1.5, md: 2 },
+            border: "1px solid rgba(36,74,112,.08)",
+            borderRadius: "18px",
+            backgroundColor: "var(--color-cream)",
+            boxShadow: "0 12px 28px rgba(18,47,77,.06)",
+          }}
+        >
+          <SectionHeader
+            icon={<AssignmentRounded />}
+            title="وصف المشروع"
+            description="التعليمات والتفاصيل المطلوبة من الطلاب."
+          />
+          <Typography
+            sx={{
+              color: "var(--color-text)",
+              fontSize: "12px",
+              lineHeight: 1.9,
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {item?.description || "لا يوجد وصف للمشروع."}
+          </Typography>
+        </Paper>
+
+        <FilesSection item={item} permissions={permissions} />
+        <SubmissionsSection item={item} />
+
+        <Popup
+          open={deleteOpen}
+          setOpen={setDeleteOpen}
+          message="هل أنت متأكد من أنك تريد حذف هذا المشروع؟"
+          type="delete"
+          fn={handleDelete}
+        />
+      </Box>
     </Container>
   );
 };
 
-const Details = ({ item, setOpen, permissions }) => {
-  const data = [
-    {
-      key: "عنوان المشروع",
-      value: item.title,
-    },
-    {
-      key: "المادة",
-      value: `${item.subject.subjectName} ${item.subject.subjectCode}`,
-    },
-    { key: "السنة الدراسية", value: item?.academicYear },
-    {
-      key: "تاريخ التسليم",
-      value: format(new Date(item.dueDate), "eee, d MMM yyyy", { locale: ar }),
-    },
-    {
-      key: "درجة المشروع",
-      value: item.grade + (item.grade <= 10 ? " درجات" : " درجة "),
-    },
-    {
-      key: "الفصول",
-      value: item.classes
-        .map(
-          (cls) =>
-            `${cls.academicYear} - ${cls.roomNumber} - ${translateGender(
-              cls.gender,
-              "class"
-            )}`
-        )
-        .join(" / "),
-    },
-  ];
+const FilesSection = ({ item, permissions }) => {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef(null);
+  const files = getArray(item?.files);
+  const count = files.length;
+  const canAdd = count < MAX_FILES;
+
+  const validate = (selected) => {
+    const newFiles = Array.from(selected || []);
+
+    if (newFiles.some((file) => file.type !== "application/pdf")) {
+      return "نوع الملف غير مدعوم. الرجاء رفع ملفات PDF فقط.";
+    }
+
+    if (count + newFiles.length > MAX_FILES) {
+      return "لا يمكن رفع أكثر من 10 ملفات";
+    }
+
+    if (newFiles.some((file) => file.size > MAX_FILE_SIZE)) {
+      return "حجم الملف يجب ألا يتجاوز 20 ميجابايت";
+    }
+
+    return null;
+  };
+
+  const handleUpload = async (event) => {
+    const newFiles = Array.from(event.target.files || []);
+    const errorMessage = validate(newFiles);
+    event.target.value = "";
+
+    if (errorMessage) {
+      toast.error(errorMessage);
+      return;
+    }
+
+    if (!newFiles.length) return;
+
+    setUploading(true);
+    try {
+      const response = await addFilesToProject(item._id, newFiles);
+
+      if (!response?.status) {
+        toast.error(getErrorMessage(response, "حدث خطأ أثناء رفع الملفات"));
+        return;
+      }
+
+      toast.success("تم رفع الملفات بنجاح");
+      window.location.reload();
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          "حدث خطأ أثناء رفع الملفات"
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        mb: 1.25,
+        p: { xs: 1.5, md: 2 },
+        border: "1px solid rgba(36,74,112,.08)",
+        borderRadius: "18px",
+        backgroundColor: "var(--color-cream)",
+        boxShadow: "0 12px 28px rgba(18,47,77,.06)",
+      }}
+    >
+      <SectionHeader
+        icon={<PictureAsPdfRounded />}
+        title={`الملفات المرفقة (${count}/${MAX_FILES})`}
+        description="ملفات PDF المرفقة بتعليمات المشروع."
+        endContent={
+          permissions.edit && canAdd ? (
+            <Button
+              component="label"
+              variant="outlined"
+              disabled={uploading}
+              startIcon={
+                uploading ? (
+                  <CircularProgress size={15} color="inherit" />
+                ) : (
+                  <CloudUploadRounded />
+                )
+              }
+              sx={{
+                minHeight: 40,
+                borderRadius: "11px",
+                color: "var(--color-navy)",
+                fontSize: "11px",
+                fontWeight: 800,
+                textTransform: "none",
+                "& .MuiButton-startIcon": {
+                  marginLeft: "6px",
+                  marginRight: 0,
+                },
+              }}
+            >
+              {uploading ? "جاري الرفع..." : "رفع ملفات"}
+              <input
+                ref={inputRef}
+                type="file"
+                hidden
+                multiple
+                accept="application/pdf,.pdf"
+                onChange={handleUpload}
+              />
+            </Button>
+          ) : null
+        }
+      />
+
+      {files.length ? (
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "repeat(2,minmax(0,1fr))",
+              lg: "repeat(3,minmax(0,1fr))",
+              xl: "repeat(4,minmax(0,1fr))",
+            },
+            gap: 1,
+          }}
+        >
+          {files.map((file, index) => (
+            <FileCard
+              key={file?._id || file?.filename || index}
+              file={file}
+              index={index}
+              projectId={item._id}
+              permissions={permissions}
+              totalFiles={count}
+            />
+          ))}
+        </Box>
+      ) : (
+        <Box
+          sx={{
+            minHeight: 160,
+            display: "grid",
+            placeItems: "center",
+            color: "var(--color-muted)",
+            fontSize: "11px",
+            fontWeight: 700,
+          }}
+        >
+          لا توجد ملفات مرفقة
+        </Box>
+      )}
+    </Paper>
+  );
+};
+
+const FileCard = ({
+  file,
+  index,
+  projectId,
+  permissions,
+  totalFiles,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const filename =
+    file?.filename || file?.originalName || `ملف ${index + 1}`;
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const response = await removeFileFromProject(
+        projectId,
+        file.filename
+      );
+
+      if (!response?.status) {
+        toast.error(getErrorMessage(response, "حدث خطأ أثناء حذف الملف"));
+        return;
+      }
+
+      toast.success("تم حذف الملف بنجاح");
+      setOpen(false);
+      window.location.reload();
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          "حدث خطأ أثناء حذف الملف"
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <>
       <Paper
         elevation={0}
         sx={{
-          bgcolor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
-          borderRadius: "16px",
-          mt: 10,
+          minHeight: 168,
+          p: 1.3,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 1,
+          position: "relative",
+          border: "1px solid rgba(36,74,112,.08)",
+          borderRadius: "15px",
+          backgroundColor: "var(--color-white)",
         }}
       >
-        <Accordion defaultExpanded>
-          <AccordionSummary>
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              width={"100%"}
-            >
-              <Stack spacing={1}>
-                <Typography variant="h5" fontWeight="bold">
-                  {item?.title}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {`${item?.academicYear} - ${item?.subject.subjectName}`}
-                </Typography>
-              </Stack>
-
-              <Stack direction="row" spacing={2}>
-                {permissions.edit && <Tooltip title={"تعديل المشروع"}>
-                  <Link to={`/school/projects/edit/${item._id}`}>
-                    <IconButton color="success" size="large">
-                      <Edit />
-                    </IconButton>
-                  </Link>
-                </Tooltip>}
-                {permissions.delete && (
-                  <Tooltip title={"حذف المشروع"}>
-                    <IconButton
-                      color="error"
-                      size="large"
-                      onClick={() => setOpen(true)}
-                    >
-                      <Delete />
-                    </IconButton>
-                  </Tooltip>
-                )}
-              </Stack>
-            </Stack>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Divider sx={{ my: 10 }} />
-
-            <Grid container spacing={4}>
-              {data.map((field, i) => {
-                const gridProps =
-                  field.key === "الفصول"
-                    ? { xs: 12, md: 12, lg: 12 }
-                    : { xs: 12, md: 6, lg: 4 };
-                return (
-                  <Grid item xs={12} md={6} lg={4} key={i} {...gridProps}>
-                    <Box
-                      sx={{
-                        p: 2,
-                        borderRadius: "10px",
-                        bgcolor: i % 2 === 0 ? "primary.white" : "white",
-                        transition: ".5s",
-                        "&:hover": { bgcolor: "grey.100" },
-                      }}
-                    >
-                      <Typography
-                        variant="label"
-                        color="text.secondary"
-                        sx={{ mb: 0.5, fontWeight: 500, fontSize: "12px" }}
-                      >
-                        {field.key}
-                      </Typography>
-                      <Typography
-                        variant="subtitle"
-                        sx={{
-                          display: "block",
-                          fontWeight: 500,
-                          color: "text.primary",
-                        }}
-                      >
-                        {field.value}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                );
-              })}
-            </Grid>
-          </AccordionDetails>
-        </Accordion>
-      </Paper>
-
-      {/* Description Section */}
-      <Description item={item} />
-
-      {/* Files Section */}
-      <Files item={item} permissions={permissions} />
-
-      {/* Submissions Section */}
-      <Submissions item={item} />
-    </>
-  );
-};
-
-const Description = ({ item }) => {
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        bgcolor: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        boxShadow: "0px 1px 2px 0px #0000000D",
-        p: 12,
-        borderRadius: "16px",
-        mt: 10,
-      }}
-    >
-      <Accordion defaultExpanded>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="h5" fontWeight="bold">
-            وصف المشروع
-          </Typography>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Divider sx={{ my: 10 }} />
-          <Typography
-            variant="body1"
-            sx={{ whiteSpace: "pre-wrap", lineHeight: 1.8 }}
-          >
-            {item?.description}
-          </Typography>
-        </AccordionDetails>
-      </Accordion>
-    </Paper>
-  );
-};
-
-const Files = ({ item, permissions }) => {
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useState(null);
-
-  const currentFileCount = item?.files?.length || 0;
-  const canAddFiles = currentFileCount < 10;
-
-  const handleFileUpload = async (event) => {
-    const files = Array.from(event.target.files);
-
-    if (!files.length) return;
-
-    // Check if adding these files would exceed the limit
-    if (currentFileCount + files.length > 10) {
-      toast.error("لا يمكن رفع أكثر من 10 ملفات");
-      return;
-    }
-
-    // Check individual file size (20MB each)
-    const oversizedFiles = files.filter((file) => file.size > 20 * 1024 * 1024);
-    if (oversizedFiles.length > 0) {
-      toast.error("حجم الملف يجب أن لا يتجاوز 20 ميجابايت");
-      return;
-    }
-
-    setUploading(true);
-    const res = await addFilesToProject(item._id, files);
-
-    if (res.status) {
-      toast.success("تم رفع الملفات بنجاح");
-      window.location.reload();
-    } else {
-      toast.error(res || "حدث خطأ أثناء رفع الملفات");
-    }
-
-    setUploading(false);
-    event.target.value = null; // Reset input
-  };
-
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        bgcolor: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        boxShadow: "0px 1px 2px 0px #0000000D",
-        p: 12,
-        borderRadius: "16px",
-        mt: 10,
-      }}
-    >
-      <Accordion defaultExpanded>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="h5" fontWeight="bold">
-            الملفات المرفقة ({currentFileCount}/10)
-          </Typography>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Divider sx={{ my: 10 }} />
-          <Grid container spacing={4}>
-            {item?.files?.map((file, index) => (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
-                <Card
-                  item={file}
-                  index={index}
-                  projectId={item._id}
-                  permissions={permissions}
-                  totalFiles={currentFileCount}
-                />
-              </Grid>
-            ))}
-
-            {/* Upload New File Card */}
-            {permissions.edit && canAddFiles && (
-              <Grid item xs={12} sm={6} md={4} lg={3}>
-                <Stack
-                  borderRadius={"20px"}
-                  border={"2px dashed"}
-                  pt={24}
-                  p={12}
-                  width={"100%"}
-                  height={"100%"}
-                  overflow={"hidden"}
-                  borderColor={"primary.main"}
-                  alignItems={"center"}
-                  justifyContent={"center"}
-                  sx={{
-                    cursor: "pointer",
-                    transition: "all 0.3s",
-                    bgcolor: "rgba(59, 130, 246, 0.05)",
-                    "&:hover": {
-                      bgcolor: "rgba(59, 130, 246, 0.1)",
-                      transform: "translateY(-4px)",
-                    },
-                  }}
-                  component="label"
-                >
-                  <input
-                    type="file"
-                    hidden
-                    multiple
-                    accept=".pdf"
-                    onChange={handleFileUpload}
-                    disabled={uploading}
-                    ref={fileInputRef}
-                  />
-
-                  <Stack
-                    width={64}
-                    height={64}
-                    borderRadius={"50%"}
-                    bgcolor={"primary.main"}
-                    alignItems={"center"}
-                    justifyContent={"center"}
-                  >
-                    <CloudUpload sx={{ fontSize: 30, color: "white" }} />
-                  </Stack>
-
-                  <Typography
-                    fontWeight={600}
-                    fontSize={16}
-                    mt={4}
-                    textAlign={"center"}
-                    color={"primary.main"}
-                  >
-                    {uploading ? "جاري الرفع..." : "رفع ملفات جديدة"}
-                  </Typography>
-
-                  <Typography
-                    fontSize={12}
-                    mt={2}
-                    textAlign={"center"}
-                    color={"text.secondary"}
-                  >
-                    {`يمكنك رفع ${10 - currentFileCount} ملف`}
-                  </Typography>
-                </Stack>
-              </Grid>
-            )}
-          </Grid>
-        </AccordionDetails>
-      </Accordion>
-    </Paper>
-  );
-};
-
-const Card = ({ item, index, projectId, permissions, totalFiles }) => {
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const handleDeleteFile = async () => {
-
-    console.log("Deleting file:", item);
-    setDeleting(true);
-    const res = await removeFileFromProject(projectId, item.filename);
-
-    if (res.status) {
-      toast.success("تم حذف الملف بنجاح");
-      window.location.reload();
-      setDeleteOpen(false);
-    } else {
-      toast.error(res || "حدث خطأ أثناء حذف الملف");
-    }
-
-    setDeleting(false);
-  };
-
-  return (
-    <>
-      <Stack
-        borderRadius={"20px"}
-        border={"1px solid"}
-        pt={24}
-        p={12}
-        width={"100%"}
-        overflow={"hidden"}
-        borderColor={"primary.border"}
-        alignItems={"center"}
-        position={"relative"}
-      >
-        {/* Delete Button */}
         {permissions.delete && (
           <Tooltip
-            title={"حذف الملف"}
-            arrow
+            title={
+              totalFiles <= 1
+                ? "لا يمكن حذف الملف الوحيد"
+                : "حذف الملف"
+            }
           >
-            <IconButton
-              size="small"
-              sx={{
-                position: "absolute",
-                top: 18,
-                right: 20,
-                bgcolor: "error.main",
-                color: "white",
-                "&:hover": {
-                  bgcolor: "error.dark",
-                },
-                width: 28,
-                height: 28,
-                cursor: totalFiles <= 1 ? "not-allowed" : "pointer",
-              }}
-              onClick={() => totalFiles > 1 && setDeleteOpen(true)}
-              disabled={totalFiles <= 1}
-            >
-              <Delete sx={{ fontSize: 18 }} />
-            </IconButton>
+            <span>
+              <IconButton
+                disabled={totalFiles <= 1}
+                onClick={() => setOpen(true)}
+                sx={{
+                  position: "absolute",
+                  top: 8,
+                  left: 8,
+                  width: 32,
+                  height: 32,
+                  color: "var(--color-danger)",
+                  backgroundColor: "rgba(201,79,79,.07)",
+                  borderRadius: "9px",
+                }}
+              >
+                <DeleteOutlineRounded fontSize="small" />
+              </IconButton>
+            </span>
           </Tooltip>
         )}
 
-        {/* Icon */}
-        <Stack
-          width={64}
-          height={64}
-          borderRadius={"50%"}
-          bgcolor={"#3B82F626"}
-          alignItems={"center"}
-          justifyContent={"center"}
-        >
-          <PictureAsPdf sx={{ fontSize: 30, color: "primary.main" }} />
-        </Stack>
-
-        {/* Title */}
-        <Typography
-          fontWeight={600}
-          fontSize={16}
-          mt={4}
-          textAlign={"center"}
-          color={"secondary"}
+        <Box
           sx={{
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            width: "100%",
-            px: 2,
+            width: 52,
+            height: 52,
+            mt: 1,
+            display: "grid",
+            placeItems: "center",
+            color: "var(--color-gold-dark)",
+            backgroundColor: "var(--color-gold-soft)",
+            borderRadius: "15px",
           }}
         >
-          {item.filename || `ملف ${index + 1}`}
+          <PictureAsPdfRounded />
+        </Box>
+
+        <Typography
+          noWrap
+          title={filename}
+          sx={{
+            width: "100%",
+            textAlign: "center",
+            color: "var(--color-navy-deep)",
+            fontSize: "11px",
+            fontWeight: 800,
+          }}
+        >
+          {filename}
         </Typography>
 
-        {/* Open Button */}
         <Button
-          variant="outlined"
-          size="small"
-          startIcon={<Download />}
-          href={item.url}
+          component="a"
+          href={file?.url}
           target="_blank"
+          rel="noreferrer"
           download
           fullWidth
-          sx={{ py: 6, mt: 4, borderRadius: "12px" }}
+          variant="outlined"
+          startIcon={<DownloadRounded />}
+          sx={{
+            minHeight: 38,
+            borderRadius: "10px",
+            color: "var(--color-navy)",
+            fontSize: "10px",
+            fontWeight: 800,
+            textTransform: "none",
+            "& .MuiButton-startIcon": {
+              marginLeft: "6px",
+              marginRight: 0,
+            },
+          }}
         >
           تحميل الملف
         </Button>
-      </Stack>
+      </Paper>
 
       <Popup
-        open={deleteOpen}
-        setOpen={setDeleteOpen}
-        message={`هل أنت متأكد من حذف الملف "${item.filename}"؟`}
-        type={"delete"}
-        fn={handleDeleteFile}
+        open={open}
+        setOpen={setOpen}
+        message={`هل أنت متأكد من حذف الملف "${filename}"؟`}
+        type="delete"
+        fn={handleDelete}
         loading={deleting}
       />
     </>
   );
 };
 
-// ── Submissions ─────────────────────────────────────────────────────────────
-const Submissions = ({ item }) => {
+const SubmissionsSection = ({ item }) => {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [gradingId, setGradingId] = useState(null);
   const [gradeInputs, setGradeInputs] = useState({});
 
   useEffect(() => {
+    let active = true;
+
     const load = async () => {
       setLoading(true);
-      const res = await fetchProjectSubmissions(item._id);
-      if (res?.status) {
-        setSubmissions(res.data || []);
-      } else {
-        toast.error(res || "حدث خطأ أثناء جلب التسليمات");
+      try {
+        const response = await fetchProjectSubmissions(item._id);
+
+        if (!active) return;
+
+        if (!response?.status) {
+          setSubmissions([]);
+          toast.error(
+            getErrorMessage(response, "حدث خطأ أثناء جلب التسليمات")
+          );
+          return;
+        }
+
+        setSubmissions(getResponseList(response));
+      } catch (error) {
+        if (active) {
+          setSubmissions([]);
+          toast.error(
+            error?.response?.data?.message ||
+              "حدث خطأ أثناء جلب التسليمات"
+          );
+        }
+      } finally {
+        if (active) setLoading(false);
       }
-      setLoading(false);
     };
+
     load();
+    return () => {
+      active = false;
+    };
   }, [item._id]);
 
+  const maxGrade = Number(item?.grade || 0);
+  const submitted = submissions.length;
+  const graded = submissions.filter(
+    (sub) =>
+      sub?.achievedGrade !== null &&
+      sub?.achievedGrade !== undefined
+  ).length;
+  const pending = submitted - graded;
+
   const handleGrade = async (studentId) => {
-    const val = gradeInputs[studentId];
-    if (val === undefined || val === "") {
+    const value = gradeInputs[studentId];
+
+    if (value === undefined || value === "") {
       toast.error("يرجى إدخال الدرجة");
       return;
     }
-    const grade = Number(val);
-    if (isNaN(grade) || grade < 0 || grade > item.grade) {
-      toast.error(`يجب أن تكون الدرجة بين 0 و ${item.grade}`);
+
+    const grade = Number(value);
+    if (Number.isNaN(grade) || grade < 0 || grade > maxGrade) {
+      toast.error(`يجب أن تكون الدرجة بين 0 و ${maxGrade}`);
       return;
     }
+
     setGradingId(studentId);
-    const res = await gradeSubmission(item._id, studentId, grade);
-    if (res?.status) {
+
+    try {
+      const response = await gradeSubmission(item._id, studentId, grade);
+
+      if (!response?.status) {
+        toast.error(
+          getErrorMessage(response, "حدث خطأ أثناء تسجيل الدرجة")
+        );
+        return;
+      }
+
       toast.success("تم تسجيل الدرجة بنجاح");
       setSubmissions((prev) =>
-        prev.map((s) =>
-          (s.student?._id || s.studentId?._id || s.studentId) === studentId
-            ? { ...s, achievedGrade: grade }
-            : s
+        prev.map((sub) =>
+          (sub?.student?._id ||
+            sub?.studentId?._id ||
+            sub?.studentId) === studentId
+            ? { ...sub, achievedGrade: grade }
+            : sub
         )
       );
       setGradeInputs((prev) => ({ ...prev, [studentId]: "" }));
-    } else {
-      toast.error(res || "حدث خطأ أثناء تسجيل الدرجة");
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          "حدث خطأ أثناء تسجيل الدرجة"
+      );
+    } finally {
+      setGradingId(null);
     }
-    setGradingId(null);
   };
 
-  const handleFileDownload = async (url, filename) => {
+  const downloadFile = async (url, filename) => {
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error();
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.download = filename || "file";
-      a.click();
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = filename || "file";
+      anchor.click();
       URL.revokeObjectURL(objectUrl);
     } catch {
       window.open(url, "_blank", "noreferrer");
     }
   };
 
-  const submitted = submissions.length;
-  const graded = submissions.filter(
-    (s) => s.achievedGrade !== null && s.achievedGrade !== undefined
-  ).length;
-  const pending = submitted - graded;
-
   return (
-    <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#EEF5FF" }}>
-            <Assignment style={{ color: "#318dce", fontSize: 20 }} />
-          </div>
-          <h2 className="text-base font-bold text-[#1E293B]">تسليمات الطلاب</h2>
-        </div>
+    <Paper
+      elevation={0}
+      sx={{
+        p: { xs: 1.5, md: 2 },
+        border: "1px solid rgba(36,74,112,.08)",
+        borderRadius: "18px",
+        backgroundColor: "var(--color-cream)",
+        boxShadow: "0 12px 28px rgba(18,47,77,.06)",
+      }}
+    >
+      <SectionHeader
+        icon={<AssignmentRounded />}
+        title="تسليمات الطلاب"
+        description="راجع الملفات المسلّمة وسجّل درجات الطلاب."
+        endContent={
+          !loading ? (
+            <Stack direction="row" gap={0.6} flexWrap="wrap">
+              <Chip label={`${submitted} سلّم`} size="small" />
+              <Chip
+                label={`${graded} صُحّح`}
+                size="small"
+                sx={{
+                  color: "#237449",
+                  backgroundColor: "rgba(116,201,154,.15)",
+                }}
+              />
+              <Chip
+                label={`${pending} بانتظار`}
+                size="small"
+                sx={{
+                  color: "var(--color-gold-dark)",
+                  backgroundColor: "var(--color-gold-soft)",
+                }}
+              />
+            </Stack>
+          ) : null
+        }
+      />
 
-        {!loading && (
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-[#EEF5FF] text-[#318dce]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#318dce]" />
-              {submitted} سلّم
-            </span>
-            <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              {graded} صُحِّح
-            </span>
-            <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              {pending} بانتظار
-            </span>
-          </div>
-        )}
-      </div>
+      {loading ? (
+        <Box sx={{ minHeight: 180, display: "grid", placeItems: "center" }}>
+          <CircularProgress
+            size={28}
+            sx={{ color: "var(--color-gold-dark)" }}
+          />
+        </Box>
+      ) : !submissions.length ? (
+        <Box
+          sx={{
+            minHeight: 180,
+            display: "grid",
+            placeItems: "center",
+            textAlign: "center",
+          }}
+        >
+          <Stack alignItems="center" spacing={0.7}>
+            <Box
+              sx={{
+                width: 52,
+                height: 52,
+                display: "grid",
+                placeItems: "center",
+                color: "var(--color-gold-dark)",
+                backgroundColor: "var(--color-gold-soft)",
+                borderRadius: "15px",
+              }}
+            >
+              <PendingActionsRounded />
+            </Box>
+            <Typography sx={{ fontSize: "13px", fontWeight: 800 }}>
+              لا توجد تسليمات حتى الآن
+            </Typography>
+          </Stack>
+        </Box>
+      ) : (
+        <Stack spacing={1}>
+          {submissions.map((sub, index) => {
+            const studentId =
+              sub?.student?._id ||
+              sub?.studentId?._id ||
+              sub?.studentId;
+            const studentName =
+              sub?.student?.name ||
+              sub?.studentId?.name ||
+              sub?.studentName ||
+              `طالب ${index + 1}`;
+            const isGraded =
+              sub?.achievedGrade !== null &&
+              sub?.achievedGrade !== undefined;
+            const files = getArray(sub?.files);
+            const isGrading = gradingId === studentId;
+            const initials = studentName
+              .trim()
+              .split(" ")
+              .slice(0, 2)
+              .map((word) => word[0])
+              .join("");
 
-      {/* Body */}
-      <div className="p-5">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-8 h-8 border-4 border-[#318dce] border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : submissions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-2">
-            <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
-              <Assignment className="text-gray-400" style={{ fontSize: 28 }} />
-            </div>
-            <p className="text-sm font-semibold text-gray-400">لا توجد تسليمات حتى الآن</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {submissions.map((sub, i) => {
-              const studentId = sub.student?._id || sub.studentId?._id || sub.studentId;
-              const studentName = sub.student?.name || sub.studentId?.name || sub.studentName || `طالب ${i + 1}`;
-              const isGraded = sub.achievedGrade !== null && sub.achievedGrade !== undefined;
-              const filesArr = Array.isArray(sub.files) ? sub.files : [];
-              const isGradingThis = gradingId === studentId;
-              const initials = studentName.trim().split(" ").slice(0, 2).map((w) => w[0]).join("");
+            return (
+              <Paper
+                key={studentId || index}
+                elevation={0}
+                sx={{
+                  overflow: "hidden",
+                  border: isGraded
+                    ? "1px solid rgba(116,201,154,.28)"
+                    : "1px solid rgba(36,74,112,.08)",
+                  borderRadius: "15px",
+                  backgroundColor: isGraded
+                    ? "rgba(116,201,154,.045)"
+                    : "var(--color-white)",
+                }}
+              >
+                <Box
+                  sx={{
+                    height: 4,
+                    backgroundColor: isGraded
+                      ? "var(--color-success)"
+                      : "var(--color-navy-light)",
+                  }}
+                />
 
-              return (
-                <div
-                  key={studentId || i}
-                  className={`rounded-2xl border overflow-hidden transition-all duration-200 ${
-                    isGraded ? "border-emerald-200 bg-emerald-50/40" : "border-gray-200 bg-white"
-                  }`}
-                >
-                  {/* Colored top strip */}
-                  <div
-                    className="h-1 w-full"
-                    style={{ backgroundColor: isGraded ? "#10b981" : "#318dce" }}
-                  />
-
-                  <div className="p-4 flex flex-col gap-3">
-                    {/* Student row */}
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <div className="flex items-center gap-3">
-                        {/* Avatar */}
-                        <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-black flex-shrink-0"
-                          style={{ backgroundColor: isGraded ? "#10b981" : "#318dce" }}
-                        >
-                          {initials}
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-[#1E293B]">{studentName}</p>
-                          <p className="text-xs text-gray-400">{filesArr.length} ملف مرفق</p>
-                        </div>
-                      </div>
-
-                      {/* Status badge */}
-                      {isGraded ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
-                          <Star style={{ fontSize: 13 }} />
-                          {sub.achievedGrade} / {item.grade}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                          بانتظار التصحيح
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Divider */}
-                    <div className="h-px bg-gray-100" />
-
-                    {/* Files */}
-                    {filesArr.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {filesArr.map((file, fi) => {
-                          const fixedUrl = file.url?.replace(/\[object(?:%20|\s)Object\]/g, studentId);
-                          return (
-                          <button
-                            key={fi}
-                            onClick={() => handleFileDownload(fixedUrl, file.filename || file.originalName || `ملف ${fi + 1}`)}
-                            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 bg-gray-50 text-gray-600 hover:border-[#318dce] hover:text-[#318dce] hover:bg-[#EEF5FF] transition-colors duration-200"
-                          >
-                            <Download style={{ fontSize: 14 }} />
-                            {file.filename || file.originalName || `ملف ${fi + 1}`}
-                          </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Grade input row */}
-                    <div className="flex items-center gap-2 pt-1">
-                      <div className="flex items-center gap-0 rounded-xl border border-gray-200 overflow-hidden flex-1 max-w-[200px] focus-within:border-[#318dce] transition-colors">
-                        <span className="px-3 text-xs font-semibold text-gray-400 bg-gray-50 border-r border-gray-200 h-9 flex items-center whitespace-nowrap">
-                          / {item.grade}
-                        </span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={item.grade}
-                          step={0.5}
-                          placeholder="الدرجة"
-                          value={gradeInputs[studentId] ?? (isGraded ? sub.achievedGrade : "")}
-                          onChange={(e) =>
-                            setGradeInputs((prev) => ({ ...prev, [studentId]: e.target.value }))
-                          }
-                          className="flex-1 px-3 py-2 text-sm font-bold text-[#1E293B] bg-white outline-none min-w-0"
-                        />
-                      </div>
-
-                      <button
-                        disabled={isGradingThis}
-                        onClick={() => handleGrade(studentId)}
-                        className="h-9 px-5 rounded-xl text-sm font-bold text-white transition-all duration-200 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                        style={{ backgroundColor: isGraded ? "#10b981" : "#318dce" }}
+                <Box sx={{ p: 1.35 }}>
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    alignItems={{ xs: "stretch", sm: "center" }}
+                    justifyContent="space-between"
+                    gap={1}
+                  >
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <Box
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          display: "grid",
+                          placeItems: "center",
+                          color: "white",
+                          backgroundColor: isGraded
+                            ? "var(--color-success)"
+                            : "var(--color-navy-light)",
+                          borderRadius: "12px",
+                          fontSize: "11px",
+                          fontWeight: 800,
+                        }}
                       >
-                        {isGradingThis ? (
-                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        {initials || "ط"}
+                      </Box>
+                      <Box>
+                        <Typography sx={{ fontSize: "12px", fontWeight: 800 }}>
+                          {studentName}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            color: "var(--color-muted)",
+                            fontSize: "9px",
+                          }}
+                        >
+                          {files.length} ملف مرفق
+                        </Typography>
+                      </Box>
+                    </Stack>
+
+                    <Chip
+                      icon={
+                        isGraded ? <StarRounded /> : <PendingActionsRounded />
+                      }
+                      label={
+                        isGraded
+                          ? `${sub.achievedGrade} / ${maxGrade}`
+                          : "بانتظار التصحيح"
+                      }
+                      sx={{
+                        alignSelf: { xs: "flex-start", sm: "center" },
+                        color: isGraded
+                          ? "#237449"
+                          : "var(--color-gold-dark)",
+                        backgroundColor: isGraded
+                          ? "rgba(116,201,154,.15)"
+                          : "var(--color-gold-soft)",
+                        fontSize: "9px",
+                        fontWeight: 800,
+                        "& .MuiChip-icon": {
+                          color: "inherit",
+                          fontSize: 15,
+                        },
+                      }}
+                    />
+                  </Stack>
+
+                  {!!files.length && (
+                    <Box
+                      sx={{
+                        mt: 1.1,
+                        pt: 1.1,
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 0.7,
+                        borderTop: "1px solid rgba(36,74,112,.06)",
+                      }}
+                    >
+                      {files.map((file, fileIndex) => {
+                        const fixedUrl = file?.url?.replace(
+                          /\[object(?:%20|\s)Object\]/g,
+                          studentId
+                        );
+                        const filename =
+                          file?.filename ||
+                          file?.originalName ||
+                          `ملف ${fileIndex + 1}`;
+
+                        return (
+                          <Button
+                            type="button"
+                            key={fileIndex}
+                            onClick={() => downloadFile(fixedUrl, filename)}
+                            variant="outlined"
+                            startIcon={<DownloadRounded />}
+                            sx={{
+                              minHeight: 34,
+                              borderRadius: "9px",
+                              color: "var(--color-navy)",
+                              fontSize: "9px",
+                              fontWeight: 700,
+                              textTransform: "none",
+                              "& .MuiButton-startIcon": {
+                                marginLeft: "5px",
+                                marginRight: 0,
+                              },
+                            }}
+                          >
+                            {filename}
+                          </Button>
+                        );
+                      })}
+                    </Box>
+                  )}
+
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    gap={0.8}
+                    sx={{
+                      mt: 1.1,
+                      pt: 1.1,
+                      borderTop: "1px solid rgba(36,74,112,.06)",
+                    }}
+                  >
+                    <TextField
+                      type="number"
+                      value={
+                        gradeInputs[studentId] ??
+                        (isGraded ? sub.achievedGrade : "")
+                      }
+                      onChange={(event) =>
+                        setGradeInputs((prev) => ({
+                          ...prev,
+                          [studentId]: event.target.value,
+                        }))
+                      }
+                      placeholder="الدرجة"
+                      inputProps={{ min: 0, max: maxGrade, step: 0.5 }}
+                      size="small"
+                      sx={{
+                        width: { xs: "100%", sm: 180 },
+                        "& .MuiOutlinedInput-root": {
+                          minHeight: 40,
+                          borderRadius: "10px",
+                          backgroundColor: "var(--color-white)",
+                        },
+                      }}
+                      InputProps={{
+                        startAdornment: (
+                          <Typography
+                            sx={{
+                              ml: 0.7,
+                              color: "var(--color-muted)",
+                              fontSize: "10px",
+                              fontWeight: 700,
+                            }}
+                          >
+                            / {maxGrade}
+                          </Typography>
+                        ),
+                      }}
+                    />
+
+                    <Button
+                      type="button"
+                      disabled={isGrading}
+                      onClick={() => handleGrade(studentId)}
+                      variant="contained"
+                      startIcon={
+                        isGrading ? (
+                          <CircularProgress size={14} color="inherit" />
                         ) : isGraded ? (
-                          "تعديل"
+                          <CheckCircleRounded />
                         ) : (
-                          "تصحيح"
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
+                          <GradeRounded />
+                        )
+                      }
+                      sx={{
+                        minHeight: 40,
+                        borderRadius: "10px",
+                        color: "white",
+                        backgroundColor: isGraded
+                          ? "var(--color-success)"
+                          : "var(--color-navy)",
+                        fontSize: "10px",
+                        fontWeight: 800,
+                        textTransform: "none",
+                        "& .MuiButton-startIcon": {
+                          marginLeft: "6px",
+                          marginRight: 0,
+                        },
+                      }}
+                    >
+                      {isGraded ? "تعديل الدرجة" : "تسجيل الدرجة"}
+                    </Button>
+                  </Stack>
+                </Box>
+              </Paper>
+            );
+          })}
+        </Stack>
+      )}
+    </Paper>
   );
 };
 

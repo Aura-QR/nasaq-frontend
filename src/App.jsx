@@ -27,6 +27,7 @@ import {
 } from "@/utils/theme/theme";
 
 import "react-toastify/dist/ReactToastify.css";
+import "@/styles/toast.css";
 
 function App() {
   return (
@@ -55,16 +56,21 @@ function App() {
             <AppRouter />
 
             <ToastContainer
-              position="top-right"
-              autoClose={5000}
+              position="top-left"
+              autoClose={3000}
               hideProgressBar={false}
-              newestOnTop={false}
+              newestOnTop
               closeOnClick
               rtl
               pauseOnFocusLoss
               draggable
               pauseOnHover
-              theme="colored"
+              theme="light"
+              limit={3}
+              className="nasaq-toast-container"
+              toastClassName="nasaq-toast"
+              bodyClassName="nasaq-toast-body"
+              progressClassName="nasaq-toast-progress"
             />
           </BrowserRouter>
         </Provider>

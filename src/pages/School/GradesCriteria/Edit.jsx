@@ -1,18 +1,236 @@
-import { Box, Grid, Typography } from "@mui/material";
-import Back from "@/components/Back/Back";
-import Container from "@/components/Container/Container";
-import Input from "@/components/Input/Input";
+import {
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Grid,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
+
+import {
+  AssessmentRounded,
+  CloseRounded,
+  EditNoteRounded,
+  SaveRounded,
+} from "@mui/icons-material";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import { useForm } from "react-hook-form";
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import SubmitSection from "@/components/SubmitSection";
+import {
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import { toast } from "react-toastify";
+
+import Container from "@/components/Container/Container";
+import Back from "@/components/Back/Back";
+import Input from "@/components/Input/Input";
 import Select from "@/components/Select/Select";
+import SubjectSelector from "@/components/Selector/SubjectSelector";
+import Loading from "@/components/Loading";
+
 import { getChangedValues } from "@/utils/helpers/getChangedValues";
 import { useGradesCriteria } from "@/utils/hooks/apis/useGradesCriteria";
 import { editGradesCriteria } from "@/APIs/school/gradesCriteria";
-import SubjectSelector from "@/components/Selector/SubjectSelector";
 import Years from "@/utils/constants/Years";
+
+const getResponseData = (response) =>
+  response?.data?.data ||
+  response?.data ||
+  response;
+
+const getResponseId = (response) => {
+  const payload =
+    getResponseData(response);
+
+  return (
+    payload?._id ||
+    payload?.id ||
+    payload?.gradesCriteria?._id ||
+    payload?.gradesCriteria?.id ||
+    ""
+  );
+};
+
+const getErrorMessage = (
+  response,
+  fallback
+) =>
+  response?.message ||
+  response?.data?.message ||
+  (typeof response === "string"
+    ? response
+    : fallback);
+
+const GRADE_FIELDS = [
+  "final",
+  "activities",
+  "projects",
+  "assignments",
+  "quizzes",
+];
+
+const calculateTotal = (values) =>
+  GRADE_FIELDS.reduce(
+    (total, field) =>
+      total +
+      Number(values?.[field] || 0),
+    0
+  );
+
+const FORM_CARD_SX = {
+  p: {
+    xs: 1.5,
+    md: 2,
+  },
+  mt: 1.25,
+  overflow: "visible",
+  border:
+    "1px solid rgba(36,74,112,0.08)",
+  borderRadius: "18px",
+  backgroundColor:
+    "var(--color-cream)",
+  boxShadow:
+    "0 12px 28px rgba(18,47,77,0.06)",
+
+  "& .MuiFormControl-root": {
+    width: "100%",
+    margin: 0,
+  },
+
+  "& .MuiInputBase-root, & .MuiOutlinedInput-root":
+    {
+      minHeight: 48,
+      backgroundColor:
+        "var(--color-white)",
+      borderRadius: "12px",
+    },
+
+  "& .MuiOutlinedInput-notchedOutline":
+    {
+      borderColor:
+        "rgba(36,74,112,0.16)",
+    },
+
+  "& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline":
+    {
+      borderColor:
+        "rgba(36,74,112,0.28)",
+    },
+
+  "& .MuiOutlinedInput-root.Mui-focused":
+    {
+      boxShadow:
+        "0 0 0 3px rgba(211,164,79,0.10)",
+    },
+
+  "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
+    {
+      borderColor:
+        "var(--color-gold)",
+      borderWidth: "1px",
+    },
+
+  "& .MuiInputLabel-root": {
+    px: 0.65,
+    color:
+      "var(--color-muted)",
+    backgroundColor:
+      "var(--color-cream)",
+    fontSize: "10.5px",
+    fontWeight: 700,
+  },
+};
+
+const SectionHeading = ({
+  icon,
+  title,
+  description,
+  endContent,
+}) => (
+  <Stack
+    direction={{
+      xs: "column",
+      sm: "row",
+    }}
+    alignItems={{
+      xs: "stretch",
+      sm: "center",
+    }}
+    justifyContent="space-between"
+    gap={1}
+    sx={{
+      pb: 1.25,
+      mb: 1.5,
+      borderBottom:
+        "1px solid rgba(36,74,112,0.07)",
+    }}
+  >
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={1}
+    >
+      <Box
+        sx={{
+          width: 40,
+          height: 40,
+          display: "grid",
+          placeItems: "center",
+          flexShrink: 0,
+          color:
+            "var(--color-gold-dark)",
+          backgroundColor:
+            "var(--color-gold-soft)",
+          border:
+            "1px solid rgba(211,164,79,0.22)",
+          borderRadius: "12px",
+
+          "& svg": {
+            fontSize: 21,
+          },
+        }}
+      >
+        {icon}
+      </Box>
+
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          sx={{
+            color:
+              "var(--color-navy-deep)",
+            fontSize: "16px",
+            fontWeight: 800,
+          }}
+        >
+          {title}
+        </Typography>
+
+        <Typography
+          sx={{
+            mt: 0.2,
+            color:
+              "var(--color-muted)",
+            fontSize: "10px",
+            lineHeight: 1.6,
+          }}
+        >
+          {description}
+        </Typography>
+      </Box>
+    </Stack>
+
+    {endContent}
+  </Stack>
+);
+
 
 const Edit = () => {
   const {
@@ -21,201 +239,546 @@ const Edit = () => {
     formState: { errors },
     reset,
     setValue,
+    watch,
   } = useForm();
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
-  const { id } = useParams();
 
-  // Reference to default values coming from the API
-  const [defaultValues, setDefaultValues] = useState(null);
+  const [loading, setLoading] =
+    useState(false);
 
-  // Fetch grades criteria data using the useGradesCriteria custom hook
-  const { gradesCriteria, loading: gradesCriteriaLoading } = useGradesCriteria(id);
+  const [
+    defaultValues,
+    setDefaultValues,
+  ] = useState(null);
 
-  // Set default values when grades criteria data is loaded
+  const navigate =
+    useNavigate();
+
+  const { id } =
+    useParams();
+
+  const {
+    gradesCriteria,
+    loading:
+      gradesCriteriaLoading,
+  } = useGradesCriteria(id);
+
   useEffect(() => {
-    if (gradesCriteria) {
-      reset(gradesCriteria);
-      setDefaultValues(gradesCriteria);
-    }
-  }, [gradesCriteria, reset]);
-
-  // Handle Submit
-  const onSubmit = async (data) => {
-    setLoading(true);
-    
-    // Get only changed fields
-    const changedData = getChangedValues(data, defaultValues, ["subject"]);
-
-    if (Object.keys(changedData).length === 0) {
-      toast.info("لم تحدث أي بيانات للتعديل");
-      setLoading(false);
+    if (!gradesCriteria) {
       return;
     }
 
-    const response = await editGradesCriteria(changedData, id);
+    const normalized = {
+      ...gradesCriteria,
+      subjectId:
+        gradesCriteria
+          ?.subjectId ||
+        gradesCriteria
+          ?.subject?._id ||
+        gradesCriteria
+          ?.subject?.id ||
+        "",
+    };
 
-    if (response.status) {
-      toast.success("تم تعديل توزيع الدرجات بنجاح");
-      navigate("/school/gradesCriteria/" + response.data._id);
-    } else {
-      toast.error(response || "حدث خطأ ما أثناء تعديل توزيع الدرجات!");
+    reset(normalized);
+    setDefaultValues(
+      normalized
+    );
+  }, [
+    gradesCriteria,
+    reset,
+  ]);
+
+  const watchedValues =
+    watch();
+
+  const totalGrades =
+    useMemo(
+      () =>
+        calculateTotal(
+          watchedValues
+        ),
+      [watchedValues]
+    );
+
+  const isTotalValid =
+    totalGrades === 100;
+
+  const onSubmit = async (
+    formData
+  ) => {
+    if (!isTotalValid) {
+      toast.error(
+        "يجب أن يكون مجموع الدرجات 100 درجة"
+      );
+      return;
     }
 
-    setLoading(false);
+    const changedData =
+      getChangedValues(
+        formData,
+        defaultValues,
+        ["subject"]
+      );
+
+    if (
+      Object.keys(
+        changedData
+      ).length === 0
+    ) {
+      toast.info(
+        "لم تحدث أي بيانات للتعديل"
+      );
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response =
+        await editGradesCriteria(
+          changedData,
+          id
+        );
+
+      if (!response?.status) {
+        toast.error(
+          getErrorMessage(
+            response,
+            "حدث خطأ أثناء تعديل توزيع الدرجات"
+          )
+        );
+        return;
+      }
+
+      toast.success(
+        "تم تعديل توزيع الدرجات بنجاح"
+      );
+
+      const updatedId =
+        getResponseId(
+          response
+        ) || id;
+
+      navigate(
+        `/school/gradesCriteria/${updatedId}`
+      );
+    } catch (error) {
+      toast.error(
+        error?.response?.data
+          ?.message ||
+          "حدث خطأ أثناء تعديل توزيع الدرجات"
+      );
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (
+    gradesCriteriaLoading &&
+    !defaultValues
+  ) {
+    return <Loading />;
+  }
 
   return (
     <Container>
-      <Back title={"تعديل توزيع الدرجات"} />
       <Box
-        bgcolor={"primary.white"}
-        p={"32px 16px"}
-        borderRadius={"12px"}
-        my={8}
-      >
-        <Typography variant="title" fontWeight={"500"}> 
-          تفاصيل توزيع الدرجات
-        (المجموع مئة درجة)</Typography>
-        {defaultValues && (
-          <DataInputs
-            register={register}
-            errors={errors}
-            defaultValues={defaultValues}
-            setValue={setValue}
-          />
+        component="form"
+        onSubmit={handleSubmit(
+          onSubmit
         )}
+        noValidate
+        dir="rtl"
+        sx={{
+          width: "100%",
+          pb: 3,
+          color:
+            "var(--color-text)",
+        }}
+      >
+        <Paper
+          elevation={0}
+          sx={{
+            px: {
+              xs: 1.25,
+              md: 1.6,
+            },
+            py: 1.05,
+            border:
+              "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "16px",
+            backgroundColor:
+              "rgba(255,252,247,0.9)",
+            boxShadow:
+              "0 8px 20px rgba(18,47,77,0.04)",
+          }}
+        >
+          <Stack
+            direction={{
+              xs: "column",
+              sm: "row",
+            }}
+            alignItems={{
+              xs: "stretch",
+              sm: "center",
+            }}
+            justifyContent="space-between"
+            gap={1}
+          >
+            <Back title="تعديل توزيع الدرجات" />
+
+            <Typography
+              sx={{
+                color:
+                  "var(--color-muted)",
+                fontSize: "10px",
+              }}
+            >
+              راجع البيانات وعدّل
+              الدرجات مع الحفاظ على
+              مجموع 100 درجة.
+            </Typography>
+          </Stack>
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={FORM_CARD_SX}
+        >
+          <SectionHeading
+            icon={
+              <EditNoteRounded />
+            }
+            title="المادة والسنة الدراسية"
+            description="عدّل المادة أو السنة المرتبط بها توزيع الدرجات."
+          />
+
+          {defaultValues && (
+            <Grid
+              container
+              spacing={{
+                xs: 1.5,
+                md: 2,
+              }}
+            >
+              <Grid
+                item
+                xs={12}
+                md={6}
+              >
+                <Select
+                  register={register}
+                  registerName="academicYear"
+                  data={Years}
+                  error={
+                    errors
+                      .academicYear
+                      ?.message
+                  }
+                  label="السنة الدراسية للمادة"
+                  required
+                  defaultValue={
+                    defaultValues
+                      .academicYear
+                  }
+                />
+              </Grid>
+
+              <Grid
+                item
+                xs={12}
+                md={6}
+              >
+                <SubjectSelector
+                  register={register}
+                  errors={errors}
+                  setValue={setValue}
+                  label="المادة"
+                  required
+                  defaultSubjectId={
+                    defaultValues
+                      .subjectId
+                  }
+                />
+              </Grid>
+            </Grid>
+          )}
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={FORM_CARD_SX}
+        >
+          <SectionHeading
+            icon={
+              <AssessmentRounded />
+            }
+            title="تفاصيل توزيع الدرجات"
+            description="يجب أن يكون مجموع درجات البنود الرئيسية 100 درجة."
+            endContent={
+              <Chip
+                label={`${totalGrades} / 100`}
+                sx={{
+                  minWidth: 88,
+                  height: 34,
+                  color:
+                    isTotalValid
+                      ? "#237449"
+                      : "var(--color-danger)",
+                  backgroundColor:
+                    isTotalValid
+                      ? "rgba(116,201,154,0.16)"
+                      : "rgba(201,79,79,0.08)",
+                  border:
+                    isTotalValid
+                      ? "1px solid rgba(116,201,154,0.28)"
+                      : "1px solid rgba(201,79,79,0.18)",
+                  fontSize: "11px",
+                  fontWeight: 800,
+                }}
+              />
+            }
+          />
+
+          {defaultValues && (
+            <GradeInputs
+              register={register}
+              errors={errors}
+              defaultValues={
+                defaultValues
+              }
+            />
+          )}
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={{
+            mt: 1.25,
+            px: {
+              xs: 1.25,
+              md: 1.6,
+            },
+            py: 1.15,
+            border:
+              "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "16px",
+            backgroundColor:
+              "var(--color-cream)",
+            boxShadow:
+              "0 10px 24px rgba(18,47,77,0.05)",
+          }}
+        >
+          <Stack
+            direction={{
+              xs: "column-reverse",
+              sm: "row",
+            }}
+            gap={1}
+          >
+            <Button
+              type="submit"
+              disabled={
+                loading ||
+                gradesCriteriaLoading ||
+                !isTotalValid
+              }
+              variant="contained"
+              startIcon={
+                loading ? (
+                  <CircularProgress
+                    size={16}
+                    color="inherit"
+                  />
+                ) : (
+                  <SaveRounded />
+                )
+              }
+              sx={{
+                width: {
+                  xs: "100%",
+                  sm: 200,
+                },
+                minHeight: 44,
+                borderRadius: "12px",
+                color:
+                  "var(--color-white)",
+                background:
+                  "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
+                fontSize: "12px",
+                fontWeight: 800,
+                textTransform: "none",
+
+                "& .MuiButton-startIcon":
+                  {
+                    marginLeft:
+                      "7px",
+                    marginRight: 0,
+                  },
+              }}
+            >
+              {loading
+                ? "جاري الحفظ..."
+                : "حفظ التغييرات"}
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() =>
+                navigate(-1)
+              }
+              variant="outlined"
+              startIcon={
+                <CloseRounded />
+              }
+              sx={{
+                width: {
+                  xs: "100%",
+                  sm: 145,
+                },
+                minHeight: 44,
+                borderRadius: "12px",
+                color:
+                  "var(--color-navy)",
+                borderColor:
+                  "rgba(36,74,112,0.18)",
+                fontSize: "12px",
+                fontWeight: 800,
+                textTransform: "none",
+
+                "& .MuiButton-startIcon":
+                  {
+                    marginLeft:
+                      "7px",
+                    marginRight: 0,
+                  },
+              }}
+            >
+              إلغاء
+            </Button>
+          </Stack>
+        </Paper>
       </Box>
-      <SubmitSection
-        onSubmit={onSubmit}
-        handleSubmit={handleSubmit}
-        loading={loading || gradesCriteriaLoading}
-      />
     </Container>
   );
 };
 
-const DataInputs = ({ register, errors, defaultValues, setValue }) => {
-  return (
-    <Grid container mt={8} spacing={8}>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Select
-          register={register}
-          registerName={"academicYear"}
-          data={Years}
-          error={errors.academicYear?.message}
-          label={"السنة الدراسية للمادة"}
-          required={true}
-          defaultValue={defaultValues.academicYear}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <SubjectSelector
-          register={register} 
-          errors={errors}
-          setValue={setValue}
-          label="المادة"
-          defaultSubjectId={defaultValues.subjectId}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"final"}
-          error={errors.final?.message}
-          label={"درجة الاختبار النهائي"}
-          required={true}
-          type={"number"}
-          defaultValue={defaultValues.final}
-          valueAsNumber={true}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"activities"}
-          error={errors.activities?.message}
-          label={"درجة اعمال السنة"}
-          required={true}
-          type={"number"}
-          defaultValue={defaultValues.activities}
-          valueAsNumber={true}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"projects"}
-          error={errors.projects?.message}
-          label={"درجة المهام الآدائية"}
-          required={true}
-          type={"number"}
-          defaultValue={defaultValues.projects}
-          valueAsNumber={true}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"projectsCount"}
-          error={errors.projectsCount?.message}
-          label={"عدد المهام الآدائية"}
-          required={true}
-          type={"number"}
-          defaultValue={defaultValues.projectsCount}
-          valueAsNumber={true}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"assignments"}
-          error={errors.assignments?.message}
-          label={"درجة الواجبات"}
-          required={true}
-          type={"number"}
-          defaultValue={defaultValues.assignments}
-          valueAsNumber={true}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"assignmentsCount"}
-          error={errors.assignmentsCount?.message}
-          label={"عدد الواجبات"}
-          required={true}
-          type={"number"}
-          defaultValue={defaultValues.assignmentsCount}
-          valueAsNumber={true}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"quizzes"}
-          error={errors.quizzes?.message}
-          label={"درجة الاختبارات القصيرة"}
-          required={true}
-          type={"number"}
-          defaultValue={defaultValues.quizzes}
-          valueAsNumber={true}
-        />
-      </Grid>
-      <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Input
-          register={register}
-          registerName={"quizzesCount"}
-          error={errors.quizzesCount?.message}
-          label={"عدد الاختبارات القصيرة"}
-          required={true}
-          type={"number"}
-          defaultValue={defaultValues.quizzesCount}
-          valueAsNumber={true}
-        />
-      </Grid>
+const GradeInputs = ({
+  register,
+  errors,
+  defaultValues,
+}) => (
+  <Grid
+    container
+    spacing={{
+      xs: 1.5,
+      md: 2,
+    }}
+  >
+    <Grid item xs={12} sm={6} lg={4}>
+      <Input
+        register={register}
+        registerName="final"
+        error={errors.final?.message}
+        label="درجة الاختبار النهائي"
+        required
+        type="number"
+        defaultValue={defaultValues.final}
+        valueAsNumber
+      />
     </Grid>
-  );
-};
+
+    <Grid item xs={12} sm={6} lg={4}>
+      <Input
+        register={register}
+        registerName="activities"
+        error={errors.activities?.message}
+        label="درجة أعمال السنة"
+        required
+        type="number"
+        defaultValue={defaultValues.activities}
+        valueAsNumber
+      />
+    </Grid>
+
+    <Grid item xs={12} sm={6} lg={4}>
+      <Input
+        register={register}
+        registerName="projects"
+        error={errors.projects?.message}
+        label="درجة المهام الأدائية"
+        required
+        type="number"
+        defaultValue={defaultValues.projects}
+        valueAsNumber
+      />
+    </Grid>
+
+    <Grid item xs={12} sm={6} lg={4}>
+      <Input
+        register={register}
+        registerName="projectsCount"
+        error={errors.projectsCount?.message}
+        label="عدد المهام الأدائية"
+        required
+        type="number"
+        defaultValue={defaultValues.projectsCount}
+        valueAsNumber
+      />
+    </Grid>
+
+    <Grid item xs={12} sm={6} lg={4}>
+      <Input
+        register={register}
+        registerName="assignments"
+        error={errors.assignments?.message}
+        label="درجة الواجبات"
+        required
+        type="number"
+        defaultValue={defaultValues.assignments}
+        valueAsNumber
+      />
+    </Grid>
+
+    <Grid item xs={12} sm={6} lg={4}>
+      <Input
+        register={register}
+        registerName="assignmentsCount"
+        error={errors.assignmentsCount?.message}
+        label="عدد الواجبات"
+        required
+        type="number"
+        defaultValue={defaultValues.assignmentsCount}
+        valueAsNumber
+      />
+    </Grid>
+
+    <Grid item xs={12} sm={6} lg={4}>
+      <Input
+        register={register}
+        registerName="quizzes"
+        error={errors.quizzes?.message}
+        label="درجة الاختبارات القصيرة"
+        required
+        type="number"
+        defaultValue={defaultValues.quizzes}
+        valueAsNumber
+      />
+    </Grid>
+
+    <Grid item xs={12} sm={6} lg={4}>
+      <Input
+        register={register}
+        registerName="quizzesCount"
+        error={errors.quizzesCount?.message}
+        label="عدد الاختبارات القصيرة"
+        required
+        type="number"
+        defaultValue={defaultValues.quizzesCount}
+        valueAsNumber
+      />
+    </Grid>
+  </Grid>
+);
 
 export default Edit;

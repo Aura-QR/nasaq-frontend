@@ -1,185 +1,552 @@
 import {
   Box,
-  Divider,
-  Grid,
+  Chip,
   IconButton,
   Paper,
   Stack,
   Tooltip,
   Typography,
 } from "@mui/material";
+
+import {
+  AssignmentTurnedInRounded,
+  DeleteOutlineRounded,
+  EditRounded,
+  FactCheckRounded,
+  GradeRounded,
+  MenuBookRounded,
+  NumbersRounded,
+  QuizRounded,
+  SchoolRounded,
+  TaskAltRounded,
+} from "@mui/icons-material";
+
+import {
+  Link,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import { toast } from "react-toastify";
+
 import Container from "@/components/Container/Container";
 import Back from "@/components/Back/Back";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
 import Popup from "@/components/Popup/Popup";
-import { Delete, Edit } from "@mui/icons-material";
-import { toast } from "react-toastify";
+import Loading from "@/components/Loading";
+
 import { useGradesCriteria } from "@/utils/hooks/apis/useGradesCriteria";
 import { deleteGradesCriteria } from "@/APIs/school/gradesCriteria";
-import Loading from "@/components/Loading";
 import usePermissions from "@/utils/hooks/usePermissions";
 
+const DetailCard = ({
+  icon,
+  label,
+  value,
+}) => (
+  <Paper
+    elevation={0}
+    sx={{
+      minHeight: 82,
+      p: 1.25,
+      display: "grid",
+      gridTemplateColumns:
+        "40px minmax(0,1fr)",
+      alignItems: "center",
+      gap: 1,
+      border:
+        "1px solid rgba(36,74,112,0.08)",
+      borderRadius: "14px",
+      backgroundColor:
+        "var(--color-white)",
+      transition:
+        "transform 180ms ease, box-shadow 180ms ease",
+
+      "&:hover": {
+        transform:
+          "translateY(-2px)",
+        boxShadow:
+          "0 10px 22px rgba(18,47,77,0.08)",
+      },
+    }}
+  >
+    <Box
+      sx={{
+        width: 40,
+        height: 40,
+        display: "grid",
+        placeItems: "center",
+        color:
+          "var(--color-gold-dark)",
+        backgroundColor:
+          "var(--color-gold-soft)",
+        border:
+          "1px solid rgba(211,164,79,0.22)",
+        borderRadius: "12px",
+
+        "& svg": {
+          fontSize: 20,
+        },
+      }}
+    >
+      {icon}
+    </Box>
+
+    <Box sx={{ minWidth: 0 }}>
+      <Typography
+        sx={{
+          color:
+            "var(--color-muted)",
+          fontSize: "9.5px",
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </Typography>
+
+      <Typography
+        noWrap
+        title={String(
+          value || "—"
+        )}
+        sx={{
+          mt: 0.25,
+          color:
+            "var(--color-navy-deep)",
+          fontSize: "12px",
+          fontWeight: 800,
+        }}
+      >
+        {value || "—"}
+      </Typography>
+    </Box>
+  </Paper>
+);
+
 const Profile = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const { id } =
+    useParams();
 
-  // calling the usegradesCriteria hook to fetch the grades criteria data
-  const { gradesCriteria, loading: gradesCriteriaLoading } =
-    useGradesCriteria(id);
+  const navigate =
+    useNavigate();
 
-  // Keep local state for toggle functionality
-  const [item, setItem] = useState(null);
+  const {
+    gradesCriteria,
+    loading,
+  } = useGradesCriteria(id);
 
-  // Update item when student data loads
+  const [item, setItem] =
+    useState(null);
+
+  const [open, setOpen] =
+    useState(false);
+
+  const permissions =
+    usePermissions(
+      "gradesCriteria"
+    );
+
   useEffect(() => {
     if (gradesCriteria) {
-      setItem(gradesCriteria);
+      setItem(
+        gradesCriteria
+      );
     }
   }, [gradesCriteria]);
 
-  // handle delete
-  const [open, setOpen] = useState(false);
-  const handleDelete = async () => {
-    const res = await deleteGradesCriteria(id);
-    if (res.status) {
-      toast.success("تم حذف توزيع الدرجات بنجاح");
-      navigate("/school/gradesCriteria");
-    } else {
-      toast.error(res || "حدث خطأ ما أثناء حذف توزيع الدرجات");
+  const handleDelete =
+    async () => {
+      try {
+        const response =
+          await deleteGradesCriteria(
+            id
+          );
+
+        if (!response?.status) {
+          toast.error(
+            response?.message ||
+              response ||
+              "تعذر حذف توزيع الدرجات"
+          );
+          return;
+        }
+
+        toast.success(
+          "تم حذف توزيع الدرجات بنجاح"
+        );
+
+        navigate(
+          "/school/gradesCriteria"
+        );
+      } catch (error) {
+        toast.error(
+          error?.response?.data
+            ?.message ||
+            "حدث خطأ أثناء حذف توزيع الدرجات"
+        );
+      }
+    };
+
+  const details = useMemo(() => {
+    if (!item) {
+      return [];
     }
-  };
 
-  //permissions
-  const permissions = usePermissions("gradesCriteria");
+    const gradeValue = (
+      value
+    ) =>
+      `${Number(
+        value || 0
+      )} درجة`;
 
-  // Show loading state
-  if (gradesCriteriaLoading) {
+    return [
+      {
+        label: "المادة",
+        value: [
+          item?.subject
+            ?.subjectName,
+          item?.subject
+            ?.subjectCode,
+        ]
+          .filter(Boolean)
+          .join(" - ") || "—",
+        icon:
+          <MenuBookRounded />,
+      },
+      {
+        label:
+          "السنة الدراسية",
+        value:
+          item?.academicYear ||
+          "—",
+        icon:
+          <SchoolRounded />,
+      },
+      {
+        label:
+          "الاختبار النهائي",
+        value: gradeValue(
+          item?.final
+        ),
+        icon: <GradeRounded />,
+      },
+      {
+        label:
+          "أعمال السنة",
+        value: gradeValue(
+          item?.activities
+        ),
+        icon:
+          <FactCheckRounded />,
+      },
+      {
+        label:
+          "المهام الأدائية",
+        value: gradeValue(
+          item?.projects
+        ),
+        icon:
+          <TaskAltRounded />,
+      },
+      {
+        label:
+          "عدد المهام الأدائية",
+        value: Number(
+          item?.projectsCount ||
+            0
+        ),
+        icon:
+          <NumbersRounded />,
+      },
+      {
+        label: "الواجبات",
+        value: gradeValue(
+          item?.assignments
+        ),
+        icon:
+          <AssignmentTurnedInRounded />,
+      },
+      {
+        label:
+          "عدد الواجبات",
+        value: Number(
+          item?.assignmentsCount ||
+            0
+        ),
+        icon:
+          <NumbersRounded />,
+      },
+      {
+        label:
+          "الاختبارات القصيرة",
+        value: gradeValue(
+          item?.quizzes
+        ),
+        icon: <QuizRounded />,
+      },
+      {
+        label:
+          "عدد الاختبارات القصيرة",
+        value: Number(
+          item?.quizzesCount ||
+            0
+        ),
+        icon:
+          <NumbersRounded />,
+      },
+    ];
+  }, [item]);
+
+  const totalGrades =
+    useMemo(
+      () =>
+        [
+          item?.final,
+          item?.activities,
+          item?.projects,
+          item?.assignments,
+          item?.quizzes,
+        ].reduce(
+          (total, value) =>
+            total +
+            Number(value || 0),
+          0
+        ),
+      [item]
+    );
+
+  if (loading) {
     return <Loading />;
   }
-  
+
+  if (!item) {
+    return (
+      <Container>
+        <Paper
+          elevation={0}
+          sx={{
+            minHeight: 300,
+            display: "grid",
+            placeItems: "center",
+            border:
+              "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "18px",
+            backgroundColor:
+              "var(--color-cream)",
+          }}
+        >
+          <Typography
+            sx={{
+              color:
+                "var(--color-muted)",
+              fontWeight: 700,
+            }}
+          >
+            لم يتم العثور على توزيع الدرجات
+          </Typography>
+        </Paper>
+      </Container>
+    );
+  }
+
+  const title = [
+    item?.academicYear,
+    item?.subject
+      ?.subjectName,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+
   return (
     <Container>
-      {/* Header */}
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={{ xs: 4, sm: 0 }}
-        justifyContent={"space-between"}
-        alignItems={"center"}
+      <Box
+        dir="rtl"
+        sx={{
+          pb: 4,
+          color:
+            "var(--color-text)",
+        }}
       >
-        <Back title={"تفاصيل توزيع الدرجات"} />
-        {/* Status */}
-      </Stack>
-      {/* Box Content */}
-      {item && <Details item={item} setOpen={setOpen} permissions={permissions} />}
-      {/* Popup */}
-      <Popup
-        open={open}
-        setOpen={setOpen}
-        message={"هل انت متأكد من انك تريد حذف توزيع الدرجات هذا؟"}
-        type={"delete"}
-        fn={handleDelete}
-      />
-    </Container>
-  );
-};
+        <Back title="تفاصيل توزيع الدرجات" />
 
-const Details = ({ item, setOpen, permissions }) => {
-  console.log(item)
-  const data = [
-    { key: "المادة", value: `${item?.subject.subjectName} ${item?.subject.subjectCode}`},
-    { key: "السنة الدراسية", value: item?.academicYear },
-    { key: "درجة الاختبار النهائي", value: item?.final + (item.final <= 10 ? " درجات" : " درجة") },
-    { key: "درجة اعمال السنة", value: item?.activities + (item.activities <= 10 ? " درجات" : " درجة") },
-    { key: "درجة المهام الآدائية", value: item?.projects + (item.projects <= 10 ? " درجات" : " درجة") },
-    { key: "عدد المهام الآدائية", value: item?.projectsCount || 1},
-    { key: "درجة الواجبات", value: item?.assignments + (item.assignments <= 10 ? " درجات" : " درجة") },
-    { key: "عدد الواجبات", value: item?.assignmentsCount || 1},
-    { key: "درجة الاختبارات القصيرة", value: item?.quizzes + (item.quizzes <= 10 ? " درجات" : " درجة") },
-    { key: "عدد الاختبارات القصيرة", value: item?.quizzesCount || 1},
-  ];
-
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        bgcolor: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        boxShadow: "0px 1px 2px 0px #0000000D",
-        p: 12,
-        borderRadius: "16px",
-        mt: 10,
-      }}
-    >
-      {/* Header */}
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={{ xs: 4, sm: 0 }}
-        justifyContent={"space-between"}
-        alignItems={{ xs: "flex-start", sm: "center" }}
-      >
-        <Stack spacing={1}>
-          <Typography
-            variant="h4"
-            fontWeight="bold"
-          >{`${item?.academicYear} - ${item?.subject.subjectName}`}</Typography>
-        </Stack>
-
-        <Stack direction="row" spacing={2}>
-          {permissions.edit && <Tooltip title={"تعديل توزيع درجات المادة"}>
-            <Link to={`/school/gradesCriteria/edit/${item._id}`}>
-              <IconButton color="success" size="large">
-                <Edit />
-              </IconButton>
-            </Link>
-          </Tooltip>}
-          {permissions.delete && <Tooltip title={"حذف توزيع درجات المادة"}>
-            <IconButton
-              color="error"
-              size="large"
-              onClick={() => setOpen(true)}
-            >
-              <Delete />
-            </IconButton>
-          </Tooltip>}
-        </Stack>
-      </Stack>
-      <Divider sx={{ my: 10 }} />
-      {/* Body */}
-      <Grid container spacing={4}>
-        {data.map((field, i) => (
-          <Grid item xs={12} md={6} lg={4} key={i}>
-            <Box
-              sx={{
-                p: 2,
-                borderRadius: "10px",
-                bgcolor: i % 2 === 0 ? "primary.white" : "white",
-                transition: ".5s",
-                "&:hover": { bgcolor: "grey.100" },
-              }}
-            >
+        <Paper
+          elevation={0}
+          sx={{
+            mt: 1.25,
+            mb: 1.25,
+            p: {
+              xs: 1.5,
+              md: 2,
+            },
+            border:
+              "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "18px",
+            background:
+              "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.42))",
+            boxShadow:
+              "0 12px 28px rgba(18,47,77,0.065)",
+          }}
+        >
+          <Stack
+            direction={{
+              xs: "column",
+              sm: "row",
+            }}
+            alignItems={{
+              xs: "stretch",
+              sm: "center",
+            }}
+            justifyContent="space-between"
+            gap={1.5}
+          >
+            <Box sx={{ minWidth: 0 }}>
               <Typography
-                variant="label"
-                color="text.secondary"
-                sx={{ mb: 0.5, fontWeight: 500, fontSize: "12px" }}
-              >
-                {field.key}
-              </Typography>
-              <Typography
-                variant="subtitle"
+                component="h1"
                 sx={{
-                  display: "block",
-                  fontWeight: 500,
-                  color: "text.primary",
+                  color:
+                    "var(--color-navy-deep)",
+                  fontSize: {
+                    xs: "20px",
+                    md: "24px",
+                  },
+                  fontWeight: 800,
                 }}
               >
-                {field.value}
+                {title || "توزيع الدرجات"}
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.35,
+                  color:
+                    "var(--color-muted)",
+                  fontSize: "10.5px",
+                }}
+              >
+                راجع تفاصيل توزيع
+                درجات المادة وعدد
+                الأنشطة المطلوبة.
               </Typography>
             </Box>
-          </Grid>
-        ))}
-      </Grid>
-    </Paper>
+
+            <Stack
+              direction="row"
+              alignItems="center"
+              gap={0.8}
+              flexWrap="wrap"
+            >
+              <Chip
+                label={`${totalGrades} / 100`}
+                sx={{
+                  height: 38,
+                  color:
+                    totalGrades ===
+                    100
+                      ? "#237449"
+                      : "var(--color-danger)",
+                  backgroundColor:
+                    totalGrades ===
+                    100
+                      ? "rgba(116,201,154,0.16)"
+                      : "rgba(201,79,79,0.08)",
+                  border:
+                    totalGrades ===
+                    100
+                      ? "1px solid rgba(116,201,154,0.28)"
+                      : "1px solid rgba(201,79,79,0.18)",
+                  fontSize: "11px",
+                  fontWeight: 800,
+                }}
+              />
+
+              {permissions.edit && (
+                <Tooltip title="تعديل توزيع الدرجات">
+                  <IconButton
+                    component={Link}
+                    to={`/school/gradesCriteria/edit/${item._id}`}
+                    sx={{
+                      width: 38,
+                      height: 38,
+                      color:
+                        "var(--color-navy)",
+                      backgroundColor:
+                        "rgba(36,74,112,0.07)",
+                      border:
+                        "1px solid rgba(36,74,112,0.10)",
+                      borderRadius:
+                        "11px",
+                    }}
+                  >
+                    <EditRounded fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {permissions.delete && (
+                <Tooltip title="حذف توزيع الدرجات">
+                  <IconButton
+                    onClick={() =>
+                      setOpen(true)
+                    }
+                    sx={{
+                      width: 38,
+                      height: 38,
+                      color:
+                        "var(--color-danger)",
+                      backgroundColor:
+                        "rgba(201,79,79,0.07)",
+                      border:
+                        "1px solid rgba(201,79,79,0.14)",
+                      borderRadius:
+                        "11px",
+                    }}
+                  >
+                    <DeleteOutlineRounded fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          </Stack>
+        </Paper>
+
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs:
+                "repeat(2, minmax(0,1fr))",
+              md:
+                "repeat(3, minmax(0,1fr))",
+              xl:
+                "repeat(5, minmax(0,1fr))",
+            },
+            gap: 1,
+          }}
+        >
+          {details.map(
+            (detail) => (
+              <DetailCard
+                key={detail.label}
+                {...detail}
+              />
+            )
+          )}
+        </Box>
+
+        <Popup
+          open={open}
+          setOpen={setOpen}
+          message="هل أنت متأكد من أنك تريد حذف توزيع الدرجات هذا؟"
+          type="delete"
+          fn={handleDelete}
+        />
+      </Box>
+    </Container>
   );
 };
 
