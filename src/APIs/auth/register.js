@@ -21,6 +21,9 @@ const normalizePhone = (value) =>
 
 export const registerRequest = async (payload) => {
   try {
+    const rawPhone = payload?.phone?.trim();
+    const normalizedPhone = rawPhone ? normalizePhone(rawPhone) : undefined;
+
     const requestBody = {
       schoolName: normalizeText(
         payload?.schoolName
@@ -34,9 +37,9 @@ export const registerRequest = async (payload) => {
         payload?.schoolEmail
       ),
 
-      phone: normalizePhone(
-        payload?.phone
-      ),
+      ...(normalizedPhone
+        ? { phone: normalizedPhone }
+        : {}),
 
       ownerName: normalizeText(
         payload?.ownerName

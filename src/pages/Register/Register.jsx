@@ -25,9 +25,11 @@ import {
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
+import { useSignIn } from "react-auth-kit";
 import { toast } from "react-toastify";
 
 import registerRequest from "@/APIs/auth/register";
+import { persistSessionMeta } from "@/shared/auth/session";
 
 import AuthLayout, {
   AuthField,
@@ -41,7 +43,7 @@ const SLUG_PATTERN =
   /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const USERNAME_PATTERN =
-  /^[a-zA-Z0-9._-]{3,30}$/;
+  /^[a-zA-Z0-9._-]{4,20}$/;
 
 const PHONE_PATTERN =
   /^\+?[1-9]\d{7,14}$/;
@@ -73,6 +75,7 @@ const isSuccessfulResponse = (response) => {
 
 const Register = () => {
   const navigate = useNavigate();
+  const signIn = useSignIn();
 
   const [loading, setLoading] =
     useState(false);
@@ -153,6 +156,67 @@ const Register = () => {
         );
 
         return;
+      }
+
+      const token =
+        response?.accessToken;
+      const user =
+        response?.user;
+      const school =
+        response?.school;
+
+      if (token && user) {
+        const role =
+          user.role || "OWNER";
+
+        const schoolId =
+          school?.id ||
+          user.schoolId ||
+          "";
+
+        const permissions = [
+          "*",
+        ];
+
+        const signedIn = signIn({
+          token,
+
+          expiresIn:
+            60 * 24 * 30,
+
+          tokenType:
+            "Bearer",
+
+          authState: {
+            user,
+            role,
+            schoolId,
+            permissions,
+          },
+        });
+
+        if (signedIn) {
+          persistSessionMeta({
+            user,
+            role,
+            permissions,
+            schoolId,
+          });
+
+          toast.success(
+            response?.message ||
+              "تم إنشاء المدرسة وتسجيل الدخول بنجاح"
+          );
+
+          navigate(
+            "/users/students",
+            {
+              replace: true,
+            }
+          );
+
+          return;
+        }
       }
 
       toast.success(
@@ -297,7 +361,7 @@ const Register = () => {
             />
 
             <AuthField
-              label="رقم هاتف المدرسة"
+              label="رقم هاتف المدرسة (اختياري)"
               type="tel"
               placeholder="+9665xxxxxxxx"
               autoComplete="tel"
@@ -309,9 +373,6 @@ const Register = () => {
               registration={register(
                 "phone",
                 {
-                  required:
-                    "رقم هاتف المدرسة مطلوب",
-
                   setValueAs: (
                     value
                   ) =>
@@ -322,12 +383,18 @@ const Register = () => {
                       ""
                     ),
 
-                  pattern: {
-                    value:
-                      PHONE_PATTERN,
+                  validate: (
+                    value
+                  ) => {
+                    if (!value)
+                      return true;
 
-                    message:
-                      "أدخل رقم هاتف دوليًا صحيحًا",
+                    return (
+                      PHONE_PATTERN.test(
+                        value
+                      ) ||
+                      "أدخل رقم هاتف دوليًا صحيحًا"
+                    );
                   },
                 }
               )}
@@ -407,7 +474,7 @@ const Register = () => {
                       USERNAME_PATTERN,
 
                     message:
-                      "استخدم من 3 إلى 30 حرفًا إنجليزيًا أو رقمًا",
+                      "استخدم من 4 إلى 20 حرفًا إنجليزيًا أو رقمًا",
                   },
                 }
               )}
@@ -465,10 +532,10 @@ const Register = () => {
                     "كلمة مرور المالك مطلوبة",
 
                   minLength: {
-                    value: 8,
+                    value: 6,
 
                     message:
-                      "كلمة المرور يجب ألا تقل عن 8 أحرف",
+                      "كلمة المرور يجب ألا تقل عن 6 أحرف",
                   },
                 }
               )}
