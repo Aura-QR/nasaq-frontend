@@ -1,66 +1,11 @@
 import { api } from "../Axios";
-
-const ENDPOINT = "/financial/bus";
-
-export const fetchBusList = async (filters = {}) => {
-	try {
-		const response = await api.get(ENDPOINT, { params: filters });
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const fetchBusCandidates = async (filters = {}) => {
-	try {
-		const response = await api.get(ENDPOINT + "/candidates", { params: filters });
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const fetchBusRecord = async (studentId) => {
-	try {
-		const response = await api.get(ENDPOINT + "/" + studentId);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const fetchMyBusRecord = async () => {
-	try {
-		const response = await api.get(ENDPOINT + "/me");
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const enrollBus = async (studentId, data) => {
-	try {
-		const response = await api.post(ENDPOINT + "/" + studentId + "/enroll", data);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const payBusInstallment = async (studentId, data) => {
-	try {
-		const response = await api.post(ENDPOINT + "/" + studentId + "/pay", data);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const unenrollBus = async (studentId) => {
-	try {
-		const response = await api.delete(ENDPOINT + "/" + studentId + "/unenroll");
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
+import { apiError } from "./_helpers";
+const E="/financial/bus";
+export const fetchBusList=async(filters={})=>{try{return(await api.get(E,{params:filters})).data}catch(e){return apiError(e,"تعذر تحميل بيانات الباص")}};
+export const fetchBusCandidates=async(filters={})=>{try{return(await api.get(`${E}/candidates`,{params:filters})).data}catch(e){return apiError(e,"تعذر تحميل الطلاب المتاحين للباص")}};
+export const fetchBusRecord=async(id)=>{try{return(await api.get(`${E}/${id}`)).data}catch(e){return apiError(e,"تعذر تحميل ملف الباص")}};
+export const fetchMyBusRecord=async()=>{try{return(await api.get(`${E}/me`)).data}catch(e){return apiError(e,"تعذر تحميل ملف الباص")}};
+export const enrollBus=async(id,data)=>{try{return(await api.post(`${E}/${id}/enroll`,data)).data}catch(e){return apiError(e,"تعذر تسجيل الطالب في الباص")}};
+export const payBusInstallment=async(id,data)=>{try{return(await api.post(`${E}/${id}/pay`,data)).data}catch(e){return apiError(e,"تعذر تسجيل دفعة الباص")}};
+export const unenrollBus=async(id)=>{try{return(await api.delete(`${E}/${id}/unenroll`)).data}catch(e){return apiError(e,"تعذر إلغاء تسجيل الطالب من الباص")}};
+export default {fetchBusList,fetchBusCandidates,fetchBusRecord,fetchMyBusRecord,enrollBus,payBusInstallment,unenrollBus};

@@ -1,334 +1,1299 @@
-import { Box, Grid, Typography, Paper, Button } from "@mui/material";
-import Back from "@/components/Back/Back";
-import Container from "@/components/Container/Container";
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Grid,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
+
+import {
+  AutoStoriesRounded,
+  CloseRounded,
+  CloudUploadRounded,
+  DeleteOutlineRounded,
+  EventNoteRounded,
+  SaveRounded,
+} from "@mui/icons-material";
+
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import { useForm } from "react-hook-form";
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import SubmitSection from "@/components/SubmitSection";
+import {
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
+import { useAuthUser } from "react-auth-kit";
 import { toast } from "react-toastify";
-import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+
+import Container from "@/components/Container/Container";
+import Back from "@/components/Back/Back";
+import Select from "@/components/Select/Select";
+import Loading from "@/components/Loading";
+
 import { addPreparation } from "@/APIs/school/preparation";
 import { fetchLectures } from "@/APIs/school/lectures";
-import { useAuthUser } from "react-auth-kit";
-import Select from "@/components/Select/Select";
-// import Weeks from "@/utils/constants/Weeks";
-// import Semesters from "@/utils/constants/Semesters";
-import Loading from "@/components/Loading";
+
 import Slots from "@/utils/constants/Slots";
 import Days from "@/utils/constants/Days";
 import { translateGender } from "@/utils/helpers/translateGender";
-const Add = () => {
 
-  const [searchParams] = useSearchParams();
-  const preselectedLectureId = searchParams.get("lectureId");
+import { format } from "date-fns";
+import { ar } from "date-fns/locale";
+
+const SCHOOL_ADMIN_ROLES = [
+  "OWNER",
+  "SUPERVISOR",
+  "MANAGER",
+  "ADMIN",
+];
+
+const getAuthUserData = (
+  authUser
+) => {
+  const value =
+    typeof authUser ===
+    "function"
+      ? authUser()
+      : authUser;
+
+  return (
+    value?.user ||
+    value ||
+    {}
+  );
+};
+
+const normalizeRole = (
+  role
+) =>
+  String(role || "")
+    .trim()
+    .toUpperCase();
+
+const isSchoolAdmin = (
+  role
+) =>
+  SCHOOL_ADMIN_ROLES.includes(
+    normalizeRole(role)
+  );
+
+const getResponseData = (
+  response
+) =>
+  response?.data?.data ||
+  response?.data ||
+  response;
+
+const getResponseList = (
+  response
+) => {
+  const payload =
+    getResponseData(response);
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return (
+    payload?.docs ||
+    payload?.items ||
+    payload?.results ||
+    []
+  );
+};
+
+const getResponseId = (
+  response
+) => {
+  const payload =
+    getResponseData(response);
+
+  return (
+    payload?._id ||
+    payload?.id ||
+    ""
+  );
+};
+
+const getErrorMessage = (
+  response,
+  fallback
+) =>
+  response?.message ||
+  response?.data?.message ||
+  (typeof response === "string"
+    ? response
+    : fallback);
+
+const getArray = (
+  value
+) =>
+  Array.isArray(value)
+    ? value
+    : [];
+
+const getLectureData = (
+  item
+) =>
+  item?.lecture || {};
+
+const getClassData = (
+  item
+) =>
+  getLectureData(item)?.class ||
+  item?.class ||
+  {};
+
+const getSubjectData = (
+  item
+) =>
+  item?.subject ||
+  getLectureData(item)?.subject ||
+  {};
+
+const getTeacherName = (
+  item
+) =>
+  item?.teacher?.name ||
+  item?.createdBy?.name ||
+  item?.name ||
+  getLectureData(item)?.teacher?.name ||
+  "—";
+
+const getClassLabel = (
+  item
+) => {
+  const classData =
+    getClassData(item);
+
+  const academicYear =
+    classData?.academicYear ||
+    item?.academicYear ||
+    "";
+
+  const roomNumber =
+    classData?.roomNumber ||
+    item?.roomNumber ||
+    "";
+
+  const gender =
+    classData?.gender ||
+    item?.gender ||
+    "";
+
+  return [
+    academicYear,
+    roomNumber,
+    gender
+      ? translateGender(
+          gender,
+          "class"
+        )
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" - ") || "—";
+};
+
+const getSubjectLabel = (
+  item
+) => {
+  const subjectData =
+    getSubjectData(item);
+
+  const name =
+    subjectData?.subjectName ||
+    subjectData?.name ||
+    "—";
+
+  const code =
+    subjectData?.subjectCode ||
+    subjectData?.code ||
+    "";
+
+  return code
+    ? `${name} - ${code}`
+    : name;
+};
+
+const getDayLabel = (
+  item
+) => {
+  const dayId =
+    getLectureData(item)
+      ?.dayOfWeek ??
+    item?.dayOfWeek;
+
+  return (
+    Days.find(
+      (day) =>
+        day.id === dayId
+    )?.day ||
+    "—"
+  );
+};
+
+const getSlotLabel = (
+  item
+) => {
+  const slotId =
+    getLectureData(item)
+      ?.slot ??
+    item?.slot;
+
+  return (
+    Slots.find(
+      (slot) =>
+        slot.id === slotId
+    )?.name ||
+    "—"
+  );
+};
+
+const formatDate = (
+  value,
+  pattern = "dd MMM، yyyy"
+) => {
+  if (!value) {
+    return "—";
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "—";
+  }
+
+  return format(
+    date,
+    pattern,
+    { locale: ar }
+  );
+};
+
+const mapLectureOptions = (
+  lectures
+) =>
+  getArray(lectures).map(
+    (lecture) => {
+      const slot =
+        getSlotLabel(lecture);
+
+      const day =
+        getDayLabel(lecture);
+
+      const classLabel =
+        getClassLabel(lecture);
+
+      const subjectLabel =
+        getSubjectLabel(lecture);
+
+      return {
+        id:
+          lecture?._id ||
+          lecture?.id,
+        name:
+          `${subjectLabel} / ${day} / ${slot} / ${classLabel}`,
+      };
+    }
+  );
+
+const validatePdf = (
+  file
+) => {
+  if (!file) {
+    return {
+      valid: false,
+      message:
+        "يرجى اختيار ملف التحضير",
+    };
+  }
+
+  const isPdf =
+    file.type ===
+      "application/pdf" ||
+    file.name
+      ?.toLowerCase()
+      .endsWith(".pdf");
+
+  if (!isPdf) {
+    return {
+      valid: false,
+      message:
+        "نوع الملف غير مدعوم. الرجاء رفع ملف PDF فقط.",
+    };
+  }
+
+  if (
+    file.size >
+    20 * 1024 * 1024
+  ) {
+    return {
+      valid: false,
+      message:
+        "حجم الملف يجب ألا يتجاوز 20 ميجابايت",
+    };
+  }
+
+  return {
+    valid: true,
+  };
+};
+
+const getFileName = (
+  file,
+  index = 0
+) =>
+  file?.originalName ||
+  file?.filename ||
+  file?.name ||
+  `ملف التحضير ${index + 1}`;
+
+const getFileSize = (
+  file
+) => {
+  if (!file?.size) {
+    return "";
+  }
+
+  return `${(
+    file.size /
+    1024 /
+    1024
+  ).toFixed(2)} MB`;
+};
+
+const FORM_CARD_SX = {
+  mt: 1.25,
+  p: {
+    xs: 1.5,
+    md: 2,
+  },
+  overflow: "visible",
+  border:
+    "1px solid rgba(36,74,112,0.08)",
+  borderRadius: "18px",
+  backgroundColor:
+    "var(--color-cream)",
+  boxShadow:
+    "0 12px 28px rgba(18,47,77,0.06)",
+
+  "& .MuiFormControl-root":
+    {
+      width: "100%",
+      margin: 0,
+    },
+
+  "& .MuiInputBase-root, & .MuiOutlinedInput-root":
+    {
+      minHeight: 48,
+      backgroundColor:
+        "var(--color-white)",
+      borderRadius: "12px",
+    },
+
+  "& .MuiOutlinedInput-notchedOutline":
+    {
+      borderColor:
+        "rgba(36,74,112,0.16)",
+    },
+
+  "& .MuiOutlinedInput-root.Mui-focused":
+    {
+      boxShadow:
+        "0 0 0 3px rgba(211,164,79,0.10)",
+    },
+
+  "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
+    {
+      borderColor:
+        "var(--color-gold)",
+      borderWidth: "1px",
+    },
+
+  "& .MuiInputLabel-root": {
+    px: 0.65,
+    color:
+      "var(--color-muted)",
+    backgroundColor:
+      "var(--color-cream)",
+    fontSize: "10.5px",
+    fontWeight: 700,
+  },
+};
+
+const SectionHeading = ({
+  icon,
+  title,
+  description,
+  endContent,
+}) => (
+  <Stack
+    direction={{
+      xs: "column",
+      sm: "row",
+    }}
+    alignItems={{
+      xs: "stretch",
+      sm: "center",
+    }}
+    justifyContent="space-between"
+    gap={1}
+    sx={{
+      pb: 1.25,
+      mb: 1.5,
+      borderBottom:
+        "1px solid rgba(36,74,112,0.07)",
+    }}
+  >
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={1}
+    >
+      <Box
+        sx={{
+          width: 40,
+          height: 40,
+          display: "grid",
+          placeItems: "center",
+          flexShrink: 0,
+          color:
+            "var(--color-gold-dark)",
+          backgroundColor:
+            "var(--color-gold-soft)",
+          border:
+            "1px solid rgba(211,164,79,0.22)",
+          borderRadius: "12px",
+
+          "& svg": {
+            fontSize: 21,
+          },
+        }}
+      >
+        {icon}
+      </Box>
+
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          sx={{
+            color:
+              "var(--color-navy-deep)",
+            fontSize: "16px",
+            fontWeight: 800,
+          }}
+        >
+          {title}
+        </Typography>
+
+        <Typography
+          sx={{
+            mt: 0.2,
+            color:
+              "var(--color-muted)",
+            fontSize: "10px",
+            lineHeight: 1.6,
+          }}
+        >
+          {description}
+        </Typography>
+      </Box>
+    </Stack>
+
+    {endContent}
+  </Stack>
+);
+
+
+const Add = () => {
+  const [searchParams] =
+    useSearchParams();
+
+  const preselectedLectureId =
+    searchParams.get(
+      "lectureId"
+    ) || "";
 
   const {
     register,
     handleSubmit,
     setValue,
     formState: { errors },
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      lecture:
+        preselectedLectureId,
+    },
+  });
 
-  const [lecturesLoading, setLecturesLoading] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const navigate = useNavigate();
+  const [
+    lecturesLoading,
+    setLecturesLoading,
+  ] = useState(true);
 
-  // to get the teacher's lectures
-  const teacherId = useAuthUser()().user.id; //get logged in teacher's id
-  const userRole = useAuthUser()().user.role; //get logged in user's role
-  const [lectures, setLectures] = useState([]);
+  const [loading, setLoading] =
+    useState(false);
+
+  const [
+    uploadedFile,
+    setUploadedFile,
+  ] = useState(null);
+
+  const [lectures, setLectures] =
+    useState([]);
+
+  const fileInputRef =
+    useRef(null);
+
+  const navigate =
+    useNavigate();
+
+  const authUser =
+    useAuthUser();
+
+  const currentUser =
+    getAuthUserData(
+      authUser
+    );
+
+  const teacherId =
+    currentUser?.id ||
+    currentUser?._id ||
+    "";
+
+  const userRole =
+    normalizeRole(
+      currentUser?.role
+    );
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLecturesLoading(true);
-      
-      // If admin, fetch all lectures. If teacher, fetch only their lectures
-      const filters = userRole === "ADMIN" ? {} : { teacherId };
-      
-      const res = await fetchLectures(filters);
-      if (res.status) {
-        console.log(res);
-        setLectures(res.data || []);
-      } else {
-        toast.error(res || "حدث خطأ ما أثناء جلب المحاضرات !");
-        setLectures([]);
-      }
-      setLecturesLoading(false);
+    let active = true;
+
+    const loadLectures =
+      async () => {
+        setLecturesLoading(
+          true
+        );
+
+        const filters =
+          isSchoolAdmin(userRole)
+            ? {}
+            : {
+                teacherId,
+              };
+
+        try {
+          const response =
+            await fetchLectures(
+              filters
+            );
+
+          if (!active) {
+            return;
+          }
+
+          if (!response?.status) {
+            setLectures([]);
+
+            toast.error(
+              getErrorMessage(
+                response,
+                "حدث خطأ أثناء جلب الحصص"
+              )
+            );
+            return;
+          }
+
+          setLectures(
+            getResponseList(
+              response
+            )
+          );
+        } catch (error) {
+          if (active) {
+            setLectures([]);
+
+            toast.error(
+              error?.response?.data
+                ?.message ||
+                "حدث خطأ أثناء جلب الحصص"
+            );
+          }
+        } finally {
+          if (active) {
+            setLecturesLoading(
+              false
+            );
+          }
+        }
+      };
+
+    loadLectures();
+
+    return () => {
+      active = false;
     };
+  }, [
+    teacherId,
+    userRole,
+  ]);
 
-    fetchData();
-  }, [teacherId, userRole]);
-
-  // Set preselected lecture if lectureId exists in URL
   useEffect(() => {
-    if (preselectedLectureId && lectures.length > 0) {
-      setValue("lecture", preselectedLectureId);
+    if (
+      preselectedLectureId &&
+      lectures.length > 0
+    ) {
+      setValue(
+        "lecture",
+        preselectedLectureId
+      );
     }
-  }, [preselectedLectureId, lectures, setValue]);
+  }, [
+    preselectedLectureId,
+    lectures,
+    setValue,
+  ]);
 
-  const onSubmit = async (data) => {
-    // Validate file upload
-    if (!uploadedFile) {
-      toast.error("يرجى رفع ملف التحضير");
+  const handleFileChange = (
+    event
+  ) => {
+    const file =
+      event.target.files?.[0];
+
+    event.target.value = "";
+
+    if (!file) {
       return;
     }
 
-    setLoading(true);
-    console.log(data);
+    const validation =
+      validatePdf(file);
 
-    // Create FormData for file upload
-    const formData = new FormData();
-    // formData.append("week", data.week);
-    // formData.append("semester", data.semester);
-    formData.append("lecture", data.lecture);
-
-    // Append file
-    if (uploadedFile) {
-      formData.append("files", uploadedFile);
-    }
-
-    const response = await addPreparation(formData);
-    if (response.status) {
-      toast.success("تم اضافة التحضير بنجاح");
-      navigate("/school/preparation/" + response.data._id);
-    } else {
-      toast.error(response || "حدث خطأ ما!");
-    }
-    setLoading(false);
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-
-    if (!file) return;
-
-    // Validate file type
-    if (file.type !== "application/pdf") {
-      toast.error("نوع الملف غير مدعوم. الرجاء رفع ملف PDF فقط.");
-      return;
-    }
-
-    // Validate file size (20 MB)
-    if (file.size > 20 * 1024 * 1024) {
-      toast.error("حجم الملف يجب أن لا يتجاوز 20 ميجابايت");
+    if (!validation.valid) {
+      toast.error(
+        validation.message
+      );
       return;
     }
 
     setUploadedFile(file);
-    setValue("files", file); 
+    setValue(
+      "files",
+      file,
+      {
+        shouldValidate: true,
+      }
+    );
   };
 
   const removeFile = () => {
     setUploadedFile(null);
-    setValue("files", null);
+    setValue(
+      "files",
+      null,
+      {
+        shouldValidate: true,
+      }
+    );
   };
 
+  const onSubmit = async (
+    formValues
+  ) => {
+    if (!uploadedFile) {
+      toast.error(
+        "يرجى رفع ملف التحضير"
+      );
+      return;
+    }
 
-  // no lectures found for this teacher
-  if (!lecturesLoading && lectures.length === 0) {
-    return (
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 3, md: 8, lg: 16 },
-          borderRadius: "16px",
-          borderColor: "primary.border",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "100vh",
-          flexDirection: "column",
-        }}
-      >
-        <Typography color="text.secondary">
-          لا توجد محاضرات لهذا المعلم{" "}
-        </Typography>
-      </Paper>
-    );
-  }
+    setLoading(true);
 
-  // Show loading state
+    try {
+      const formData =
+        new FormData();
+
+      formData.append(
+        "lecture",
+        formValues.lecture
+      );
+
+      formData.append(
+        "files",
+        uploadedFile
+      );
+
+      const response =
+        await addPreparation(
+          formData
+        );
+
+      if (!response?.status) {
+        toast.error(
+          getErrorMessage(
+            response,
+            "حدث خطأ أثناء إضافة التحضير"
+          )
+        );
+        return;
+      }
+
+      toast.success(
+        "تم إضافة التحضير بنجاح"
+      );
+
+      const createdId =
+        getResponseId(
+          response
+        );
+
+      navigate(
+        createdId
+          ? `/school/preparation/${createdId}`
+          : "/school/preparation"
+      );
+    } catch (error) {
+      toast.error(
+        error?.response?.data
+          ?.message ||
+          "حدث خطأ أثناء إضافة التحضير"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (lecturesLoading) {
     return <Loading />;
   }
 
+  const lectureOptions =
+    mapLectureOptions(
+      lectures
+    );
+
+  if (
+    lectureOptions.length === 0
+  ) {
+    return (
+      <Container>
+        <Box
+          dir="rtl"
+          sx={{ pb: 3 }}
+        >
+          <Back title="إضافة تحضير" />
+
+          <Paper
+            elevation={0}
+            sx={{
+              mt: 1.25,
+              minHeight: 300,
+              px: 2,
+              py: 3,
+              display: "grid",
+              placeItems: "center",
+              textAlign: "center",
+              border:
+                "1px solid rgba(36,74,112,0.08)",
+              borderRadius: "18px",
+              backgroundColor:
+                "var(--color-cream)",
+              boxShadow:
+                "0 12px 28px rgba(18,47,77,0.06)",
+            }}
+          >
+            <Stack
+              alignItems="center"
+              spacing={1}
+            >
+              <Box
+                sx={{
+                  width: 64,
+                  height: 64,
+                  display: "grid",
+                  placeItems: "center",
+                  color:
+                    "var(--color-gold-dark)",
+                  backgroundColor:
+                    "var(--color-gold-soft)",
+                  borderRadius: "18px",
+                }}
+              >
+                <EventNoteRounded />
+              </Box>
+
+              <Typography
+                sx={{
+                  color:
+                    "var(--color-navy-deep)",
+                  fontSize: "16px",
+                  fontWeight: 800,
+                }}
+              >
+                {isSchoolAdmin(
+                  userRole
+                )
+                  ? "لا توجد حصص دراسية متاحة"
+                  : "لا توجد حصص دراسية لهذا المعلم"}
+              </Typography>
+
+              <Typography
+                sx={{
+                  color:
+                    "var(--color-muted)",
+                  fontSize: "10px",
+                }}
+              >
+                يجب إنشاء حصة دراسية أولًا قبل إضافة التحضير.
+              </Typography>
+            </Stack>
+          </Paper>
+        </Box>
+      </Container>
+    );
+  }
+
   return (
     <Container>
-      <Back title={"إضافة تحضير"} />
       <Box
-        bgcolor={"primary.white"}
-        p={"32px 16px"}
-        borderRadius={"12px"}
-        my={8}
+        component="form"
+        onSubmit={handleSubmit(
+          onSubmit
+        )}
+        noValidate
+        dir="rtl"
+        sx={{
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
+          pb: 3,
+          color:
+            "var(--color-text)",
+        }}
       >
-        <Typography variant="title" fontWeight={"500"}>
-          تفاصيل التحضير
-        </Typography>
-        <DataInputs
-          register={register}
-          errors={errors}
-          lectures={lectures}
-          preselectedLectureId={preselectedLectureId}
-        />
-      </Box>
+        <Paper
+          elevation={0}
+          sx={{
+            px: {
+              xs: 1.25,
+              md: 1.6,
+            },
+            py: 1.05,
+            border:
+              "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "16px",
+            backgroundColor:
+              "rgba(255,252,247,0.9)",
+            boxShadow:
+              "0 8px 20px rgba(18,47,77,0.04)",
+          }}
+        >
+          <Stack
+            direction={{
+              xs: "column",
+              sm: "row",
+            }}
+            alignItems={{
+              xs: "stretch",
+              sm: "center",
+            }}
+            justifyContent="space-between"
+            gap={1}
+          >
+            <Back title="إضافة تحضير جديد" />
 
-      {/* teacher has lectures - Show prepartion Details Form */}
-      <Box mb={8} mt={16}>
-        <Box bgcolor={"primary.white"} p={"32px 16px"} borderRadius={"12px"}>
-          <Box mb={16}>
-            <Typography variant="title" fontWeight={"500"}>
-              محتوى التحضير
+            <Typography
+              sx={{
+                color:
+                  "var(--color-muted)",
+                fontSize: "10px",
+              }}
+            >
+              اختر الحصة ثم أرفق ملف التحضير بصيغة PDF.
             </Typography>
-          </Box>
-          <Grid container spacing={8}>
-            {!uploadedFile && (
-              <Grid item xs={12} mt={6}>
-                <Box
+          </Stack>
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={FORM_CARD_SX}
+        >
+          <SectionHeading
+            icon={
+              <EventNoteRounded />
+            }
+            title="تفاصيل التحضير"
+            description="اختر الحصة الدراسية المرتبط بها ملف التحضير."
+          />
+
+          <Grid
+            container
+            spacing={{
+              xs: 1.5,
+              md: 2,
+            }}
+          >
+            <Grid
+              item
+              xs={12}
+            >
+              <Select
+                register={register}
+                registerName="lecture"
+                data={
+                  lectureOptions
+                }
+                name="name"
+                error={
+                  errors.lecture
+                    ?.message
+                }
+                label="الحصة الدراسية"
+                required
+                disabled={
+                  Boolean(
+                    preselectedLectureId
+                  )
+                }
+                defaultValue={
+                  preselectedLectureId
+                }
+              />
+            </Grid>
+          </Grid>
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={FORM_CARD_SX}
+        >
+          <SectionHeading
+            icon={
+              <AutoStoriesRounded />
+            }
+            title="ملف التحضير"
+            description="ارفع ملف PDF واحدًا بحد أقصى 20 ميجابايت."
+            endContent={
+              uploadedFile ? (
+                <Typography
                   sx={{
-                    border: "2px dashed",
-                    borderColor: "primary.border",
-                    borderRadius: "12px",
-                    p: 8,
-                    textAlign: "center",
-                    cursor: "pointer",
-                    transition: "all 0.3s",
-                    "&:hover": {
-                      borderColor: "primary.main",
-                    },
+                    color:
+                      "var(--color-success)",
+                    fontSize: "10px",
+                    fontWeight: 800,
                   }}
                 >
-                  <input
-                    type="file"
-                    {...register("files", { required: "يرجى رفع ملف التحضير"})}                    
-                    onChange={handleFileChange}
-                    style={{ display: "none" }}
-                    id="file-upload"
-                    accept="application/pdf"
-                  />
-                  <label htmlFor="file-upload" style={{ cursor: "pointer" }}>
-                    <CloudUploadIcon
-                      sx={{ fontSize: 48, color: "primary.main", mb: 2 }}
-                    />
-                    <Typography
-                      variant="body1"
-                      color="text.primary"
-                      fontWeight={500}
-                    >
-                      اضغط لرفع التحضير
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      الحد الأقصى: 1 ملف PDF بحجم 20 ميجابايت
-                    </Typography>
-                  </label>
-                </Box>
-                {errors.files && (
-                  <Typography color="error" variant="caption" mt={2} fontSize={16}>
-                    {errors.files.message} *
-                  </Typography>
-                )}
-              </Grid>
-            )}
-
-            {uploadedFile && (
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" fontWeight={500} mb={4}>
-                  الملف المرفوع
+                  تم اختيار الملف
                 </Typography>
-                <Box>
-                  <Box
+              ) : null
+            }
+          />
+
+          {!uploadedFile ? (
+            <Box
+              component="label"
+              htmlFor="preparation-file-upload"
+              sx={{
+                minHeight: 175,
+                px: 2,
+                py: 2.5,
+                display: "grid",
+                placeItems: "center",
+                textAlign: "center",
+                cursor: "pointer",
+                border:
+                  "2px dashed rgba(36,74,112,0.18)",
+                borderRadius: "16px",
+                backgroundColor:
+                  "rgba(36,74,112,0.025)",
+                transition:
+                  "border-color 180ms ease, background-color 180ms ease",
+
+                "&:hover": {
+                  borderColor:
+                    "var(--color-gold)",
+                  backgroundColor:
+                    "var(--color-gold-soft)",
+                },
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                id="preparation-file-upload"
+                type="file"
+                hidden
+                accept="application/pdf,.pdf"
+                onChange={
+                  handleFileChange
+                }
+              />
+
+              <Stack
+                alignItems="center"
+                spacing={0.8}
+              >
+                <Box
+                  sx={{
+                    width: 52,
+                    height: 52,
+                    display: "grid",
+                    placeItems: "center",
+                    color:
+                      "var(--color-gold-dark)",
+                    backgroundColor:
+                      "var(--color-gold-soft)",
+                    borderRadius: "15px",
+                  }}
+                >
+                  <CloudUploadRounded />
+                </Box>
+
+                <Typography
+                  sx={{
+                    color:
+                      "var(--color-navy-deep)",
+                    fontSize: "13px",
+                    fontWeight: 800,
+                  }}
+                >
+                  اضغط لاختيار ملف التحضير
+                </Typography>
+
+                <Typography
+                  sx={{
+                    color:
+                      "var(--color-muted)",
+                    fontSize: "9.5px",
+                  }}
+                >
+                  PDF فقط — الحد الأقصى 20 ميجابايت
+                </Typography>
+              </Stack>
+            </Box>
+          ) : (
+            <Paper
+              elevation={0}
+              sx={{
+                px: 1.4,
+                py: 1.2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent:
+                  "space-between",
+                gap: 1,
+                border:
+                  "1px solid rgba(36,74,112,0.08)",
+                borderRadius: "14px",
+                backgroundColor:
+                  "var(--color-white)",
+              }}
+            >
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={1}
+                sx={{ minWidth: 0 }}
+              >
+                <Box
+                  sx={{
+                    width: 42,
+                    height: 42,
+                    display: "grid",
+                    placeItems: "center",
+                    flexShrink: 0,
+                    color:
+                      "var(--color-gold-dark)",
+                    backgroundColor:
+                      "var(--color-gold-soft)",
+                    borderRadius: "12px",
+                  }}
+                >
+                  <AutoStoriesRounded />
+                </Box>
+
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography
+                    noWrap
+                    title={
+                      getFileName(
+                        uploadedFile
+                      )
+                    }
                     sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      p: 4,
-                      mb: 2,
-                      bgcolor: "grey.50",
-                      borderRadius: "8px",
-                      border: "1px solid",
-                      borderColor: "grey.200",
+                      color:
+                        "var(--color-navy-deep)",
+                      fontSize: "11px",
+                      fontWeight: 800,
                     }}
                   >
-                    <Typography variant="body2">
-                      {uploadedFile.name} (
-                      {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB)
-                    </Typography>
-                    <Button
-                      size="small"
-                      color="error"
-                      onClick={removeFile}
-                      startIcon={<DeleteOutlineIcon />}
-                    >
-                      حذف
-                    </Button>
-                  </Box>
+                    {getFileName(
+                      uploadedFile
+                    )}
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.15,
+                      color:
+                        "var(--color-muted)",
+                      fontSize: "9px",
+                    }}
+                  >
+                    {getFileSize(
+                      uploadedFile
+                    ) || "ملف PDF"}
+                  </Typography>
                 </Box>
-              </Grid>
-            )}
-          </Grid>
-        </Box>
+              </Stack>
+
+              <Button
+                type="button"
+                onClick={removeFile}
+                variant="text"
+                startIcon={
+                  <DeleteOutlineRounded />
+                }
+                sx={{
+                  flexShrink: 0,
+                  color:
+                    "var(--color-danger)",
+                  fontSize: "10px",
+                  fontWeight: 800,
+                  textTransform: "none",
+
+                  "& .MuiButton-startIcon":
+                    {
+                      marginLeft:
+                        "5px",
+                      marginRight: 0,
+                    },
+                }}
+              >
+                حذف
+              </Button>
+            </Paper>
+          )}
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={{
+            mt: 1.25,
+            px: {
+              xs: 1.25,
+              md: 1.6,
+            },
+            py: 1.15,
+            border:
+              "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "16px",
+            backgroundColor:
+              "var(--color-cream)",
+            boxShadow:
+              "0 10px 24px rgba(18,47,77,0.05)",
+          }}
+        >
+          <Stack
+            direction={{
+              xs: "column-reverse",
+              sm: "row",
+            }}
+            gap={1}
+          >
+            <Button
+              type="submit"
+              disabled={
+                loading ||
+                !uploadedFile
+              }
+              variant="contained"
+              startIcon={
+                loading ? (
+                  <CircularProgress
+                    size={16}
+                    color="inherit"
+                  />
+                ) : (
+                  <SaveRounded />
+                )
+              }
+              sx={{
+                width: {
+                  xs: "100%",
+                  sm: 180,
+                },
+                minHeight: 44,
+                borderRadius: "12px",
+                color:
+                  "var(--color-white)",
+                background:
+                  "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
+                fontSize: "12px",
+                fontWeight: 800,
+                textTransform: "none",
+
+                "& .MuiButton-startIcon":
+                  {
+                    marginLeft:
+                      "7px",
+                    marginRight: 0,
+                  },
+              }}
+            >
+              {loading
+                ? "جاري الحفظ..."
+                : "حفظ التحضير"}
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() =>
+                navigate(-1)
+              }
+              variant="outlined"
+              startIcon={
+                <CloseRounded />
+              }
+              sx={{
+                width: {
+                  xs: "100%",
+                  sm: 145,
+                },
+                minHeight: 44,
+                borderRadius: "12px",
+                color:
+                  "var(--color-navy)",
+                borderColor:
+                  "rgba(36,74,112,0.18)",
+                fontSize: "12px",
+                fontWeight: 800,
+                textTransform: "none",
+
+                "& .MuiButton-startIcon":
+                  {
+                    marginLeft:
+                      "7px",
+                    marginRight: 0,
+                  },
+              }}
+            >
+              إلغاء
+            </Button>
+          </Stack>
+        </Paper>
       </Box>
-      <SubmitSection
-        onSubmit={onSubmit}
-        handleSubmit={handleSubmit}
-        loading={loading}
-      />
     </Container>
-  );
-};
-
-const DataInputs = ({ register, errors, lectures, preselectedLectureId }) => {
-  const mappedLectures = lectures.map((lecture) => {
-    const slot = Slots.find((slot) => lecture.slot === slot.id).name;
-    const day = Days.find((day) => lecture.dayOfWeek === day.id).day;
-    const cls = `${lecture.class.academicYear}-${lecture.class.roomNumber}-${translateGender(lecture.class.gender,"class")}`;
-    const subject = `${lecture.subject.subjectName}-${lecture.subject.subjectCode}`;
-    return {
-      name: `${subject} / يوم ${day} / ${slot} / ${cls}`,
-      id: lecture._id,
-    };
-  });
-
-  return (
-    <Grid container mt={8} spacing={8} alignItems={"center"}>
-      {/* <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Select
-          register={register}
-          registerName={"week"}
-          data={Weeks}
-          error={errors.week?.message}
-          label={"رقم الأسبوع"}
-          required={true}
-          type={"text"}
-        />
-      </Grid> */}
-      {/* <Grid item xs={12} sm={6} md={4} lg={3}>
-        <Select
-          register={register}
-          registerName={"semester"}
-          data={Semesters}
-          error={errors.semester?.message}
-          label={"الفصل الدراسي"}
-          required={true}
-          type={"text"}
-        />
-      </Grid> */}
-      <Grid item xs={12}>
-        <Select
-          register={register}
-          registerName={"lecture"}
-          data={mappedLectures}
-          name="name"
-          error={errors.lecture?.message}
-          label={"الحصة الدراسية"}
-          required={true}
-          type={"text"}
-          disabled={preselectedLectureId}
-          defaultValue={preselectedLectureId}
-        />
-      </Grid>
-    </Grid>
   );
 };
 

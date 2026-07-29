@@ -1,102 +1,15 @@
 import { api } from "../Axios";
-
-const ENDPOINT = "/financial/discounts";
-
-export const fetchDiscounts = async () => {
-	try {
-		const response = await api.get(ENDPOINT);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const fetchSingleDiscount = async (id) => {
-	try {
-		const response = await api.get(ENDPOINT + "/" + id);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const addDiscount = async (data) => {
-	try {
-		const response = await api.post(ENDPOINT, data);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const editDiscount = async (data, id) => {
-	try {
-		const response = await api.patch(ENDPOINT + "/" + id, data);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const deleteDiscount = async (id) => {
-	try {
-		const response = await api.delete(ENDPOINT + "/" + id);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const applyDiscountToTuition = async (studentId, data) => {
-	try {
-		const response = await api.post(ENDPOINT + "/apply/tuition/" + studentId, data);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const removeDiscountFromTuition = async (studentId) => {
-	try {
-		const response = await api.delete(ENDPOINT + "/apply/tuition/" + studentId);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const applyDiscountToBus = async (studentId, data) => {
-	try {
-		const response = await api.post(ENDPOINT + "/apply/bus/" + studentId, data);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const removeDiscountFromBus = async (studentId) => {
-	try {
-		const response = await api.delete(ENDPOINT + "/apply/bus/" + studentId);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const applyDiscountToTrip = async (studentId, tripId, data) => {
-	try {
-		const response = await api.post(ENDPOINT + "/apply/trips/" + studentId + "/" + tripId, data);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const removeDiscountFromTrip = async (studentId, tripId) => {
-	try {
-		const response = await api.delete(ENDPOINT + "/apply/trips/" + studentId + "/" + tripId);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
+import { apiError } from "./_helpers";
+const E="/financial/discounts";
+export const fetchDiscounts=async()=>{try{return(await api.get(E)).data}catch(e){return apiError(e,"تعذر تحميل الخصومات")}};
+export const fetchSingleDiscount=async(id)=>{try{return(await api.get(`${E}/${id}`)).data}catch(e){return apiError(e,"تعذر تحميل الخصم")}};
+export const addDiscount=async(data)=>{try{return(await api.post(E,data)).data}catch(e){return apiError(e,"تعذر إضافة الخصم")}};
+export const editDiscount=async(data,id)=>{try{return(await api.patch(`${E}/${id}`,data)).data}catch(e){return apiError(e,"تعذر تعديل الخصم")}};
+export const deleteDiscount=async(id)=>{try{return(await api.delete(`${E}/${id}`)).data}catch(e){return apiError(e,"تعذر حذف الخصم")}};
+export const applyDiscountToTuition=async(id,data)=>{try{return(await api.post(`${E}/apply/tuition/${id}`,data)).data}catch(e){return apiError(e,"تعذر تطبيق الخصم على المصروفات")}};
+export const removeDiscountFromTuition=async(id)=>{try{return(await api.delete(`${E}/apply/tuition/${id}`)).data}catch(e){return apiError(e,"تعذر إزالة خصم المصروفات")}};
+export const applyDiscountToBus=async(id,data)=>{try{return(await api.post(`${E}/apply/bus/${id}`,data)).data}catch(e){return apiError(e,"تعذر تطبيق خصم الباص")}};
+export const removeDiscountFromBus=async(id)=>{try{return(await api.delete(`${E}/apply/bus/${id}`)).data}catch(e){return apiError(e,"تعذر إزالة خصم الباص")}};
+export const applyDiscountToTrip=async(studentId,tripId,data)=>{try{return(await api.post(`${E}/apply/trips/${studentId}/${tripId}`,data)).data}catch(e){return apiError(e,"تعذر تطبيق خصم الرحلة")}};
+export const removeDiscountFromTrip=async(studentId,tripId)=>{try{return(await api.delete(`${E}/apply/trips/${studentId}/${tripId}`)).data}catch(e){return apiError(e,"تعذر إزالة خصم الرحلة")}};
+export default {fetchDiscounts,fetchSingleDiscount,addDiscount,editDiscount,deleteDiscount,applyDiscountToTuition,removeDiscountFromTuition,applyDiscountToBus,removeDiscountFromBus,applyDiscountToTrip,removeDiscountFromTrip};

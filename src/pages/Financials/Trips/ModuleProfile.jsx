@@ -1,9 +1,27 @@
-import { AddCircleOutlineOutlined } from "@mui/icons-material";
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Grid, Paper, Stack, Typography, Box } from "@mui/material";
+import {
+  AddCircleOutlineRounded,
+  AccountBalanceWalletRounded,
+  GroupsRounded,
+  PaymentsRounded,
+  PersonAddAltRounded,
+  SearchOffRounded,
+  TourRounded,
+} from "@mui/icons-material";
+import {
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogContent,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
+
 import {
   enrollStudentInTripTemplate,
   fetchTripTemplate,
@@ -17,19 +35,22 @@ import SearchFilter from "@/components/Filters/SearchFilter";
 import Loading from "@/components/Loading";
 import PaginationControls from "@/components/Pagination";
 import Select from "@/components/Select/Select";
+import {
+  DialogHeader,
+  EmptyState,
+  FormActions,
+  StatCard,
+  StatsGrid,
+  pageCardSx,
+} from "@/components/financial/FinancialShell";
+import { formatMoney, mapFeeStatus } from "@/utils/financial/financialUtils";
 import { translateGender } from "@/utils/helpers/translateGender";
 import { useInstallmentPlans } from "@/utils/hooks/apis/financials/useInstallmentPlans";
-
-const statusMap = {
-  paid: "مدفوعة",
-  partial: "جزئية",
-  unpaid: "غير مدفوعة",
-};
 
 const ModuleTripsProfilePage = () => {
   const { tripTemplateId } = useParams();
   const navigate = useNavigate();
-  const { installmentPlans } = useInstallmentPlans();
+  const { installmentPlans = [] } = useInstallmentPlans();
 
   const [template, setTemplate] = useState(null);
   const [students, setStudents] = useState([]);
@@ -42,28 +63,11 @@ const ModuleTripsProfilePage = () => {
   const [pagination, setPagination] = useState(null);
   const [searchName, setSearchName] = useState("");
 
-  const filters = useMemo(
-    () => ({
-      page,
-      limit,
-    }),
-    [page, limit],
-  );
-
-  const candidateFilters = useMemo(
-    () => ({
-      limit: 500,
-    }),
-    [],
-  );
-
-  useEffect(() => {
-    setPage(1);
-  }, [limit]);
+  const filters = useMemo(() => ({ page, limit }), [page, limit]);
+  const candidateFilters = useMemo(() => ({ limit: 500 }), []);
 
   const fetchData = async () => {
     if (!tripTemplateId) return;
-
     setLoading(true);
     const [templateRes, studentsRes, candidatesRes] = await Promise.all([
       fetchTripTemplate(tripTemplateId),
@@ -71,33 +75,35 @@ const ModuleTripsProfilePage = () => {
       fetchTripTemplateCandidates(tripTemplateId, candidateFilters),
     ]);
 
-    if (templateRes.status) {
-      setTemplate(templateRes.data || null);
-    } else {
-      toast.error(templateRes || "حدث خطأ ما أثناء جلب بيانات الرحلة");
+    if (templateRes?.status) setTemplate(templateRes?.data || null);
+    else {
+      toast.error(templateRes?.message || templateRes || "حدث خطأ أثناء جلب بيانات الرحلة");
       setTemplate(null);
     }
 
-    if (studentsRes.status) {
-      setStudents(studentsRes.data || []);
+    if (studentsRes?.status) {
+      setStudents(studentsRes?.data || []);
       setPagination(
-        studentsRes.totalDocs !== undefined && studentsRes.totalPages !== undefined
-          ? { totalDocs: studentsRes.totalDocs, totalPages: studentsRes.totalPages }
+        studentsRes?.totalDocs !== undefined
+          ? {
+              totalDocs: studentsRes.totalDocs,
+              totalPages: studentsRes.totalPages,
+              page: studentsRes.page,
+              limit,
+            }
           : null,
       );
     } else {
-      toast.error(studentsRes || "حدث خطأ ما أثناء جلب طلاب الرحلة");
+      toast.error(studentsRes?.message || studentsRes || "حدث خطأ أثناء جلب طلاب الرحلة");
       setStudents([]);
       setPagination(null);
     }
 
-    if (candidatesRes.status) {
-      setCandidates(candidatesRes.data || []);
-    } else {
-      toast.error(candidatesRes || "حدث خطأ ما أثناء جلب الطلاب المتاحين");
+    if (candidatesRes?.status) setCandidates(candidatesRes?.data || []);
+    else {
+      toast.error(candidatesRes?.message || candidatesRes || "حدث خطأ أثناء جلب الطلاب المتاحين");
       setCandidates([]);
     }
-
     setLoading(false);
   };
 
@@ -106,400 +112,227 @@ const ModuleTripsProfilePage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripTemplateId, filters, candidateFilters]);
 
-  const planOptions = (installmentPlans || []).map((plan) => ({
+  useEffect(() => setPage(1), [limit]);
+
+  const planOptions = installmentPlans.map((plan) => ({
     ...plan,
     displayName: `${plan.name} (${plan.numberOfInstallments} قسط)${plan.isDefault ? " - افتراضية" : ""}`,
   }));
 
-  const candidateOptions = (candidates || []).map((item) => {
-    const student = item?.student || {};
-    const cls = item?.class || {};
-    const classLabel = cls?.roomNumber
-      ? `${cls.roomNumber} - ${translateGender(cls.gender, "class")}`
-      : "بدون فصل";
-
-    return {
-      _id: student?._id,
-      displayName: `${student?.name || "طالب"} (${classLabel})`,
-    };
-  }).filter((item) => item._id);
+  const candidateOptions = candidates
+    .map((item) => {
+      const student = item?.student || {};
+      const cls = item?.class || {};
+      const classLabel = cls?.roomNumber
+        ? `${cls.roomNumber} - ${translateGender(cls.gender, "class")}`
+        : "بدون فصل";
+      return {
+        _id: student?._id || student?.id,
+        displayName: `${student?.name || "طالب"} (${classLabel})`,
+      };
+    })
+    .filter((item) => item._id);
 
   const displayedStudents = useMemo(() => {
     const query = searchName.trim().toLowerCase();
     if (!query) return students;
-
-    return (students || []).filter((item) => {
-      const studentName = item?.student?.name || "";
-      return studentName.toLowerCase().includes(query);
-    });
+    return students.filter((item) =>
+      String(item?.student?.name || "").toLowerCase().includes(query),
+    );
   }, [students, searchName]);
 
-  const handleRemove = async (studentId) => {
-    if (!tripTemplateId || !studentId) return;
+  const totals = useMemo(
+    () =>
+      displayedStudents.reduce(
+        (result, item) => {
+          const trip = item?.trip || {};
+          const fee = Number(trip?.discount ? trip?.netFee : trip?.fee || 0);
+          const paid = Number(trip?.totalPaid || 0);
+          result.paid += paid;
+          result.remaining += Math.max(fee - paid, 0);
+          return result;
+        },
+        { paid: 0, remaining: 0 },
+      ),
+    [displayedStudents],
+  );
 
+  const handleRemove = async (studentId) => {
     setActionLoading(true);
-    const response = await removeStudentFromTripTemplate(tripTemplateId, studentId);
-    if (response.status) {
-      toast.success(response.message || "تم إزالة الطالب من الرحلة بنجاح");
+    try {
+      const response = await removeStudentFromTripTemplate(tripTemplateId, studentId);
+      if (!response?.status) {
+        toast.error(response?.message || response || "حدث خطأ أثناء إزالة الطالب من الرحلة");
+        return;
+      }
+      toast.success(response?.message || "تم إزالة الطالب من الرحلة بنجاح");
       await fetchData();
-    } else {
-      toast.error(response || "حدث خطأ ما أثناء إزالة الطالب من الرحلة");
+    } finally {
+      setActionLoading(false);
     }
-    setActionLoading(false);
   };
 
-  if (loading) {
-    return (
-      <Container>
-        <Loading />
-      </Container>
-    );
-  }
-
+  if (loading) return <Loading />;
   if (!template) {
     return (
       <Container>
-        <Back title={"تفاصيل الرحلة"} />
-        <Typography mt={8}>لا توجد بيانات لهذه الرحلة</Typography>
+        <Back title="تفاصيل الرحلة" />
+        <EmptyState icon={<TourRounded />} title="لا توجد بيانات لهذه الرحلة" description="تعذر العثور على الرحلة المطلوبة." />
       </Container>
     );
   }
 
   return (
     <Container>
-      <Back title={"تفاصيل الرحلة"} />
+      <Box dir="rtl" sx={{ pb: 4 }}>
+        <Paper elevation={0} sx={{ ...pageCardSx, px: 1.5, py: 1.05, mb: 1.25 }}>
+          <Back title="تفاصيل الرحلة" />
+        </Paper>
 
-      <Paper
-        elevation={0}
-        sx={{
-          bgcolor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
-          borderRadius: "16px",
-          mt: 8,
-        }}
-      >
-        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={3} mb={4}>
-          <Stack spacing={1}>
-            <Typography variant="h5" fontWeight={700}>{template?.name || "—"}</Typography>
-            <Typography color="text.secondary">{template?.description || "—"}</Typography>
+        <Paper elevation={0} sx={{ ...pageCardSx, mb: 1.25, p: { xs: 1.5, md: 2 }, background: "linear-gradient(135deg,rgba(255,252,247,.98),rgba(251,240,216,.42))" }}>
+          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1.5}>
+            <Box>
+              <Typography component="h1" sx={{ color: "var(--color-navy-deep)", fontSize: 24, fontWeight: 800 }}>
+                {template?.name || "تفاصيل الرحلة"}
+              </Typography>
+              <Typography sx={{ mt: 0.25, color: "var(--color-muted)", fontSize: 10 }}>
+                {template?.description || "إدارة الطلاب المشتركين ورسوم الرحلة."}
+              </Typography>
+            </Box>
+            <Chip label={`المعرّف: ${template?._id || "—"}`} size="small" sx={{ alignSelf: { xs: "flex-start", md: "center" }, color: "var(--color-navy)", bgcolor: "rgba(36,74,112,.07)", fontWeight: 800 }} />
           </Stack>
-          <Box
-            sx={{
-              alignSelf: { xs: "flex-start", md: "center" },
-              px: 3,
-              py: 1.5,
-              borderRadius: "999px",
-              bgcolor: "#F3F4F6",
-              color: "#374151",
-              fontSize: 12,
-              fontWeight: 700,
-            }}
-          >
-            المعرّف: {template?._id || "—"}
-          </Box>
-        </Stack>
+        </Paper>
 
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={6}>
-            <StatCard label="رسوم الرحلة" value={`${Number(template?.fee || 0)} جنيه`} />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <StatCard label="عدد الطلاب المشتركين" value={String(template?.enrolledCount || 0)} />
-          </Grid>
-        </Grid>
-      </Paper>
+        <StatsGrid>
+          <StatCard label="رسوم الرحلة" value={formatMoney(template?.fee)} icon={<AccountBalanceWalletRounded />} />
+          <StatCard label="عدد المشتركين" value={template?.enrolledCount ?? students.length} icon={<GroupsRounded />} />
+          <StatCard label="المدفوع في الصفحة" value={formatMoney(totals.paid)} icon={<PaymentsRounded />} />
+          <StatCard label="المتبقي في الصفحة" value={formatMoney(totals.remaining)} icon={<TourRounded />} />
+        </StatsGrid>
 
-      <Box
-        mt={8}
-        mb={8}
-        sx={{
-          display: "flex",
-          gap: 2,
-          alignItems: "center",
-          flexDirection: "row",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-        }}
-      >
-        <Stack maxWidth={400} width="100%">
-          <SearchFilter
-            value={searchName}
-            onChange={setSearchName}
-            placeholder="ابحث باسم الطالب"
-          />
-        </Stack>
+        <Paper elevation={0} sx={{ ...pageCardSx, mb: 1.25, p: { xs: 1.5, md: 1.8 } }}>
+          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }} gap={1.25}>
+            <Box sx={{ width: { xs: "100%", md: 390 } }}>
+              <SearchFilter value={searchName} onChange={setSearchName} placeholder="ابحث باسم الطالب..." />
+            </Box>
+            <Button type="button" onClick={() => setOpenAdd(true)} variant="contained" startIcon={<AddCircleOutlineRounded />} sx={{ minHeight: 42, borderRadius: "12px", background: "var(--color-navy)", fontSize: 11, fontWeight: 800, textTransform: "none" }}>
+              إضافة طالب إلى الرحلة
+            </Button>
+          </Stack>
+        </Paper>
 
-        <Button
-          startIcon={<AddCircleOutlineOutlined />}
-          variant="contained"
-          onClick={() => setOpenAdd(true)}
-          sx={{ px: 8, py: 8, borderRadius: "8px", width: { xs: "100%", sm: "auto" } }}
-        >
-          إضافة طالب إلى الرحلة
-        </Button>
-      </Box>
+        <Paper elevation={0} sx={{ ...pageCardSx, overflow: "hidden" }}>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={1} sx={{ px: 1.7, py: 1.25, borderBottom: "1px solid rgba(36,74,112,.07)" }}>
+            <Box>
+              <Typography sx={{ color: "var(--color-navy-deep)", fontSize: 16, fontWeight: 800 }}>طلاب الرحلة</Typography>
+              <Typography sx={{ color: "var(--color-muted)", fontSize: 9.5 }}>راجع حالة الدفع وافتح ملف الرحلة لكل طالب.</Typography>
+            </Box>
+            <Chip label={`العدد الحالي: ${displayedStudents.length}`} size="small" sx={{ color: "var(--color-navy)", bgcolor: "rgba(36,74,112,.07)", fontWeight: 800 }} />
+          </Stack>
 
-      <Paper
-        elevation={0}
-        sx={{
-          bgcolor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
-          borderRadius: "16px",
-        }}
-      >
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-[#1E293B]">طلاب الرحلة</h2>
-          <span className="rounded-full bg-[#F3F4F6] px-3 py-1 text-xs font-semibold text-[#374151]">
-            العدد الحالي: {displayedStudents.length}
-          </span>
-        </div>
+          {displayedStudents.length === 0 ? (
+            <EmptyState
+              icon={searchName ? <SearchOffRounded /> : <GroupsRounded />}
+              title={searchName ? "لا يوجد طلاب مطابقون للبحث" : "لا يوجد طلاب في الرحلة"}
+              description={searchName ? "جرّب البحث باسم آخر." : "أضف أول طالب إلى الرحلة."}
+            />
+          ) : (
+            <Box sx={{ p: 1, overflowX: "auto" }}>
+              <Box component="table" sx={{ width: "100%", minWidth: 850, borderCollapse: "separate", borderSpacing: "0 8px", "& th": { px: 1.2, py: 1, color: "var(--color-muted)", bgcolor: "rgba(36,74,112,.045)", fontSize: 10, fontWeight: 800, textAlign: "right" }, "& td": { px: 1.2, py: 1, color: "var(--color-text)", bgcolor: "var(--color-white)", borderTop: "1px solid rgba(36,74,112,.08)", borderBottom: "1px solid rgba(36,74,112,.08)", fontSize: 11 } }}>
+                <thead><tr><th>الطالب</th><th>الفصل</th><th>الحالة</th><th>المدفوع</th><th>المتبقي</th><th>الإجراء</th></tr></thead>
+                <tbody>
+                  {displayedStudents.map((item) => {
+                    const student = item?.student || {};
+                    const cls = item?.class || {};
+                    const trip = item?.trip || {};
+                    const fee = Number(trip?.discount ? trip?.netFee : trip?.fee || 0);
+                    const paid = Number(trip?.totalPaid || 0);
+                    const remaining = Math.max(fee - paid, 0);
+                    return (
+                      <tr key={student?._id || student?.id}>
+                        <td>{student?.name || "—"}</td>
+                        <td>{cls?.roomNumber ? `${cls.roomNumber} - ${translateGender(cls?.gender, "class")}` : "—"}</td>
+                        <td><Chip label={mapFeeStatus(trip?.status)} size="small" sx={{ height: 26, fontSize: 9, fontWeight: 800 }} /></td>
+                        <td>{formatMoney(paid)}</td>
+                        <td>{formatMoney(remaining)}</td>
+                        <td>
+                          <Stack direction="row" gap={0.8}>
+                            <Button type="button" onClick={() => navigate(`/financial/records/${student?._id}/trips/${trip?._id}`)} variant="contained" sx={{ minHeight: 34, borderRadius: "9px", fontSize: 9.5, fontWeight: 800, textTransform: "none" }}>التفاصيل</Button>
+                            <Button type="button" onClick={() => handleRemove(student?._id)} disabled={actionLoading} variant="outlined" color="error" sx={{ minHeight: 34, borderRadius: "9px", fontSize: 9.5, fontWeight: 800, textTransform: "none" }}>إزالة</Button>
+                          </Stack>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Box>
+            </Box>
+          )}
 
-        {displayedStudents.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm font-medium text-gray-500">
-            لا يوجد طلاب مطابقين لبحث الاسم
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-y-2">
-              <thead>
-                <tr>
-                  <th className="rounded-r-xl bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">الطالب</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">الفصل</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">الحالة</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">المدفوع</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">المتبقي</th>
-                  <th className="rounded-l-xl bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">الإجراء</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayedStudents.map((item) => {
-                  const student = item?.student || {};
-                  const cls = item?.class || {};
-                  const trip = item?.trip || {};
-                  const effectiveFee = Number(trip?.discount ? trip?.netFee : trip?.fee || 0);
-                  const totalPaid = Number(trip?.totalPaid || 0);
-                  const remaining = Math.max(effectiveFee - totalPaid, 0);
+          {pagination && students.length > 0 && (
+            <Box sx={{ p: 1 }}>
+              <PaginationControls pagination={pagination} page={page} onPageChange={setPage} limit={limit} onLimitChange={setLimit} label="عدد الطلاب" />
+            </Box>
+          )}
+        </Paper>
 
-                  return (
-                    <tr key={student?._id}>
-                      <td className="rounded-r-xl border border-[#E5E7EB] bg-white px-3 py-3 text-sm font-semibold text-[#1E293B]">
-                        {student?.name || "—"}
-                      </td>
-                      <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm text-[#374151]">
-                        {cls?.roomNumber ? `${cls?.roomNumber} - ${translateGender(cls?.gender, "class")}` : "—"}
-                      </td>
-                      <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${trip?.status === "paid" ? "bg-[#E7F8F1] text-[#0E9F6E]" : trip?.status === "partial" ? "bg-[#EEF5FF] text-[#1D4ED8]" : "bg-[#FDECEC] text-[#D14343]"}`}>
-                          {statusMap[trip?.status] || "غير مدفوعة"}
-                        </span>
-                      </td>
-                      <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm text-[#374151]">
-                        {totalPaid} جنيه
-                      </td>
-                      <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm text-[#374151]">
-                        {remaining} جنيه
-                      </td>
-                      <td className="rounded-l-xl border border-[#E5E7EB] bg-white px-3 py-3 text-sm">
-                        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                          <Button
-                            variant="contained"
-                            onClick={() => navigate(`/financial/records/${student?._id}/trips/${trip?._id}`)}
-                            sx={{ minWidth: 120 }}
-                          >
-                              التفاصيل
-                            </Button>
-
-                            <Button
-                              variant="outlined"
-                              color="error"
-                              onClick={() => handleRemove(student?._id)}
-                              disabled={actionLoading}
-                              sx={{ minWidth: 120 }}
-                            >
-                              إزالة
-                            </Button>
-                        </Stack>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Paper>
-
-      {pagination && (
-        <PaginationControls
-          pagination={pagination}
-          page={page}
-          onPageChange={setPage}
-          limit={limit}
-          onLimitChange={setLimit}
-          label="عدد الطلاب"
+        <EnrollDialog
+          open={openAdd}
+          onClose={() => !actionLoading && setOpenAdd(false)}
+          tripTemplateId={tripTemplateId}
+          onDone={async () => {
+            setOpenAdd(false);
+            await fetchData();
+          }}
+          loading={actionLoading}
+          setActionLoading={setActionLoading}
+          candidateOptions={candidateOptions}
+          planOptions={planOptions}
         />
-      )}
-
-      <EnrollDialog
-        open={openAdd}
-        onClose={() => setOpenAdd(false)}
-        tripTemplateId={tripTemplateId}
-        onDone={async () => {
-          setOpenAdd(false);
-          await fetchData();
-        }}
-        loading={actionLoading}
-        setActionLoading={setActionLoading}
-        candidateOptions={candidateOptions}
-        planOptions={planOptions}
-      />
+      </Box>
     </Container>
   );
 };
 
-const StatCard = ({ label, value }) => {
-  return (
-    <Box
-      sx={{
-        p: 2,
-        borderRadius: "10px",
-        bgcolor: "primary.white",
-        transition: ".5s",
-        "&:hover": { bgcolor: "grey.100" },
-      }}
-    >
-      <Typography variant="label" color="text.secondary" sx={{ mb: 0.5, fontWeight: 500, fontSize: "12px" }}>
-        {label}
-      </Typography>
-      <Typography variant="subtitle" sx={{ display: "block", fontWeight: 500, color: "text.primary" }}>
-        {value}
-      </Typography>
-    </Box>
-  );
-};
-
-const EnrollDialog = ({
-  open,
-  onClose,
-  tripTemplateId,
-  onDone,
-  loading,
-  setActionLoading,
-  candidateOptions,
-  planOptions,
-}) => {
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm({
-    defaultValues: {
-      studentId: "",
-      installmentPlanId: "",
-    },
-  });
-
+const EnrollDialog = ({ open, onClose, tripTemplateId, onDone, loading, setActionLoading, candidateOptions, planOptions }) => {
+  const { register, handleSubmit, reset, formState: { errors } } = useForm({ defaultValues: { studentId: "", installmentPlanId: "" } });
   useEffect(() => {
-    if (open) {
-      reset({
-        studentId: "",
-        installmentPlanId: "",
-      });
-    }
+    if (open) reset({ studentId: "", installmentPlanId: "" });
   }, [open, reset]);
 
-  const onSubmit = async (formData) => {
-    if (!tripTemplateId) return;
-
+  const onSubmit = async (formValues) => {
     setActionLoading(true);
-    const response = await enrollStudentInTripTemplate(tripTemplateId, {
-      studentId: formData.studentId,
-      installmentPlanId: formData.installmentPlanId || undefined,
-    });
-
-    if (response.status) {
-      toast.success(response.message || "تم إضافة الطالب إلى الرحلة بنجاح");
+    try {
+      const response = await enrollStudentInTripTemplate(tripTemplateId, {
+        studentId: formValues.studentId,
+        installmentPlanId: formValues.installmentPlanId || undefined,
+      });
+      if (!response?.status) {
+        toast.error(response?.message || response || "حدث خطأ أثناء إضافة الطالب إلى الرحلة");
+        return;
+      }
+      toast.success(response?.message || "تم إضافة الطالب إلى الرحلة بنجاح");
       await onDone();
-    } else {
-      toast.error(response || "حدث خطأ ما أثناء إضافة الطالب إلى الرحلة");
+    } finally {
+      setActionLoading(false);
     }
-    setActionLoading(false);
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      fullWidth
-      maxWidth="sm"
-      PaperProps={{ sx: { borderRadius: "14px" } }}
-    >
-      <DialogTitle sx={{ px: 6, pt: 5, pb: 6 }}>
-        <Typography variant="h6" fontWeight={700}>إضافة طالب إلى الرحلة</Typography>
-      </DialogTitle>
-
-      <DialogContent sx={{ px: 6, pt: 2, pb: 6 }}>
-        <Grid container spacing={4}>
-          <Grid item xs={12} sm={6}>
-            <Select
-              register={register}
-              registerName={"studentId"}
-              data={candidateOptions}
-              name="displayName"
-              error={errors.studentId?.message}
-              label={"الطالب"}
-              required={true}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Select
-              register={register}
-              registerName={"installmentPlanId"}
-              data={planOptions}
-              name="displayName"
-              error={errors.installmentPlanId?.message}
-              label={"خطة التقسيط"}
-              defaultSelect="كاش بدون تقسيط"
-            />
-          </Grid>
-
-          {candidateOptions.length === 0 && (
-            <Grid item xs={12}>
-              <Typography variant="body2" color="text.secondary">
-                لا يوجد طلاب متاحون للإضافة حالياً.
-              </Typography>
-            </Grid>
-          )}
-        </Grid>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { overflow: "hidden", borderRadius: "20px", bgcolor: "var(--color-cream)" } }}>
+      <DialogHeader icon={<PersonAddAltRounded />} title="إضافة طالب إلى الرحلة" description="اختر الطالب وخطة التقسيط المناسبة." loading={loading} onClose={onClose} />
+      <DialogContent sx={{ p: 2 }}>
+        <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
+          <Stack spacing={1.5}>
+            <Select register={register} registerName="studentId" data={candidateOptions} name="displayName" error={errors.studentId?.message} label="الطالب" required />
+            <Select register={register} registerName="installmentPlanId" data={planOptions} name="displayName" error={errors.installmentPlanId?.message} label="خطة التقسيط" defaultSelect="كاش بدون تقسيط" />
+            {candidateOptions.length === 0 && (
+              <Typography sx={{ color: "var(--color-muted)", fontSize: 10 }}>لا يوجد طلاب متاحون للإضافة حالياً.</Typography>
+            )}
+          </Stack>
+          <FormActions loading={loading} onCancel={onClose} label="إضافة الطالب" disabled={candidateOptions.length === 0} />
+        </Box>
       </DialogContent>
-
-      <DialogActions
-        sx={{
-          px: 6,
-          pb: 5,
-          pt: 1,
-          gap: 2,
-          flexDirection: { xs: "column-reverse", sm: "row" },
-        }}
-      >
-        <Button variant="outlined" onClick={onClose} sx={{ width: { xs: "100%", sm: "auto" } }}>
-          إلغاء
-        </Button>
-
-        <Button
-          variant="contained"
-          onClick={handleSubmit(onSubmit)}
-          disabled={loading || candidateOptions.length === 0}
-          sx={{ width: { xs: "100%", sm: "auto" }, minWidth: { sm: 140 }, px: 4 }}
-        >
-          إضافة الطالب
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 };

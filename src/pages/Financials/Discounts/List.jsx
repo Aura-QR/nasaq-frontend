@@ -1,74 +1,20 @@
-﻿import { AddCircleOutlineOutlined } from "@mui/icons-material";
-import { Button, Grid, Stack } from "@mui/material";
+﻿import { Box, Button } from "@mui/material";
+import { AddCircleOutlineRounded, DiscountRounded, PercentRounded, ToggleOffRounded, ToggleOnRounded } from "@mui/icons-material";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { deleteDiscount } from "@/APIs/financials/discounts";
 import Container from "@/components/Container/Container";
 import Table from "@/components/Table/Table";
+import { EmptyState, FinancialHeader, SectionCard, StatCard, StatsGrid } from "@/components/financial/FinancialShell";
+import { deleteDiscount } from "@/APIs/financials/discounts";
 import { useDiscounts } from "@/utils/hooks/apis/financials/useDiscounts";
 import usePermissions from "@/utils/hooks/usePermissions";
-
-const DiscountsListPage = () => {
-  const headers = ["اسم الخصم", "نسبة الخصم", "الحالة"];
-  const body = ["name", "percentage", "isActive"];
-
-  const { discounts, loading, setDiscounts } = useDiscounts();
-  const permissions = usePermissions("financial");
-
-  const mappedDiscounts = (discounts || []).map((item) => ({
-    id: item._id,
-    name: item.name,
-    percentage: `${item.percentage}%`,
-    isActive: item.isActive ? "نشط" : "غير نشط",
-  }));
-
-  const handleDelete = async (id, setActive) => {
-    const response = await deleteDiscount(id);
-    if (response.status) {
-      toast.success("تم حذف الخصم بنجاح");
-      setDiscounts((prev) => prev.filter((item) => item._id !== id));
-      setActive(false);
-    } else {
-      toast.error(response || "حدث خطأ ما أثناء حذف الخصم");
-    }
-  };
-
-  return (
-    <Container>
-      <Grid container mb={8} spacing={{ xs: 4, sm: 6, md: 8 }} alignItems={"center"}>
-        <Grid item xs={12}>
-          <Stack direction={"row"} spacing={8} alignItems={"center"}>
-            {permissions?.add && (
-              <Link to={"add"}>
-                <Button
-                  startIcon={<AddCircleOutlineOutlined />}
-                  variant="contained"
-                  sx={{ p: "16px 40px", borderRadius: "8px" }}
-                >
-                  إضافة خصم
-                </Button>
-              </Link>
-            )}
-          </Stack>
-        </Grid>
-      </Grid>
-
-      {!loading && mappedDiscounts.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm font-medium text-gray-500">
-          لا توجد خصومات لعرضها
-        </div>
-      ) : (
-        <Table
-          headers={headers}
-          data={mappedDiscounts}
-          loading={loading}
-          edit={permissions?.edit}
-          body={body}
-          deleteFn={permissions?.delete ? handleDelete : undefined}
-        />
-      )}
-    </Container>
-  );
+const headers=["اسم الخصم","نسبة الخصم","الحالة"],body=["name","percentage","isActive"];
+const DiscountsListPage=()=>{
+ const {discounts=[],loading,setDiscounts}=useDiscounts(), permissions=usePermissions("financial");
+ const rows=discounts.map(i=>({id:i?._id||i?.id,name:i?.name||"—",percentage:`${Number(i?.percentage||0)}%`,isActive:i?.isActive?"نشط":"غير نشط"}));
+ const active=discounts.filter(i=>i?.isActive).length, avg=discounts.length?(discounts.reduce((s,i)=>s+Number(i?.percentage||0),0)/discounts.length).toFixed(1):0;
+ const del=async(id,setOpen)=>{const r=await deleteDiscount(id);if(r?.status){toast.success("تم حذف الخصم بنجاح");setDiscounts(p=>p.filter(i=>(i?._id||i?.id)!==id));setOpen(false)}else toast.error(r?.message||r||"حدث خطأ أثناء حذف الخصم")};
+ const action=permissions?.add?<Button component={Link} to="add" variant="contained" startIcon={<AddCircleOutlineRounded/>} sx={{minHeight:42,borderRadius:"12px",background:"linear-gradient(135deg,var(--color-navy-light),var(--color-navy-dark))",fontWeight:800}}>إضافة خصم</Button>:null;
+ return <Container><Box dir="rtl" sx={{pb:4}}><FinancialHeader title="إدارة الخصومات" description="أنشئ الخصومات وعدّل نسبها وحالتها من مكان واحد." count={discounts.length} actions={action}/><StatsGrid><StatCard label="إجمالي الخصومات" value={discounts.length} icon={<DiscountRounded/>}/><StatCard label="الخصومات النشطة" value={active} icon={<ToggleOnRounded/>}/><StatCard label="غير النشطة" value={discounts.length-active} icon={<ToggleOffRounded/>}/><StatCard label="متوسط النسبة" value={`${avg}%`} icon={<PercentRounded/>}/></StatsGrid><SectionCard title="قائمة الخصومات" description="عدّل الخصم أو احذفه حسب صلاحياتك.">{!loading&&rows.length===0?<EmptyState icon={<DiscountRounded/>} title="لا توجد خصومات حتى الآن" description="أضف أول خصم لاستخدامه مع المصروفات أو الباص أو الرحلات."/>:<Box sx={{p:1}}><Table headers={headers} data={rows} loading={loading} edit={permissions?.edit} body={body} deleteFn={permissions?.delete?del:undefined}/></Box>}</SectionCard></Box></Container>;
 };
-
 export default DiscountsListPage;

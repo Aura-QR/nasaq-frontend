@@ -1,139 +1,167 @@
-import { Box, Grid, Typography } from "@mui/material";
+import { Box, Grid } from "@mui/material";
+import { ReceiptLongRounded } from "@mui/icons-material";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+
 import { addExpense } from "@/APIs/expenses";
-import Back from "@/components/Back/Back";
+
 import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
 import Select from "@/components/Select/Select";
-import SubmitSection from "@/components/SubmitSection";
+import FinancialFormShell from "@/components/financial/FinancialFormShell";
+
 import Years from "@/utils/constants/Years";
+import { getCurrencyFieldLabel } from "@/utils/financial/financialUtils";
 import { useExpenseCategories } from "@/utils/hooks/apis/expenses/useExpenseCategories";
 
 const ExpensesAddPage = () => {
   const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(now.getDate()).padStart(2, "0")}`;
 
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm({
-    defaultValues: {
-      date: today,
-    },
+    defaultValues: { date: today },
   });
 
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { categories = [] } = useExpenseCategories();
 
-  const { categories } = useExpenseCategories();
-
-  const onSubmit = async (data) => {
+  const onSubmit = async (formValues) => {
     const payload = {
-      name: data.name,
-      amount: Number(data.amount),
-      categoryId: data.categoryId || undefined,
-      date: data.date,
-      academicYear: data.academicYear || undefined,
-      notes: data.notes || undefined,
+      name: formValues.name,
+      amount: Number(formValues.amount),
+      categoryId: formValues.categoryId || undefined,
+      date: formValues.date,
+      academicYear: formValues.academicYear || undefined,
+      notes: formValues.notes || undefined,
     };
 
     setLoading(true);
-    const response = await addExpense(payload);
-    if (response.status) {
+
+    try {
+      const response = await addExpense(payload);
+
+      if (!response?.status) {
+        toast.error(
+          response?.message ||
+            response ||
+            "حدث خطأ ما أثناء إضافة المصروف"
+        );
+        return;
+      }
+
       toast.success("تم إضافة المصروف بنجاح");
       navigate("/expenses");
-    } else {
-      toast.error(response || "حدث خطأ ما أثناء إضافة المصروف");
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          "حدث خطأ ما أثناء إضافة المصروف"
+      );
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
     <Container>
-      <Back title={"إضافة مصروف"} />
+      <Box
+        component="form"
+        onSubmit={handleSubmit(onSubmit)}
+        noValidate
+        dir="rtl"
+        sx={{ pb: 3 }}
+      >
+        <FinancialFormShell
+          backTitle="إضافة مصروف"
+          helperText="أدخل بيانات المصروف ثم احفظ السجل."
+          sectionIcon={<ReceiptLongRounded />}
+          sectionTitle="تفاصيل المصروف"
+          sectionDescription="أضف الاسم والمبلغ والتصنيف والتاريخ."
+          loading={loading}
+          submitLabel="حفظ المصروف"
+          onCancel={() => navigate(-1)}
+        >
+          <Grid container spacing={1.5}>
+            <Grid item xs={12} sm={6}>
+              <Input
+                register={register}
+                registerName="name"
+                error={errors.name?.message}
+                label="اسم المصروف"
+                required
+                type="text"
+              />
+            </Grid>
 
-      <Box bgcolor={"primary.white"} p={"32px 16px"} borderRadius={"12px"} my={8}>
-        <Typography variant="title" fontWeight={"500"}>
-          تفاصيل المصروف
-        </Typography>
+            <Grid item xs={12} sm={6}>
+              <Input
+                register={register}
+                registerName="amount"
+                error={errors.amount?.message}
+                label={getCurrencyFieldLabel("المبلغ")}
+                required
+                type="number"
+                valueAsNumber
+              />
+            </Grid>
 
-        <Grid container mt={8} spacing={8}>
-          <Grid item xs={12} sm={6}>
-            <Input
-              register={register}
-              registerName={"name"}
-              error={errors.name?.message}
-              label={"اسم المصروف"}
-              required={true}
-              type={"text"}
-            />
+            <Grid item xs={12} sm={6}>
+              <Select
+                register={register}
+                registerName="categoryId"
+                data={categories}
+                name="name"
+                error={errors.categoryId?.message}
+                label="التصنيف"
+                required
+                defaultSelect="اختر التصنيف"
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <Input
+                register={register}
+                registerName="date"
+                error={errors.date?.message}
+                label="تاريخ المصروف"
+                required
+                type="date"
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <Select
+                register={register}
+                registerName="academicYear"
+                data={Years}
+                error={errors.academicYear?.message}
+                label="السنة الدراسية"
+                defaultSelect="غير محدد"
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Input
+                register={register}
+                registerName="notes"
+                error={errors.notes?.message}
+                label="ملاحظات"
+                multiline
+                rows={3}
+              />
+            </Grid>
           </Grid>
-
-          <Grid item xs={12} sm={6}>
-            <Input
-              register={register}
-              registerName={"amount"}
-              error={errors.amount?.message}
-              label={"المبلغ (ريال)"}
-              required={true}
-              type={"number"}
-              valueAsNumber={true}
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6}>
-            <Select
-              register={register}
-              registerName={"categoryId"}
-              data={categories || []}
-              name="name"
-              error={errors.categoryId?.message}
-              label={"التصنيف"}
-              required={true}
-              defaultSelect="اختر التصنيف"
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6}>
-            <Input
-              register={register}
-              registerName={"date"}
-              error={errors.date?.message}
-              label={"تاريخ المصروف"}
-              required={true}
-              type={"date"}
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6}>
-            <Select
-              register={register}
-              registerName={"academicYear"}
-              data={Years}
-              error={errors.academicYear?.message}
-              label={"السنة الدراسية"}
-              defaultSelect="غير محدد"
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <Input
-              register={register}
-              registerName={"notes"}
-              error={errors.notes?.message}
-              label={"ملاحظات"}
-              type={"text"}
-              multiline={true}
-            />
-          </Grid>
-        </Grid>
+        </FinancialFormShell>
       </Box>
-
-      <SubmitSection onSubmit={onSubmit} handleSubmit={handleSubmit} loading={loading} />
     </Container>
   );
 };

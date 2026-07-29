@@ -1,4 +1,5 @@
-﻿import { Box, Grid, Typography } from "@mui/material";
+﻿import { Box, Grid, Paper, Stack, Typography } from "@mui/material";
+import { DiscountRounded } from "@mui/icons-material";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
@@ -7,85 +8,6 @@ import { addDiscount } from "@/APIs/financials/discounts";
 import Back from "@/components/Back/Back";
 import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
-import SubmitSection from "@/components/SubmitSection";
-
-const DiscountsAddPage = () => {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm();
-
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
-
-  const onSubmit = async (data) => {
-    const payload = {
-      name: data.name,
-      description: data.description || undefined,
-      percentage: Number(data.percentage),
-    };
-
-    setLoading(true);
-    const response = await addDiscount(payload);
-    if (response.status) {
-      toast.success("تم إضافة الخصم بنجاح");
-      navigate("/financial/discounts");
-    } else {
-      toast.error(response || "حدث خطأ ما أثناء إضافة الخصم");
-    }
-    setLoading(false);
-  };
-
-  return (
-    <Container>
-      <Back title={"إضافة خصم"} />
-
-      <Box bgcolor={"primary.white"} p={"32px 16px"} borderRadius={"12px"} my={8}>
-        <Typography variant="title" fontWeight={"500"}>
-          تفاصيل الخصم
-        </Typography>
-
-        <Grid container mt={8} spacing={8}>
-          <Grid item xs={12} sm={6}>
-            <Input
-              register={register}
-              registerName={"name"}
-              error={errors.name?.message}
-              label={"اسم الخصم"}
-              required={true}
-              type={"text"}
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6}>
-            <Input
-              register={register}
-              registerName={"percentage"}
-              error={errors.percentage?.message}
-              label={"نسبة الخصم (%)"}
-              required={true}
-              type={"number"}
-              valueAsNumber={true}
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <Input
-              register={register}
-              registerName={"description"}
-              error={errors.description?.message}
-              label={"الوصف"}
-              type={"text"}
-              multiline={true}
-            />
-          </Grid>
-        </Grid>
-      </Box>
-
-      <SubmitSection onSubmit={onSubmit} handleSubmit={handleSubmit} loading={loading} />
-    </Container>
-  );
-};
-
+import { FormActions, formFieldsSx, pageCardSx } from "@/components/financial/FinancialShell";
+const DiscountsAddPage=()=>{const {register,handleSubmit,formState:{errors}}=useForm(),[loading,setLoading]=useState(false),navigate=useNavigate();const submit=async d=>{setLoading(true);const r=await addDiscount({name:d.name,description:d.description||undefined,percentage:Number(d.percentage)});if(r?.status){toast.success("تم إضافة الخصم بنجاح");navigate("/financial/discounts")}else toast.error(r?.message||r||"حدث خطأ أثناء إضافة الخصم");setLoading(false)};return <Container><Box component="form" onSubmit={handleSubmit(submit)} dir="rtl" sx={{pb:3}}><Paper elevation={0} sx={{...pageCardSx,p:1.4}}><Back title="إضافة خصم"/></Paper><Paper elevation={0} sx={{...pageCardSx,...formFieldsSx,mt:1.25,p:2}}><Stack direction="row" spacing={1} sx={{mb:1.5,pb:1.25,borderBottom:"1px solid rgba(36,74,112,.07)"}}><Box sx={{width:40,height:40,display:"grid",placeItems:"center",bgcolor:"var(--color-gold-soft)",color:"var(--color-gold-dark)",borderRadius:"12px"}}><DiscountRounded/></Box><Box><Typography sx={{fontSize:16,fontWeight:800,color:"var(--color-navy-deep)"}}>تفاصيل الخصم</Typography><Typography sx={{fontSize:10,color:"var(--color-muted)"}}>نسبة الخصم من 0 إلى 100.</Typography></Box></Stack><Grid container spacing={1.5}><Grid item xs={12} sm={6}><Input register={register} registerName="name" error={errors.name?.message} label="اسم الخصم" required/></Grid><Grid item xs={12} sm={6}><Input register={register} registerName="percentage" error={errors.percentage?.message} label="نسبة الخصم (%)" required type="number" valueAsNumber/></Grid><Grid item xs={12}><Input register={register} registerName="description" error={errors.description?.message} label="الوصف" multiline rows={3}/></Grid></Grid></Paper><Paper elevation={0} sx={{...pageCardSx,mt:1.25,p:1.4}}><FormActions loading={loading} onCancel={()=>navigate(-1)} label="حفظ الخصم"/></Paper></Box></Container>};
 export default DiscountsAddPage;

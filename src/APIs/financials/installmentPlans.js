@@ -1,57 +1,10 @@
 import { api } from "../Axios";
-
-const ENDPOINT = "/financial/installment-plans";
-
-export const fetchInstallmentPlans = async () => {
-	try {
-		const response = await api.get(ENDPOINT);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const fetchSingleInstallmentPlan = async (id) => {
-	try {
-		const response = await api.get(ENDPOINT + "/" + id);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const addInstallmentPlan = async (data) => {
-	try {
-		const response = await api.post(ENDPOINT, data);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const editInstallmentPlan = async (data, id) => {
-	try {
-		const response = await api.patch(ENDPOINT + "/" + id, data);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const setDefaultInstallmentPlan = async (id) => {
-	try {
-		const response = await api.patch(ENDPOINT + "/" + id + "/set-default");
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
-
-export const deleteInstallmentPlan = async (id) => {
-	try {
-		const response = await api.delete(ENDPOINT + "/" + id);
-		return response.data;
-	} catch (err) {
-		return err?.response?.data?.message || "حدث خطأ ما";
-	}
-};
+import { apiError } from "./_helpers";
+const E="/financial/installment-plans";
+export const fetchInstallmentPlans=async()=>{try{return(await api.get(E)).data}catch(e){return apiError(e,"تعذر تحميل خطط التقسيط")}};
+export const fetchSingleInstallmentPlan=async(id)=>{try{return(await api.get(`${E}/${id}`)).data}catch(e){return apiError(e,"تعذر تحميل خطة التقسيط")}};
+export const addInstallmentPlan=async(data)=>{try{return(await api.post(E,data)).data}catch(e){return apiError(e,"تعذر إضافة خطة التقسيط")}};
+export const editInstallmentPlan=async(data,id)=>{try{return(await api.patch(`${E}/${id}`,data)).data}catch(e){return apiError(e,"تعذر تعديل خطة التقسيط")}};
+export const setDefaultInstallmentPlan=async(id)=>{try{return(await api.patch(`${E}/${id}/set-default`)).data}catch(e){return apiError(e,"تعذر تعيين الخطة الافتراضية")}};
+export const deleteInstallmentPlan=async(id)=>{try{return(await api.delete(`${E}/${id}`)).data}catch(e){return apiError(e,"تعذر حذف خطة التقسيط")}};
+export default {fetchInstallmentPlans,fetchSingleInstallmentPlan,addInstallmentPlan,editInstallmentPlan,setDefaultInstallmentPlan,deleteInstallmentPlan};

@@ -1,4 +1,5 @@
-﻿import { Box, Checkbox, FormControlLabel, Grid, Typography } from "@mui/material";
+﻿import { Box, Checkbox, FormControlLabel, Grid, Paper, Stack, Typography } from "@mui/material";
+import { DiscountRounded } from "@mui/icons-material";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router-dom";
@@ -7,138 +8,9 @@ import { editDiscount } from "@/APIs/financials/discounts";
 import Back from "@/components/Back/Back";
 import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
-import SubmitSection from "@/components/SubmitSection";
+import Loading from "@/components/Loading";
+import { FormActions, formFieldsSx, pageCardSx } from "@/components/financial/FinancialShell";
 import { getChangedValues } from "@/utils/helpers/getChangedValues";
 import { useDiscount } from "@/utils/hooks/apis/financials/useDiscount";
-
-const DiscountsEditPage = () => {
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    reset,
-    formState: { errors },
-  } = useForm();
-
-  const [loading, setLoading] = useState(false);
-  const [defaultValues, setDefaultValues] = useState(null);
-  const navigate = useNavigate();
-  const { id } = useParams();
-
-  const { discount, loading: discountLoading } = useDiscount(id);
-
-  useEffect(() => {
-    if (discount) {
-      const normalized = {
-        name: discount.name,
-        description: discount.description || "",
-        percentage: discount.percentage,
-        isActive: discount.isActive,
-      };
-      reset(normalized);
-      setDefaultValues(normalized);
-    }
-  }, [discount, reset]);
-
-  const onSubmit = async (data) => {
-    setLoading(true);
-
-    const payload = {
-      name: data.name,
-      description: data.description || undefined,
-      percentage: Number(data.percentage),
-      isActive: !!data.isActive,
-    };
-
-    const changedData = getChangedValues(payload, defaultValues || {});
-    if (Object.keys(changedData).length === 0) {
-      toast.info("لم تحدث أي بيانات للتعديل");
-      setLoading(false);
-      return;
-    }
-
-    const response = await editDiscount(changedData, id);
-    if (response.status) {
-      toast.success("تم تعديل الخصم بنجاح");
-      navigate("/financial/discounts");
-    } else {
-      toast.error(response || "حدث خطأ ما أثناء تعديل الخصم");
-    }
-
-    setLoading(false);
-  };
-
-  return (
-    <Container>
-      <Back title={"تعديل خصم"} />
-
-      <Box bgcolor={"primary.white"} p={"32px 16px"} borderRadius={"12px"} my={8}>
-        <Typography variant="title" fontWeight={"500"}>
-          تفاصيل الخصم
-        </Typography>
-
-        {defaultValues && (
-          <Grid container mt={8} spacing={8}>
-            <Grid item xs={12} sm={6}>
-              <Input
-                register={register}
-                registerName={"name"}
-                error={errors.name?.message}
-                label={"اسم الخصم"}
-                required={true}
-                type={"text"}
-                defaultValue={defaultValues.name}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <Input
-                register={register}
-                registerName={"percentage"}
-                error={errors.percentage?.message}
-                label={"نسبة الخصم (%)"}
-                required={true}
-                type={"number"}
-                valueAsNumber={true}
-                defaultValue={defaultValues.percentage}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <Input
-                register={register}
-                registerName={"description"}
-                error={errors.description?.message}
-                label={"الوصف"}
-                type={"text"}
-                multiline={true}
-                defaultValue={defaultValues.description}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={!!watch("isActive")}
-                    onChange={(e) => setValue("isActive", e.target.checked)}
-                  />
-                }
-                label="الخصم نشط"
-              />
-            </Grid>
-          </Grid>
-        )}
-      </Box>
-
-      <SubmitSection
-        onSubmit={onSubmit}
-        handleSubmit={handleSubmit}
-        loading={loading || discountLoading}
-      />
-    </Container>
-  );
-};
-
+const DiscountsEditPage=()=>{const {register,handleSubmit,watch,setValue,reset,formState:{errors}}=useForm(),[saving,setSaving]=useState(false),[defaults,setDefaults]=useState(null),navigate=useNavigate(),{id}=useParams(),{discount,loading}=useDiscount(id);useEffect(()=>{if(discount){const n={name:discount.name||"",description:discount.description||"",percentage:Number(discount.percentage||0),isActive:!!discount.isActive};reset(n);setDefaults(n)}},[discount,reset]);const submit=async d=>{const payload={name:d.name,description:d.description||undefined,percentage:Number(d.percentage),isActive:!!d.isActive},changed=getChangedValues(payload,defaults||{});if(!Object.keys(changed).length)return toast.info("لم تحدث أي بيانات للتعديل");setSaving(true);const r=await editDiscount(changed,id);if(r?.status){toast.success("تم تعديل الخصم بنجاح");navigate("/financial/discounts")}else toast.error(r?.message||r||"حدث خطأ أثناء تعديل الخصم");setSaving(false)};if(loading)return <Loading/>;return <Container><Box component="form" onSubmit={handleSubmit(submit)} dir="rtl" sx={{pb:3}}><Paper elevation={0} sx={{...pageCardSx,p:1.4}}><Back title="تعديل الخصم"/></Paper><Paper elevation={0} sx={{...pageCardSx,...formFieldsSx,mt:1.25,p:2}}><Stack direction="row" spacing={1} sx={{mb:1.5,pb:1.25,borderBottom:"1px solid rgba(36,74,112,.07)"}}><Box sx={{width:40,height:40,display:"grid",placeItems:"center",bgcolor:"var(--color-gold-soft)",color:"var(--color-gold-dark)",borderRadius:"12px"}}><DiscountRounded/></Box><Box><Typography sx={{fontSize:16,fontWeight:800,color:"var(--color-navy-deep)"}}>تفاصيل الخصم</Typography><Typography sx={{fontSize:10,color:"var(--color-muted)"}}>عدّل النسبة والوصف وحالة الخصم.</Typography></Box></Stack>{defaults&&<Grid container spacing={1.5}><Grid item xs={12} sm={6}><Input register={register} registerName="name" error={errors.name?.message} label="اسم الخصم" required/></Grid><Grid item xs={12} sm={6}><Input register={register} registerName="percentage" error={errors.percentage?.message} label="نسبة الخصم (%)" required type="number" valueAsNumber/></Grid><Grid item xs={12}><Input register={register} registerName="description" error={errors.description?.message} label="الوصف" multiline rows={3}/></Grid><Grid item xs={12}><FormControlLabel control={<Checkbox checked={!!watch("isActive")} onChange={e=>setValue("isActive",e.target.checked,{shouldDirty:true})}/>} label="الخصم نشط" sx={{m:0,p:1,border:"1px solid rgba(36,74,112,.08)",borderRadius:"12px",bgcolor:"white"}}/></Grid></Grid>}</Paper><Paper elevation={0} sx={{...pageCardSx,mt:1.25,p:1.4}}><FormActions loading={saving} onCancel={()=>navigate(-1)} label="حفظ التغييرات"/></Paper></Box></Container>};
 export default DiscountsEditPage;
