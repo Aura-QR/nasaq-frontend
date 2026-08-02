@@ -1,199 +1,128 @@
-﻿import { api } from "../Axios";
-import { getApiError } from "../helpers/getApiError";
+﻿import {
+  createSchoolTeacher,
+  deleteSchoolTeacher,
+  getCurrentTeacher,
+  getSchoolTeacherById,
+  getSchoolTeachers,
+  getSchoolTeachersList,
+  getTeachersBySubject,
+  toggleSchoolTeacherActive,
+  updateSchoolTeacher,
+} from "../school/teachers";
 
-const ENDPOINT = "/teachers";
-
-export const fetchTeachers = async (
-  filters = {}
+const wrapTeacherResult = (
+  result
 ) => {
-  try {
-    const response = await api.get(
-      ENDPOINT,
-      {
-        params: filters,
-      }
-    );
-
-    return response.data;
-  } catch (error) {
-    return getApiError(
-      error,
-      "تعذر تحميل المعلمين"
-    );
+  if (
+    result?.status ===
+      false
+  ) {
+    return result;
   }
+
+  const teacher =
+    result?.data?.teacher ||
+    result?.data;
+
+  return {
+    ...result,
+    data: {
+      teacher,
+    },
+  };
 };
+
+export const fetchTeachers =
+  getSchoolTeachers;
 
 export const fetchTeachersList =
-  async () => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/list`
-      );
+  getSchoolTeachersList;
 
-      return response.data;
-    } catch (error) {
-      return getApiError(
-        error,
-        "تعذر تحميل قائمة المعلمين"
-      );
-    }
-  };
+export const fetchTeacher =
+  getSchoolTeacherById;
 
+/*
+ * Legacy name used by lecture, teacher profile,
+ * add and edit pages.
+ */
 export const fetchSingleTeacher =
-  async (id) => {
-    if (!id) {
-      return {
-        status: false,
-        message:
-          "معرّف المعلم غير موجود",
-      };
-    }
+  getSchoolTeacherById;
 
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/${id}`
-      );
+export const fetchCurrentTeacher =
+  getCurrentTeacher;
 
-      return response.data;
-    } catch (error) {
-      return getApiError(
-        error,
-        "تعذر تحميل بيانات المعلم"
-      );
-    }
-  };
-
+/*
+ * Legacy profile export.
+ */
 export const fetchMyTeacherProfile =
-  async () => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/me`
-      );
+  getCurrentTeacher;
 
-      return response.data;
-    } catch (error) {
-      return getApiError(
-        error,
-        "تعذر تحميل الملف الشخصي"
-      );
-    }
-  };
+export const fetchTeachersBySubject =
+  getTeachersBySubject;
 
+/*
+ * Legacy subject-filter export.
+ */
 export const fetchTeachersBySubjectId =
-  async (subjectId) => {
-    if (!subjectId) {
-      return {
-        status: false,
-        message:
-          "معرّف المادة غير موجود",
-      };
-    }
+  getTeachersBySubject;
 
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/by-subject/${subjectId}`
-      );
-
-      return response.data;
-    } catch (error) {
-      return getApiError(
-        error,
-        "تعذر تحميل معلمي المادة"
-      );
-    }
-  };
-
-export const addTeacher = async (
-  data
-) => {
-  try {
-    const response = await api.post(
-      ENDPOINT,
-      data
+export const addTeacher =
+  async (payload) =>
+    wrapTeacherResult(
+      await createSchoolTeacher(
+        payload
+      )
     );
 
-    return response.data;
-  } catch (error) {
-    return getApiError(
-      error,
-      "تعذر إضافة المعلم"
+export const editTeacher =
+  async (
+    payload,
+    teacherId
+  ) =>
+    wrapTeacherResult(
+      await updateSchoolTeacher(
+        teacherId,
+        payload
+      )
     );
-  }
-};
-
-export const editTeacher = async (
-  data,
-  id
-) => {
-  if (!id) {
-    return {
-      status: false,
-      message:
-        "معرّف المعلم غير موجود",
-    };
-  }
-
-  try {
-    const response = await api.patch(
-      `${ENDPOINT}/${id}`,
-      data
-    );
-
-    return response.data;
-  } catch (error) {
-    return getApiError(
-      error,
-      "تعذر تعديل بيانات المعلم"
-    );
-  }
-};
-
-export const deleteTeacher =
-  async (id) => {
-    if (!id) {
-      return {
-        status: false,
-        message:
-          "معرّف المعلم غير موجود",
-      };
-    }
-
-    try {
-      const response =
-        await api.delete(
-          `${ENDPOINT}/${id}`
-        );
-
-      return response.data;
-    } catch (error) {
-      return getApiError(
-        error,
-        "تعذر حذف المعلم"
-      );
-    }
-  };
 
 export const toggleActiveTeacher =
-  async (id) => {
-    if (!id) {
-      return {
-        status: false,
-        message:
-          "معرّف المعلم غير موجود",
-      };
-    }
+  toggleSchoolTeacherActive;
 
-    try {
-      const response =
-        await api.patch(
-          `${ENDPOINT}/${id}/toggle-active`
-        );
+/*
+ * Additional compatibility aliases used by
+ * older teacher screens.
+ */
+export const toggleTeacherActive =
+  toggleSchoolTeacherActive;
 
-      return response.data;
-    } catch (error) {
-      return getApiError(
-        error,
-        "تعذر تغيير حالة المعلم"
-      );
-    }
-  };
+export const deleteTeacher =
+  deleteSchoolTeacher;
+
+export {
+  createSchoolTeacher,
+  deleteSchoolTeacher,
+  getCurrentTeacher,
+  getSchoolTeacherById,
+  getSchoolTeachers,
+  getSchoolTeachersList,
+  getTeachersBySubject,
+  toggleSchoolTeacherActive,
+  updateSchoolTeacher,
+};
+
+export default {
+  fetchTeachers,
+  fetchTeachersList,
+  fetchTeacher,
+  fetchSingleTeacher,
+  fetchCurrentTeacher,
+  fetchMyTeacherProfile,
+  fetchTeachersBySubject,
+  fetchTeachersBySubjectId,
+  addTeacher,
+  editTeacher,
+  toggleActiveTeacher,
+  toggleTeacherActive,
+  deleteTeacher,
+};

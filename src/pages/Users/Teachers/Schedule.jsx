@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -15,10 +16,12 @@ import {
   CalendarMonthRounded,
   DeleteOutlineRounded,
   EditRounded,
+  RefreshRounded,
   VisibilityRounded,
 } from "@mui/icons-material";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -47,6 +50,177 @@ import Days from "@/utils/constants/Days";
 import { translateGender } from "@/utils/helpers/translateGender";
 import usePermissions from "@/utils/hooks/usePermissions";
 import { useTeacher } from "@/utils/hooks/apis/useTeacher";
+
+const SCHEDULE_CACHE_TTL =
+  15_000;
+
+const scheduleCache =
+  new Map();
+
+const schedulePending =
+  new Map();
+
+const extractLectures = (
+  response
+) => {
+  const data =
+    response?.data ??
+    response;
+
+  if (
+    Array.isArray(data)
+  ) {
+    return data;
+  }
+
+  return (
+    [
+      data?.docs,
+      data?.items,
+      data?.lectures,
+      data?.results,
+      data?.records,
+      data?.data,
+    ].find(
+      Array.isArray
+    ) || []
+  );
+};
+
+const getLectureId = (
+  lecture
+) =>
+  lecture?._id ||
+  lecture?.id ||
+  "";
+
+const getLectureSubjectName = (
+  lecture
+) =>
+  lecture?.subject
+    ?.subjectName ||
+  lecture?.subject?.name ||
+  lecture?.subjectId
+    ?.subjectName ||
+  lecture?.subjectId?.name ||
+  lecture?.subjectOffering
+    ?.subject?.name ||
+  lecture?.subjectOfferingId
+    ?.subjectId?.name ||
+  "مادة غير محددة";
+
+const getLectureClass = (
+  lecture
+) =>
+  lecture?.class ||
+  lecture?.classId ||
+  null;
+
+const fetchTeacherLectures =
+  async (
+    teacherId,
+    {
+      force = false,
+    } = {}
+  ) => {
+    const key =
+      String(
+        teacherId || ""
+      );
+
+    if (!key) {
+      return {
+        status: false,
+        message:
+          "معرّف المعلم غير موجود",
+        data: [],
+      };
+    }
+
+    const cached =
+      scheduleCache.get(
+        key
+      );
+
+    if (
+      !force &&
+      cached &&
+      Date.now() -
+        cached.createdAt <
+        SCHEDULE_CACHE_TTL
+    ) {
+      return cached.value;
+    }
+
+    if (
+      !force &&
+      schedulePending.has(
+        key
+      )
+    ) {
+      return schedulePending.get(
+        key
+      );
+    }
+
+    const request =
+      fetchLectures({
+        teacherId:
+          key,
+      })
+        .then((response) => {
+          if (
+            response?.status ===
+              false
+          ) {
+            return response;
+          }
+
+          const value = {
+            status: true,
+            message:
+              response?.message ||
+              "Success",
+            data:
+              extractLectures(
+                response
+              ),
+          };
+
+          scheduleCache.set(
+            key,
+            {
+              value,
+              createdAt:
+                Date.now(),
+            }
+          );
+
+          return value;
+        })
+        .finally(() => {
+          schedulePending.delete(
+            key
+          );
+        });
+
+    schedulePending.set(
+      key,
+      request
+    );
+
+    return request;
+  };
+
+const invalidateTeacherSchedule =
+  (teacherId) => {
+    scheduleCache.delete(
+      String(
+        teacherId || ""
+      )
+    );
+  };
+
 
 const TeacherSchedule = () => {
   const { id } = useParams();
@@ -114,6 +288,9 @@ const Schedule = ({
   const [loading, setLoading] =
     useState(true);
 
+  const [error, setError] =
+    useState("");
+
   const [deleteOpen, setDeleteOpen] =
     useState(false);
 
@@ -128,49 +305,92 @@ const Schedule = ({
     usePermissions("lectures");
 
   const fetchScheduleData =
-    async () => {
-      try {
-        setLoading(true);
-
-        const response =
-          await fetchLectures({
-            teacherId:
-              teacherData._id,
-          });
-
-        if (!response?.status) {
-          toast.error(
-            response?.message ||
-              "حدث خطأ أثناء جلب الجدول الدراسي"
-          );
-          setLectures([]);
-          return;
+    useCallback(
+      async ({
+        force = false,
+        silent = false,
+      } = {}) => {
+        if (!silent) {
+          setLoading(true);
         }
 
-        setLectures(
-          Array.isArray(
-            response.data
-          )
-            ? response.data
-            : []
-        );
-      } catch (error) {
-        toast.error(
-          error?.response?.data
-            ?.message ||
-            "حدث خطأ أثناء جلب الجدول الدراسي"
-        );
-        setLectures([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+        setError("");
+
+        try {
+          const response =
+            await fetchTeacherLectures(
+              teacherData._id,
+              {
+                force,
+              }
+            );
+
+          if (
+            response?.status ===
+              false
+          ) {
+            const message =
+              response?.message ||
+              "حدث خطأ أثناء جلب الجدول الدراسي";
+
+            setLectures([]);
+            setError(
+              message
+            );
+
+            toast.error(
+              message,
+              {
+                toastId:
+                  "teacher-schedule-load-error",
+              }
+            );
+
+            return;
+          }
+
+          setLectures(
+            extractLectures(
+              response
+            )
+          );
+        } catch (requestError) {
+          const message =
+            requestError?.response
+              ?.data?.message ||
+            "حدث خطأ أثناء جلب الجدول الدراسي";
+
+          setLectures([]);
+          setError(
+            message
+          );
+
+          toast.error(
+            message,
+            {
+              toastId:
+                "teacher-schedule-load-error",
+            }
+          );
+        } finally {
+          setLoading(false);
+        }
+      },
+      [
+        teacherData._id,
+      ]
+    );
 
   useEffect(() => {
-    if (teacherData?._id) {
+    if (
+      teacherData?._id
+    ) {
       fetchScheduleData();
     }
-  }, [teacherData?._id]);
+  }, [
+    teacherData?._id,
+    fetchScheduleData,
+  ]);
 
   const weeklySchedule =
     useMemo(() => {
@@ -188,43 +408,112 @@ const Schedule = ({
         }
       );
 
-      lectures.forEach((lecture) => {
-        const day = Days.find(
-          (item) =>
-            item.id ===
-            lecture.dayOfWeek?.toLowerCase()
-        );
+      lectures.forEach(
+        (lecture) => {
+          const dayValue =
+            String(
+              lecture?.dayOfWeek ||
+              lecture?.day ||
+              ""
+            )
+              .trim()
+              .toLowerCase();
 
-        const slotIndex =
-          Number(lecture.slot) - 1;
+          const day =
+            Days.find(
+              (item) =>
+                [
+                  item?.id,
+                  item?.day,
+                  item?.value,
+                ]
+                  .filter(Boolean)
+                  .some(
+                    (value) =>
+                      String(
+                        value
+                      )
+                        .trim()
+                        .toLowerCase() ===
+                      dayValue
+                  )
+            );
 
-        if (
-          !day ||
-          slotIndex < 0 ||
-          slotIndex >=
-            schedule.length
-        ) {
-          return;
+          const slotIndex =
+            Number(
+              lecture.slot
+            ) - 1;
+
+          if (
+            !day ||
+            slotIndex < 0 ||
+            slotIndex >=
+              schedule.length
+          ) {
+            return;
+          }
+
+          const classItem =
+            getLectureClass(
+              lecture
+            );
+
+          const classYear =
+            classItem
+              ?.academicYear
+              ?.name ||
+            classItem
+              ?.academicYearId
+              ?.name ||
+            classItem
+              ?.gradeLevelId
+              ?.name ||
+            classItem
+              ?.academicYear ||
+            "";
+
+          const roomNumber =
+            classItem
+              ?.roomNumber ||
+            classItem?.name ||
+            "";
+
+          const genderLabel =
+            classItem?.gender
+              ? translateGender(
+                  classItem.gender,
+                  "class"
+                )
+              : "";
+
+          const classInfo =
+            [
+              classYear,
+              roomNumber,
+              genderLabel,
+            ]
+              .filter(Boolean)
+              .join(" - ");
+
+          schedule[slotIndex][
+            day.day
+          ] = {
+            id:
+              getLectureId(
+                lecture
+              ),
+            subject:
+              getLectureSubjectName(
+                lecture
+              ),
+            info:
+              classInfo ||
+              "بدون فصل",
+            preparation:
+              lecture.preparation,
+          };
         }
-
-        schedule[slotIndex][
-          day.day
-        ] = {
-          id: lecture._id,
-          subject:
-            lecture.subject
-              ?.subjectName ||
-            "مادة غير محددة",
-          info: lecture.class
-            ? `${lecture.class.academicYear} - ${lecture.class.roomNumber} - ${translateGender(
-                lecture.class.gender,
-                "class"
-              )}`
-            : "بدون فصل",
-          preparation:
-            lecture.preparation,
-        };
-      });
+      );
 
       return schedule;
     }, [lectures]);
@@ -253,9 +542,15 @@ const Schedule = ({
           (previous) =>
             previous.filter(
               (lecture) =>
-                lecture._id !==
+                getLectureId(
+                  lecture
+                ) !==
                 selectedLectureId
             )
+        );
+
+        invalidateTeacherSchedule(
+          teacherData._id
         );
 
         setDeleteOpen(false);
@@ -296,6 +591,23 @@ const Schedule = ({
       </Stack>
     );
   }
+
+  const preparationCount =
+    lectures.filter(
+      (lecture) => {
+        const preparation =
+          Array.isArray(
+            lecture?.preparation
+          )
+            ? lecture.preparation[0]
+            : lecture?.preparation;
+
+        return Boolean(
+          preparation?._id ||
+          preparation?.id
+        );
+      }
+    ).length;
 
   return (
     <>
@@ -387,29 +699,131 @@ const Schedule = ({
             </Box>
           </Stack>
 
-          <Button
-            component={Link}
-            to={`/users/teachers/${teacherData._id}`}
-            variant="outlined"
+          <Stack
+            direction={{
+              xs: "column",
+              sm: "row",
+            }}
+            alignItems={{
+              xs: "stretch",
+              sm: "center",
+            }}
+            spacing={0.8}
+          >
+            <Chip
+              size="small"
+              label={`${lectures.length} حصة`}
+              sx={{
+                height: 30,
+                color:
+                  "var(--color-navy)",
+                backgroundColor:
+                  "rgba(36,74,112,0.07)",
+                fontSize:
+                  "9px",
+                fontWeight:
+                  800,
+              }}
+            />
+
+            <Chip
+              size="small"
+              label={`${preparationCount} تحضير`}
+              sx={{
+                height: 30,
+                color:
+                  "#287a51",
+                backgroundColor:
+                  "rgba(116,201,154,0.15)",
+                fontSize:
+                  "9px",
+                fontWeight:
+                  800,
+              }}
+            />
+
+            <Button
+              type="button"
+              onClick={() =>
+                fetchScheduleData({
+                  force: true,
+                })
+              }
+              variant="outlined"
+              startIcon={
+                <RefreshRounded />
+              }
+              sx={{
+                minHeight: 40,
+                px: 1.4,
+                borderRadius:
+                  "12px",
+                color:
+                  "var(--color-navy)",
+                borderColor:
+                  "rgba(36,74,112,0.16)",
+                fontSize:
+                  "10px",
+                fontWeight:
+                  800,
+                textTransform:
+                  "none",
+              }}
+            >
+              تحديث
+            </Button>
+
+            <Button
+              component={Link}
+              to={`/users/teachers/${teacherData._id}`}
+              variant="outlined"
+              sx={{
+                minHeight: 40,
+                px: 1.6,
+
+                borderRadius: "12px",
+
+                color:
+                  "var(--color-navy)",
+                borderColor:
+                  "rgba(36, 74, 112, 0.16)",
+
+                fontSize: "11px",
+                fontWeight: 800,
+                textTransform: "none",
+              }}
+            >
+              تفاصيل المعلم
+            </Button>
+          </Stack>
+        </Paper>
+
+        {error && (
+          <Alert
+            severity="error"
+            action={
+              <Button
+                type="button"
+                size="small"
+                onClick={() =>
+                  fetchScheduleData({
+                    force: true,
+                  })
+                }
+              >
+                إعادة المحاولة
+              </Button>
+            }
             sx={{
-              minHeight: 40,
-              px: 1.6,
-
-              borderRadius: "12px",
-
-              color:
-                "var(--color-navy)",
-              borderColor:
-                "rgba(36, 74, 112, 0.16)",
-
-              fontSize: "11px",
-              fontWeight: 800,
-              textTransform: "none",
+              borderRadius:
+                "14px",
+              fontSize:
+                "10px",
             }}
           >
-            تفاصيل المعلم
-          </Button>
-        </Paper>
+            {error}
+          </Alert>
+        )}
 
         <Paper
           elevation={0}
@@ -508,6 +922,34 @@ const Schedule = ({
                         true
                       );
                     }}
+                    onPreparationDeleted={(
+                      lectureId
+                    ) => {
+                      setLectures(
+                        (
+                          previous
+                        ) =>
+                          previous.map(
+                            (
+                              lecture
+                            ) =>
+                              getLectureId(
+                                lecture
+                              ) ===
+                              lectureId
+                                ? {
+                                    ...lecture,
+                                    preparation:
+                                      null,
+                                  }
+                                : lecture
+                          )
+                      );
+
+                      invalidateTeacherSchedule(
+                        teacherData._id
+                      );
+                    }}
                   />
                 )
               )}
@@ -562,6 +1004,7 @@ const ScheduleRow = ({
   permissions,
   navigate,
   onDelete,
+  onPreparationDeleted,
 }) => {
   return (
     <>
@@ -738,6 +1181,11 @@ const ScheduleRow = ({
                   preparation={
                     lesson.preparation
                   }
+                  onDeleted={() =>
+                    onPreparationDeleted?.(
+                      lesson.id
+                    )
+                  }
                 />
 
                 {permissions.delete && (
@@ -820,6 +1268,7 @@ const ScheduleRow = ({
 const LecturePreparation = ({
   lectureId,
   preparation,
+  onDeleted,
 }) => {
   const navigate = useNavigate();
 
@@ -872,7 +1321,7 @@ const LecturePreparation = ({
           "تم حذف التحضير بنجاح"
         );
 
-        window.location.reload();
+        onDeleted?.();
       } catch (error) {
         toast.error(
           error?.response?.data
@@ -883,20 +1332,6 @@ const LecturePreparation = ({
         setLoading(false);
       }
     };
-
-  if (preparation === undefined) {
-    return (
-      <Typography
-        sx={{
-          color:
-            "var(--color-muted)",
-          fontSize: "8.5px",
-        }}
-      >
-        جاري تحميل التحضير...
-      </Typography>
-    );
-  }
 
   return (
     <>
@@ -1002,7 +1437,7 @@ const LecturePreparation = ({
             event.stopPropagation();
 
             navigate(
-              `/school/preparation/add/?lectureId=${lectureId}`
+              `/school/preparation/add?lectureId=${lectureId}`
             );
           }}
           sx={{

@@ -1,4 +1,5 @@
 import {
+  Alert,
   Avatar,
   Box,
   Button,
@@ -54,16 +55,235 @@ import { formatDate } from "@/utils/helpers/dateUtils";
 import { useTeacher } from "@/utils/hooks/apis/useTeacher";
 import usePermissions from "@/utils/hooks/usePermissions";
 
-const getSubjects = (teacher) => {
-  const subjects = Array.isArray(
-    teacher?.subjects
-  )
-    ? teacher.subjects
-    : Array.isArray(teacher?.subject)
-    ? teacher.subject
-    : [];
+const hasSubjectField = (
+  teacher
+) =>
+  Boolean(
+    teacher &&
+      typeof teacher === "object" &&
+      (
+        Object.prototype.hasOwnProperty.call(
+          teacher,
+          "subjects"
+        ) ||
+        Object.prototype.hasOwnProperty.call(
+          teacher,
+          "subject"
+        ) ||
+        Object.prototype.hasOwnProperty.call(
+          teacher,
+          "subjectIds"
+        )
+      )
+  );
 
-  return subjects;
+const getSubjects = (
+  teacher
+) => {
+  if (
+    Array.isArray(
+      teacher?.subjects
+    )
+  ) {
+    return teacher.subjects;
+  }
+
+  if (
+    Array.isArray(
+      teacher?.subject
+    )
+  ) {
+    return teacher.subject;
+  }
+
+  if (
+    Array.isArray(
+      teacher?.subjectIds
+    )
+  ) {
+    return teacher.subjectIds.map(
+      (subject) =>
+        typeof subject ===
+          "object"
+          ? subject
+          : {
+              _id: subject,
+            }
+    );
+  }
+
+  return [];
+};
+
+const getSubjectId = (
+  subject
+) =>
+  typeof subject ===
+    "string"
+    ? subject
+    : subject?._id ||
+      subject?.id ||
+      "";
+
+const getTeacherSubjectsStorageKey = (
+  teacherId
+) => {
+  const schoolId =
+    localStorage.getItem(
+      "schoolId"
+    ) || "school";
+
+  return `nasaq:teacher-subjects:${schoolId}:${teacherId}`;
+};
+
+const readStoredTeacherSubjectIds = (
+  teacherId
+) => {
+  if (!teacherId) {
+    return [];
+  }
+
+  try {
+    const stored =
+      JSON.parse(
+        localStorage.getItem(
+          getTeacherSubjectsStorageKey(
+            teacherId
+          )
+        ) || "[]"
+      );
+
+    return Array.isArray(stored)
+      ? Array.from(
+          new Set(
+            stored
+              .map(
+                (value) =>
+                  String(
+                    value || ""
+                  ).trim()
+              )
+              .filter(Boolean)
+          )
+        )
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const storeTeacherSubjectIds = (
+  teacherId,
+  subjectIds
+) => {
+  if (!teacherId) {
+    return;
+  }
+
+  const normalizedIds =
+    Array.from(
+      new Set(
+        (
+          Array.isArray(
+            subjectIds
+          )
+            ? subjectIds
+            : []
+        )
+          .map(
+            (value) =>
+              String(
+                value || ""
+              ).trim()
+          )
+          .filter(Boolean)
+      )
+    );
+
+  localStorage.setItem(
+    getTeacherSubjectsStorageKey(
+      teacherId
+    ),
+    JSON.stringify(
+      normalizedIds
+    )
+  );
+};
+
+const clearStoredTeacherSubjectIds = (
+  teacherId
+) => {
+  if (!teacherId) {
+    return;
+  }
+
+  localStorage.removeItem(
+    getTeacherSubjectsStorageKey(
+      teacherId
+    )
+  );
+};
+
+const getSubjectName = (
+  subject
+) =>
+  subject?.subjectName ||
+  subject?.name ||
+  subject?.title ||
+  "";
+
+const getSubjectsSummary = (
+  teacher
+) => {
+  if (
+    !hasSubjectField(
+      teacher
+    )
+  ) {
+    return {
+      available: false,
+      count: null,
+      label:
+        "بيانات المواد غير متاحة من الخادم",
+    };
+  }
+
+  const subjects =
+    getSubjects(
+      teacher
+    );
+
+  const names =
+    subjects
+      .map(
+        getSubjectName
+      )
+      .filter(Boolean);
+
+  if (names.length) {
+    return {
+      available: true,
+      count:
+        subjects.length,
+      label:
+        names.join(" - "),
+    };
+  }
+
+  if (subjects.length) {
+    return {
+      available: true,
+      count:
+        subjects.length,
+      label: `${subjects.length} مادة مرتبطة`,
+    };
+  }
+
+  return {
+    available: true,
+    count: 0,
+    label: "بدون مواد",
+  };
 };
 
 const infoCardSx = {
@@ -165,6 +385,7 @@ const Profile = () => {
   const {
     teacher,
     loading: teacherLoading,
+    error: teacherError,
   } = useTeacher(id);
 
   const [item, setItem] =
@@ -179,16 +400,67 @@ const Profile = () => {
   ] = useState(false);
 
   useEffect(() => {
-    if (teacher) {
-      setItem(teacher);
+    if (!teacher) {
+      return;
     }
-  }, [teacher]);
+
+    const teacherId =
+      teacher?._id ||
+      teacher?.id ||
+      id;
+
+    const backendSubjectIds =
+      getSubjects(
+        teacher
+      )
+        .map(
+          getSubjectId
+        )
+        .filter(Boolean);
+
+    if (
+      hasSubjectField(
+        teacher
+      )
+    ) {
+      storeTeacherSubjectIds(
+        teacherId,
+        backendSubjectIds
+      );
+
+      setItem(
+        teacher
+      );
+
+      return;
+    }
+
+    const storedSubjectIds =
+      readStoredTeacherSubjectIds(
+        teacherId
+      );
+
+    setItem({
+      ...teacher,
+      ...(storedSubjectIds.length
+        ? {
+            subjectIds:
+              storedSubjectIds,
+            __subjectsSource:
+              "local",
+          }
+        : {}),
+    });
+  }, [
+    teacher,
+    id,
+  ]);
 
   const teacherPermissions =
     usePermissions("teachers");
 
-  const subjectPermissions =
-    usePermissions("subjects");
+  const lecturePermissions =
+    usePermissions("lectures");
 
   const handleDelete = async () => {
     try {
@@ -203,6 +475,10 @@ const Profile = () => {
         );
         return;
       }
+
+      clearStoredTeacherSubjectIds(
+        id
+      );
 
       toast.success(
         "تم حذف المعلم بنجاح"
@@ -237,10 +513,22 @@ const Profile = () => {
           return;
         }
 
+        const updatedTeacher =
+          response?.data?.teacher ||
+          response?.data;
+
         setItem((previous) => ({
           ...previous,
+          ...(updatedTeacher &&
+          typeof updatedTeacher ===
+            "object"
+            ? updatedTeacher
+            : {}),
           isActive:
-            !previous.isActive,
+            typeof updatedTeacher?.isActive ===
+              "boolean"
+              ? updatedTeacher.isActive
+              : !previous.isActive,
         }));
 
         toast.success(
@@ -317,7 +605,8 @@ const Profile = () => {
               fontWeight: 800,
             }}
           >
-            لم يتم العثور على بيانات المعلم
+            {teacherError ||
+              "لم يتم العثور على بيانات المعلم"}
           </Typography>
         </Paper>
       </Container>
@@ -341,6 +630,9 @@ const Profile = () => {
           onDelete={() =>
             setDeleteOpen(true)
           }
+          canViewSchedule={
+            lecturePermissions.read
+          }
         />
 
         <TeacherDetails
@@ -351,7 +643,7 @@ const Profile = () => {
           teacher={item}
           setTeacher={setItem}
           permissions={
-            subjectPermissions
+            teacherPermissions
           }
         />
       </Stack>
@@ -373,9 +665,12 @@ const TeacherHeader = ({
   toggleLoading,
   onToggleStatus,
   onDelete,
+  canViewSchedule,
 }) => {
-  const subjects =
-    getSubjects(teacher);
+  const subjectSummary =
+    getSubjectsSummary(
+      teacher
+    );
 
   return (
     <Paper
@@ -416,6 +711,16 @@ const TeacherHeader = ({
         spacing={1.4}
       >
         <Avatar
+          src={
+            teacher?.avatar ||
+            teacher?.avatarUrl ||
+            teacher?.photo ||
+            undefined
+          }
+          alt={
+            teacher?.name ||
+            "المعلم"
+          }
           sx={{
             width: 58,
             height: 58,
@@ -503,7 +808,9 @@ const TeacherHeader = ({
             {teacher.specialization ||
               "بدون تخصص"}
             {" • "}
-            {subjects.length} مادة
+            {subjectSummary.available
+              ? `${subjectSummary.count} مادة`
+              : "المواد غير متاحة"}
           </Typography>
         </Box>
       </Stack>
@@ -518,37 +825,39 @@ const TeacherHeader = ({
           flexShrink: 0,
         }}
       >
-        <Button
-          component={Link}
-          to={`/users/teachers/${teacher._id}/schedule`}
-          variant="outlined"
-          startIcon={
-            <CalendarMonthOutlined />
-          }
-          sx={{
-            minHeight: 42,
-            px: 1.7,
+        {canViewSchedule && (
+          <Button
+            component={Link}
+            to={`/users/teachers/${teacher._id}/schedule`}
+            variant="outlined"
+            startIcon={
+              <CalendarMonthOutlined />
+            }
+            sx={{
+              minHeight: 42,
+              px: 1.7,
 
-            borderRadius: "12px",
+              borderRadius: "12px",
 
-            color:
-              "var(--color-navy)",
-            borderColor:
-              "rgba(36, 74, 112, 0.16)",
+              color:
+                "var(--color-navy)",
+              borderColor:
+                "rgba(36, 74, 112, 0.16)",
 
-            fontSize: "11px",
-            fontWeight: 800,
-            textTransform: "none",
+              fontSize: "11px",
+              fontWeight: 800,
+              textTransform: "none",
 
-            "& .MuiButton-startIcon":
-              {
-                marginLeft: "6px",
-                marginRight: 0,
-              },
-          }}
-        >
-          الجدول الدراسي
-        </Button>
+              "& .MuiButton-startIcon":
+                {
+                  marginLeft: "6px",
+                  marginRight: 0,
+                },
+            }}
+          >
+            الجدول الدراسي
+          </Button>
+        )}
 
         {permissions.edit && (
           <>
@@ -666,8 +975,10 @@ const TeacherHeader = ({
 const TeacherDetails = ({
   teacher,
 }) => {
-  const subjects =
-    getSubjects(teacher);
+  const subjectSummary =
+    getSubjectsSummary(
+      teacher
+    );
 
   const data = [
     {
@@ -728,15 +1039,7 @@ const TeacherDetails = ({
     {
       label: "المواد الدراسية",
       value:
-        subjects
-          .map(
-            (subject) =>
-              subject?.subjectName ||
-              subject?.name
-          )
-          .filter(Boolean)
-          .join(" - ") ||
-        "لا يوجد",
+        subjectSummary.label,
       icon: <MenuBookRounded />,
     },
   ];
@@ -814,18 +1117,27 @@ const TeacherSubjects = ({
   const { id } = useParams();
 
   const subjects =
-    getSubjects(teacher);
+    getSubjects(
+      teacher
+    );
+
+  const subjectsAvailable =
+    hasSubjectField(
+      teacher
+    );
 
   const originalIds = useMemo(
     () =>
       subjects
         .map(
-          (subject) =>
-            subject?._id ||
-            subject?.id
+          getSubjectId
         )
         .filter(Boolean),
-    [subjects]
+    [
+      JSON.stringify(
+        subjects
+      ),
+    ]
   );
 
   const [
@@ -895,15 +1207,34 @@ const TeacherSubjects = ({
         }
 
         const updatedTeacher =
-          response?.data?.teacher;
+          response?.data?.teacher ||
+          response?.data;
+
+        const responseHasSubjects =
+          hasSubjectField(
+            updatedTeacher
+          );
+
+        storeTeacherSubjectIds(
+          id,
+          selectedSubjects
+        );
 
         setTeacher((previous) => ({
           ...previous,
-          ...(updatedTeacher || {}),
-          subjects:
-            updatedTeacher?.subjects ||
-            updatedTeacher?.subject ||
-            previous.subjects,
+          ...(updatedTeacher &&
+          typeof updatedTeacher ===
+            "object"
+            ? updatedTeacher
+            : {}),
+          ...(responseHasSubjects
+            ? {}
+            : {
+                subjectIds:
+                  selectedSubjects,
+                __subjectsSource:
+                  "local",
+              }),
         }));
 
         toast.success(
@@ -1009,6 +1340,26 @@ const TeacherSubjects = ({
           </Button>
         )}
       </Stack>
+
+      {!subjectsAvailable && (
+        <Alert
+          severity="info"
+          sx={{
+            mb: 1,
+            borderRadius:
+              "12px",
+            fontSize:
+              "9.5px",
+            "& .MuiAlert-message":
+              {
+                py: 0.25,
+              },
+          }}
+        >
+          الخادم لم يُرجع المواد المرتبطة بهذا المعلم.
+          يمكنك اختيار المواد وحفظها، لكن قد لا تظهر أسماؤها بعد تحديث الصفحة حتى يدعمها الـAPI.
+        </Alert>
+      )}
 
       <Box
         sx={{

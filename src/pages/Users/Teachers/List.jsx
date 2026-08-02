@@ -1,267 +1,613 @@
 import {
+  AddRounded,
+  AdminPanelSettingsRounded,
+  CheckCircleRounded,
+  GroupsRounded,
+  PersonOffRounded,
+  RefreshRounded,
+  SearchRounded,
+  SupervisorAccountRounded,
+} from "@mui/icons-material";
+
+import {
+  Alert,
   Box,
   Button,
   Chip,
-  Grid,
+  InputAdornment,
+  MenuItem,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 
 import {
-  AddCircleOutlineOutlined,
-  CheckCircleRounded,
-  FileDownloadOutlined,
-  Groups2Rounded,
-  MenuBookRounded,
-  PeopleAltRounded,
-  RestartAltRounded,
-  SortRounded,
-} from "@mui/icons-material";
-
-import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
 
-import { CSVLink } from "react-csv";
-import { Link } from "react-router-dom";
-import { toast } from "react-toastify";
+import {
+  useAuthUser,
+} from "react-auth-kit";
+
+import {
+  useNavigate,
+} from "react-router-dom";
+
+import {
+  toast,
+} from "react-toastify";
 
 import Container from "@/components/Container/Container";
-import Table from "@/components/Table/Table";
-import SearchFilter from "@/components/Filters/SearchFilter";
-import SelectFilter from "@/components/Filters/SelectFilter";
 import PaginationControls from "@/components/Pagination";
 
-import { deleteTeacher } from "@/APIs/users/teachers";
-import { useTeachers } from "@/utils/hooks/apis/useTeachers";
+import TeacherDeleteDialog from "@/components/school/teachers/TeacherDeleteDialog";
+import TeacherManagerRoleDialog from "@/components/school/teachers/TeacherManagerRoleDialog";
+import TeacherStatusDialog from "@/components/school/teachers/TeacherStatusDialog";
+import TeachersTable from "@/components/school/teachers/TeachersTable";
+
+import {
+  getSchoolTeachers,
+  toggleSchoolTeacherActive,
+  deleteSchoolTeacher,
+} from "@/APIs/school/teachers";
+
+import {
+  demoteTeacherFromManager,
+  promoteTeacherToManager,
+} from "@/APIs/school/managers";
+
+import {
+  ROLES,
+} from "@/shared/auth/roles";
+
 import useDebounce from "@/utils/hooks/useDebounce";
 import usePermissions from "@/utils/hooks/usePermissions";
 
-import Status from "@/utils/constants/Status";
+import {
+  getTeacherId,
+  isTeacherActive,
+  isTeacherManager,
+} from "@/utils/school/teacherData";
 
-const TABLE_HEADERS = [
-  "اسم المعلم",
-  "رقم الهاتف",
-  "البريد الإلكتروني",
-  "المواد الدراسية",
-  "الحالة",
-];
+import {
+  getSchoolSessionInfo,
+} from "@/utils/school/schoolSession";
 
-const TABLE_BODY = [
-  "name",
-  "phone",
-  "email",
-  "subjects",
-  "status",
-];
+const extractTeachers = (
+  value
+) => {
+  if (
+    Array.isArray(value)
+  ) {
+    return value;
+  }
 
-const getTeacherSubjects = (teacher) => {
-  const subjects = Array.isArray(teacher?.subject)
-    ? teacher.subject
-    : Array.isArray(teacher?.subjects)
-    ? teacher.subjects
-    : [];
-
-  return subjects
-    .map(
-      (subject) =>
-        subject?.subjectName ||
-        subject?.name ||
-        subject?.title
-    )
-    .filter(Boolean);
+  return (
+    [
+      value?.docs,
+      value?.items,
+      value?.teachers,
+      value?.results,
+      value?.records,
+      value?.data,
+    ].find(
+      Array.isArray
+    ) || []
+  );
 };
 
-const mapTeachers = (data = []) =>
-  data.map((teacher) => {
-    const subjectNames =
-      getTeacherSubjects(teacher);
+const extractPagination = (
+  value,
+  page,
+  limit
+) => {
+  const source =
+    value?.pagination ||
+    value?.meta ||
+    value;
 
-    const teacherName =
-      teacher?.name ||
-      [
-        teacher?.firstName,
-        teacher?.fatherName,
-        teacher?.familyName,
-      ]
-        .filter(Boolean)
-        .join(" ");
+  const totalDocs =
+    Number(
+      source?.totalDocs ??
+      source?.total ??
+      source?.count
+    );
 
-    return {
-      id: teacher?._id,
-      name: teacherName || "—",
-      phone:
-        teacher?.phoneNumber ||
-        teacher?.phone ||
-        "—",
-      email: teacher?.email || "—",
-      subjects:
-        subjectNames.length > 0
-          ? subjectNames.join(" - ")
-          : "لا يوجد",
-      subjectNames,
-      status: teacher?.isActive
-        ? "نشط"
-        : "غير نشط",
-    };
-  });
+  const totalPages =
+    Number(
+      source?.totalPages ??
+      source?.pages
+    );
 
-const STAT_CARDS = [
-  {
-    key: "total",
-    label: "إجمالي المعلمين",
-    icon: <PeopleAltRounded />,
-  },
-  {
-    key: "visible",
-    label: "الظاهر في الصفحة",
-    icon: <Groups2Rounded />,
-  },
-  {
-    key: "active",
-    label: "المعلمون النشطون",
-    icon: <CheckCircleRounded />,
-  },
-  {
-    key: "subjects",
-    label: "المواد الظاهرة",
-    icon: <MenuBookRounded />,
-  },
-];
+  if (
+    !Number.isFinite(
+      totalDocs
+    ) &&
+    !Number.isFinite(
+      totalPages
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    ...source,
+    page:
+      Number(
+        source?.page ??
+        source?.currentPage
+      ) ||
+      page,
+    limit:
+      Number(
+        source?.limit ??
+        source?.pageSize
+      ) ||
+      limit,
+    totalDocs:
+      Number.isFinite(
+        totalDocs
+      )
+        ? totalDocs
+        : 0,
+    totalPages:
+      Number.isFinite(
+        totalPages
+      )
+        ? totalPages
+        : 1,
+  };
+};
+
+const StatCard = ({
+  label,
+  value,
+  icon,
+}) => (
+  <Paper
+    elevation={0}
+    sx={{
+      minHeight: 82,
+      p: 1.25,
+      display: "flex",
+      alignItems:
+        "center",
+      gap: 0.9,
+      borderRadius:
+        "15px",
+      border:
+        "1px solid #ded8cd",
+      backgroundColor:
+        "#ffffff",
+      boxShadow:
+        "0 7px 20px rgba(36,74,112,0.035)",
+    }}
+  >
+    <Box
+      sx={{
+        width: 40,
+        height: 40,
+        flexShrink: 0,
+        display: "grid",
+        placeItems:
+          "center",
+        borderRadius:
+          "11px",
+        color:
+          "#b78430",
+        backgroundColor:
+          "#fbf0d8",
+        "& svg": {
+          fontSize: 20,
+        },
+      }}
+    >
+      {icon}
+    </Box>
+
+    <Box>
+      <Typography
+        sx={{
+          color:
+            "#7e8791",
+          fontSize:
+            "8px",
+          fontWeight:
+            700,
+        }}
+      >
+        {label}
+      </Typography>
+
+      <Typography
+        sx={{
+          mt: 0.1,
+          color:
+            "#122f4d",
+          fontSize:
+            "19px",
+          fontWeight:
+            800,
+        }}
+      >
+        {value}
+      </Typography>
+    </Box>
+  </Paper>
+);
 
 const List = () => {
-  const [items, setItems] = useState([]);
+  const navigate =
+    useNavigate();
 
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const getAuthUser =
+    useAuthUser();
 
-  const [limit, setLimit] = useState(10);
-  const [page, setPage] = useState(1);
-
-  const [
-    localPagination,
-    setLocalPagination,
-  ] = useState(null);
-
-  const debouncedSearch = useDebounce(
-    search,
-    700
-  );
-
-  const filters = useMemo(
-    () => ({
-      page,
-      limit,
-      name:
-        debouncedSearch || undefined,
-      isActive:
-        status !== ""
-          ? Boolean(Number(status))
-          : undefined,
-    }),
-    [
-      page,
-      limit,
-      debouncedSearch,
-      status,
-    ]
-  );
+  const authState =
+    getAuthUser();
 
   const {
-    teachers,
-    loading,
-    pagination,
-  } = useTeachers(filters);
+    role,
+  } =
+    getSchoolSessionInfo(
+      authState
+    );
 
   const permissions =
-    usePermissions("teachers");
+    usePermissions(
+      "teachers"
+    );
+
+  const canManageRole =
+    role === ROLES.OWNER;
+
+  const [
+    teachers,
+    setTeachers,
+  ] = useState([]);
+
+  const [
+    pagination,
+    setPagination,
+  ] = useState(null);
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    error,
+    setError,
+  ] = useState("");
+
+  const [search, setSearch] =
+    useState("");
+
+  const [status, setStatus] =
+    useState("");
+
+  const [page, setPage] =
+    useState(1);
+
+  const [limit, setLimit] =
+    useState(10);
+
+  const [
+    selectedTeacher,
+    setSelectedTeacher,
+  ] = useState(null);
+
+  const [
+    statusOpen,
+    setStatusOpen,
+  ] = useState(false);
+
+  const [
+    statusLoading,
+    setStatusLoading,
+  ] = useState(false);
+
+  const [
+    roleOpen,
+    setRoleOpen,
+  ] = useState(false);
+
+  const [
+    roleLoading,
+    setRoleLoading,
+  ] = useState(false);
+
+  const [
+    deleteOpen,
+    setDeleteOpen,
+  ] = useState(false);
+
+  const [
+    deleteLoading,
+    setDeleteLoading,
+  ] = useState(false);
+
+  const debouncedSearch =
+    useDebounce(
+      search,
+      500
+    );
+
+  const filters =
+    useMemo(
+      () => ({
+        page,
+        limit,
+        name:
+          debouncedSearch ||
+          undefined,
+        isActive:
+          status === ""
+            ? undefined
+            : status ===
+              "true",
+      }),
+      [
+        page,
+        limit,
+        debouncedSearch,
+        status,
+      ]
+    );
+
+  const loadTeachers =
+    useCallback(
+      async ({
+        force = false,
+        silent = false,
+      } = {}) => {
+        if (!silent) {
+          setLoading(true);
+        }
+
+        setError("");
+
+        const response =
+          await getSchoolTeachers(
+            filters,
+            {
+              force,
+            }
+          );
+
+        if (
+          response?.status ===
+            false
+        ) {
+          setTeachers([]);
+          setPagination(null);
+          setError(
+            response?.message ||
+            "تعذر تحميل المعلمين"
+          );
+          setLoading(false);
+          return;
+        }
+
+        const nextTeachers =
+          extractTeachers(
+            response?.data
+          );
+
+        setTeachers(
+          nextTeachers
+        );
+
+        setPagination(
+          extractPagination(
+            response?.data,
+            page,
+            limit
+          )
+        );
+
+        setLoading(false);
+      },
+      [
+        JSON.stringify(
+          filters
+        ),
+      ]
+    );
 
   useEffect(() => {
-    setItems(mapTeachers(teachers));
-  }, [teachers]);
-
-  useEffect(() => {
-    if (pagination) {
-      setLocalPagination(pagination);
-    }
-  }, [pagination]);
+    loadTeachers();
+  }, [loadTeachers]);
 
   useEffect(() => {
     setPage(1);
   }, [
-    limit,
     debouncedSearch,
     status,
+    limit,
   ]);
 
-  const currentPagination =
-    localPagination || pagination;
+  const stats =
+    useMemo(
+      () => ({
+        total:
+          pagination?.totalDocs ??
+          teachers.length,
 
-  const activeFiltersCount = [
-    search,
-    status,
-  ].filter(Boolean).length;
+        visible:
+          teachers.length,
 
-  const stats = useMemo(() => {
-    const activeTeachers = items.filter(
-      (teacher) =>
-        teacher.status === "نشط"
-    ).length;
+        active:
+          teachers.filter(
+            isTeacherActive
+          ).length,
 
-    const visibleSubjects = new Set(
-      items.flatMap(
-        (teacher) =>
-          teacher.subjectNames || []
-      )
-    ).size;
+        managers:
+          teachers.filter(
+            isTeacherManager
+          ).length,
+      }),
+      [
+        teachers,
+        pagination,
+      ]
+    );
 
-    return {
-      total:
-        currentPagination?.totalDocs ??
-        items.length,
-      visible: items.length,
-      active: activeTeachers,
-      subjects: visibleSubjects,
-    };
-  }, [items, currentPagination]);
+  const handleStatusConfirm =
+    async () => {
+      const teacherId =
+        getTeacherId(
+          selectedTeacher
+        );
 
-  const csvData = useMemo(
-    () =>
-      items.map((teacher) => ({
-        "اسم المعلم": teacher.name,
-        "رقم الهاتف": teacher.phone,
-        "البريد الإلكتروني":
-          teacher.email,
-        "المواد الدراسية":
-          teacher.subjects,
-        الحالة: teacher.status,
-      })),
-    [items]
-  );
+      if (!teacherId) {
+        toast.error(
+          "معرّف المعلم غير موجود"
+        );
+        return;
+      }
 
-  const resetFilters = () => {
-    setSearch("");
-    setStatus("");
-    setPage(1);
-  };
+      setStatusLoading(true);
 
-  const handleDelete = async (
-    id,
-    setActive
-  ) => {
-    try {
       const response =
-        await deleteTeacher(id);
+        await toggleSchoolTeacherActive(
+          teacherId
+        );
 
-      if (!response?.status) {
+      if (
+        response?.status ===
+          false
+      ) {
         toast.error(
           response?.message ||
-            response ||
-            "تعذر حذف المعلم"
+          "تعذر تغيير حالة المعلم"
         );
+        setStatusLoading(false);
+        return;
+      }
+
+      toast.success(
+        isTeacherActive(
+          selectedTeacher
+        )
+          ? "تم إيقاف حساب المعلم"
+          : "تم تفعيل حساب المعلم"
+      );
+
+      setStatusOpen(false);
+      setSelectedTeacher(null);
+      setStatusLoading(false);
+
+      await loadTeachers({
+        force: true,
+        silent: true,
+      });
+    };
+
+  const handleRoleConfirm =
+    async () => {
+      if (!canManageRole) {
+        toast.error(
+          "هذه العملية متاحة لمالك المدرسة فقط"
+        );
+        return;
+      }
+
+      const teacherId =
+        getTeacherId(
+          selectedTeacher
+        );
+
+      if (!teacherId) {
+        toast.error(
+          "معرّف المعلم غير موجود"
+        );
+        return;
+      }
+
+      const wasManager =
+        isTeacherManager(
+          selectedTeacher
+        );
+
+      setRoleLoading(true);
+
+      const response =
+        wasManager
+          ? await demoteTeacherFromManager(
+              teacherId
+            )
+          : await promoteTeacherToManager(
+              teacherId
+            );
+
+      if (
+        response?.status ===
+          false
+      ) {
+        toast.error(
+          response?.message ||
+          (
+            wasManager
+              ? "تعذر إلغاء دور المدير"
+              : "تعذر ترقية المعلم"
+          )
+        );
+        setRoleLoading(false);
+        return;
+      }
+
+      toast.success(
+        wasManager
+          ? "تم إلغاء دور المدير وإعادة الحساب إلى معلم"
+          : "تمت ترقية المعلم إلى مدير بنجاح"
+      );
+
+      setRoleOpen(false);
+      setSelectedTeacher(null);
+      setRoleLoading(false);
+
+      await loadTeachers({
+        force: true,
+        silent: true,
+      });
+    };
+
+  const handleDeleteConfirm =
+    async () => {
+      const teacherId =
+        getTeacherId(
+          selectedTeacher
+        );
+
+      if (!teacherId) {
+        toast.error(
+          "معرّف المعلم غير موجود"
+        );
+        return;
+      }
+
+      setDeleteLoading(true);
+
+      const response =
+        await deleteSchoolTeacher(
+          teacherId
+        );
+
+      if (
+        response?.status ===
+          false
+      ) {
+        toast.error(
+          response?.message ||
+          "تعذر حذف المعلم"
+        );
+        setDeleteLoading(false);
         return;
       }
 
@@ -269,39 +615,26 @@ const List = () => {
         "تم حذف المعلم بنجاح"
       );
 
-      setItems((previousItems) =>
-        previousItems.filter(
-          (teacher) =>
-            teacher.id !== id
-        )
-      );
+      setDeleteOpen(false);
+      setSelectedTeacher(null);
+      setDeleteLoading(false);
 
-      setLocalPagination(
-        (previousPagination) => {
-          if (!previousPagination) {
-            return previousPagination;
-          }
+      if (
+        teachers.length === 1 &&
+        page > 1
+      ) {
+        setPage(
+          (previous) =>
+            previous - 1
+        );
+        return;
+      }
 
-          return {
-            ...previousPagination,
-            totalDocs: Math.max(
-              0,
-              (previousPagination.totalDocs ||
-                1) - 1
-            ),
-          };
-        }
-      );
-
-      setActive(false);
-    } catch (error) {
-      toast.error(
-        error?.response?.data
-          ?.message ||
-          "حدث خطأ أثناء حذف المعلم"
-      );
-    }
-  };
+      await loadTeachers({
+        force: true,
+        silent: true,
+      });
+    };
 
   return (
     <Container>
@@ -309,140 +642,85 @@ const List = () => {
         dir="rtl"
         sx={{
           pb: 4,
-          color:
-            "var(--color-text)",
-
-          "@media (prefers-reduced-motion: reduce)":
-            {
-              "&, & *": {
-                transition:
-                  "none !important",
-                animation:
-                  "none !important",
-                transform:
-                  "none !important",
-              },
-            },
         }}
       >
-        {/* Page header */}
         <Paper
           elevation={0}
           sx={{
-            mb: 1.25,
-
-            px: {
+            p: {
               xs: 1.7,
-              sm: 2,
-              md: 2.4,
+              md: 2.1,
             },
-
-            py: {
-              xs: 1.4,
-              md: 1.6,
-            },
-
+            borderRadius:
+              "18px",
             border:
-              "1px solid rgba(36, 74, 112, 0.08)",
-            borderRadius: "18px",
-
+              "1px solid rgba(36,74,112,0.08)",
             background:
-              "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.42))",
-
+              "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.44))",
             boxShadow:
               "0 10px 24px rgba(18,47,77,0.06)",
-
-            transition:
-              "transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease",
-
-            "&:hover": {
-              transform:
-                "translateY(-2px)",
-              borderColor:
-                "rgba(211,164,79,0.22)",
-              boxShadow:
-                "0 16px 34px rgba(18,47,77,0.10)",
-            },
           }}
         >
           <Stack
             direction={{
               xs: "column",
-              sm: "row",
+              md: "row",
             }}
             alignItems={{
               xs: "stretch",
-              sm: "center",
+              md: "center",
             }}
             justifyContent="space-between"
-            spacing={1.5}
+            spacing={1.4}
           >
             <Box>
               <Stack
                 direction="row"
                 alignItems="center"
-                spacing={0.8}
+                spacing={0.7}
               >
                 <Typography
                   component="h1"
                   sx={{
                     color:
-                      "var(--color-navy-deep)",
-
+                      "#122f4d",
                     fontSize: {
                       xs: "21px",
                       md: "25px",
                     },
-
-                    fontWeight: 800,
-                    lineHeight: 1.3,
+                    fontWeight:
+                      800,
                   }}
                 >
                   إدارة المعلمين
                 </Typography>
 
                 <Chip
-                  label={
-                    currentPagination
-                      ?.totalDocs ??
-                    items.length
-                  }
                   size="small"
+                  label={
+                    stats.total
+                  }
                   sx={{
-                    height: 26,
-
                     color:
-                      "var(--color-gold-dark)",
+                      "#b78430",
                     backgroundColor:
-                      "var(--color-gold-soft)",
-
-                    border:
-                      "1px solid rgba(211,164,79,0.24)",
-
-                    fontSize: "10px",
-                    fontWeight: 800,
-
-                    "& .MuiChip-label":
-                      {
-                        px: 1,
-                      },
+                      "#fbf0d8",
+                    fontWeight:
+                      800,
                   }}
                 />
               </Stack>
 
               <Typography
                 sx={{
-                  mt: 0.45,
-
+                  mt: 0.35,
                   color:
-                    "var(--color-muted)",
-                  fontSize: "11px",
-                  lineHeight: 1.6,
+                    "#7e8791",
+                  fontSize:
+                    "10px",
                 }}
               >
-                عرض بيانات المعلمين
-                وإدارتها والبحث عنها من
-                مكان واحد.
+                إدارة بيانات المعلمين وحالات الحسابات والأدوار الإدارية.
               </Typography>
             </Box>
 
@@ -451,163 +729,64 @@ const List = () => {
                 xs: "column",
                 sm: "row",
               }}
-              alignItems="center"
-              justifyContent="flex-start"
-              gap={1.25}
-              sx={{
-                width: {
-                  xs: "100%",
-                  sm: "auto",
-                },
-                flexShrink: 0,
-              }}
+              spacing={0.8}
             >
-              <Box
-                component={CSVLink}
-                data={csvData}
-                filename="teachers.csv"
+              <Button
+                type="button"
+                onClick={() =>
+                  loadTeachers({
+                    force: true,
+                  })
+                }
+                startIcon={
+                  <RefreshRounded />
+                }
+                variant="outlined"
                 sx={{
-                  width: {
-                    xs: "100%",
-                    sm: "auto",
-                  },
-                  display:
-                    "inline-flex",
-                  textDecoration: "none",
+                  minHeight: 42,
+                  borderRadius:
+                    "12px",
+                  color:
+                    "#244a70",
+                  borderColor:
+                    "rgba(36,74,112,0.18)",
+                  fontWeight:
+                    800,
                 }}
               >
-                <Button
-                  disabled={
-                    items.length === 0
-                  }
-                  variant="outlined"
-                  startIcon={
-                    <FileDownloadOutlined />
-                  }
-                  sx={{
-                    width: {
-                      xs: "100%",
-                      sm: 112,
-                    },
-                    minHeight: 42,
-                    px: 1.8,
-
-                    borderRadius:
-                      "12px",
-
-                    color:
-                      "var(--color-navy)",
-                    backgroundColor:
-                      "rgba(255, 252, 247, 0.84)",
-                    borderColor:
-                      "rgba(36, 74, 112, 0.16)",
-
-                    boxShadow: "none",
-
-                    transition:
-                      "transform 180ms ease, box-shadow 180ms ease, color 180ms ease, background-color 180ms ease, border-color 180ms ease",
-
-                    fontSize: "12px",
-                    fontWeight: 800,
-                    whiteSpace:
-                      "nowrap",
-                    textTransform:
-                      "none",
-
-                    "& .MuiButton-startIcon":
-                      {
-                        marginLeft:
-                          "7px",
-                        marginRight: 0,
-                      },
-
-                    "& svg": {
-                      fontSize: "18px",
-                    },
-
-                    "&:hover": {
-                      color:
-                        "var(--color-gold-dark)",
-                      backgroundColor:
-                        "var(--color-gold-soft)",
-                      borderColor:
-                        "rgba(211, 164, 79, 0.42)",
-                      boxShadow:
-                        "0 7px 16px rgba(18, 47, 77, 0.08)",
-                      transform:
-                        "translateY(-1px)",
-                    },
-
-                    "&.Mui-disabled":
-                      {
-                        color:
-                          "rgba(126, 135, 145, 0.65)",
-                        backgroundColor:
-                          "rgba(240, 237, 230, 0.64)",
-                        borderColor:
-                          "rgba(36, 74, 112, 0.08)",
-                      },
-                  }}
-                >
-                  تصدير
-                </Button>
-              </Box>
+                تحديث
+              </Button>
 
               {permissions.add && (
                 <Button
-                  component={Link}
-                  to="add"
-                  variant="contained"
-                  startIcon={
-                    <AddCircleOutlineOutlined />
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      "/users/teachers/add"
+                    )
                   }
+                  startIcon={
+                    <AddRounded />
+                  }
+                  variant="contained"
                   sx={{
-                    width: {
-                      xs: "100%",
-                      sm: 178,
-                    },
                     minHeight: 42,
                     px: 2,
-
                     borderRadius:
                       "12px",
-
                     color:
-                      "var(--color-white)",
-                    background:
-                      "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-
+                      "#ffffff",
+                    backgroundColor:
+                      "#244a70",
+                    fontWeight:
+                      800,
                     boxShadow:
-                      "0 9px 20px rgba(18, 47, 77, 0.16)",
-
-                    transition:
-                      "transform 180ms ease, box-shadow 180ms ease, background 180ms ease",
-
-                    fontSize: "12px",
-                    fontWeight: 800,
-                    whiteSpace:
-                      "nowrap",
-                    textTransform:
                       "none",
-
-                    "& .MuiButton-startIcon":
-                      {
-                        marginLeft:
-                          "7px",
-                        marginRight: 0,
-                      },
-
-                    "& svg": {
-                      fontSize: "19px",
-                    },
-
                     "&:hover": {
-                      background:
-                        "linear-gradient(135deg, var(--color-navy), var(--color-navy-deep))",
+                      backgroundColor:
+                        "#1b3d61",
                       boxShadow:
-                        "0 12px 24px rgba(18, 47, 77, 0.21)",
-                      transform:
-                        "translateY(-1px)",
+                        "none",
                     },
                   }}
                 >
@@ -618,547 +797,363 @@ const List = () => {
           </Stack>
         </Paper>
 
-        {/* Statistics */}
         <Box
           sx={{
-            mb: 1.25,
-
+            mt: 1.25,
             display: "grid",
             gridTemplateColumns: {
-              xs: "repeat(2, minmax(0, 1fr))",
-              lg: "repeat(4, minmax(0, 1fr))",
+              xs: "1fr 1fr",
+              lg:
+                "repeat(4,minmax(0,1fr))",
             },
-
             gap: 1,
           }}
         >
-          {STAT_CARDS.map((card) => (
-            <Paper
-              key={card.key}
-              elevation={0}
-              sx={{
-                p: 1.3,
+          <StatCard
+            label="إجمالي المعلمين"
+            value={stats.total}
+            icon={
+              <GroupsRounded />
+            }
+          />
 
-                display: "flex",
-                alignItems: "center",
-                justifyContent:
-                  "space-between",
-                gap: 1.5,
+          <StatCard
+            label="الظاهر في الصفحة"
+            value={stats.visible}
+            icon={
+              <SupervisorAccountRounded />
+            }
+          />
 
-                border:
-                  "1px solid rgba(36,74,112,0.08)",
-                borderRadius: "18px",
+          <StatCard
+            label="الحسابات النشطة"
+            value={stats.active}
+            icon={
+              <CheckCircleRounded />
+            }
+          />
 
-                backgroundColor:
-                  "var(--color-cream)",
-
-                boxShadow:
-                  "0 10px 24px rgba(18,47,77,0.055)",
-
-                transition:
-                  "transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease, background-color 200ms ease",
-
-                "& .stats-card-icon":
-                  {
-                    transition:
-                      "transform 220ms ease, box-shadow 220ms ease, background-color 220ms ease",
-                  },
-
-                "&:hover": {
-                  transform:
-                    "translateY(-4px)",
-                  borderColor:
-                    "rgba(211,164,79,0.25)",
-                  backgroundColor:
-                    "var(--color-white)",
-                  boxShadow:
-                    "0 17px 32px rgba(18,47,77,0.11)",
-                },
-
-                "&:hover .stats-card-icon":
-                  {
-                    transform:
-                      "scale(1.08) rotate(-4deg)",
-                    backgroundColor:
-                      "rgba(242,215,146,0.58)",
-                    boxShadow:
-                      "0 8px 16px rgba(211,164,79,0.16)",
-                  },
-              }}
-            >
-              <Box>
-                <Typography
-                  sx={{
-                    color:
-                      "var(--color-muted)",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                  }}
-                >
-                  {card.label}
-                </Typography>
-
-                <Typography
-                  sx={{
-                    mt: 0.4,
-
-                    color:
-                      "var(--color-navy-deep)",
-                    fontSize: "21px",
-                    fontWeight: 800,
-                  }}
-                >
-                  {stats[card.key]}
-                </Typography>
-              </Box>
-
-              <Box
-                className="stats-card-icon"
-                sx={{
-                  width: 40,
-                  height: 40,
-
-                  display: "grid",
-                  placeItems: "center",
-                  flexShrink: 0,
-
-                  color:
-                    "var(--color-gold-dark)",
-                  backgroundColor:
-                    "var(--color-gold-soft)",
-
-                  border:
-                    "1px solid rgba(211,164,79,0.22)",
-                  borderRadius: "12px",
-
-                  "& svg": {
-                    fontSize: 21,
-                  },
-                }}
-              >
-                {card.icon}
-              </Box>
-            </Paper>
-          ))}
+          <StatCard
+            label="معلمون بدور مدير"
+            value={stats.managers}
+            icon={
+              <AdminPanelSettingsRounded />
+            }
+          />
         </Box>
 
-        {/* Search and filters */}
         <Paper
           elevation={0}
           sx={{
-            mb: 1.25,
-
-            px: {
-              xs: 1.5,
-              md: 1.75,
-            },
-
-            py: {
-              xs: 1.4,
-              md: 1.55,
-            },
-
+            mt: 1.25,
+            p: 1.2,
+            borderRadius:
+              "16px",
             border:
-              "1px solid rgba(36,74,112,0.08)",
-            borderRadius: "18px",
-
+              "1px solid #ded8cd",
             backgroundColor:
-              "var(--color-cream)",
-
-            boxShadow:
-              "0 9px 22px rgba(18,47,77,0.05)",
-
-            transition:
-              "transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease",
-
-            "&:hover": {
-              transform:
-                "translateY(-2px)",
-              borderColor:
-                "rgba(36,74,112,0.13)",
-              boxShadow:
-                "0 15px 30px rgba(18,47,77,0.085)",
-            },
-
-            "& .MuiFormControl-root": {
-              width: "100%",
-              margin: 0,
-            },
-
-            "& .MuiInputBase-root, & .MuiOutlinedInput-root":
-              {
-                minHeight: 48,
-                height: 48,
-
-                backgroundColor:
-                  "var(--color-white)",
-                borderRadius: "13px",
-                fontSize: "12px",
-
-                transition:
-                  "transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease",
-              },
-
-            "& .MuiInputBase-root:hover, & .MuiOutlinedInput-root:hover":
-              {
-                transform:
-                  "translateY(-1px)",
-                backgroundColor:
-                  "rgba(255,255,255,0.98)",
-                boxShadow:
-                  "0 7px 16px rgba(18,47,77,0.07)",
-              },
-
-            "& .MuiOutlinedInput-notchedOutline":
-              {
-                borderColor:
-                  "rgba(36,74,112,0.13)",
-              },
-
-            "& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline":
-              {
-                borderColor:
-                  "rgba(36,74,112,0.25)",
-              },
-
-            "& .MuiOutlinedInput-root.Mui-focused":
-              {
-                transform:
-                  "translateY(-1px)",
-                boxShadow:
-                  "0 0 0 3px rgba(211,164,79,0.12)",
-              },
-
-            "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
-              {
-                borderWidth: "1px",
-                borderColor:
-                  "var(--color-gold)",
-              },
-
-            "& .MuiInputLabel-root": {
-              top: 0,
-              right: 14,
-              left: "auto",
-
-              px: 0.7,
-
-              color:
-                "var(--color-muted)",
-              backgroundColor:
-                "var(--color-cream)",
-
-              fontSize: "11px",
-              fontWeight: 700,
-              lineHeight: 1.4,
-
-              transform:
-                "translateY(-50%) scale(0.92)",
-              transformOrigin:
-                "top right",
-
-              zIndex: 2,
-              pointerEvents: "none",
-            },
-
-            "& .MuiInputLabel-root.MuiInputLabel-shrink":
-              {
-                transform:
-                  "translateY(-50%) scale(0.92)",
-              },
-
-            "& .MuiInputLabel-root.Mui-focused":
-              {
-                color:
-                  "var(--color-gold-dark)",
-                backgroundColor:
-                  "var(--color-cream)",
-              },
-
-            "& .MuiOutlinedInput-notchedOutline legend":
-              {
-                width: 0,
-                maxWidth: 0,
-                padding: 0,
-              },
-
-            "& .MuiInputBase-input": {
-              py: 0.8,
-              px: 1.5,
-              fontSize: "12px",
-            },
-
-            "& .MuiSelect-select": {
-              display: "flex",
-              alignItems: "center",
-              minHeight:
-                "unset !important",
-              py: "0 !important",
-            },
-
-            "& .MuiSvgIcon-root": {
-              fontSize: "20px",
-            },
+              "#ffffff",
           }}
         >
           <Stack
             direction={{
               xs: "column",
-              sm: "row",
+              md: "row",
             }}
-            alignItems={{
-              xs: "stretch",
-              sm: "center",
-            }}
-            justifyContent="space-between"
-            gap={1}
-            sx={{
-              mb: 1.25,
-            }}
+            spacing={1}
           >
-            <Box>
-              <Typography
-                sx={{
-                  color:
-                    "var(--color-navy-deep)",
-                  fontSize: "15px",
-                  fontWeight: 800,
-                  lineHeight: 1.35,
-                }}
-              >
-                البحث والتصفية
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 0.2,
-                  color:
-                    "var(--color-muted)",
-                  fontSize: "9.5px",
-                  lineHeight: 1.5,
-                }}
-              >
-                استخدم الفلاتر للوصول
-                إلى المعلمين بسرعة.
-              </Typography>
-            </Box>
-
-            <Button
-              type="button"
-              disabled={
-                activeFiltersCount === 0
+            <TextField
+              fullWidth
+              size="small"
+              value={search}
+              onChange={(
+                event
+              ) =>
+                setSearch(
+                  event.target.value
+                )
               }
-              onClick={resetFilters}
-              variant="text"
-              startIcon={
-                <RestartAltRounded />
+              placeholder="ابحث باسم المعلم..."
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchRounded />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root":
+                  {
+                    minHeight: 42,
+                    borderRadius:
+                      "12px",
+                    backgroundColor:
+                      "#fffcf7",
+                  },
+              }}
+            />
+
+            <TextField
+              select
+              size="small"
+              label="الحالة"
+              value={status}
+              onChange={(
+                event
+              ) =>
+                setStatus(
+                  event.target.value
+                )
               }
               sx={{
-                minHeight: 36,
-                px: 1.25,
-
-                alignSelf: {
-                  xs: "flex-start",
-                  sm: "center",
+                width: {
+                  xs: "100%",
+                  md: 220,
                 },
-
-                color:
-                  "var(--color-navy)",
-                backgroundColor:
-                  "rgba(36,74,112,0.055)",
-
-                border:
-                  "1px solid rgba(36,74,112,0.075)",
-                borderRadius: "11px",
-
-                fontSize: "10.5px",
-                fontWeight: 800,
-                whiteSpace: "nowrap",
-                textTransform: "none",
-
-                transition:
-                  "transform 180ms ease, color 180ms ease, background-color 180ms ease, border-color 180ms ease",
-
-                "& .MuiButton-startIcon":
+                "& .MuiOutlinedInput-root":
                   {
-                    marginLeft: "6px",
-                    marginRight: 0,
+                    minHeight: 42,
+                    borderRadius:
+                      "12px",
+                    backgroundColor:
+                      "#fffcf7",
                   },
-
-                "&:hover": {
-                  color:
-                    "var(--color-gold-dark)",
-                  backgroundColor:
-                    "var(--color-gold-soft)",
-                  borderColor:
-                    "rgba(211,164,79,0.24)",
-                  transform:
-                    "translateY(-1px)",
-                },
-
-                "&.Mui-disabled": {
-                  color:
-                    "rgba(126,135,145,0.45)",
-                  backgroundColor:
-                    "rgba(36,74,112,0.025)",
-                  borderColor:
-                    "rgba(36,74,112,0.045)",
-                },
               }}
             >
-              مسح الفلاتر
-            </Button>
+              <MenuItem value="">
+                كل الحالات
+              </MenuItem>
+
+              <MenuItem value="true">
+                نشط
+              </MenuItem>
+
+              <MenuItem value="false">
+                موقوف
+              </MenuItem>
+            </TextField>
           </Stack>
-
-          <Grid
-            container
-            spacing={{
-              xs: 1.5,
-              md: 1.35,
-            }}
-            alignItems="center"
-            sx={{
-              pt: 0.8,
-            }}
-          >
-            <Grid
-              item
-              xs={12}
-              sm={6}
-            >
-              <SearchFilter
-                value={search}
-                onChange={setSearch}
-                placeholder="ابحث باسم المعلم..."
-              />
-            </Grid>
-
-            <Grid
-              item
-              xs={12}
-              sm={6}
-            >
-              <SelectFilter
-                value={status}
-                onChange={setStatus}
-                label="حالة المعلم"
-                icon={SortRounded}
-                allLabel="جميع الحالات"
-                options={Status.map(
-                  (item) => ({
-                    value:
-                      item.id.toString(),
-                    label:
-                      item.label,
-                  })
-                )}
-              />
-            </Grid>
-          </Grid>
         </Paper>
 
-        {/* Teachers table */}
+        {error && (
+          <Alert
+            severity="error"
+            sx={{
+              mt: 1.25,
+              borderRadius:
+                "14px",
+            }}
+          >
+            {error}
+          </Alert>
+        )}
+
         <Paper
           elevation={0}
           sx={{
-            overflow: "hidden",
-
+            mt: 1.25,
+            overflow:
+              "hidden",
+            borderRadius:
+              "18px",
             border:
-              "1px solid rgba(36,74,112,0.08)",
-            borderRadius: "18px",
-
+              "1px solid #ded8cd",
             backgroundColor:
-              "var(--color-cream)",
-
-            boxShadow:
-              "0 14px 32px rgba(18,47,77,0.065)",
-
-            transition:
-              "box-shadow 220ms ease, border-color 220ms ease",
-
-            "&:hover": {
-              borderColor:
-                "rgba(36,74,112,0.13)",
-              boxShadow:
-                "0 18px 38px rgba(18,47,77,0.09)",
-            },
+              "#ffffff",
           }}
         >
-          <Box
-            sx={{
-              px: {
-                xs: 1.5,
-                md: 1.9,
-              },
-              py: 1.25,
-
-              borderBottom:
-                "1px solid rgba(36,74,112,0.07)",
-            }}
-          >
-            <Typography
+          {!loading &&
+          teachers.length === 0 ? (
+            <Box
               sx={{
-                color:
-                  "var(--color-navy-deep)",
-                fontSize: "16px",
-                fontWeight: 800,
+                minHeight: 300,
+                display: "grid",
+                placeItems:
+                  "center",
+                p: 3,
+                textAlign:
+                  "center",
               }}
             >
-              قائمة المعلمين
-            </Typography>
+              <Box>
+                <PersonOffRounded
+                  sx={{
+                    fontSize: 48,
+                    color:
+                      "#d3a44f",
+                  }}
+                />
 
-            <Typography
-              sx={{
-                mt: 0.25,
-                color:
-                  "var(--color-muted)",
-                fontSize: "9.5px",
-              }}
-            >
-              يمكنك عرض الملف أو تعديل
-              البيانات أو حذف المعلم حسب
-              صلاحياتك.
-            </Typography>
-          </Box>
+                <Typography
+                  sx={{
+                    mt: 1,
+                    color:
+                      "#122f4d",
+                    fontWeight:
+                      800,
+                  }}
+                >
+                  لا توجد بيانات معلمين مطابقة
+                </Typography>
 
-          <Box
-            sx={{
-              p: {
-                xs: 0.7,
-                md: 1,
-              },
-            }}
-          >
-            <Table
-              headers={TABLE_HEADERS}
-              data={items}
-              loading={loading}
-              edit={permissions.edit}
-              profile
-              body={TABLE_BODY}
-              deleteFn={
-                permissions.delete
-                  ? handleDelete
-                  : undefined
+                <Typography
+                  sx={{
+                    mt: 0.4,
+                    color:
+                      "#7e8791",
+                    fontSize:
+                      "10px",
+                  }}
+                >
+                  غيّر البحث أو الحالة، أو أضف معلمًا جديدًا.
+                </Typography>
+              </Box>
+            </Box>
+          ) : (
+            <TeachersTable
+              teachers={
+                teachers
               }
-              schedule
+              loading={
+                loading
+              }
+              canUpdate={
+                permissions.edit
+              }
+              canDelete={
+                permissions.delete
+              }
+              canManageRole={
+                canManageRole
+              }
+              onView={(
+                teacher
+              ) =>
+                navigate(
+                  `/users/teachers/${getTeacherId(
+                    teacher
+                  )}`
+                )
+              }
+              onEdit={(
+                teacher
+              ) =>
+                navigate(
+                  `/users/teachers/edit/${getTeacherId(
+                    teacher
+                  )}`
+                )
+              }
+              onToggleStatus={(
+                teacher
+              ) => {
+                setSelectedTeacher(
+                  teacher
+                );
+                setStatusOpen(
+                  true
+                );
+              }}
+              onToggleManagerRole={(
+                teacher
+              ) => {
+                setSelectedTeacher(
+                  teacher
+                );
+                setRoleOpen(
+                  true
+                );
+              }}
+              onDelete={(
+                teacher
+              ) => {
+                setSelectedTeacher(
+                  teacher
+                );
+                setDeleteOpen(
+                  true
+                );
+              }}
             />
+          )}
 
-            {currentPagination && (
+          {pagination && (
+            <Box
+              sx={{
+                p: 1,
+                borderTop:
+                  "1px solid rgba(222,216,205,0.75)",
+              }}
+            >
               <PaginationControls
                 pagination={
-                  currentPagination
+                  pagination
                 }
                 page={page}
-                onPageChange={setPage}
+                onPageChange={
+                  setPage
+                }
                 limit={limit}
-                onLimitChange={setLimit}
+                onLimitChange={
+                  setLimit
+                }
                 label="عدد المعلمين"
               />
-            )}
-          </Box>
+            </Box>
+          )}
         </Paper>
       </Box>
+
+      <TeacherStatusDialog
+        open={statusOpen}
+        teacher={
+          selectedTeacher
+        }
+        loading={
+          statusLoading
+        }
+        onClose={() => {
+          setStatusOpen(false);
+          setSelectedTeacher(null);
+        }}
+        onConfirm={
+          handleStatusConfirm
+        }
+      />
+
+      <TeacherManagerRoleDialog
+        open={roleOpen}
+        teacher={
+          selectedTeacher
+        }
+        loading={
+          roleLoading
+        }
+        onClose={() => {
+          setRoleOpen(false);
+          setSelectedTeacher(null);
+        }}
+        onConfirm={
+          handleRoleConfirm
+        }
+      />
+
+      <TeacherDeleteDialog
+        open={deleteOpen}
+        teacher={
+          selectedTeacher
+        }
+        loading={
+          deleteLoading
+        }
+        onClose={() => {
+          setDeleteOpen(false);
+          setSelectedTeacher(null);
+        }}
+        onConfirm={
+          handleDeleteConfirm
+        }
+      />
     </Container>
   );
 };

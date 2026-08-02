@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -14,15 +15,19 @@ import {
   SaveRounded,
 } from "@mui/icons-material";
 
-import { useForm } from "react-hook-form";
 import {
   useEffect,
+  useMemo,
   useState,
 } from "react";
+
+import { useForm } from "react-hook-form";
+
 import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
+
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
@@ -33,173 +38,226 @@ import Days from "@/utils/constants/Days";
 import Slots from "@/utils/constants/Slots";
 import { translateGender } from "@/utils/helpers/translateGender";
 
-import { fetchClasses } from "@/APIs/school/classes";
-import { addLecture } from "@/APIs/school/lectures";
 import {
-  fetchSingleTeacher,
-  fetchTeachersBySubjectId,
-} from "@/APIs/users/teachers";
-import { fetchSubjects } from "@/APIs/school/subjects";
+  fetchClassesList,
+  fetchSingleClass,
+} from "@/APIs/school/classes";
 
-const getResponsePayload = (response) => {
-  if (
-    !response ||
-    typeof response === "string" ||
-    response?.status === false
-  ) {
-    return null;
-  }
+import { fetchSingleTeacher } from "@/APIs/users/teachers";
 
-  return (
-    response?.data?.data ||
-    response?.data ||
-    response
-  );
-};
-
-const getResponseList = (response) => {
-  const payload =
-    getResponsePayload(response);
-
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-
-  return (
-    payload?.docs ||
-    payload?.items ||
-    payload?.results ||
-    []
-  );
-};
-
-const getErrorMessage = (
-  response,
-  fallback
-) =>
-  response?.message ||
-  response?.data?.message ||
-  (typeof response === "string"
-    ? response
-    : fallback);
-
-const mapClasses = (classes) =>
-  (Array.isArray(classes)
-    ? classes
-    : []
-  ).map((classItem) => ({
-    id:
-      classItem?._id ||
-      classItem?.id,
-    name: `${
-      classItem?.academicYear ||
-      "—"
-    } - ${
-      classItem?.roomNumber ||
-      "—"
-    } - ${translateGender(
-      classItem?.gender,
-      "class"
-    ) || "—"}`,
-  }));
-
-const mapSubjects = (subjects) =>
-  (Array.isArray(subjects)
-    ? subjects
-    : []
-  ).map((subjectItem) => ({
-    id:
-      subjectItem?._id ||
-      subjectItem?.id,
-    name:
-      subjectItem?.subjectName ||
-      subjectItem?.name ||
-      "—",
-  }));
-
-const mapTeachers = (teachers) =>
-  (Array.isArray(teachers)
-    ? teachers
-    : []
-  ).map((teacherItem) => ({
-    id:
-      teacherItem?._id ||
-      teacherItem?.id,
-    name:
-      teacherItem?.name ||
-      teacherItem?.username ||
-      "—",
-  }));
+import {
+  addLecture,
+  fetchSubjectOfferings,
+  fetchTeacherAssignments,
+  fetchTermsByAcademicYear,
+} from "@/APIs/school/lectures";
 
 const FORM_CARD_SX = {
-  p: {
-    xs: 1.5,
-    md: 2,
-  },
   mt: 1.25,
+  p: { xs: 1.5, md: 2 },
   overflow: "visible",
-  border:
-    "1px solid rgba(36,74,112,0.08)",
+  border: "1px solid rgba(36,74,112,0.08)",
   borderRadius: "18px",
-  backgroundColor:
-    "var(--color-cream)",
-  boxShadow:
-    "0 12px 28px rgba(18,47,77,0.06)",
+  backgroundColor: "var(--color-cream)",
+  boxShadow: "0 12px 28px rgba(18,47,77,0.06)",
 
   "& .MuiFormControl-root": {
     width: "100%",
     margin: 0,
   },
 
-  "& .MuiInputBase-root, & .MuiOutlinedInput-root":
-    {
-      minHeight: 48,
-      backgroundColor:
-        "var(--color-white)",
-      borderRadius: "12px",
-    },
+  "& .MuiInputBase-root, & .MuiOutlinedInput-root": {
+    minHeight: 48,
+    backgroundColor: "var(--color-white)",
+    borderRadius: "12px",
+  },
 
-  "& .MuiOutlinedInput-notchedOutline":
-    {
-      borderColor:
-        "rgba(36,74,112,0.16)",
-    },
-
-  "& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline":
-    {
-      borderColor:
-        "rgba(36,74,112,0.28)",
-    },
-
-  "& .MuiOutlinedInput-root.Mui-focused":
-    {
-      boxShadow:
-        "0 0 0 3px rgba(211,164,79,0.10)",
-    },
+  "& .MuiOutlinedInput-notchedOutline": {
+    borderColor: "rgba(36,74,112,0.16)",
+  },
 
   "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
     {
-      borderColor:
-        "var(--color-gold)",
+      borderColor: "var(--color-gold)",
       borderWidth: "1px",
     },
-
-  "& .MuiInputLabel-root": {
-    px: 0.65,
-    color:
-      "var(--color-muted)",
-    backgroundColor:
-      "var(--color-cream)",
-    fontSize: "10.5px",
-    fontWeight: 700,
-  },
 };
 
-const SectionHeading = ({
-  icon,
-  title,
-  description,
-}) => (
+const unwrapData = (response) =>
+  response?.data?.data ??
+  response?.data ??
+  response;
+
+const extractList = (response) => {
+  const payload = unwrapData(response);
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return (
+    [
+      payload?.docs,
+      payload?.items,
+      payload?.results,
+      payload?.records,
+      payload?.classes,
+      payload?.terms,
+      payload?.offerings,
+      payload?.assignments,
+      payload?.data,
+    ].find(Array.isArray) || []
+  );
+};
+
+const getId = (value) => {
+  if (value && typeof value === "object") {
+    return String(value._id || value.id || "").trim();
+  }
+
+  return String(value || "").trim();
+};
+
+const normalizeDay = (value) => {
+  const day = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  return day
+    ? `${day.charAt(0).toUpperCase()}${day.slice(1)}`
+    : "";
+};
+
+const getAcademicYearId = (item) =>
+  getId(item?.academicYearId || item?.academicYear);
+
+const getGradeLevelId = (item) =>
+  getId(item?.gradeLevelId || item?.gradeLevel);
+
+const mapClass = (item) => {
+  const academicYear =
+    item?.academicYearId?.name ||
+    item?.academicYear?.name ||
+    (typeof item?.academicYear === "string"
+      ? item.academicYear
+      : "");
+
+  const className =
+    item?.name ||
+    item?.roomNumber ||
+    "فصل";
+
+  const gender = translateGender(
+    item?.gender,
+    "class"
+  );
+
+  return {
+    id: getId(item),
+    name:
+      [
+        academicYear,
+        className,
+        item?.roomNumber &&
+        item.roomNumber !== className
+          ? item.roomNumber
+          : "",
+        gender,
+      ]
+        .filter(Boolean)
+        .join(" - ") || "فصل",
+  };
+};
+
+const mapTerm = (item) => ({
+  id: getId(item),
+  name:
+    item?.name ||
+    `الترم ${item?.order || ""}`,
+  order: Number(item?.order) || 0,
+  status: item?.status || "",
+});
+
+const getOfferingSubject = (item) =>
+  item?.subjectId ||
+  item?.subject ||
+  item?.subjectDetails ||
+  null;
+
+const getOfferingSubjectId = (item) =>
+  getId(getOfferingSubject(item));
+
+const mapOffering = (item) => {
+  const subject = getOfferingSubject(item);
+
+  return {
+    id: getId(item),
+    subjectId: getOfferingSubjectId(item),
+    name:
+      subject?.subjectName ||
+      subject?.name ||
+      item?.subjectName ||
+      item?.name ||
+      "مادة",
+  };
+};
+
+const getAssignmentTeacher = (item) =>
+  item?.teacherId ||
+  item?.teacher ||
+  null;
+
+const getAssignmentOfferingId = (item) =>
+  getId(
+    item?.subjectOfferingId ||
+    item?.subjectOffering
+  );
+
+const mapTeacher = (item) => ({
+  id: getId(item),
+  name:
+    item?.name ||
+    item?.username ||
+    item?.email ||
+    "معلم",
+});
+
+const getLocalTeacherSubjectIds = (teacherId) => {
+  if (!teacherId) {
+    return [];
+  }
+
+  const schoolId =
+    localStorage.getItem("schoolId") || "school";
+
+  try {
+    const value = JSON.parse(
+      localStorage.getItem(
+        `nasaq:teacher-subjects:${schoolId}:${teacherId}`
+      ) || "[]"
+    );
+
+    return Array.isArray(value)
+      ? value.map(getId).filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const getBackendTeacherSubjectIds = (teacher) => {
+  const source = Array.isArray(teacher?.subjects)
+    ? teacher.subjects
+    : Array.isArray(teacher?.subject)
+    ? teacher.subject
+    : Array.isArray(teacher?.subjectIds)
+    ? teacher.subjectIds
+    : [];
+
+  return source.map(getId).filter(Boolean);
+};
+
+const SectionHeading = () => (
   <Stack
     direction="row"
     alignItems="center"
@@ -218,49 +276,39 @@ const SectionHeading = ({
         display: "grid",
         placeItems: "center",
         flexShrink: 0,
-        color:
-          "var(--color-gold-dark)",
-        backgroundColor:
-          "var(--color-gold-soft)",
+        color: "var(--color-gold-dark)",
+        backgroundColor: "var(--color-gold-soft)",
         border:
           "1px solid rgba(211,164,79,0.22)",
         borderRadius: "12px",
-
-        "& svg": {
-          fontSize: 21,
-        },
       }}
     >
-      {icon}
+      <EventNoteRounded />
     </Box>
 
-    <Box sx={{ minWidth: 0 }}>
+    <Box>
       <Typography
         sx={{
-          color:
-            "var(--color-navy-deep)",
+          color: "var(--color-navy-deep)",
           fontSize: "16px",
           fontWeight: 800,
         }}
       >
-        {title}
+        تفاصيل الحصة
       </Typography>
 
       <Typography
         sx={{
           mt: 0.2,
-          color:
-            "var(--color-muted)",
+          color: "var(--color-muted)",
           fontSize: "10px",
-          lineHeight: 1.6,
         }}
       >
-        {description}
+        اختر الفصل والترم، ثم المادة المفعلة والمعلم المسند إليها.
       </Typography>
     </Box>
   </Stack>
 );
-
 
 const Add = () => {
   const {
@@ -270,142 +318,542 @@ const Add = () => {
     setValue,
   } = useForm();
 
-  const [loading, setLoading] =
-    useState(false);
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const navigate =
-    useNavigate();
+  const queryClassId =
+    searchParams.get("classId") || "";
 
-  const [searchParams] =
-    useSearchParams();
+  const queryTeacherId =
+    searchParams.get("teacherId") || "";
 
-  const classId =
-    searchParams.get("classId");
+  const queryDay =
+    searchParams.get("day") || "";
 
-  const day =
-    searchParams.get("day");
+  const querySlot =
+    searchParams.get("slot") || "";
 
-  const slot =
-    searchParams.get("slot");
+  const [saving, setSaving] = useState(false);
+  const [setupLoading, setSetupLoading] =
+    useState(true);
 
-  const teacherId =
-    searchParams.get(
-      "teacherId"
-    );
+  const [classes, setClasses] = useState([]);
+  const [classDetails, setClassDetails] =
+    useState(null);
+
+  const [terms, setTerms] = useState([]);
+  const [offerings, setOfferings] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+
+  const [selectedClassId, setSelectedClassId] =
+    useState(queryClassId);
+
+  const [selectedTermId, setSelectedTermId] =
+    useState("");
+
+  const [
+    selectedOfferingId,
+    setSelectedOfferingId,
+  ] = useState("");
+
+  const [
+    selectedTeacherId,
+    setSelectedTeacherId,
+  ] = useState(queryTeacherId);
+
+  const [
+    teacherSubjectIds,
+    setTeacherSubjectIds,
+  ] = useState([]);
+
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (classId) {
-      setValue(
-        "classId",
-        classId
-      );
+    setValue("dayOfWeek", queryDay);
+    setValue("slot", querySlot);
+
+    if (queryClassId) {
+      setValue("classId", queryClassId);
     }
 
-    if (teacherId) {
-      setValue(
-        "teacherId",
-        teacherId
-      );
-    }
-
-    if (day) {
-      setValue(
-        "dayOfWeek",
-        day
-      );
-    }
-
-    if (slot) {
-      setValue(
-        "slot",
-        slot
-      );
+    if (queryTeacherId) {
+      setValue("teacherId", queryTeacherId);
     }
   }, [
-    classId,
-    day,
-    slot,
-    teacherId,
+    queryClassId,
+    queryDay,
+    querySlot,
+    queryTeacherId,
     setValue,
   ]);
 
-  const onSubmit = async (
-    formData
-  ) => {
-    setLoading(true);
+  useEffect(() => {
+    let mounted = true;
 
-    try {
-      const payload = {
-        ...formData,
-        slot: Number(
-          formData.slot
-        ),
-      };
+    const loadInitial = async () => {
+      setSetupLoading(true);
 
-      const response =
-        await addLecture(
-          payload
+      const classesResponse =
+        await fetchClassesList();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (classesResponse?.status === false) {
+        setClasses([]);
+        setMessage(
+          classesResponse?.message ||
+            "تعذر تحميل الفصول"
+        );
+      } else {
+        setClasses(
+          extractList(classesResponse)
+            .map(mapClass)
+            .filter((item) => item.id)
+        );
+      }
+
+      if (queryTeacherId) {
+        const teacherResponse =
+          await fetchSingleTeacher(queryTeacherId);
+
+        if (!mounted) {
+          return;
+        }
+
+        const teacher = unwrapData(teacherResponse);
+
+        const ids = Array.from(
+          new Set([
+            ...getBackendTeacherSubjectIds(teacher),
+            ...getLocalTeacherSubjectIds(
+              queryTeacherId
+            ),
+          ])
         );
 
-      if (!response?.status) {
-        toast.error(
-          getErrorMessage(
-            response,
-            "حدث خطأ أثناء إضافة الحصة"
+        setTeacherSubjectIds(ids);
+
+        if (teacher) {
+          setTeachers([mapTeacher(teacher)]);
+        }
+      }
+
+      setSetupLoading(false);
+    };
+
+    loadInitial();
+
+    return () => {
+      mounted = false;
+    };
+  }, [queryTeacherId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadClassSetup = async () => {
+      setClassDetails(null);
+      setTerms([]);
+      setOfferings([]);
+      setSelectedTermId("");
+      setSelectedOfferingId("");
+      setValue("termId", "");
+      setValue("subjectOfferingId", "");
+
+      if (!selectedClassId) {
+        setMessage("");
+        return;
+      }
+
+      setSetupLoading(true);
+
+      const classResponse =
+        await fetchSingleClass(selectedClassId);
+
+      if (!mounted) {
+        return;
+      }
+
+      if (classResponse?.status === false) {
+        setMessage(
+          classResponse?.message ||
+            "تعذر تحميل بيانات الفصل"
+        );
+        setSetupLoading(false);
+        return;
+      }
+
+      const details = unwrapData(classResponse);
+      const academicYearId =
+        getAcademicYearId(details);
+      const gradeLevelId =
+        getGradeLevelId(details);
+
+      setClassDetails(details);
+
+      if (!academicYearId || !gradeLevelId) {
+        setMessage(
+          "بيانات الفصل لا تحتوي على السنة الدراسية أو الصف الدراسي"
+        );
+        setSetupLoading(false);
+        return;
+      }
+
+      const termsResponse =
+        await fetchTermsByAcademicYear(
+          academicYearId
+        );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (termsResponse?.status === false) {
+        setMessage(
+          termsResponse?.message ||
+            "تعذر تحميل الترم"
+        );
+        setSetupLoading(false);
+        return;
+      }
+
+      const mappedTerms = extractList(termsResponse)
+        .map(mapTerm)
+        .filter((item) => item.id)
+        .sort((a, b) => a.order - b.order);
+
+      setTerms(mappedTerms);
+
+      const defaultTerm =
+        mappedTerms.find(
+          (item) => item.status === "active"
+        ) ||
+        mappedTerms.find(
+          (item) => item.status === "upcoming"
+        ) ||
+        mappedTerms[0];
+
+      if (defaultTerm) {
+        setSelectedTermId(defaultTerm.id);
+        setValue("termId", defaultTerm.id, {
+          shouldValidate: true,
+        });
+        setMessage("");
+      } else {
+        setMessage(
+          "لا توجد فصول دراسية مرتبطة بهذه السنة"
+        );
+      }
+
+      setSetupLoading(false);
+    };
+
+    loadClassSetup();
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedClassId, setValue]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadOfferings = async () => {
+      setOfferings([]);
+      setSelectedOfferingId("");
+      setValue("subjectOfferingId", "");
+
+      const gradeLevelId =
+        getGradeLevelId(classDetails);
+
+      if (!gradeLevelId || !selectedTermId) {
+        return;
+      }
+
+      setSetupLoading(true);
+
+      const [
+        offeringsResponse,
+        assignmentsResponse,
+      ] = await Promise.all([
+        fetchSubjectOfferings({
+          gradeLevelId,
+          termId: selectedTermId,
+        }),
+        fetchTeacherAssignments(
+          queryTeacherId
+            ? { teacherId: queryTeacherId }
+            : {}
+        ),
+      ]);
+
+      if (!mounted) {
+        return;
+      }
+
+      if (offeringsResponse?.status === false) {
+        setMessage(
+          offeringsResponse?.message ||
+            "تعذر تحميل المواد المفعلة"
+        );
+        setSetupLoading(false);
+        return;
+      }
+
+      const rawOfferings =
+        extractList(offeringsResponse);
+
+      const assignments =
+        assignmentsResponse?.status === false
+          ? []
+          : extractList(assignmentsResponse);
+
+      const teacherAssignments = queryTeacherId
+        ? assignments.filter(
+            (item) =>
+              getId(getAssignmentTeacher(item)) ===
+              queryTeacherId
           )
+        : assignments;
+
+      const assignedOfferingIds = new Set(
+        teacherAssignments
+          .map(getAssignmentOfferingId)
+          .filter(Boolean)
+      );
+
+      let filtered = rawOfferings;
+
+      if (
+        queryTeacherId &&
+        assignedOfferingIds.size > 0
+      ) {
+        filtered = rawOfferings.filter((item) =>
+          assignedOfferingIds.has(getId(item))
+        );
+      } else if (
+        queryTeacherId &&
+        teacherSubjectIds.length > 0
+      ) {
+        const subjectSet = new Set(
+          teacherSubjectIds
+        );
+
+        filtered = rawOfferings.filter((item) =>
+          subjectSet.has(
+            getOfferingSubjectId(item)
+          )
+        );
+      }
+
+      const mapped = filtered
+        .map(mapOffering)
+        .filter((item) => item.id);
+
+      setOfferings(mapped);
+
+      setMessage(
+        mapped.length > 0
+          ? ""
+          : queryTeacherId
+          ? "لا توجد مادة مسندة لهذا المعلم داخل الصف والترم المختارين"
+          : "لا توجد مواد مفعلة لهذا الصف داخل الترم المختار"
+      );
+
+      setSetupLoading(false);
+    };
+
+    loadOfferings();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    classDetails,
+    selectedTermId,
+    queryTeacherId,
+    teacherSubjectIds,
+    setValue,
+  ]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTeachers = async () => {
+      if (queryTeacherId) {
+        return;
+      }
+
+      setTeachers([]);
+      setSelectedTeacherId("");
+      setValue("teacherId", "");
+
+      if (!selectedOfferingId) {
+        return;
+      }
+
+      const response =
+        await fetchTeacherAssignments({
+          subjectOfferingId:
+            selectedOfferingId,
+        });
+
+      if (!mounted) {
+        return;
+      }
+
+      if (response?.status === false) {
+        setMessage(
+          response?.message ||
+            "تعذر تحميل المعلمين"
         );
         return;
       }
 
-      toast.success(
-        "تم إضافة الحصة بنجاح"
-      );
+      const rows = extractList(response);
 
-      navigate(-1);
-    } catch (error) {
+      const mappedTeachers = rows
+        .filter(
+          (item) =>
+            getAssignmentOfferingId(item) ===
+            selectedOfferingId
+        )
+        .map(getAssignmentTeacher)
+        .filter(
+          (teacher) =>
+            teacher &&
+            typeof teacher === "object"
+        )
+        .map(mapTeacher)
+        .filter((teacher) => teacher.id);
+
+      setTeachers(mappedTeachers);
+
+      if (mappedTeachers.length === 0) {
+        setMessage(
+          "لا يوجد معلم مسند لهذه المادة في الترم المختار"
+        );
+      }
+    };
+
+    loadTeachers();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    queryTeacherId,
+    selectedOfferingId,
+    setValue,
+  ]);
+
+  const classOptions = useMemo(
+    () => classes,
+    [classes]
+  );
+
+  const termOptions = useMemo(
+    () => terms,
+    [terms]
+  );
+
+  const offeringOptions = useMemo(
+    () => offerings,
+    [offerings]
+  );
+
+  const teacherOptions = useMemo(
+    () => teachers,
+    [teachers]
+  );
+
+  const updateValue = (name, value) => {
+    setValue(name, value || "", {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+
+  const onSubmit = async (formData) => {
+    const payload = {
+      classId:
+        formData.classId || selectedClassId,
+
+      subjectOfferingId:
+        formData.subjectOfferingId ||
+        selectedOfferingId,
+
+      termId:
+        formData.termId || selectedTermId,
+
+      teacherId:
+        formData.teacherId ||
+        selectedTeacherId ||
+        queryTeacherId,
+
+      dayOfWeek: normalizeDay(
+        formData.dayOfWeek || queryDay
+      ),
+
+      slot: Number(
+        formData.slot || querySlot
+      ),
+    };
+
+    if (
+      !payload.classId ||
+      !payload.subjectOfferingId ||
+      !payload.termId ||
+      !payload.dayOfWeek ||
+      !payload.slot
+    ) {
       toast.error(
-        error?.response?.data
-          ?.message ||
-          "حدث خطأ أثناء إضافة الحصة"
+        "أكملي بيانات الحصة المطلوبة"
       );
-    } finally {
-      setLoading(false);
+      return;
     }
+
+    setSaving(true);
+
+    const response = await addLecture(payload);
+
+    if (response?.status === false) {
+      toast.error(
+        response?.message ||
+          "تعذر إضافة الحصة"
+      );
+      setSaving(false);
+      return;
+    }
+
+    toast.success(
+      "تمت إضافة الحصة بنجاح"
+    );
+
+    navigate(-1);
   };
 
   return (
     <Container>
       <Box
         component="form"
-        onSubmit={handleSubmit(
-          onSubmit
-        )}
         noValidate
         dir="rtl"
-        sx={{
-          width: "100%",
-          maxWidth: "100%",
-          minWidth: 0,
-          pb: 3,
-          color:
-            "var(--color-text)",
-        }}
+        onSubmit={handleSubmit(onSubmit)}
+        sx={{ pb: 3 }}
       >
         <Paper
           elevation={0}
           sx={{
-            px: {
-              xs: 1.25,
-              md: 1.6,
-            },
+            px: { xs: 1.25, md: 1.6 },
             py: 1.05,
             border:
               "1px solid rgba(36,74,112,0.08)",
             borderRadius: "16px",
             backgroundColor:
               "rgba(255,252,247,0.9)",
-            boxShadow:
-              "0 8px 20px rgba(18,47,77,0.04)",
           }}
         >
           <Stack
@@ -424,59 +872,191 @@ const Add = () => {
 
             <Typography
               sx={{
-                color:
-                  "var(--color-muted)",
+                color: "var(--color-muted)",
                 fontSize: "10px",
               }}
             >
-              حدّد اليوم والحصة ثم
-              اختر الفصل والمادة
-              والمعلم.
+              الحصة ترتبط بترم ومادة مفعلة داخل الصف.
             </Typography>
           </Stack>
         </Paper>
 
-        <Paper
-          elevation={0}
-          sx={FORM_CARD_SX}
-        >
-          <SectionHeading
-            icon={
-              <EventNoteRounded />
-            }
-            title="تفاصيل الحصة"
-            description="اربط الحصة بموعدها والفصل والمادة والمعلم المسؤول."
-          />
+        <Paper elevation={0} sx={FORM_CARD_SX}>
+          <SectionHeading />
 
-          <DataInputs
-            register={register}
-            errors={errors}
-            setValue={setValue}
-            classId={classId}
-            day={day}
-            slot={slot}
-            teacherId={
-              teacherId
-            }
-          />
+          {message && (
+            <Alert
+              severity={
+                message.includes("تعذر")
+                  ? "error"
+                  : "info"
+              }
+              sx={{
+                mb: 1.5,
+                borderRadius: "12px",
+                fontSize: "10px",
+              }}
+            >
+              {message}
+            </Alert>
+          )}
+
+          <Grid
+            container
+            spacing={{ xs: 1.5, md: 2 }}
+          >
+            <Grid item xs={12} sm={6} lg={4}>
+              <Select
+                register={register}
+                registerName="dayOfWeek"
+                error={
+                  errors.dayOfWeek?.message
+                }
+                label="اليوم"
+                required
+                data={Days}
+                name="day"
+                defaultValue={queryDay}
+                disabled={Boolean(queryDay)}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} lg={4}>
+              <Select
+                register={register}
+                registerName="slot"
+                error={errors.slot?.message}
+                label="الحصة"
+                required
+                data={Slots}
+                name="name"
+                defaultValue={querySlot}
+                disabled={Boolean(querySlot)}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} lg={4}>
+              <Select
+                register={register}
+                registerName="classId"
+                error={errors.classId?.message}
+                label="الفصل"
+                required
+                data={classOptions}
+                name="name"
+                defaultValue={selectedClassId}
+                disabled={
+                  setupLoading ||
+                  Boolean(queryClassId)
+                }
+                onChange={(value) => {
+                  setSelectedClassId(value || "");
+                  updateValue("classId", value);
+                }}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} lg={4}>
+              <Select
+                register={register}
+                registerName="termId"
+                error={errors.termId?.message}
+                label="الترم"
+                required
+                data={termOptions}
+                name="name"
+                defaultValue={selectedTermId}
+                disabled={
+                  setupLoading ||
+                  !selectedClassId ||
+                  termOptions.length === 0
+                }
+                onChange={(value) => {
+                  setSelectedTermId(value || "");
+                  updateValue("termId", value);
+                }}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} lg={4}>
+              <Select
+                register={register}
+                registerName="subjectOfferingId"
+                error={
+                  errors.subjectOfferingId
+                    ?.message
+                }
+                label="المادة"
+                required
+                data={offeringOptions}
+                name="name"
+                defaultValue={
+                  selectedOfferingId
+                }
+                disabled={
+                  setupLoading ||
+                  !selectedClassId ||
+                  !selectedTermId ||
+                  offeringOptions.length === 0
+                }
+                onChange={(value) => {
+                  setSelectedOfferingId(
+                    value || ""
+                  );
+                  updateValue(
+                    "subjectOfferingId",
+                    value
+                  );
+                }}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} lg={4}>
+              <Select
+                register={register}
+                registerName="teacherId"
+                error={
+                  errors.teacherId?.message
+                }
+                label="المعلم"
+                required
+                data={teacherOptions}
+                name="name"
+                defaultValue={
+                  selectedTeacherId ||
+                  queryTeacherId
+                }
+                disabled={
+                  setupLoading ||
+                  Boolean(queryTeacherId) ||
+                  !selectedOfferingId ||
+                  teacherOptions.length === 0
+                }
+                onChange={(value) => {
+                  setSelectedTeacherId(
+                    value || ""
+                  );
+                  updateValue(
+                    "teacherId",
+                    value
+                  );
+                }}
+              />
+            </Grid>
+          </Grid>
         </Paper>
 
         <Paper
           elevation={0}
           sx={{
             mt: 1.25,
-            px: {
-              xs: 1.25,
-              md: 1.6,
-            },
+            px: { xs: 1.25, md: 1.6 },
             py: 1.15,
             border:
               "1px solid rgba(36,74,112,0.08)",
             borderRadius: "16px",
             backgroundColor:
               "var(--color-cream)",
-            boxShadow:
-              "0 10px 24px rgba(18,47,77,0.05)",
           }}
         >
           <Stack
@@ -488,10 +1068,14 @@ const Add = () => {
           >
             <Button
               type="submit"
-              disabled={loading}
+              disabled={
+                saving ||
+                setupLoading ||
+                offeringOptions.length === 0
+              }
               variant="contained"
               startIcon={
-                loading ? (
+                saving ? (
                   <CircularProgress
                     size={16}
                     color="inherit"
@@ -501,65 +1085,32 @@ const Add = () => {
                 )
               }
               sx={{
-                width: {
-                  xs: "100%",
-                  sm: 180,
-                },
                 minHeight: 44,
+                px: 2.5,
                 borderRadius: "12px",
-                color:
-                  "var(--color-white)",
                 background:
                   "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-                boxShadow:
-                  "0 9px 20px rgba(18,47,77,0.16)",
-                fontSize: "12px",
                 fontWeight: 800,
-                textTransform: "none",
-
-                "& .MuiButton-startIcon":
-                  {
-                    marginLeft:
-                      "7px",
-                    marginRight: 0,
-                  },
               }}
             >
-              {loading
+              {saving
                 ? "جاري الحفظ..."
                 : "حفظ الحصة"}
             </Button>
 
             <Button
               type="button"
-              onClick={() =>
-                navigate(-1)
-              }
+              onClick={() => navigate(-1)}
               variant="outlined"
-              startIcon={
-                <CloseRounded />
-              }
+              startIcon={<CloseRounded />}
               sx={{
-                width: {
-                  xs: "100%",
-                  sm: 145,
-                },
                 minHeight: 44,
+                px: 2.5,
                 borderRadius: "12px",
-                color:
-                  "var(--color-navy)",
+                color: "var(--color-navy)",
                 borderColor:
                   "rgba(36,74,112,0.18)",
-                fontSize: "12px",
                 fontWeight: 800,
-                textTransform: "none",
-
-                "& .MuiButton-startIcon":
-                  {
-                    marginLeft:
-                      "7px",
-                    marginRight: 0,
-                  },
               }}
             >
               إلغاء
@@ -568,686 +1119,6 @@ const Add = () => {
         </Paper>
       </Box>
     </Container>
-  );
-};
-
-const DataInputs = ({
-  register,
-  errors,
-  setValue,
-  classId,
-  day,
-  slot,
-  teacherId,
-}) => {
-  const [subject, setSubject] =
-    useState(null);
-
-  const [
-    lectureClass,
-    setLectureClass,
-  ] = useState(
-    classId || null
-  );
-
-  const [
-    teacherSubjects,
-    setTeacherSubjects,
-  ] = useState([]);
-
-  useEffect(() => {
-    if (!teacherId) {
-      setTeacherSubjects([]);
-      return;
-    }
-
-    let active = true;
-
-    const loadTeacher =
-      async () => {
-        try {
-          const response =
-            await fetchSingleTeacher(
-              teacherId
-            );
-
-          const teacher =
-            getResponsePayload(
-              response
-            );
-
-          if (
-            active &&
-            teacher
-          ) {
-            setTeacherSubjects(
-              Array.isArray(
-                teacher.subjects
-              )
-                ? teacher.subjects
-                : []
-            );
-          }
-        } catch {
-          if (active) {
-            setTeacherSubjects(
-              []
-            );
-          }
-        }
-      };
-
-    loadTeacher();
-
-    return () => {
-      active = false;
-    };
-  }, [teacherId]);
-
-  return (
-    <Grid
-      container
-      spacing={{
-        xs: 1.5,
-        md: 2,
-      }}
-    >
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <Select
-          register={register}
-          registerName="dayOfWeek"
-          error={
-            errors.dayOfWeek
-              ?.message
-          }
-          label="اليوم"
-          required
-          data={Days}
-          name="day"
-          defaultValue={
-            day || ""
-          }
-          disabled={Boolean(day)}
-        />
-      </Grid>
-
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <Select
-          register={register}
-          registerName="slot"
-          error={
-            errors.slot?.message
-          }
-          label="الحصة"
-          required
-          data={Slots}
-          name="name"
-          defaultValue={
-            slot || ""
-          }
-          disabled={Boolean(slot)}
-        />
-      </Grid>
-
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <SelectClass
-          register={register}
-          errors={errors}
-          setLectureClass={
-            setLectureClass
-          }
-          setValue={setValue}
-          setSubject={setSubject}
-          classId={classId}
-          teacherId={
-            teacherId
-          }
-          subject={subject}
-        />
-      </Grid>
-
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <SelectSubject
-          register={register}
-          errors={errors}
-          setSubject={
-            setSubject
-          }
-          setValue={setValue}
-          lectureClass={
-            lectureClass
-          }
-          teacherId={
-            teacherId
-          }
-          teacherSubjects={
-            teacherSubjects
-          }
-        />
-      </Grid>
-
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <SelectTeacher
-          register={register}
-          errors={errors}
-          subject={subject}
-          setValue={setValue}
-          teacherId={
-            teacherId
-          }
-        />
-      </Grid>
-    </Grid>
-  );
-};
-
-const SelectClass = ({
-  register,
-  errors,
-  setLectureClass,
-  setValue,
-  setSubject,
-  classId,
-  teacherId,
-  subject,
-}) => {
-  const [loading, setLoading] =
-    useState(false);
-
-  const [
-    studentClasses,
-    setStudentClasses,
-  ] = useState([]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadClasses =
-      async () => {
-        setLoading(true);
-
-        try {
-          const response =
-            await fetchClasses(
-              teacherId &&
-                subject
-                ? {
-                    subjectIds:
-                      subject,
-                  }
-                : undefined
-            );
-
-          const classes =
-            getResponseList(
-              response
-            );
-
-          if (!active) {
-            return;
-          }
-
-          setStudentClasses(
-            mapClasses(classes)
-          );
-
-          if (
-            teacherId &&
-            subject &&
-            classes.length === 0
-          ) {
-            toast.info(
-              "لا توجد فصول متاحة لهذه المادة"
-            );
-          }
-        } catch (error) {
-          if (active) {
-            setStudentClasses(
-              []
-            );
-
-            toast.error(
-              error?.response?.data
-                ?.message ||
-                "حدث خطأ أثناء جلب بيانات الفصول"
-            );
-          }
-        } finally {
-          if (active) {
-            setLoading(false);
-          }
-        }
-      };
-
-    loadClasses();
-
-    return () => {
-      active = false;
-    };
-  }, [
-    teacherId,
-    subject,
-  ]);
-
-  useEffect(() => {
-    if (classId) {
-      setLectureClass(
-        classId
-      );
-    }
-  }, [
-    classId,
-    setLectureClass,
-  ]);
-
-  const handleClassChange = (
-    value
-  ) => {
-    if (!teacherId) {
-      setValue(
-        "subjectId",
-        ""
-      );
-      setValue(
-        "teacherId",
-        ""
-      );
-      setSubject(null);
-    }
-
-    setLectureClass(value);
-  };
-
-  return (
-    <Select
-      register={register}
-      registerName="classId"
-      error={
-        errors.classId?.message
-      }
-      label="الفصل"
-      required
-      data={studentClasses}
-      name="name"
-      disabled={
-        Boolean(classId) ||
-        loading
-      }
-      defaultValue={
-        classId || ""
-      }
-      onChange={
-        handleClassChange
-      }
-    />
-  );
-};
-
-const SelectSubject = ({
-  register,
-  errors,
-  setSubject,
-  setValue,
-  lectureClass,
-  teacherId,
-  teacherSubjects,
-}) => {
-  const [loading, setLoading] =
-    useState(false);
-
-  const [subjects, setSubjects] =
-    useState([]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadSubjects =
-      async () => {
-        if (
-          teacherId &&
-          !lectureClass
-        ) {
-          setSubjects(
-            mapSubjects(
-              teacherSubjects
-            )
-          );
-          return;
-        }
-
-        if (!lectureClass) {
-          setSubjects([]);
-          setValue(
-            "subjectId",
-            ""
-          );
-          setSubject(null);
-          return;
-        }
-
-        setLoading(true);
-
-        try {
-          const response =
-            await fetchSubjects({
-              classIds:
-                lectureClass,
-            });
-
-          const classSubjects =
-            getResponseList(
-              response
-            );
-
-          if (!active) {
-            return;
-          }
-
-          if (teacherId) {
-            const teacherIds =
-              new Set(
-                teacherSubjects.map(
-                  (item) =>
-                    item?._id ||
-                    item?.id
-                )
-              );
-
-            const intersection =
-              classSubjects.filter(
-                (item) =>
-                  teacherIds.has(
-                    item?._id ||
-                      item?.id
-                  )
-              );
-
-            setSubjects(
-              mapSubjects(
-                intersection
-              )
-            );
-
-            if (
-              intersection.length ===
-              0
-            ) {
-              setValue(
-                "subjectId",
-                ""
-              );
-
-              toast.info(
-                "لا توجد مواد للمعلم داخل هذا الفصل"
-              );
-            }
-
-            return;
-          }
-
-          setSubjects(
-            mapSubjects(
-              classSubjects
-            )
-          );
-
-          if (
-            classSubjects.length ===
-            0
-          ) {
-            setValue(
-              "subjectId",
-              ""
-            );
-
-            toast.info(
-              "لا توجد مواد مرتبطة بهذا الفصل"
-            );
-          }
-        } catch (error) {
-          if (active) {
-            setSubjects([]);
-            setValue(
-              "subjectId",
-              ""
-            );
-
-            toast.error(
-              error?.response?.data
-                ?.message ||
-                "حدث خطأ أثناء جلب بيانات المواد"
-            );
-          }
-        } finally {
-          if (active) {
-            setLoading(false);
-          }
-        }
-      };
-
-    loadSubjects();
-
-    return () => {
-      active = false;
-    };
-  }, [
-    lectureClass,
-    teacherId,
-    teacherSubjects,
-    setSubject,
-    setValue,
-  ]);
-
-  const handleSubjectChange = (
-    value
-  ) => {
-    if (!teacherId) {
-      setValue(
-        "teacherId",
-        ""
-      );
-    }
-
-    setSubject(value);
-  };
-
-  return (
-    <Select
-      register={register}
-      registerName="subjectId"
-      error={
-        errors.subjectId?.message
-      }
-      label="المادة"
-      required
-      data={subjects}
-      name="name"
-      disabled={
-        teacherId
-          ? loading
-          : !lectureClass ||
-            loading
-      }
-      onChange={
-        handleSubjectChange
-      }
-    />
-  );
-};
-
-const SelectTeacher = ({
-  register,
-  errors,
-  subject,
-  setValue,
-  teacherId,
-}) => {
-  const [loading, setLoading] =
-    useState(false);
-
-  const [teachers, setTeachers] =
-    useState([]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadTeachers =
-      async () => {
-        if (teacherId) {
-          setLoading(true);
-
-          try {
-            const response =
-              await fetchSingleTeacher(
-                teacherId
-              );
-
-            const teacher =
-              getResponsePayload(
-                response
-              );
-
-            if (
-              active &&
-              teacher
-            ) {
-              setTeachers(
-                mapTeachers([
-                  teacher,
-                ])
-              );
-            }
-          } finally {
-            if (active) {
-              setLoading(false);
-            }
-          }
-
-          return;
-        }
-
-        if (!subject) {
-          setTeachers([]);
-          setValue(
-            "teacherId",
-            ""
-          );
-          return;
-        }
-
-        setLoading(true);
-
-        try {
-          const response =
-            await fetchTeachersBySubjectId(
-              subject
-            );
-
-          const payload =
-            getResponsePayload(
-              response
-            );
-
-          const teacherRows =
-            Array.isArray(payload)
-              ? payload
-              : payload?.teachers ||
-                [];
-
-          if (!active) {
-            return;
-          }
-
-          setTeachers(
-            mapTeachers(
-              teacherRows
-            )
-          );
-
-          if (
-            teacherRows.length ===
-            0
-          ) {
-            toast.info(
-              "لا يوجد معلمون مرتبطون بهذه المادة"
-            );
-          }
-        } catch (error) {
-          if (active) {
-            setTeachers([]);
-
-            toast.error(
-              error?.response?.data
-                ?.message ||
-                "حدث خطأ أثناء جلب بيانات المعلمين"
-            );
-          }
-        } finally {
-          if (active) {
-            setLoading(false);
-          }
-        }
-      };
-
-    loadTeachers();
-
-    return () => {
-      active = false;
-    };
-  }, [
-    subject,
-    teacherId,
-    setValue,
-  ]);
-
-  return (
-    <Select
-      register={register}
-      registerName="teacherId"
-      error={
-        errors.teacherId?.message
-      }
-      label="المعلم"
-      required
-      data={teachers}
-      name="name"
-      defaultValue={
-        teacherId || ""
-      }
-      disabled={
-        Boolean(teacherId) ||
-        loading ||
-        (!teacherId &&
-          (!subject ||
-            teachers.length ===
-              0))
-      }
-    />
   );
 };
 
