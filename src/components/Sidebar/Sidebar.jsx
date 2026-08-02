@@ -15,6 +15,7 @@ import {
   FolderCopyOutlined,
   LocalOffer,
   Logout,
+  ManageAccountsRounded,
   MoneyOff,
   ReceiptLong,
   Route,
@@ -204,6 +205,13 @@ const Sidebar = ({ active }) => {
             to: "/users/teachers",
             show: teachersPermissions.read,
           },
+          {
+            name: "المديرون والمشرفون",
+            Icon: ManageAccountsRounded,
+            iconType: "mui",
+            to: "/school/managers",
+            show: role === "OWNER",
+          },
         ],
       },
       {
@@ -367,6 +375,7 @@ const Sidebar = ({ active }) => {
     return baseCategories;
   }, [
     isTeacher,
+    role,
     userId,
     studentsPermissions.read,
     teachersPermissions.read,

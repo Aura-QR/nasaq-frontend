@@ -20,7 +20,6 @@ import {
   EmailOutlined,
   HomeOutlined,
   LocalPhoneOutlined,
-  PaymentsOutlined,
   PersonOutlineRounded,
   SchoolOutlined,
   ToggleOnRounded,
@@ -32,7 +31,11 @@ import {
   useParams,
 } from "react-router-dom";
 
-import { useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
@@ -44,10 +47,44 @@ import {
   toggleActiveStudent,
 } from "@/APIs/users/students";
 
+import { api } from "@/APIs/Axios";
+
 import { formatDate } from "@/utils/helpers/dateUtils";
 import { useStudent } from "@/utils/hooks/apis/useStudent";
 import usePermissions from "@/utils/hooks/usePermissions";
-import { useInstallmentPlan } from "@/utils/hooks/apis/financials/useInstallmentPlan";
+import {
+  getCurrentEnrollment,
+  getStudentAcademicYearLabel,
+  getStudentClassLabel,
+  mergeStudentEnrollment,
+} from "@/utils/helpers/studentAcademic";
+
+
+const fetchStudentEnrollmentHistory =
+  async (studentId) => {
+    if (!studentId) {
+      return {
+        status: false,
+        message:
+          "معرّف الطالب غير موجود",
+      };
+    }
+
+    try {
+      const response = await api.get(
+        `/enrollments/student/${studentId}`
+      );
+
+      return response.data;
+    } catch (error) {
+      return {
+        status: false,
+        message:
+          error?.response?.data?.message ||
+          "تعذر تحميل السجل الدراسي للطالب",
+      };
+    }
+  };
 
 const infoCardSx = {
   p: 1.5,
@@ -142,6 +179,61 @@ const Profile = () => {
     loading,
   } = useStudent(id);
 
+  const [
+    currentEnrollment,
+    setCurrentEnrollment,
+  ] = useState(null);
+
+  const [
+    enrollmentLoading,
+    setEnrollmentLoading,
+  ] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadEnrollment =
+      async () => {
+        setEnrollmentLoading(true);
+
+        const response =
+          await fetchStudentEnrollmentHistory(
+            id
+          );
+
+        if (!active) return;
+
+        setCurrentEnrollment(
+          response?.status === false
+            ? null
+            : getCurrentEnrollment(
+                response
+              )
+        );
+
+        setEnrollmentLoading(false);
+      };
+
+    loadEnrollment();
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const displayStudent =
+    useMemo(
+      () =>
+        mergeStudentEnrollment(
+          student,
+          currentEnrollment
+        ),
+      [
+        student,
+        currentEnrollment,
+      ]
+    );
+
   const permissions =
     usePermissions("students");
 
@@ -211,7 +303,7 @@ const Profile = () => {
     }
   };
 
-  if (loading) {
+  if (loading || enrollmentLoading) {
     return (
       <Container>
         <Stack spacing={1.4}>
@@ -271,9 +363,9 @@ const Profile = () => {
   }
 
   const fullName = [
-    student.firstName,
-    student.fatherName,
-    student.familyName,
+    displayStudent.firstName,
+    displayStudent.fatherName,
+    displayStudent.familyName,
   ]
     .filter(Boolean)
     .join(" ");
@@ -284,7 +376,7 @@ const Profile = () => {
         <Back title="تفاصيل الطالب" />
 
         <StudentHeader
-          student={student}
+          student={displayStudent}
           fullName={fullName}
           permissions={permissions}
           toggleLoading={toggleLoading}
@@ -293,7 +385,7 @@ const Profile = () => {
         />
 
         <StudentDetails
-          student={student}
+          student={displayStudent}
         />
       </Stack>
 
@@ -423,11 +515,17 @@ const StudentHeader = ({
             fontSize: "10.5px",
           }}
         >
-          {student.academicYear || "بدون صف"}
+          {getStudentAcademicYearLabel(
+            student
+          )}
           {" • "}
-          {student.class?.roomNumber
-            ? `الفصل ${student.class.roomNumber}`
-            : "بدون فصل"}
+          {getStudentClassLabel(
+            student
+          ) === "لا يوجد"
+            ? "بدون فصل"
+            : `الفصل ${getStudentClassLabel(
+                student
+              )}`}
         </Typography>
       </Box>
     </Stack>
@@ -534,41 +632,24 @@ const StudentHeader = ({
 );
 
 const StudentDetails = ({ student }) => {
-  const currentInstallmentPlanId =
-    student?.installmentPlanId;
+  const classValue =
+    getStudentClassLabel(
+      student
+    );
 
-  const {
-    installmentPlan,
-    loading: installmentPlanLoading,
-  } = useInstallmentPlan(
-    currentInstallmentPlanId
-  );
-
-  const classValue = student?.class
-    ? `${student.class.academicYear || ""} - ${
-        student.class.roomNumber || ""
-      } - ${
-        student.class.gender === "male"
-          ? "بنين"
-          : "بنات"
-      }`
-    : "لا يوجد";
-
-  const installmentValue =
-    installmentPlanLoading
-      ? "جاري تحميل الخطة..."
-      : installmentPlan
-      ? `${installmentPlan.name} (${installmentPlan.numberOfInstallments} قسط)`
-      : currentInstallmentPlanId
-      ? "خطة غير معروفة"
-      : "كاش بدون تقسيط";
+  const academicYearValue =
+    getStudentAcademicYearLabel(
+      student
+    );
 
   const data = [
     {
       label: "تاريخ الميلاد",
       value: student.birthDate
         ? formatDate(
-            new Date(student.birthDate),
+            new Date(
+              student.birthDate
+            ),
             "eee, dd MMM yyyy"
           )
         : "—",
@@ -579,17 +660,22 @@ const StudentDetails = ({ student }) => {
       value:
         student.gender === "male"
           ? "ولد"
-          : "بنت",
+          : student.gender === "female"
+          ? "بنت"
+          : "—",
       icon: <PersonOutlineRounded />,
     },
     {
       label: "الجنسية",
-      value: student.nationality || "—",
+      value:
+        student.nationality ||
+        "—",
       icon: <BadgeOutlined />,
     },
     {
-      label: "الصف الدراسي",
-      value: student.academicYear || "—",
+      label: "السنة الدراسية",
+      value:
+        academicYearValue,
       icon: <SchoolOutlined />,
     },
     {
@@ -600,38 +686,43 @@ const StudentDetails = ({ student }) => {
     {
       label: "رقم الهاتف",
       value:
-        student.phoneNumber || "لا يوجد",
+        student.phoneNumber ||
+        student.phone ||
+        "لا يوجد",
       icon: <LocalPhoneOutlined />,
     },
     {
       label: "البريد الإلكتروني",
-      value: student.email || "—",
+      value:
+        student.email ||
+        "—",
       icon: <EmailOutlined />,
     },
     {
       label: "العنوان",
-      value: student.address || "—",
+      value:
+        student.address ||
+        "—",
       icon: <HomeOutlined />,
     },
     {
       label: "المدرسة السابقة",
       value:
-        student.previousSchool || "لا يوجد",
+        student.previousSchool ||
+        "لا يوجد",
       icon: <SchoolOutlined />,
     },
     {
-      label: "خطة التقسيط",
-      value: installmentValue,
-      icon: <PaymentsOutlined />,
-    },
-    {
       label: "تاريخ التسجيل",
-      value: student.registrationDate
-        ? formatDate(
-            new Date(student.registrationDate),
-            "eee, dd MMM yyyy"
-          )
-        : "—",
+      value:
+        student.registrationDate
+          ? formatDate(
+              new Date(
+                student.registrationDate
+              ),
+              "eee, dd MMM yyyy"
+            )
+          : "—",
       icon: <CalendarMonthOutlined />,
     },
   ];
@@ -645,19 +736,21 @@ const StudentDetails = ({ student }) => {
           md: 1.9,
         },
 
-        border: "1px solid rgba(36, 74, 112, 0.08)",
+        border:
+          "1px solid rgba(36, 74, 112, 0.08)",
         borderRadius: "20px",
-
-        backgroundColor: "var(--color-cream)",
-
-        boxShadow: "0 10px 24px rgba(18, 47, 77, 0.055)",
+        backgroundColor:
+          "var(--color-cream)",
+        boxShadow:
+          "0 10px 24px rgba(18, 47, 77, 0.055)",
       }}
     >
       <Box sx={{ mb: 1.5 }}>
         <Typography
           component="h2"
           sx={{
-            color: "var(--color-navy-deep)",
+            color:
+              "var(--color-navy-deep)",
             fontSize: "16px",
             fontWeight: 800,
           }}
@@ -668,15 +761,20 @@ const StudentDetails = ({ student }) => {
         <Typography
           sx={{
             mt: 0.25,
-            color: "var(--color-muted)",
+            color:
+              "var(--color-muted)",
             fontSize: "9.5px",
           }}
         >
-          البيانات الشخصية والدراسية وبيانات التواصل.
+          البيانات الشخصية والدراسية
+          وبيانات التواصل.
         </Typography>
       </Box>
 
-      <Grid container spacing={1.2}>
+      <Grid
+        container
+        spacing={1.2}
+      >
         {data.map((field) => (
           <Grid
             item
@@ -685,15 +783,22 @@ const StudentDetails = ({ student }) => {
             lg={4}
             key={field.label}
           >
-            <DetailCard {...field} />
+            <DetailCard
+              {...field}
+            />
           </Grid>
         ))}
 
         <Grid item xs={12}>
           <DetailCard
-            icon={<BadgeOutlined />}
+            icon={
+              <BadgeOutlined />
+            }
             label="ملاحظات"
-            value={student.notes || "—"}
+            value={
+              student.notes ||
+              "—"
+            }
           />
         </Grid>
       </Grid>

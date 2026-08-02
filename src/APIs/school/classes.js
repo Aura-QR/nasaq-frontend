@@ -281,8 +281,19 @@ export const fetchClasses =
       const normalizedFilters =
         typeof filters === "string"
           ? {
-              academicYear:
-                filters,
+              /*
+               * يدعم القيمة القديمة، لكن عند تمرير MongoID
+               * يتم إرسال الاسم الصحيح حسب الباك الجديد.
+               */
+              ...( /^[a-f\d]{24}$/i.test(filters)
+                ? {
+                    academicYearId:
+                      filters,
+                  }
+                : {
+                    academicYear:
+                      filters,
+                  } ),
             }
           : filters || {};
 

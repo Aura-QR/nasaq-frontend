@@ -15,10 +15,14 @@ import PlatformDashboard from "@/pages/PlatformDashboard/PlatformDashboard";
 import PlatformSchools from "@/pages/PlatformSchools/PlatformSchools";
 import PlatformSchoolDetails from "@/pages/PlatformSchoolDetails/PlatformSchoolDetails";
 
+import SchoolManagersList from "@/pages/SchoolManagers/List";
+import SchoolManagerAdd from "@/pages/SchoolManagers/Add";
+
 import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
 
 import AuthenticatedRoute from "@/shared/guards/AuthenticatedRoute";
 import GuestRoute from "@/shared/guards/GuestRoute";
+import OwnerOnlyRoute from "@/shared/guards/OwnerOnlyRoute";
 import RoleRoute from "@/shared/guards/RoleRoute";
 
 import {
@@ -38,20 +42,6 @@ const AppRouter = () => {
         path="/"
         element={<Home />}
       />
-      <Route
-  path="/platform"
-  element={<PlatformLayout />}
->
-  <Route
-    path="schools"
-    element={<PlatformSchools />}
-  />
-
-  <Route
-    path="schools/:schoolId"
-    element={<PlatformSchoolDetails />}
-  />
-</Route>
 
       <Route
         path="/onboarding"
@@ -94,12 +84,13 @@ const AppRouter = () => {
         />
       </Route>
 
-      {/* Super Admin / Platform routes */}
+      {/* Authenticated routes */}
       <Route
         element={
           <AuthenticatedRoute loginPath="/login" />
         }
       >
+        {/* Super Admin / Platform */}
         <Route
           element={
             <RoleRoute
@@ -111,9 +102,7 @@ const AppRouter = () => {
         >
           <Route
             path="/platform"
-            element={
-              <PlatformLayout />
-            }
+            element={<PlatformLayout />}
           >
             <Route
               index
@@ -127,34 +116,36 @@ const AppRouter = () => {
 
             <Route
               path="dashboard"
-              element={
-                <PlatformDashboard />
-              }
+              element={<PlatformDashboard />}
             />
 
             <Route
               path="schools"
-              element={
-                <PlatformSchools />
-              }
+              element={<PlatformSchools />}
             />
 
             <Route
               path="schools/:schoolId"
-              element={
-                <PlatformSchoolDetails />
-              }
+              element={<PlatformSchoolDetails />}
             />
           </Route>
         </Route>
-      </Route>
 
-      {/* School-scoped authenticated routes */}
-      <Route
-        element={
-          <AuthenticatedRoute loginPath="/login" />
-        }
-      >
+        {/* Owner-only administrative accounts */}
+        <Route
+          element={<OwnerOnlyRoute />}
+        >
+          <Route
+            path="/school/managers"
+            element={<SchoolManagersList />}
+          />
+
+          <Route
+            path="/school/managers/add"
+            element={<SchoolManagerAdd />}
+          />
+        </Route>
+
         {/* Owner / Supervisor / Manager */}
         <Route
           element={
@@ -188,9 +179,7 @@ const AppRouter = () => {
         >
           <Route
             path="/teacher/dashboard"
-            element={
-              <TeacherDashboard />
-            }
+            element={<TeacherDashboard />}
           />
         </Route>
 
@@ -218,8 +207,6 @@ const AppRouter = () => {
         {/*
          * Temporary compatibility with
          * existing protected application routes.
-         * These routes can later be moved into
-         * their corresponding modules.
          */}
         {appRoutes}
       </Route>

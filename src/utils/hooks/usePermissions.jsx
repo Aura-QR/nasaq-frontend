@@ -26,6 +26,18 @@ const FULL_SCHOOL_ACCESS_ROLES = [
   "SUPERVISOR",
 ];
 
+const ROLE_BLOCKED_MODULES = {
+  SUPERVISOR: [
+    "managers",
+  ],
+
+  MANAGER: [
+    "managers",
+    "financial",
+    "expenses",
+  ],
+};
+
 const safeJsonParse = (
   value,
   fallback
@@ -39,7 +51,9 @@ const safeJsonParse = (
 
 const getStoredRole = () => {
   const storedRole =
-    localStorage.getItem("role");
+    localStorage.getItem(
+      "role"
+    );
 
   if (storedRole) {
     return String(storedRole)
@@ -49,7 +63,9 @@ const getStoredRole = () => {
 
   const storedUser =
     safeJsonParse(
-      localStorage.getItem("user"),
+      localStorage.getItem(
+        "user"
+      ),
       null
     );
 
@@ -60,26 +76,64 @@ const getStoredRole = () => {
     .toUpperCase();
 };
 
-const getStoredPermissions = () => {
-  const raw =
-    localStorage.getItem(
-      "permissions"
-    );
+const getStoredPermissions =
+  () => {
+    const raw =
+      localStorage.getItem(
+        "permissions"
+      );
 
-  if (!raw) {
-    return [];
-  }
+    if (!raw) {
+      return [];
+    }
 
-  const parsed =
-    safeJsonParse(raw, []);
+    const parsed =
+      safeJsonParse(
+        raw,
+        []
+      );
 
-  return parsed || [];
+    return parsed || [];
+  };
+
+const getModuleKey = (
+  module
+) => {
+  const normalized =
+    String(module || "")
+      .replace(/^school\./, "");
+
+  return normalized.split(".")[0];
+};
+
+const isRoleBlocked = (
+  role,
+  module
+) => {
+  const moduleKey =
+    getModuleKey(module);
+
+  return (
+    ROLE_BLOCKED_MODULES[
+      role
+    ] || []
+  ).includes(moduleKey);
 };
 
 const hasWildcardAccess = (
   permissions,
-  role
+  role,
+  module
 ) => {
+  if (
+    isRoleBlocked(
+      role,
+      module
+    )
+  ) {
+    return false;
+  }
+
   if (
     FULL_SCHOOL_ACCESS_ROLES.includes(
       role
@@ -90,7 +144,9 @@ const hasWildcardAccess = (
 
   return (
     permissions === "*" ||
-    permissions?.includes?.("*") ||
+    permissions?.includes?.(
+      "*"
+    ) ||
     permissions?.includes?.(
       "school.*"
     )
@@ -121,11 +177,13 @@ const buildPermissionName = (
   operation
 ) => {
   if (
-    module?.startsWith?.("school.")
+    module?.startsWith?.(
+      "school."
+    )
   ) {
     if (
-      module.split(".").length >=
-      3
+      module.split(".")
+        .length >= 3
     ) {
       return module;
     }
@@ -136,34 +194,39 @@ const buildPermissionName = (
   return `school.${module}.${operation}`;
 };
 
-/**
- * الاستخدام الحالي:
- *
- * usePermissions("students", "read")
- * usePermissions("students")
- *
- * ويدعم أيضًا:
- *
- * usePermissions("school.students.read")
- */
 const usePermissions = (
   module,
   operation
 ) => {
-  const role = getStoredRole();
+  const role =
+    getStoredRole();
 
   const permissions =
     getStoredPermissions();
 
   if (
-    hasWildcardAccess(
-      permissions,
-      role
+    isRoleBlocked(
+      role,
+      module
     )
   ) {
     return operation ||
-      module?.split?.(".").length >=
-        3
+      module?.split?.(".")
+        .length >= 3
+      ? false
+      : createEmptyModuleAccess();
+  }
+
+  if (
+    hasWildcardAccess(
+      permissions,
+      role,
+      module
+    )
+  ) {
+    return operation ||
+      module?.split?.(".")
+        .length >= 3
       ? true
       : createFullModuleAccess();
   }
@@ -174,12 +237,10 @@ const usePermissions = (
       : createEmptyModuleAccess();
   }
 
-  /*
-   * الصيغة الجديدة:
-   * ["school.students.read", ...]
-   */
   if (
-    Array.isArray(permissions)
+    Array.isArray(
+      permissions
+    )
   ) {
     if (!module) {
       return permissions;
@@ -189,15 +250,23 @@ const usePermissions = (
       module.startsWith?.(
         "school."
       ) &&
-      module.split(".").length >=
-        3;
+      module.split(".")
+        .length >= 3;
 
     if (
       isFullPermissionString &&
       !operation
     ) {
-      return permissions.includes(
-        module
+      return (
+        permissions.includes(
+          module
+        ) ||
+        permissions.includes(
+          `${module
+            .split(".")
+            .slice(0, 2)
+            .join(".")}.manage`
+        )
       );
     }
 
@@ -239,71 +308,93 @@ const usePermissions = (
 
     return {
       read:
-        hasOperation("read"),
+        hasOperation(
+          "read"
+        ),
+
       add:
-        hasOperation("add"),
+        hasOperation(
+          "add"
+        ),
+
       edit:
-        hasOperation("edit"),
+        hasOperation(
+          "edit"
+        ),
+
       delete:
-        hasOperation("delete"),
+        hasOperation(
+          "delete"
+        ),
     };
   }
 
-  /*
-   * دعم الصيغة القديمة:
-   * {
-   *   students: {
-   *     read: true,
-   *     add: true,
-   *     edit: true,
-   *     delete: true
-   *   }
-   * }
-   */
   if (
     typeof permissions ===
       "object" &&
     module
   ) {
     const normalizedModule =
-      module
-        .replace(/^school\./, "")
-        .split(".")[0];
+      getModuleKey(module);
 
     const modulePermissions =
       permissions[
         normalizedModule
-      ] || {};
+      ] ||
+      permissions?.school?.[
+        normalizedModule
+      ] ||
+      {};
+
+    if (
+      modulePermissions ===
+      true
+    ) {
+      return operation
+        ? true
+        : createFullModuleAccess();
+    }
 
     if (operation) {
-      return Boolean(
+      const normalizedOperation =
+        normalizeOperation(
+          operation
+        );
+
+      const operationValue =
         modulePermissions[
           operation
         ] ??
-          modulePermissions[
-            normalizeOperation(
-              operation
-            )
-          ]
+        modulePermissions[
+          normalizedOperation
+        ];
+
+      return Boolean(
+        modulePermissions.manage ||
+        operationValue
       );
     }
 
     return {
       read: Boolean(
+        modulePermissions.manage ||
         modulePermissions.read
       ),
 
       add: Boolean(
-        modulePermissions.add ??
-          modulePermissions.create
+        modulePermissions.manage ||
+        modulePermissions.add ||
+        modulePermissions.create
       ),
 
       edit: Boolean(
-        modulePermissions.edit ??
-          modulePermissions.update
+        modulePermissions.manage ||
+        modulePermissions.edit ||
+        modulePermissions.update
       ),
 
       delete: Boolean(
+        modulePermissions.manage ||
         modulePermissions.delete
       ),
 
