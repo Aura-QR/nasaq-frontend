@@ -8,6 +8,8 @@ import {
 
 import {
   AccountBalanceWallet,
+  AccountTreeRounded,
+  CalendarMonthRounded,
   Category as CategoryIcon,
   DirectionsBus,
   ExpandLess,
@@ -19,6 +21,7 @@ import {
   MoneyOff,
   ReceiptLong,
   Route,
+  SchoolRounded,
   ViewList,
 } from "@mui/icons-material";
 
@@ -188,6 +191,10 @@ const Sidebar = ({ active }) => {
 
   const isTeacher = role === "TEACHER";
 
+  const canManageAcademicYears =
+    role === "OWNER" ||
+    role === "SUPERVISOR";
+
   const categories = useMemo(() => {
     const baseCategories = [
       {
@@ -217,6 +224,27 @@ const Sidebar = ({ active }) => {
       {
         title: "الإدارة الأكاديمية",
         items: [
+          {
+            name: "السنوات الدراسية",
+            Icon: CalendarMonthRounded,
+            iconType: "mui",
+            to: "/school/academic-years",
+            show: canManageAcademicYears,
+          },
+          {
+            name: "إدارة المراحل",
+            Icon: AccountTreeRounded,
+            iconType: "mui",
+            to: "/school/stages",
+            show: classesPermissions.read,
+          },
+          {
+            name: "إدارة الصفوف",
+            Icon: SchoolRounded,
+            iconType: "mui",
+            to: "/school/grade-levels",
+            show: classesPermissions.read,
+          },
           {
             name: "إدارة المواد",
             icon: subjectIcon,
@@ -375,8 +403,8 @@ const Sidebar = ({ active }) => {
     return baseCategories;
   }, [
     isTeacher,
-    role,
     userId,
+    canManageAcademicYears,
     studentsPermissions.read,
     teachersPermissions.read,
     subjectsPermissions.read,

@@ -4,6 +4,7 @@ import {
   AssessmentRounded,
   AssignmentRounded,
   AutoStoriesRounded,
+  CalendarMonthRounded,
   CategoryRounded,
   DashboardRounded,
   DirectionsBusRounded,
@@ -86,6 +87,15 @@ const NAVIGATION_SECTIONS = [
     title: "الإدارة الأكاديمية",
 
     items: [
+      {
+        label: "السنوات الدراسية",
+        path: "/school/academic-years",
+        icon: <CalendarMonthRounded />,
+        allowedRoles: [
+          ROLES.OWNER,
+          ROLES.SUPERVISOR,
+        ],
+      },
       {
         label: "المواد",
         path: "/school/subjects",
@@ -330,9 +340,13 @@ const SchoolSidebar = ({
         items:
           section.items.filter(
             (item) =>
-              modulePermissions[
-                item.module
-              ]?.read
+              item.allowedRoles
+                ? item.allowedRoles.includes(
+                    role
+                  )
+                : modulePermissions[
+                    item.module
+                  ]?.read
           ),
       }))
       .filter(

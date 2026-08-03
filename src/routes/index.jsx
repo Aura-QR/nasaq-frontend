@@ -3,6 +3,18 @@ import {
 } from "react-router-dom";
 
 import {
+  academicYearsRoutes,
+} from "./academicYears.routes";
+
+import {
+  stagesRoutes,
+} from "./stages.routes";
+
+import {
+  gradeLevelsRoutes,
+} from "./gradeLevels.routes";
+
+import {
   studentsRoutes,
 } from "./students.routes";
 
@@ -77,6 +89,18 @@ const protectModule = (
 
 export const appRoutes = (
   <>
+    {academicYearsRoutes}
+
+    {protectModule(
+      "classes",
+      stagesRoutes
+    )}
+
+    {protectModule(
+      "classes",
+      gradeLevelsRoutes
+    )}
+
     {protectModule(
       "students",
       studentsRoutes
