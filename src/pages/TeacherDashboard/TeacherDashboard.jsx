@@ -21,13 +21,20 @@ import {
   AutoAwesomeRounded,
   CalendarMonthRounded,
   CheckCircleRounded,
+  AssignmentRounded,
   EventAvailableRounded,
+  FactCheckRounded,
+  GradeRounded,
+  GroupsRounded,
+  HowToRegRounded,
   LibraryBooksRounded,
   LogoutRounded,
   MenuBookRounded,
+  QuizRounded,
   RefreshRounded,
   ScheduleRounded,
   SchoolRounded,
+  TaskAltRounded,
   VisibilityRounded,
   WarningAmberRounded,
 } from "@mui/icons-material";
@@ -55,8 +62,21 @@ import {
 } from "@/APIs/school/preparation";
 
 import {
+  fetchMyClasses,
+} from "@/APIs/school/classes";
+
+import {
   fetchMyTeacherProfile,
 } from "@/APIs/users/teachers";
+
+import {
+  fetchExams,
+} from "@/APIs/school/exams";
+
+import {
+  fetchTeacherProjects,
+  fetchProjectSubmissions,
+} from "@/APIs/school/projects";
 
 import nasaqLogo from "../../images/wadq-logo.png";
 
@@ -283,6 +303,62 @@ const getClassData = (lecture) => {
   };
 };
 
+const getClassId = (value) =>
+  normalizeId(
+    value?.class ||
+      value?.classId ||
+      value
+  );
+
+const getClassStudentCount = (classItem) => {
+  const arrayCandidates = [
+    classItem?.students,
+    classItem?.studentIds,
+    classItem?.enrolledStudents,
+    classItem?.members,
+  ];
+
+  const populated = arrayCandidates.find(Array.isArray);
+
+  if (populated) {
+    return populated.length;
+  }
+
+  const numberCandidates = [
+    classItem?.studentsCount,
+    classItem?.studentCount,
+    classItem?.totalStudents,
+    classItem?.enrolledStudentsCount,
+  ];
+
+  const numeric = numberCandidates
+    .map(Number)
+    .find(Number.isFinite);
+
+  return numeric || 0;
+};
+
+const getClassRowData = (classItem) => {
+  const classData = getClassData({
+    class: classItem,
+  });
+
+  return {
+    id: getClassId(classItem),
+    label: classData.details
+      ? `${classData.name} • ${classData.details}`
+      : classData.name,
+    students: getClassStudentCount(classItem),
+  };
+};
+
+const formatLocalDate = (date = new Date()) =>
+  [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+
 const getSlotNumber = (lecture) => {
   const value = Number(
     lecture?.slot ||
@@ -315,8 +391,14 @@ const isLectureOnDay = (lecture, date) => {
 
 const getTimestamp = (value) => {
   const dateValue =
+    value?.submittedAt ||
+    value?.completedAt ||
+    value?.gradedAt ||
     value?.updatedAt ||
     value?.createdAt ||
+    value?.dueDate ||
+    value?.endDate ||
+    value?.startDate ||
     value?.date ||
     "";
 
@@ -342,6 +424,148 @@ const formatDateTime = (value) => {
   } catch {
     return "بدون تاريخ";
   }
+};
+
+
+const getExamId = (exam) => normalizeId(exam);
+const getProjectId = (project) => normalizeId(project);
+
+const EXAM_TYPE_LABELS = {
+  final: "اختبار نهائي",
+  assignment: "واجب",
+  activity: "نشاط",
+  quiz: "اختبار قصير",
+};
+
+const getEvaluationTitle = (item, fallback) =>
+  String(
+    item?.title ||
+      item?.name ||
+      item?.projectTitle ||
+      EXAM_TYPE_LABELS[item?.examType] ||
+      fallback ||
+      ""
+  ).trim();
+
+const getStudentName = (value) => {
+  const student =
+    value?.studentId ||
+    value?.student ||
+    value;
+
+  if (!student || typeof student !== "object") {
+    return "طالب غير محدد";
+  }
+
+  const combinedName = [
+    student?.firstName,
+    student?.familyName || student?.lastName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return (
+    student?.name ||
+    student?.fullName ||
+    combinedName ||
+    student?.email ||
+    "طالب غير محدد"
+  );
+};
+
+const getStudentId = (value) =>
+  normalizeId(
+    value?.studentId ||
+      value?.student ||
+      value
+  );
+
+const getEvaluationSubjectLabel = (item) => {
+  const offering =
+    item?.subjectOfferingId ||
+    item?.subjectOffering ||
+    null;
+
+  const subject =
+    (offering && typeof offering === "object"
+      ? offering?.subjectId || offering?.subject
+      : null) ||
+    item?.subjectId ||
+    item?.subject ||
+    null;
+
+  if (!subject || typeof subject !== "object") {
+    return (
+      item?.subjectName ||
+      item?.subjectCode ||
+      "مادة غير محددة"
+    );
+  }
+
+  const name =
+    subject?.subjectName ||
+    subject?.name ||
+    "";
+  const code =
+    subject?.subjectCode ||
+    subject?.code ||
+    "";
+
+  return [name, code].filter(Boolean).join(" - ") ||
+    "مادة غير محددة";
+};
+
+const hasProjectGrade = (submission) =>
+  submission?.grade !== undefined &&
+  submission?.grade !== null &&
+  String(submission.grade).trim() !== "";
+
+const isPendingProjectSubmission = (submission) =>
+  Boolean(submission) && !hasProjectGrade(submission);
+
+const loadProjectSubmissionsForDashboard = async (
+  projectList
+) => {
+  const candidates = [...projectList]
+    .filter((project) => Boolean(getProjectId(project)))
+    .sort(
+      (first, second) =>
+        getTimestamp(second) - getTimestamp(first)
+    )
+    .slice(0, 25);
+
+  const results = await Promise.allSettled(
+    candidates.map(async (project) => {
+      const projectId = getProjectId(project);
+      const response = await fetchProjectSubmissions(
+        projectId,
+        {
+          limit: 500,
+        }
+      );
+
+      const submissions =
+        response?.status === false ||
+        typeof response === "string"
+          ? []
+          : extractCollection(response, [
+              "submissions",
+              "projectSubmissions",
+            ]);
+
+      return submissions.map((submission) => ({
+        ...submission,
+        dashboardProject: project,
+      }));
+    })
+  );
+
+  return results.flatMap((result) =>
+    result.status === "fulfilled"
+      ? result.value
+      : []
+  );
 };
 
 const resolveTeacherId = (
@@ -460,7 +684,15 @@ const TeacherDashboard = () => {
 
   const [lectures, setLectures] =
     useState([]);
+  const [classes, setClasses] =
+    useState([]);
   const [preparations, setPreparations] =
+    useState([]);
+  const [exams, setExams] =
+    useState([]);
+  const [projects, setProjects] =
+    useState([]);
+  const [projectSubmissions, setProjectSubmissions] =
     useState([]);
   const [loading, setLoading] =
     useState(true);
@@ -501,7 +733,11 @@ const TeacherDashboard = () => {
     async ({ silent = false } = {}) => {
       if (!teacherId) {
         setLectures([]);
+        setClasses([]);
         setPreparations([]);
+        setExams([]);
+        setProjects([]);
+        setProjectSubmissions([]);
         setError(
           "تعذر تحديد حساب المعلم الحالي. سجّل الدخول مرة أخرى أو تأكد من وجود معرّف المعلم في بيانات الجلسة."
         );
@@ -519,18 +755,15 @@ const TeacherDashboard = () => {
       setError("");
 
       try {
-        const profileResponse =
-          await fetchMyTeacherProfile();
-
-        const profile =
-          extractEntity(profileResponse);
-
-        if (profile) {
-          setTeacherProfile(profile);
-        }
-
-        const lectureResponse =
-          await fetchLectures(
+        const [
+          profileResponse,
+          lectureResponse,
+          classesResponse,
+          examsResponse,
+          projectsResponse,
+        ] = await Promise.all([
+          fetchMyTeacherProfile(),
+          fetchLectures(
             {
               teacherId,
               limit: 500,
@@ -538,7 +771,24 @@ const TeacherDashboard = () => {
             {
               force: true,
             }
-          );
+          ),
+          fetchMyClasses(),
+          fetchExams({
+            page: 1,
+            limit: 100,
+          }),
+          fetchTeacherProjects({
+            page: 1,
+            limit: 100,
+          }),
+        ]);
+
+        const profile =
+          extractEntity(profileResponse);
+
+        if (profile) {
+          setTeacherProfile(profile);
+        }
 
         if (lectureResponse?.status === false) {
           throw new Error(
@@ -553,17 +803,57 @@ const TeacherDashboard = () => {
             ["lectures"]
           );
 
-        const preparationList =
-          await loadPreparationsForTeacher(
+        const classList =
+          classesResponse?.status === false ||
+          typeof classesResponse === "string"
+            ? []
+            : extractCollection(
+                classesResponse,
+                ["classes"]
+              );
+
+        const examList =
+          examsResponse?.status === false ||
+          typeof examsResponse === "string"
+            ? []
+            : extractCollection(examsResponse, [
+                "exams",
+              ]);
+
+        const projectList =
+          projectsResponse?.status === false ||
+          typeof projectsResponse === "string"
+            ? []
+            : extractCollection(projectsResponse, [
+                "projects",
+              ]);
+
+        const [
+          preparationList,
+          submissionList,
+        ] = await Promise.all([
+          loadPreparationsForTeacher(
             teacherId,
             lectureList
-          );
+          ),
+          loadProjectSubmissionsForDashboard(
+            projectList
+          ),
+        ]);
 
         setLectures(lectureList);
+        setClasses(classList);
         setPreparations(preparationList);
+        setExams(examList);
+        setProjects(projectList);
+        setProjectSubmissions(submissionList);
       } catch (requestError) {
         setLectures([]);
+        setClasses([]);
         setPreparations([]);
+        setExams([]);
+        setProjects([]);
+        setProjectSubmissions([]);
         setError(
           requestError?.message ||
             requestError?.response?.data?.message ||
@@ -736,6 +1026,135 @@ const TeacherDashboard = () => {
     [preparations, lectureMap]
   );
 
+  const classRows = useMemo(() => {
+    const source =
+      classes.length > 0
+        ? classes
+        : enrichedLectures
+            .map(
+              (lecture) =>
+                lecture?.class ||
+                lecture?.classId
+            )
+            .filter(
+              (classItem) =>
+                classItem &&
+                typeof classItem === "object"
+            );
+
+    const map = new Map();
+
+    source.forEach((classItem) => {
+      const row = getClassRowData(classItem);
+
+      if (!row.id || map.has(row.id)) {
+        return;
+      }
+
+      map.set(row.id, row);
+    });
+
+    return Array.from(map.values());
+  }, [classes, enrichedLectures]);
+
+
+  const pendingProjectCorrections = useMemo(
+    () =>
+      projectSubmissions
+        .filter(isPendingProjectSubmission)
+        .map((submission, index) => {
+          const project =
+            submission?.dashboardProject ||
+            submission?.project ||
+            submission?.projectId ||
+            null;
+          const projectId = getProjectId(project);
+
+          return {
+            id: `project-${projectId || "unknown"}-${
+              getStudentId(submission) || index
+            }`,
+            type: "project",
+            typeLabel: "مشروع",
+            title: getEvaluationTitle(
+              project,
+              "مشروع بدون عنوان"
+            ),
+            student: getStudentName(submission),
+            subject: getEvaluationSubjectLabel(project),
+            date:
+              submission?.submittedAt ||
+              submission?.updatedAt ||
+              submission?.createdAt,
+            path: projectId
+              ? `/teacher/grading/projects?projectId=${projectId}&studentId=${getStudentId(
+                  submission
+                )}`
+              : "/teacher/grading/projects",
+          };
+        }),
+    [projectSubmissions]
+  );
+
+  const pendingCorrections = useMemo(
+    () =>
+      [...pendingProjectCorrections].sort(
+        (first, second) =>
+          getTimestamp({ date: second.date }) -
+          getTimestamp({ date: first.date })
+      ),
+    [pendingProjectCorrections]
+  );
+
+  const recentEvaluations = useMemo(
+    () =>
+      [
+        ...exams.map((exam) => ({
+          id: `exam-${getExamId(exam)}`,
+          type: "exam",
+          typeLabel: "اختبار",
+          title: getEvaluationTitle(
+            exam,
+            "اختبار بدون عنوان"
+          ),
+          subject: getEvaluationSubjectLabel(exam),
+          date:
+            exam?.updatedAt ||
+            exam?.createdAt ||
+            exam?.startDate ||
+            exam?.endDate,
+          path: getExamId(exam)
+            ? `/school/exams/${getExamId(exam)}`
+            : "/teacher/exams",
+        })),
+        ...projects.map((project) => ({
+          id: `project-${getProjectId(project)}`,
+          type: "project",
+          typeLabel: "مشروع",
+          title: getEvaluationTitle(
+            project,
+            "مشروع بدون عنوان"
+          ),
+          subject: getEvaluationSubjectLabel(project),
+          date:
+            project?.updatedAt ||
+            project?.createdAt ||
+            project?.dueDate,
+          path: getProjectId(project)
+            ? `/school/projects/${getProjectId(project)}`
+            : "/school/projects",
+        })),
+      ]
+        .filter((item) => item.id)
+        .sort(
+          (first, second) =>
+            getTimestamp({ date: second.date }) -
+            getTimestamp({ date: first.date })
+        )
+        .slice(0, 4),
+    [exams, projects]
+  );
+
   const todayLabel = useMemo(() => {
     try {
       return new Intl.DateTimeFormat(
@@ -799,10 +1218,13 @@ const TeacherDashboard = () => {
         icon: <EventAvailableRounded />,
       },
       {
-        title: "نسبة التحضير",
-        value: `${completionRate}%`,
-        helper: "من إجمالي حصص الجدول",
-        icon: <AutoAwesomeRounded />,
+        title: "تسليمات تحتاج تصحيح",
+        value: pendingProjectCorrections.length,
+        helper:
+          pendingProjectCorrections.length > 0
+            ? "تسليمات مشروعات غير مصححة"
+            : "لا توجد تسليمات منتظرة",
+        icon: <FactCheckRounded />,
       },
     ],
     [
@@ -810,7 +1232,7 @@ const TeacherDashboard = () => {
       enrichedLectures.length,
       preparedLectures.length,
       unpreparedLectures.length,
-      completionRate,
+      pendingProjectCorrections.length,
     ]
   );
 
@@ -825,20 +1247,27 @@ const TeacherDashboard = () => {
           navigate("/teacher/schedule"),
       },
       {
+        title: "تسجيل الحضور",
+        description: todayLectures.length
+          ? "ابدأ تسجيل حضور وغياب طلاب حصص اليوم"
+          : "راجع سجلات الحضور والغياب",
+        icon: <HowToRegRounded />,
+        onClick: () => {
+          if (todayLectures[0]) {
+            openAttendance(todayLectures[0]);
+            return;
+          }
+
+          navigate("/teacher/attendance");
+        },
+      },
+      {
         title: "تحضيراتي",
         description:
           "راجع ملفات التحضير الحالية وافتح تفاصيلها",
         icon: <MenuBookRounded />,
         onClick: () =>
           navigate("/school/preparation"),
-      },
-      {
-        title: "المكتبة",
-        description:
-          "افتح المصادر والروابط التعليمية المتاحة",
-        icon: <LibraryBooksRounded />,
-        onClick: () =>
-          navigate("/school/library"),
       },
       {
         title: nextUnpreparedLecture
@@ -869,9 +1298,61 @@ const TeacherDashboard = () => {
           navigate("/school/preparation");
         },
       },
+      {
+        title: "اختباراتي",
+        description: `${exams.length} اختبار • التصحيح من تفاصيل الاختبار`,
+        icon: <QuizRounded />,
+        onClick: () =>
+          navigate("/teacher/exams"),
+      },
+      {
+        title: "تصحيح المشروعات",
+        description: `${pendingProjectCorrections.length} تسليم يحتاج تصحيح من ${projects.length} مشروع`,
+        icon: <FactCheckRounded />,
+        onClick: () =>
+          navigate("/teacher/grading/projects"),
+      },
+      {
+        title: "المكتبة",
+        description:
+          "افتح المصادر والروابط التعليمية المتاحة",
+        icon: <LibraryBooksRounded />,
+        onClick: () =>
+          navigate("/school/library"),
+      },
+      {
+        title: "فصولي وطلابي",
+        description: `${classRows.length} فصل مرتبط بحسابك`,
+        icon: <GroupsRounded />,
+        onClick: () =>
+          navigate("/teacher/classes"),
+      },
     ],
-    [navigate, nextUnpreparedLecture]
+    [
+      navigate,
+      nextUnpreparedLecture,
+      todayLectures,
+      exams.length,
+      projects.length,
+      pendingProjectCorrections.length,
+      classRows.length,
+    ]
   );
+
+  const openAttendance = (lecture) => {
+    const classId = getClassId(lecture);
+    const params = new URLSearchParams();
+
+    if (classId) {
+      params.set("classId", classId);
+    }
+
+    params.set("date", formatLocalDate());
+
+    navigate(
+      `/teacher/attendance?${params.toString()}`
+    );
+  };
 
   const handleLogout = () => {
     signOut();
@@ -1594,6 +2075,191 @@ const TeacherDashboard = () => {
             </SectionCard>
 
             <SectionCard
+              title="تصحيح المشروعات"
+              subtitle="تسليمات الطلاب غير المصححة"
+              action={
+                <Button
+                  type="button"
+                  onClick={() =>
+                    navigate("/teacher/grading/projects")
+                  }
+                  endIcon={<ArrowBackRounded />}
+                  sx={{
+                    color: "var(--color-navy)",
+                    fontSize: "8.5px",
+                    fontWeight: 800,
+                    textTransform: "none",
+                  }}
+                >
+                  كل التسليمات
+                </Button>
+              }
+            >
+              <Alert
+                severity="info"
+                sx={{
+                  mb: 0.9,
+                  py: 0.15,
+                  borderRadius: "10px",
+                  fontSize: "8.5px",
+                  "& .MuiAlert-icon": {
+                    py: 0.45,
+                    fontSize: 17,
+                  },
+                  "& .MuiAlert-message": {
+                    py: 0.45,
+                  },
+                }}
+              >
+                تصحيح الاختبارات اليدوي متاح من صفحة تفاصيل الاختبار؛ الباك لا يوفّر حاليًا قائمة مستقلة بالمحاولات المنتظرة.
+              </Alert>
+
+              {pendingCorrections.length > 0 ? (
+                <Stack spacing={0.75}>
+                  {pendingCorrections
+                    .slice(0, 5)
+                    .map((correction) => (
+                      <Paper
+                        key={correction.id}
+                        elevation={0}
+                        sx={{
+                          p: 1.05,
+                          display: "grid",
+                          gridTemplateColumns: {
+                            xs: "1fr auto",
+                            sm: "42px minmax(0,1fr) auto",
+                          },
+                          alignItems: "center",
+                          gap: 1,
+                          border:
+                            "1px solid rgba(36,74,112,0.07)",
+                          borderRadius: "13px",
+                          backgroundColor:
+                            "var(--color-white)",
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: 36,
+                            height: 36,
+                            display: {
+                              xs: "none",
+                              sm: "grid",
+                            },
+                            placeItems: "center",
+                            color: "var(--color-gold-dark)",
+                            backgroundColor:
+                              "var(--color-gold-soft)",
+                            borderRadius: "10px",
+                            "& svg": {
+                              fontSize: 19,
+                            },
+                          }}
+                        >
+                          <AssignmentRounded />
+                        </Box>
+
+                        <Box sx={{ minWidth: 0 }}>
+                          <Stack
+                            direction="row"
+                            alignItems="center"
+                            flexWrap="wrap"
+                            gap={0.6}
+                          >
+                            <Chip
+                              label={correction.typeLabel}
+                              size="small"
+                              sx={{
+                                height: 20,
+                                color: "#8a5f12",
+                                backgroundColor: "#fff3d8",
+                                fontSize: "7.5px",
+                                fontWeight: 800,
+                              }}
+                            />
+                            <Typography
+                              noWrap
+                              sx={{
+                                color:
+                                  "var(--color-navy-deep)",
+                                fontSize: "10.5px",
+                                fontWeight: 800,
+                              }}
+                            >
+                              {correction.title}
+                            </Typography>
+                          </Stack>
+
+                          <Typography
+                            noWrap
+                            sx={{
+                              mt: 0.3,
+                              color:
+                                "var(--color-muted)",
+                              fontSize: "8px",
+                            }}
+                          >
+                            {correction.student} • {correction.subject} • {formatDateTime({
+                              date: correction.date,
+                            })}
+                          </Typography>
+                        </Box>
+
+                        <Button
+                          type="button"
+                          size="small"
+                          variant="contained"
+                          startIcon={<GradeRounded />}
+                          onClick={() =>
+                            navigate(correction.path)
+                          }
+                          sx={{
+                            minHeight: 31,
+                            px: 1.15,
+                            borderRadius: "9px",
+                            color: "var(--color-white)",
+                            backgroundColor:
+                              "var(--color-navy)",
+                            fontSize: "8.5px",
+                            fontWeight: 800,
+                            textTransform: "none",
+                            "& .MuiButton-startIcon": {
+                              marginLeft: "4px",
+                              marginRight: 0,
+                            },
+                            "& svg": {
+                              fontSize:
+                                "14px !important",
+                            },
+                          }}
+                        >
+                          تصحيح الآن
+                        </Button>
+                      </Paper>
+                    ))}
+
+                  {pendingCorrections.length > 5 && (
+                    <Typography
+                      sx={{
+                        color: "var(--color-muted)",
+                        fontSize: "8.5px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      يوجد {pendingCorrections.length - 5} تسليم إضافي ينتظر التصحيح.
+                    </Typography>
+                  )}
+                </Stack>
+              ) : (
+                <EmptyState
+                  icon={<TaskAltRounded />}
+                  title="لا توجد تسليمات تحتاج تصحيح"
+                  description="عند تسليم الطلاب للمشروعات ستظهر التسليمات غير المصححة هنا تلقائيًا."
+                />
+              )}
+            </SectionCard>
+
+            <SectionCard
               title="جدول اليوم"
               subtitle="حصص اليوم وحالة التحضير لكل حصة"
               action={
@@ -1690,67 +2356,108 @@ const TeacherDashboard = () => {
                           </Typography>
                         </Box>
 
-                        <Button
-                          type="button"
-                          size="small"
-                          variant={
-                            hasPreparation
-                              ? "contained"
-                              : "outlined"
-                          }
-                          startIcon={
-                            hasPreparation ? (
-                              <VisibilityRounded />
-                            ) : (
-                              <AddRounded />
-                            )
-                          }
-                          onClick={() => {
-                            if (hasPreparation) {
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          justifyContent="flex-end"
+                          flexWrap="wrap"
+                          gap={0.65}
+                        >
+                          <Button
+                            type="button"
+                            size="small"
+                            variant="outlined"
+                            startIcon={<HowToRegRounded />}
+                            onClick={() =>
+                              openAttendance(lecture)
+                            }
+                            sx={{
+                              minHeight: 31,
+                              px: 1,
+                              borderRadius: "9px",
+                              color: "var(--color-navy)",
+                              borderColor:
+                                "rgba(36,74,112,0.18)",
+                              backgroundColor:
+                                "rgba(36,74,112,0.025)",
+                              fontSize: "8.5px",
+                              fontWeight: 800,
+                              textTransform: "none",
+                              "& .MuiButton-startIcon": {
+                                marginLeft: "4px",
+                                marginRight: 0,
+                              },
+                              "& svg": {
+                                fontSize:
+                                  "14px !important",
+                              },
+                            }}
+                          >
+                            تسجيل الحضور
+                          </Button>
+
+                          <Button
+                            type="button"
+                            size="small"
+                            variant={
+                              hasPreparation
+                                ? "contained"
+                                : "outlined"
+                            }
+                            startIcon={
+                              hasPreparation ? (
+                                <VisibilityRounded />
+                              ) : (
+                                <AddRounded />
+                              )
+                            }
+                            onClick={() => {
+                              if (hasPreparation) {
+                                navigate(
+                                  `/school/preparation/edit/${getPreparationId(
+                                    preparation
+                                  )}`
+                                );
+                                return;
+                              }
+
                               navigate(
-                                `/school/preparation/edit/${getPreparationId(
-                                  preparation
+                                `/school/preparation/add?lectureId=${getLectureId(
+                                  lecture
                                 )}`
                               );
-                              return;
-                            }
-
-                            navigate(
-                              `/school/preparation/add?lectureId=${getLectureId(
-                                lecture
-                              )}`
-                            );
-                          }}
-                          sx={{
-                            minHeight: 31,
-                            px: 1,
-                            borderRadius: "9px",
-                            color: hasPreparation
-                              ? "var(--color-white)"
-                              : "var(--color-navy)",
-                            backgroundColor:
-                              hasPreparation
-                                ? "#287a51"
-                                : "transparent",
-                            borderColor:
-                              "rgba(36,74,112,0.18)",
-                            fontSize: "8.5px",
-                            fontWeight: 800,
-                            textTransform: "none",
-                            "& .MuiButton-startIcon": {
-                              marginLeft: "4px",
-                              marginRight: 0,
-                            },
-                            "& svg": {
-                              fontSize:
-                                "14px !important",
-                            },
-                          }}
-                        >
-                          {hasPreparation
-                            ? "فتح التحضير"
-                            : "إضافة تحضير"}
-                        </Button>
+                            }}
+                            sx={{
+                              minHeight: 31,
+                              px: 1,
+                              borderRadius: "9px",
+                              color: hasPreparation
+                                ? "var(--color-white)"
+                                : "var(--color-navy)",
+                              backgroundColor:
+                                hasPreparation
+                                  ? "#287a51"
+                                  : "transparent",
+                              borderColor:
+                                "rgba(36,74,112,0.18)",
+                              fontSize: "8.5px",
+                              fontWeight: 800,
+                              textTransform: "none",
+                              "& .MuiButton-startIcon": {
+                                marginLeft: "4px",
+                                marginRight: 0,
+                              },
+                              "& svg": {
+                                fontSize:
+                                  "14px !important",
+                              },
+                            }}
+                          >
+                            {hasPreparation
+                              ? "فتح التحضير"
+                              : "إضافة تحضير"}
+                          </Button>
+                        </Stack>
                       </Paper>
                     );
                   })}
@@ -1902,6 +2609,285 @@ const TeacherDashboard = () => {
                   onAction={() =>
                     navigate("/teacher/schedule")
                   }
+                />
+              )}
+            </SectionCard>
+
+            <SectionCard
+              title="الاختبارات والمشروعات"
+              subtitle="ملخص أعمال التقييم الخاصة بفصولك"
+            >
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: 0.8,
+                }}
+              >
+                <Button
+                  type="button"
+                  onClick={() =>
+                    navigate("/teacher/exams")
+                  }
+                  sx={{
+                    p: 1,
+                    display: "block",
+                    textAlign: "right",
+                    border:
+                      "1px solid rgba(36,74,112,0.07)",
+                    borderRadius: "12px",
+                    color: "var(--color-navy-deep)",
+                    backgroundColor:
+                      "var(--color-white)",
+                    textTransform: "none",
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    gap={0.6}
+                  >
+                    <QuizRounded
+                      sx={{
+                        color: "var(--color-navy)",
+                        fontSize: 19,
+                      }}
+                    />
+                    <Typography
+                      sx={{
+                        fontSize: "17px",
+                        fontWeight: 800,
+                      }}
+                    >
+                      {exams.length}
+                    </Typography>
+                  </Stack>
+                  <Typography
+                    sx={{
+                      mt: 0.45,
+                      fontSize: "9px",
+                      fontWeight: 800,
+                    }}
+                  >
+                    اختباراتي
+                  </Typography>
+                  <Typography
+                    noWrap
+                    sx={{
+                      mt: 0.2,
+                      color: "var(--color-muted)",
+                      fontSize: "7.5px",
+                    }}
+                  >
+                    التصحيح من تفاصيل الاختبار
+                  </Typography>
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={() =>
+                    navigate("/school/projects")
+                  }
+                  sx={{
+                    p: 1,
+                    display: "block",
+                    textAlign: "right",
+                    border:
+                      "1px solid rgba(36,74,112,0.07)",
+                    borderRadius: "12px",
+                    color: "var(--color-navy-deep)",
+                    backgroundColor:
+                      "var(--color-white)",
+                    textTransform: "none",
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    gap={0.6}
+                  >
+                    <AssignmentRounded
+                      sx={{
+                        color:
+                          "var(--color-gold-dark)",
+                        fontSize: 19,
+                      }}
+                    />
+                    <Typography
+                      sx={{
+                        fontSize: "17px",
+                        fontWeight: 800,
+                      }}
+                    >
+                      {projects.length}
+                    </Typography>
+                  </Stack>
+                  <Typography
+                    sx={{
+                      mt: 0.45,
+                      fontSize: "9px",
+                      fontWeight: 800,
+                    }}
+                  >
+                    مشروعاتي
+                  </Typography>
+                  <Typography
+                    noWrap
+                    sx={{
+                      mt: 0.2,
+                      color: "var(--color-muted)",
+                      fontSize: "7.5px",
+                    }}
+                  >
+                    {pendingProjectCorrections.length} تسليم ينتظر التصحيح
+                  </Typography>
+                </Button>
+              </Box>
+
+              {recentEvaluations.length > 0 && (
+                <Stack
+                  spacing={0.65}
+                  sx={{ mt: 0.9 }}
+                >
+                  {recentEvaluations.map((item) => (
+                    <Button
+                      key={item.id}
+                      type="button"
+                      onClick={() =>
+                        navigate(item.path)
+                      }
+                      sx={{
+                        p: 0.75,
+                        justifyContent: "flex-start",
+                        gap: 0.7,
+                        textAlign: "right",
+                        borderRadius: "10px",
+                        color:
+                          "var(--color-navy-deep)",
+                        backgroundColor:
+                          "rgba(36,74,112,0.025)",
+                        textTransform: "none",
+                      }}
+                    >
+                      {item.type === "exam" ? (
+                        <QuizRounded
+                          sx={{ fontSize: 16 }}
+                        />
+                      ) : (
+                        <AssignmentRounded
+                          sx={{ fontSize: 16 }}
+                        />
+                      )}
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography
+                          noWrap
+                          sx={{
+                            fontSize: "8.5px",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {item.title}
+                        </Typography>
+                        <Typography
+                          noWrap
+                          sx={{
+                            color:
+                              "var(--color-muted)",
+                            fontSize: "7px",
+                          }}
+                        >
+                          {item.typeLabel} • {item.subject}
+                        </Typography>
+                      </Box>
+                    </Button>
+                  ))}
+                </Stack>
+              )}
+            </SectionCard>
+
+            <SectionCard
+              title="فصولي"
+              subtitle="الفصول المسندة إليك وعدد الطلاب"
+            >
+              {classRows.length > 0 ? (
+                <Stack spacing={0.7}>
+                  {classRows.slice(0, 5).map((classItem) => (
+                    <Paper
+                      key={classItem.id}
+                      elevation={0}
+                      sx={{
+                        p: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 1,
+                        border:
+                          "1px solid rgba(36,74,112,0.07)",
+                        borderRadius: "12px",
+                        backgroundColor:
+                          "var(--color-white)",
+                      }}
+                    >
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        gap={0.8}
+                        sx={{ minWidth: 0 }}
+                      >
+                        <Box
+                          sx={{
+                            width: 31,
+                            height: 31,
+                            display: "grid",
+                            placeItems: "center",
+                            flexShrink: 0,
+                            color:
+                              "var(--color-navy)",
+                            backgroundColor:
+                              "rgba(36,74,112,0.06)",
+                            borderRadius: "9px",
+                            "& svg": {
+                              fontSize: 17,
+                            },
+                          }}
+                        >
+                          <GroupsRounded />
+                        </Box>
+
+                        <Typography
+                          noWrap
+                          sx={{
+                            color:
+                              "var(--color-navy-deep)",
+                            fontSize: "10px",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {classItem.label}
+                        </Typography>
+                      </Stack>
+
+                      <Chip
+                        label={`${classItem.students} طالب`}
+                        size="small"
+                        sx={{
+                          flexShrink: 0,
+                          color: "#287a51",
+                          backgroundColor: "#e7f6ed",
+                          fontSize: "8px",
+                          fontWeight: 800,
+                        }}
+                      />
+                    </Paper>
+                  ))}
+                </Stack>
+              ) : (
+                <EmptyState
+                  icon={<GroupsRounded />}
+                  title="لا توجد فصول مرتبطة بحسابك"
+                  description="ستظهر هنا الفصول المسندة إليك من الإدارة."
                 />
               )}
             </SectionCard>
@@ -2154,7 +3140,7 @@ const DashboardSkeleton = () => (
     >
       <Skeleton
         variant="rounded"
-        height={285}
+        height={235}
         sx={{
           mb: 1.5,
           borderRadius: "22px",

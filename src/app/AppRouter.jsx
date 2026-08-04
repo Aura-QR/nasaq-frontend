@@ -10,6 +10,12 @@ import Register from "@/pages/Register/Register";
 import Onboarding from "@/pages/Onboarding/Onboarding";
 import NoAccess from "@/pages/Others/NoAccess";
 import TeacherDashboard from "@/pages/TeacherDashboard/TeacherDashboard";
+import TeacherProjectGrading from "@/pages/TeacherProjectGrading/TeacherProjectGrading";
+import TeacherExams from "@/pages/TeacherExams/TeacherExams";
+import TeacherExamAdd from "@/pages/TeacherExamAdd/TeacherExamAdd";
+import TeacherAttendance from "@/pages/TeacherAttendance/TeacherAttendance";
+import TeacherSchedule from "@/pages/TeacherSchedule/TeacherSchedule";
+import TeacherClasses from "@/pages/TeacherClasses/TeacherClasses";
 
 import PlatformDashboard from "@/pages/PlatformDashboard/PlatformDashboard";
 import PlatformSchools from "@/pages/PlatformSchools/PlatformSchools";
@@ -37,28 +43,16 @@ import {
 const AppRouter = () => {
   return (
     <Routes>
-      {/* Public routes */}
-      <Route
-        path="/"
-        element={<Home />}
-      />
-
+      <Route path="/" element={<Home />} />
       <Route
         path="/onboarding"
         element={<Onboarding />}
       />
-
       <Route
         path="/no-access"
         element={<NoAccess />}
       />
 
-      {/*
-       * Unified authentication:
-       * /auth/login is used by all roles,
-       * so the old platform login URL now
-       * redirects to the normal login page.
-       */}
       <Route
         path="/platform/login"
         element={
@@ -69,28 +63,22 @@ const AppRouter = () => {
         }
       />
 
-      {/* Guest-only routes */}
-      <Route
-        element={<GuestRoute />}
-      >
+      <Route element={<GuestRoute />}>
         <Route
           path="/login"
           element={<Login />}
         />
-
         <Route
           path="/register"
           element={<Register />}
         />
       </Route>
 
-      {/* Authenticated routes */}
       <Route
         element={
           <AuthenticatedRoute loginPath="/login" />
         }
       >
-        {/* Super Admin / Platform */}
         <Route
           element={
             <RoleRoute
@@ -113,17 +101,14 @@ const AppRouter = () => {
                 />
               }
             />
-
             <Route
               path="dashboard"
               element={<PlatformDashboard />}
             />
-
             <Route
               path="schools"
               element={<PlatformSchools />}
             />
-
             <Route
               path="schools/:schoolId"
               element={<PlatformSchoolDetails />}
@@ -131,22 +116,17 @@ const AppRouter = () => {
           </Route>
         </Route>
 
-        {/* Owner-only administrative accounts */}
-        <Route
-          element={<OwnerOnlyRoute />}
-        >
+        <Route element={<OwnerOnlyRoute />}>
           <Route
             path="/school/managers"
             element={<SchoolManagersList />}
           />
-
           <Route
             path="/school/managers/add"
             element={<SchoolManagerAdd />}
           />
         </Route>
 
-        {/* Owner / Supervisor / Manager */}
         <Route
           element={
             <RoleRoute
@@ -167,7 +147,6 @@ const AppRouter = () => {
           />
         </Route>
 
-        {/* Teacher */}
         <Route
           element={
             <RoleRoute
@@ -178,12 +157,44 @@ const AppRouter = () => {
           }
         >
           <Route
+            path="/teacher"
+            element={
+              <Navigate
+                to="/teacher/dashboard"
+                replace
+              />
+            }
+          />
+          <Route
             path="/teacher/dashboard"
             element={<TeacherDashboard />}
           />
+          <Route
+            path="/teacher/grading/projects"
+            element={<TeacherProjectGrading />}
+          />
+          <Route
+            path="/teacher/exams"
+            element={<TeacherExams />}
+          />
+          <Route
+            path="/teacher/exams/add"
+            element={<TeacherExamAdd />}
+          />
+          <Route
+            path="/teacher/attendance"
+            element={<TeacherAttendance />}
+          />
+          <Route
+            path="/teacher/schedule"
+            element={<TeacherSchedule />}
+          />
+          <Route
+            path="/teacher/classes"
+            element={<TeacherClasses />}
+          />
         </Route>
 
-        {/* Student */}
         <Route
           element={
             <RoleRoute
@@ -204,14 +215,9 @@ const AppRouter = () => {
           />
         </Route>
 
-        {/*
-         * Temporary compatibility with
-         * existing protected application routes.
-         */}
         {appRoutes}
       </Route>
 
-      {/* Unknown routes */}
       <Route
         path="*"
         element={
