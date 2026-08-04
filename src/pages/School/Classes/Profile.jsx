@@ -1,403 +1,296 @@
 import {
-  Box,
-  Divider,
-  Grid,
-  IconButton,
-  Paper,
-  Stack,
-  Tooltip,
-  Typography,
-  Chip,
-  Button,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-} from "@mui/material";
-import Container from "@/components/Container/Container";
-import Back from "@/components/Back/Back";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import Popup from "@/components/Popup/Popup";
-import { Delete, Edit } from "@mui/icons-material";
-import { toast } from "react-toastify";
-import { translateGender } from "@/utils/helpers/translateGender";
+  ArrowBackRounded,
+  CalendarMonthRounded,
+  DeleteOutlineRounded,
+  EditRounded,
+  EventSeatRounded,
+  GroupsRounded,
+  MeetingRoomRounded,
+  PauseCircleRounded,
+  PlayCircleRounded,
+  RefreshRounded,
+  ScheduleRounded,
+  SchoolRounded,
+} from "@mui/icons-material";
 import {
-  deleteClass,
-  editClass,
-  toggleActiveClass,
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  LinearProgress,
+  Paper,
+  Skeleton,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "react-toastify";
+
+import Container from "@/components/Container/Container";
+import {
+  deleteSchoolClass,
+  getSchoolClassById,
+  getSchoolClassStudents,
+  toggleSchoolClassActive,
 } from "@/APIs/school/classes";
-import { useClass } from "@/utils/hooks/apis/useClass";
-import SubjectCheckBoxes from "@/components/Selector/SubjectCheckBoxes";
-import ClassStudentsList from "@/components/ClassLists/ClassStudentsList";
-import StudentsToBeAdded from "@/components/ClassLists/StudentsToBeAdded";
-import ClassAttendanceList from "@/components/ClassLists/ClassAttendanceList";
-import ClassAbsenceList from "@/components/ClassLists/ClassAbsenceList";
-import Loading from "@/components/Loading";
+import {
+  extractApiList,
+  extractClass,
+  getClassAcademicYear,
+  getClassCapacity,
+  getClassDisplayName,
+  getClassGenderLabel,
+  getClassGradeLevelName,
+  getClassRoomNumber,
+  getClassStageName,
+  getClassStudentCount,
+  getClassTeacherName,
+  getEntityId,
+  isClassActive,
+} from "@/utils/school/classData";
 import usePermissions from "@/utils/hooks/usePermissions";
+
+const studentName = (student) =>
+  String(student?.name || [student?.firstName, student?.fatherName, student?.familyName].filter(Boolean).join(" ") || "طالب");
+
+const InfoCard = ({ label, value, icon }) => (
+  <Paper elevation={0} sx={{ minHeight: 82, p: 1.25, display: "flex", alignItems: "center", gap: .9, border: "1px solid #ded8cd", borderRadius: "15px", backgroundColor: "#fff" }}>
+    <Box sx={{ width: 40, height: 40, display: "grid", placeItems: "center", color: "#b78430", backgroundColor: "#fbf0d8", borderRadius: "11px" }}>{icon}</Box>
+    <Box sx={{ minWidth: 0 }}><Typography sx={{ color: "#7e8791", fontSize: "8px", fontWeight: 700 }}>{label}</Typography><Typography noWrap title={String(value)} sx={{ color: "#122f4d", fontSize: "11px", fontWeight: 800 }}>{value}</Typography></Box>
+  </Paper>
+);
 
 const Profile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [item, setItem] = useState({});
-
-  // Fetch Class Data using custom hook
-  const { currentClass, loading } = useClass(id);
-
-  // Update item when currentClass changes
-  useEffect(() => {
-    if (currentClass) {
-      setItem(currentClass);
-    }
-  }, [currentClass]);
-
-  // Class Students
-  const [studentsToBeAdd, setStudentsToBeAdded] = useState([]);
-
-  // Absent Students
-  const [absentStudents, setAbsentStudents] = useState([]);
-
-  // handle delete
-  const [open, setOpen] = useState(false);
-  const handleDelete = async () => {
-    const res = await deleteClass(id);
-    if (res.status) {
-      toast.success("تم حذف الفصل بنجاح");
-      navigate("/users/classes");
-    } else {
-      toast.error(res || "حدث خطأ ما أثناء حذف الفصل");
-    }
-  };
-
-  // Handle Toggle Status
-  const [toggleLoading, setToggleLoading] = useState(false);
-  const handleToggleStatus = async () => {
-    setToggleLoading(true);
-    const res = await toggleActiveClass(id);
-    if (res.status) {
-      toast.success("تم تغيير حالة الفصل بنجاح");
-      setItem((prev) => ({ ...prev, isActive: !prev.isActive })); // Toggle the status
-    } else {
-      toast.error(res || "حدث خطأ ما أثناء تغيير حالة الفصل ");
-    }
-    setToggleLoading(false);
-  };
-
-  // Permissions
   const permissions = usePermissions("classes");
+  const [item, setItem] = useState(null);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [dialog, setDialog] = useState("");
 
-  // Show loading state
-  if (loading) {
-    return <Loading/>;
-  }
-  
-  // If no item found
-  if (!item) {
-    return (
-      <Container>
-        <Paper
-          elevation={0}
-          sx={{
-            p: { xs: 3, md: 8, lg: 16 },
-            borderRadius: "16px",
-            borderColor: "primary.border",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            minHeight: "400px",
-          }}
-        >
-          <Typography color="text.secondary">
-            لم يتم العثور على بيانات الفصل
-          </Typography>
-        </Paper>
-      </Container>
-    );
-  }
+  const load = useCallback(async ({ force = false, silent = false } = {}) => {
+    if (silent) setRefreshing(true);
+    else setLoading(true);
+    setError("");
+    const [classRes, studentsRes] = await Promise.all([
+      getSchoolClassById(id, { force }),
+      getSchoolClassStudents(id, { force }),
+    ]);
+
+    if (classRes?.status === false) {
+      setItem(null);
+      setError(classRes?.message || "تعذر تحميل الفصل");
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    const nextClass = extractClass(classRes);
+    const list = studentsRes?.status === false
+      ? (Array.isArray(nextClass?.students) ? nextClass.students : [])
+      : extractApiList(studentsRes, ["students", "enrollments"]).map((row) => row?.studentId || row?.student || row);
+
+    setItem({ ...nextClass, students: list });
+    setStudents(list);
+    setLoading(false);
+    setRefreshing(false);
+  }, [id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const active = isClassActive(item);
+  const capacity = getClassCapacity(item);
+  const count = students.length || getClassStudentCount(item);
+  const occupancy = capacity ? Math.min(100, Math.round((count / capacity) * 100)) : 0;
+  const remainingSeats = Math.max(0, capacity - count);
+
+  const confirmAction = async () => {
+    setActionLoading(true);
+    const response = dialog === "delete"
+      ? await deleteSchoolClass(id)
+      : await toggleSchoolClassActive(id);
+
+    if (response?.status === false) {
+      toast.error(response?.message || "تعذر تنفيذ العملية");
+      setActionLoading(false);
+      return;
+    }
+
+    toast.success(dialog === "delete" ? "تم حذف الفصل" : "تم تغيير حالة الفصل");
+    if (dialog === "delete") {
+      navigate("/school/classes", { replace: true });
+      return;
+    }
+    setDialog("");
+    setActionLoading(false);
+    load({ force: true });
+  };
+
+  if (loading) return <Container><Stack spacing={1}><Skeleton variant="rounded" height={120} /><Skeleton variant="rounded" height={90} /><Skeleton variant="rounded" height={320} /></Stack></Container>;
+  if (error || !item) return <Container><Alert severity="error">{error || "الفصل غير موجود"}</Alert></Container>;
 
   return (
     <Container>
-      {/* Header */}
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={{ xs: 4, sm: 0 }}
-        justifyContent={"space-between"}
-        alignItems={"center"}
-      >
-        <Back title={"تفاصيل الفصل"} />
-        {/* Status */}
-        {permissions.edit && 
-        <Chip
-          label={item?.isActive ? "نشط" : "غير نشط"}
-          color={item?.isActive ? "success" : "error"}
-          sx={{
-            fontSize: "14px",
-            fontWeight: "bold",
-            px: 2,
-            py: 1,
-            borderRadius: "8px",
-          }}
-          onClick={handleToggleStatus}
-          clickable
-          disabled={toggleLoading}
-        />}
-      </Stack>
-      {/* Box Content */}
-      {item && <Details item={item} setOpen={setOpen} permissions={permissions} />}
-      {/* Subjects */}
-      {item.subjects && permissions.edit && <Subjects subjects={item.subjects} classId={id} setItem={setItem} />}
-      {/* Students */}
-      {permissions.edit && <Grid container spacing={8}>
-        <Grid item xs={12} md={6}>
-          {item.students && (
-            <ClassStudentsList
-              students={item?.students}
-              classId={id}
-              setItem={setItem}
-              setStudentsToBeAdded={setStudentsToBeAdded}
-            />
-          )}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {item.academicYear && item.gender && (
-            <StudentsToBeAdded
-              academicYear={item.academicYear}
-              gender={item.gender}
-              classId={id}
-              setItem={setItem}
-              students={studentsToBeAdd}
-              setStudents={setStudentsToBeAdded}
-            />
-          )}
-        </Grid>
-      </Grid>}
-      {/* Attendance & Absence */}
-      <Grid container spacing={8}>
-        <Grid item xs={12} md={6}>
-          {item.students && (
-            <ClassAttendanceList 
-              students={item?.students} 
-              classId={id}
-              absentStudents={absentStudents} 
-              setAbsentStudents={setAbsentStudents} 
-            />
-          )}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <ClassAbsenceList 
-            classId={id}
-            absentStudents={absentStudents} 
-            setAbsentStudents={setAbsentStudents} 
-          />
-        </Grid>
-      </Grid>
-      {/* Popup */}
-      <Popup
-        open={open}
-        setOpen={setOpen}
-        message={"هل انت متأكد من انك تريد حذف هذا الفصل"}
-        type={"delete"}
-        fn={handleDelete}
-      />
-    </Container>
-  );
-};
-
-const Details = ({ item, setOpen , permissions }) => {
-  const data = [
-    { key: "السنة الدراسية", value: item?.academicYear || "" },
-    { key: "رقم الفصل", value: item?.roomNumber || "لا يوجد" },
-    { key: "النوع", value: translateGender(item?.gender, "class") },
-    { key: "الحالة", value: item?.isActive == 1 ? "نشط" : "غير نشط" },
-    { key: "اقصي سعة للفصل", value: item?.maxCapacity + " طالب" || "لا يوجد" },
-    { key: "عدد الطلاب فى الفصل", value: item?.students?.length + " طالب" },
-    {
-      key: "عدد الاماكن المتاحة",
-      value: item?.maxCapacity - item?.students?.length + " طالب",
-    },
-    {
-      key: "رائد الفصل",
-      value: item?.teacherInCharge?.name || "لا يوجد",
-    },
-    {
-      key: "المواد الدراسية",
-      value:
-        item?.subjects?.map((sub) => sub.subjectName).join(" - ") || "لا يوجد",
-    },
-  ];
-
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        bgcolor: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        boxShadow: "0px 1px 2px 0px #0000000D",
-        p: 12,
-        borderRadius: "16px",
-        mt: 10,
-      }}
-    >
-      <Accordion defaultExpanded>
-        <AccordionSummary>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            width={"100%"}
-          >
-            <Stack spacing={1}>
-              <Typography variant="h4" fontWeight="bold">
-                {`${item?.academicYear} - ${item?.roomNumber} - ${translateGender(
-                  item?.gender,
-                  "class"
-                )}`}
-              </Typography>
-            </Stack>
-
-            <Stack direction="row" spacing={2}>
-              {permissions.edit && <Tooltip title={"تعديل بيانات الفصل"}>
-                <Link to={`/school/classes/edit/${item._id}`}>
-                  <IconButton color="success" size="medium">
-                    <Edit />
-                  </IconButton>
-                </Link>
-              </Tooltip>}
-              {permissions.delete && <Tooltip title={"حذف الفصل"}>
-                <IconButton
-                  color="error"
-                  size="medium"
-                  onClick={() => setOpen(true)}
+      <Box dir="rtl" sx={{ pb: 4 }}>
+        <Paper elevation={0} sx={{ p: { xs: 1.5, md: 1.8 }, border: "1px solid rgba(36,74,112,.08)", borderRadius: "18px", background: "linear-gradient(135deg,rgba(255,252,247,.98),rgba(251,240,216,.44))", boxShadow: "0 10px 24px rgba(18,47,77,.06)" }}>
+          <Stack direction={{ xs: "column", lg: "row" }} alignItems={{ xs: "stretch", lg: "center" }} justifyContent="space-between" gap={1.2}>
+            <Box>
+              <Stack direction="row" alignItems="center" spacing={.7} sx={{ flexWrap: "wrap" }}>
+                <Typography component="h1" sx={{ color: "#122f4d", fontSize: { xs: "21px", md: "24px" }, fontWeight: 800 }}>{getClassDisplayName(item)}</Typography>
+                <Chip size="small" label={active ? "نشط" : "موقوف"} sx={{ color: active ? "#29734A" : "#A44343", backgroundColor: active ? "rgba(116,201,154,.17)" : "rgba(201,79,79,.12)", fontSize: "8px", fontWeight: 800 }} />
+              </Stack>
+              <Stack direction="row" alignItems="center" spacing={.55} sx={{ mt: .35, flexWrap: "wrap" }}>
+                <Typography sx={{ color: "#7e8791", fontSize: "9px" }}>{getClassGradeLevelName(item)}</Typography>
+                <Typography sx={{ color: "#c4bcae" }}>•</Typography>
+                <Typography sx={{ color: "#7e8791", fontSize: "9px" }}>{getClassAcademicYear(item)}</Typography>
+                <Chip size="small" label={`الغرفة ${getClassRoomNumber(item)}`} sx={{ height: 22, color: "#244a70", backgroundColor: "rgba(36,74,112,.07)", fontSize: "7.2px", fontWeight: 800 }} />
+              </Stack>
+            </Box>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              alignItems={{ xs: "stretch", md: "center" }}
+              gap={{ xs: 1, md: 1.35 }}
+              sx={{ flexWrap: "wrap" }}
+            >
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                gap={0.9}
+                sx={{ flexWrap: "wrap" }}
+              >
+                <Button
+                  variant="outlined"
+                  startIcon={<ArrowBackRounded />}
+                  onClick={() => navigate("/school/classes")}
+                  sx={{ minHeight: 40, minWidth: 106, px: 1.6, borderRadius: "11px", color: "#244a70", borderColor: "rgba(36,74,112,.18)", fontWeight: 800 }}
                 >
-                  <Delete />
-                </IconButton>
-              </Tooltip>}
-            </Stack>
-          </Stack>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Divider sx={{ my: 10 }} />
+                  رجوع
+                </Button>
 
-          <Grid container spacing={4}>
-            {data.map((field, i) => (
-              <Grid item xs={12} md={6} lg={4} key={i}>
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshRounded />}
+                  disabled={refreshing}
+                  onClick={() => load({ force: true, silent: true })}
+                  sx={{ minHeight: 40, minWidth: 106, px: 1.6, borderRadius: "11px", color: "#244a70", borderColor: "rgba(36,74,112,.18)", fontWeight: 800 }}
+                >
+                  تحديث
+                </Button>
+
+                <Button
+                  variant="outlined"
+                  startIcon={<ScheduleRounded />}
+                  onClick={() => navigate(`/school/classes/${id}/schedule`)}
+                  sx={{ minHeight: 40, minWidth: 106, px: 1.6, borderRadius: "11px", color: "#244a70", borderColor: "rgba(36,74,112,.18)", fontWeight: 800 }}
+                >
+                  الجدول
+                </Button>
+              </Stack>
+
+              {(permissions.edit || permissions.delete) && (
                 <Box
                   sx={{
-                    p: 2,
-                    borderRadius: "10px",
-                    bgcolor: i % 2 === 0 ? "primary.white" : "white",
-                    transition: ".5s",
-                    "&:hover": { bgcolor: "grey.100" },
+                    display: { xs: "none", md: "block" },
+                    width: "1px",
+                    height: 34,
+                    backgroundColor: "#ded8cd",
                   }}
-                >
-                  <Typography
-                    variant="label"
-                    color="text.secondary"
-                    sx={{ mb: 0.5, fontWeight: 500, fontSize: "12px" }}
+                />
+              )}
+
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                gap={0.9}
+                sx={{ flexWrap: "wrap" }}
+              >
+                {permissions.edit && (
+                  <>
+                    <Button
+                      variant="contained"
+                      startIcon={<EditRounded />}
+                      onClick={() => navigate(`/school/classes/edit/${id}`)}
+                      sx={{ minHeight: 40, minWidth: 106, px: 1.6, borderRadius: "11px", backgroundColor: "#244a70", boxShadow: "none", fontWeight: 800, "&:hover": { backgroundColor: "#1b3d61", boxShadow: "none" } }}
+                    >
+                      تعديل
+                    </Button>
+
+                    <Button
+                      variant="outlined"
+                      startIcon={active ? <PauseCircleRounded /> : <PlayCircleRounded />}
+                      onClick={() => setDialog("status")}
+                      sx={{ minHeight: 40, minWidth: 106, px: 1.6, borderRadius: "11px", color: active ? "#c94f4f" : "#29734A", borderColor: active ? "rgba(201,79,79,.30)" : "rgba(41,115,74,.28)", fontWeight: 800 }}
+                    >
+                      {active ? "إيقاف" : "تفعيل"}
+                    </Button>
+                  </>
+                )}
+
+                {permissions.delete && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<DeleteOutlineRounded />}
+                    onClick={() => setDialog("delete")}
+                    sx={{ minHeight: 40, minWidth: 106, px: 1.6, borderRadius: "11px", color: "#c94f4f", borderColor: "rgba(201,79,79,.30)", fontWeight: 800 }}
                   >
-                    {field.key}
-                  </Typography>
-                  <Typography
-                    variant="subtitle"
-                    sx={{
-                      display: "block",
-                      fontWeight: 500,
-                      color: "text.primary",
-                    }}
-                  >
-                    {field.value}
-                  </Typography>
-                </Box>
-              </Grid>
-            ))}
-          </Grid>
-        </AccordionDetails>
-      </Accordion>
-    </Paper>
-  );
-};
-
-const Subjects = ({ subjects, classId, setItem }) => {
-  const [selectedSubjects, setSelectedSubjects] = useState(
-    subjects?.map((sub) => sub._id || sub.id)
-  );
-  const [loading, setLoading] = useState(false);
-
-  // Save Changes
-  const handleSaveChanges = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Validate Selected Subjects
-    if (selectedSubjects?.length === 0) {
-      toast.error("يرجى اختيار مادة دراسية واحدة على الأقل");
-      return;
-    }
-
-    // Check if subjects are the same
-    if (
-      JSON.stringify(selectedSubjects) ===
-      JSON.stringify(subjects.map((sub) => sub._id || sub.id))
-    ) {
-      toast.info("لا توجد تغييرات لحفظها");
-      return;
-    }
-    setLoading(true);
-    // API Call to update subjects
-    const response = await editClass({ subjectIds: selectedSubjects }, classId);
-    if (response.status) {
-      toast.success("تم تعديل مواد الفصل بنجاح");
-      setItem((prev) => ({
-        ...prev,
-        subjects: response.data.subjects,
-      }));
-    } else {
-      toast.error(response || "حدث خطأ ما أثناء تعديل مواد الفصل!");
-    }
-    setLoading(false);
-  };
-
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        bgcolor: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        boxShadow: "0px 1px 2px 0px #0000000D",
-        p: 12,
-        borderRadius: "16px",
-        mt: 10,
-      }}
-    >
-      <Accordion>
-        <AccordionSummary>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            width={"100%"}
-          >
-            <Typography variant="h5" fontWeight="bold">
-              المواد الدراسية
-            </Typography>
-            <Button
-              color="primary"
-              variant="contained"
-              disabled={loading}
-              sx={{ p: "8px 20px", borderRadius: "8px" }}
-              onClick={e => handleSaveChanges(e)}
-            >
-              حفظ التغييرات
-            </Button>
+                    حذف
+                  </Button>
+                )}
+              </Stack>
+            </Stack>
           </Stack>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Divider sx={{ my: 10 }} />
-          <SubjectCheckBoxes 
-            selectedSubjects={selectedSubjects}
-            setSelectedSubjects={setSelectedSubjects}
-          />
-        </AccordionDetails>
-      </Accordion>
-    </Paper>
+        </Paper>
+
+        <Box sx={{ mt: 1.1, display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(4,minmax(0,1fr))" }, gap: 1 }}>
+          <InfoCard label="السنة الدراسية" value={getClassAcademicYear(item)} icon={<CalendarMonthRounded />} />
+          <InfoCard label="المرحلة والصف" value={`${getClassStageName(item)} — ${getClassGradeLevelName(item)}`} icon={<SchoolRounded />} />
+          <InfoCard label="نوع الفصل" value={getClassGenderLabel(item)} icon={<MeetingRoomRounded />} />
+          <InfoCard label="المعلم المسؤول" value={getClassTeacherName(item)} icon={<GroupsRounded />} />
+        </Box>
+
+        <Paper elevation={0} sx={{ mt: 1.1, p: 1.4, border: "1px solid #ded8cd", borderRadius: "18px", backgroundColor: "#fff" }}>
+          <Stack direction={{ xs: "column", lg: "row" }} alignItems={{ xs: "stretch", lg: "center" }} justifyContent="space-between" gap={1.3}>
+            <Box sx={{ flex: 1 }}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+                <Box><Typography sx={{ color: "#122f4d", fontSize: "15px", fontWeight: 800 }}>إشغال الفصل</Typography><Typography sx={{ color: "#7e8791", fontSize: "8.5px" }}>نسبة المقاعد المستخدمة داخل الفصل.</Typography></Box>
+                <Chip size="small" label={`${occupancy}%`} sx={{ color: "#b78430", backgroundColor: "#fbf0d8", fontWeight: 800 }} />
+              </Stack>
+              <LinearProgress variant="determinate" value={occupancy} sx={{ mt: 1.1, height: 7, borderRadius: 99, backgroundColor: "rgba(36,74,112,.08)", "& .MuiLinearProgress-bar": { borderRadius: 99, backgroundColor: occupancy >= 90 ? "#c94f4f" : "#d3a44f" } }} />
+            </Box>
+            <Stack direction="row" justifyContent={{ xs: "space-between", lg: "flex-end" }} gap={{ xs: 1.2, md: 3 }} sx={{ minWidth: { lg: 330 }, px: { lg: 1.5 }, borderRight: { lg: "1px solid #ded8cd" } }}>
+              <Box><Typography sx={{ color: "#7e8791", fontSize: "8px", fontWeight: 700 }}>المسجلون</Typography><Typography sx={{ color: "#122f4d", fontSize: "18px", fontWeight: 800 }}>{count}</Typography></Box>
+              <Box><Typography sx={{ color: "#7e8791", fontSize: "8px", fontWeight: 700 }}>السعة</Typography><Typography sx={{ color: "#122f4d", fontSize: "18px", fontWeight: 800 }}>{capacity || "—"}</Typography></Box>
+              <Box><Typography sx={{ color: "#7e8791", fontSize: "8px", fontWeight: 700 }}>المتاح</Typography><Typography sx={{ color: "#122f4d", fontSize: "18px", fontWeight: 800 }}>{remainingSeats}</Typography></Box>
+            </Stack>
+          </Stack>
+        </Paper>
+
+        <Paper elevation={0} sx={{ mt: 1.1, overflow: "hidden", border: "1px solid #ded8cd", borderRadius: "18px", backgroundColor: "#fff" }}>
+          <Box sx={{ px: 1.5, py: 1.15, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, borderBottom: "1px solid #ded8cd" }}><Box><Typography sx={{ color: "#122f4d", fontSize: "16px", fontWeight: 800 }}>طلاب الفصل</Typography><Typography sx={{ color: "#7e8791", fontSize: "8.5px" }}>الطلاب المرتبطون بالفصل من خلال التسجيلات.</Typography></Box><Chip size="small" icon={<EventSeatRounded />} label={`${count} طالب`} sx={{ color: "#244a70", backgroundColor: "rgba(36,74,112,.07)", fontWeight: 800 }} /></Box>
+          {students.length ? <TableContainer><Table><TableHead><TableRow sx={{ backgroundColor: "#f1f5fa" }}><TableCell>الطالب</TableCell><TableCell align="center">البريد</TableCell><TableCell align="center">الهاتف</TableCell></TableRow></TableHead><TableBody>{students.map((student, index) => <TableRow key={getEntityId(student) || index}><TableCell sx={{ fontWeight: 800 }}>{studentName(student)}</TableCell><TableCell align="center">{student?.email || "—"}</TableCell><TableCell align="center">{student?.phoneNumber || student?.phone || "—"}</TableCell></TableRow>)}</TableBody></Table></TableContainer> : <Box sx={{ minHeight: 190, display: "grid", placeItems: "center", py: 3, px: 2, textAlign: "center" }}><Box><GroupsRounded sx={{ fontSize: 46, color: "#d3a44f" }} /><Typography sx={{ mt: .8, color: "#122f4d", fontSize: "14px", fontWeight: 800 }}>لا يوجد طلاب مسجلون في الفصل</Typography><Typography sx={{ mt: .3, color: "#7e8791", fontSize: "9px" }}>يظهر الطلاب هنا بعد إنشاء تسجيلات مرتبطة بهذا الفصل.</Typography></Box></Box>}
+        </Paper>
+
+        <Dialog open={Boolean(dialog)} onClose={actionLoading ? undefined : () => setDialog("")} fullWidth maxWidth="xs" PaperProps={{ sx: { borderRadius: "18px" } }}>
+          <DialogTitle sx={{ color: "#122f4d", fontWeight: 800 }}>{dialog === "delete" ? "حذف الفصل" : active ? "إيقاف الفصل" : "تفعيل الفصل"}</DialogTitle>
+          <DialogContent><Typography sx={{ fontSize: "10.5px", lineHeight: 1.8 }}>تأكيد العملية على «{getClassDisplayName(item)}»؟</Typography></DialogContent>
+          <DialogActions><Button onClick={() => setDialog("")} disabled={actionLoading}>إلغاء</Button><Button onClick={confirmAction} disabled={actionLoading} variant="contained" color={dialog === "delete" || active ? "error" : "success"}>{actionLoading ? <CircularProgress size={16} color="inherit" /> : "تأكيد"}</Button></DialogActions>
+        </Dialog>
+      </Box>
+    </Container>
   );
 };
 

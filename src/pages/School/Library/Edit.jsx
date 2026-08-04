@@ -30,37 +30,68 @@ import Input from "@/components/Input/Input";
 import Select from "@/components/Select/Select";
 import SubjectSelector from "@/components/Selector/SubjectSelector";
 
-import Years from "@/utils/constants/Years";
-import { getChangedValues } from "@/utils/helpers/getChangedValues";
 
-import { editLibrary } from "@/APIs/school/library";
+import {
+  editLibrary,
+  fetchLibraryAcademicYears,
+} from "@/APIs/school/library";
+import { fetchSingleSubject } from "@/APIs/school/subjects";
+
+const normalizeId = (value) => {
+  if (value && typeof value === "object") {
+    return String(value._id || value.id || "").trim();
+  }
+
+  return String(value || "").trim();
+};
+
+const getArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.docs)) return value.docs;
+  if (Array.isArray(value?.items)) return value.items;
+  if (Array.isArray(value?.results)) return value.results;
+  return [];
+};
+
+const mapAcademicYear = (item) => ({
+  id: normalizeId(item),
+  name:
+    item?.name ||
+    item?.label ||
+    item?.title ||
+    "سنة دراسية",
+});
 
 const normalizeItem = (item) => ({
   ...item,
-  _id:
-    item?._id ||
-    item?.id,
-  id:
-    item?._id ||
-    item?.id,
-  title:
-    item?.title || "",
-  link:
-    item?.link || "",
-  subjectId:
-    item?.subjectId ||
-    item?.subject?._id ||
-    item?.subject?.id ||
-    "",
-  academicYear:
-    item?.academicYear ||
-    "",
+  _id: normalizeId(item),
+  id: normalizeId(item),
+  title: item?.title || "",
+  link: item?.link || "",
+  subjectId: normalizeId(
+    item?.subjectId || item?.subject
+  ),
+  academicYearId: normalizeId(
+    item?.academicYearId ||
+      (typeof item?.academicYear === "object"
+        ? item.academicYear
+        : "")
+  ),
 });
 
-const getResponseData = (response) =>
-  response?.data?.data ||
-  response?.data ||
-  null;
+const getResponseData = (response) => {
+  const payload =
+    response?.data?.data ??
+    response?.data ??
+    null;
+
+  return (
+    payload?.library ||
+    payload?.item ||
+    payload?.subject ||
+    payload
+  );
+};
 
 const getErrorMessage = (
   response,
@@ -82,6 +113,12 @@ const Edit = ({
   const [loading, setLoading] =
     useState(false);
 
+  const [academicYears, setAcademicYears] =
+    useState([]);
+
+  const [loadingYears, setLoadingYears] =
+    useState(false);
+
   const [
     defaultValues,
     setDefaultValues,
@@ -96,6 +133,47 @@ const Edit = ({
   } = useForm();
 
   useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    let active = true;
+
+    const loadAcademicYears = async () => {
+      setLoadingYears(true);
+
+      const response =
+        await fetchLibraryAcademicYears();
+
+      if (!active) {
+        return;
+      }
+
+      if (response?.status === false) {
+        toast.error(
+          response?.message ||
+            "تعذر تحميل السنوات الدراسية"
+        );
+        setAcademicYears([]);
+      } else {
+        setAcademicYears(
+          getArray(response?.data).map(
+            mapAcademicYear
+          )
+        );
+      }
+
+      setLoadingYears(false);
+    };
+
+    loadAcademicYears();
+
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (
       item &&
       open
@@ -108,11 +186,30 @@ const Edit = ({
       );
 
       reset(normalized);
+
+      setValue(
+        "subjectId",
+        normalized.subjectId,
+        {
+          shouldDirty: false,
+          shouldValidate: false,
+        }
+      );
+
+      setValue(
+        "academicYearId",
+        normalized.academicYearId,
+        {
+          shouldDirty: false,
+          shouldValidate: false,
+        }
+      );
     }
   }, [
     item,
     open,
     reset,
+    setValue,
   ]);
 
   const handleClose = (
@@ -139,12 +236,40 @@ const Edit = ({
   const onSubmit = async (
     formValues
   ) => {
-    const changedData =
-      getChangedValues(
-        formValues,
-        defaultValues,
-        ["subject"]
-      );
+    const nextValues = {
+      title: String(
+        formValues?.title || ""
+      ).trim(),
+      link: String(
+        formValues?.link || ""
+      ).trim(),
+      subjectId: normalizeId(
+        formValues?.subjectId
+      ),
+      academicYearId: normalizeId(
+        formValues?.academicYearId
+      ),
+    };
+
+    const changedData = {};
+
+    [
+      "title",
+      "link",
+      "subjectId",
+      "academicYearId",
+    ].forEach((key) => {
+      const previous = String(
+        defaultValues?.[key] || ""
+      ).trim();
+      const next = String(
+        nextValues?.[key] || ""
+      ).trim();
+
+      if (previous !== next) {
+        changedData[key] = next;
+      }
+    });
 
     if (
       Object.keys(
@@ -181,25 +306,74 @@ const Edit = ({
       );
 
       const updatedItem =
-        getResponseData(
-          response
-        );
+        getResponseData(response) || {};
 
-      setItems(
-        (previousItems) =>
-          previousItems.map(
-            (currentItem) =>
-              (
-                currentItem?._id ||
-                currentItem?.id
-              ) ===
-              defaultValues._id
-                ? {
-                    ...currentItem,
-                    ...updatedItem,
-                  }
-                : currentItem
-          )
+      const subjectId = normalizeId(
+        updatedItem?.subjectId ||
+          changedData?.subjectId ||
+          defaultValues?.subjectId
+      );
+
+      let subjectData =
+        updatedItem?.subject ||
+        (updatedItem?.subjectId &&
+        typeof updatedItem.subjectId === "object"
+          ? updatedItem.subjectId
+          : null);
+
+      if (subjectId && !subjectData) {
+        const subjectResponse =
+          await fetchSingleSubject(
+            subjectId,
+            { force: true }
+          );
+
+        if (subjectResponse?.status !== false) {
+          subjectData =
+            getResponseData(
+              subjectResponse
+            );
+        }
+      }
+
+      const academicYearId = normalizeId(
+        updatedItem?.academicYearId ||
+          changedData?.academicYearId ||
+          defaultValues?.academicYearId
+      );
+
+      const academicYearData =
+        (updatedItem?.academicYearId &&
+        typeof updatedItem.academicYearId ===
+          "object"
+          ? updatedItem.academicYearId
+          : null) ||
+        academicYears.find(
+          (year) => year.id === academicYearId
+        ) ||
+        null;
+
+      setItems?.((previousItems) =>
+        previousItems.map(
+          (currentItem) =>
+            normalizeId(currentItem) ===
+            normalizeId(defaultValues)
+              ? {
+                  ...currentItem,
+                  ...changedData,
+                  ...updatedItem,
+                  subjectId,
+                  subject:
+                    subjectData ||
+                    currentItem?.subject,
+                  academicYearId,
+                  academicYear:
+                    academicYearData?.name ||
+                    currentItem?.academicYear ||
+                    "",
+                }
+              : currentItem
+        )
       );
 
       setOpen(false);
@@ -441,6 +615,8 @@ const Edit = ({
                     register={register}
                     errors={errors}
                     setValue={setValue}
+                    registerName="subjectId"
+                    valueName="name"
                     label="المادة المرتبط بها العنصر"
                     defaultSubjectId={
                       defaultValues
@@ -455,18 +631,31 @@ const Edit = ({
                   sm={6}
                 >
                   <Select
+                    key={`academic-year-${defaultValues.academicYearId}-${academicYears.length}`}
                     register={register}
-                    registerName="academicYear"
-                    data={Years}
+                    registerName="academicYearId"
+                    data={academicYears}
+                    name="name"
                     error={
-                      errors.academicYear
+                      errors.academicYearId
                         ?.message
                     }
                     label="السنة الدراسية"
                     defaultValue={
                       defaultValues
-                        .academicYear
+                        .academicYearId
                     }
+                    disabled={loadingYears}
+                    onChange={(value) => {
+                      setValue(
+                        "academicYearId",
+                        value || "",
+                        {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        }
+                      );
+                    }}
                   />
                 </Grid>
               </Grid>

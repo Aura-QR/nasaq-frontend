@@ -28,7 +28,7 @@ import {
   useParams,
 } from "react-router-dom";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
@@ -39,6 +39,7 @@ import Loading from "@/components/Loading";
 import usePermissions from "@/utils/hooks/usePermissions";
 import { usePreparation } from "@/utils/hooks/apis/usePreparation";
 
+import { api } from "@/APIs/Axios";
 import { deletePreparation } from "@/APIs/school/preparation";
 
 import Slots from "@/utils/constants/Slots";
@@ -92,6 +93,53 @@ const getResponseData = (
   response?.data ||
   response;
 
+const unwrapLectureRecord = (
+  response
+) => {
+  const payload =
+    getResponseData(response);
+
+  const nested =
+    payload?.lecture ||
+    payload?.record ||
+    payload?.item ||
+    payload?.result ||
+    payload?.data?.lecture ||
+    payload?.data;
+
+  return nested &&
+    typeof nested === "object" &&
+    !Array.isArray(nested)
+    ? nested
+    : payload &&
+      typeof payload === "object" &&
+      !Array.isArray(payload)
+    ? payload
+    : null;
+};
+
+const extractLectureList = (
+  response
+) => {
+  const payload =
+    getResponseData(response);
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return (
+    [
+      payload?.docs,
+      payload?.items,
+      payload?.lectures,
+      payload?.results,
+      payload?.records,
+      payload?.data,
+    ].find(Array.isArray) || []
+  );
+};
+
 const getResponseList = (
   response
 ) => {
@@ -119,6 +167,8 @@ const getResponseId = (
   return (
     payload?._id ||
     payload?.id ||
+    payload?.preparation?._id ||
+    payload?.preparation?.id ||
     ""
   );
 };
@@ -140,33 +190,440 @@ const getArray = (
     ? value
     : [];
 
+const getEntityId = (
+  value
+) => {
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    return String(
+      value._id ||
+        value.id ||
+        ""
+    ).trim();
+  }
+
+  return String(
+    value || ""
+  ).trim();
+};
+
+
+const RELATION_WRAPPER_KEYS = [
+  "data",
+  "result",
+  "payload",
+  "response",
+  "record",
+  "item",
+  "lecture",
+  "subjectOffering",
+  "offering",
+  "subject",
+];
+
+const unwrapApiEntity = (
+  response,
+  preferredKeys = []
+) => {
+  const root =
+    response?.data ??
+    response;
+
+  const queue = [root];
+  const visited = new Set();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+
+    if (
+      !current ||
+      typeof current !== "object" ||
+      Array.isArray(current) ||
+      visited.has(current)
+    ) {
+      continue;
+    }
+
+    visited.add(current);
+
+    const priorityKeys = [
+      ...preferredKeys,
+      ...RELATION_WRAPPER_KEYS,
+    ];
+
+    priorityKeys.forEach((key) => {
+      const child = current?.[key];
+
+      if (
+        child &&
+        typeof child === "object" &&
+        !Array.isArray(child)
+      ) {
+        queue.unshift(child);
+      }
+    });
+
+    const looksLikeEntity =
+      Boolean(getEntityId(current)) ||
+      Boolean(current.subjectName) ||
+      Boolean(current.subjectCode) ||
+      Boolean(current.subjectId) ||
+      Boolean(current.subjectOfferingId) ||
+      Boolean(current.dayOfWeek) ||
+      current.slot !== undefined;
+
+    const looksLikeWrapper =
+      Object.prototype.hasOwnProperty.call(
+        current,
+        "status"
+      ) &&
+      Object.prototype.hasOwnProperty.call(
+        current,
+        "data"
+      );
+
+    if (
+      looksLikeEntity &&
+      !looksLikeWrapper
+    ) {
+      return current;
+    }
+
+    Object.values(current).forEach(
+      (child) => {
+        if (
+          child &&
+          typeof child === "object" &&
+          !Array.isArray(child) &&
+          !visited.has(child)
+        ) {
+          queue.push(child);
+        }
+      }
+    );
+  }
+
+  return null;
+};
+
+const createRelationCaches = () => ({
+  lectures: new Map(),
+  offerings: new Map(),
+  subjects: new Map(),
+});
+
+const fetchEntityCached = async (
+  endpoint,
+  preferredKeys,
+  cache
+) => {
+  if (cache.has(endpoint)) {
+    return cache.get(endpoint);
+  }
+
+  const request = api
+    .get(endpoint)
+    .then((response) =>
+      unwrapApiEntity(
+        response,
+        preferredKeys
+      )
+    )
+    .catch(() => null);
+
+  cache.set(endpoint, request);
+  return request;
+};
+
+const asObject = (value) =>
+  value &&
+  typeof value === "object" &&
+  !Array.isArray(value)
+    ? value
+    : {};
+
+const resolvePreparationRelations = async (
+  item,
+  caches = createRelationCaches()
+) => {
+  const initialLecture =
+    item?.lecture ||
+    item?.lectureId ||
+    item?.lectureData;
+
+  const lectureId =
+    getEntityId(initialLecture);
+
+  let lecture =
+    asObject(initialLecture);
+
+  if (lectureId) {
+    const fetchedLecture =
+      await fetchEntityCached(
+        `/lectures/${lectureId}`,
+        ["lecture"],
+        caches.lectures
+      );
+
+    lecture = {
+      ...lecture,
+      ...asObject(fetchedLecture),
+    };
+  }
+
+  const initialOffering =
+    lecture?.subjectOfferingId ||
+    lecture?.subjectOffering ||
+    item?.subjectOfferingId ||
+    item?.subjectOffering;
+
+  const offeringId =
+    getEntityId(initialOffering);
+
+  let offering =
+    asObject(initialOffering);
+
+  if (offeringId) {
+    const fetchedOffering =
+      await fetchEntityCached(
+        `/subject-offerings/${offeringId}`,
+        [
+          "subjectOffering",
+          "offering",
+        ],
+        caches.offerings
+      );
+
+    offering = {
+      ...offering,
+      ...asObject(fetchedOffering),
+    };
+  }
+
+  const initialSubject =
+    offering?.subjectId ||
+    offering?.subject ||
+    lecture?.subjectId ||
+    lecture?.subject ||
+    item?.subjectId ||
+    item?.subject;
+
+  const subjectId =
+    getEntityId(initialSubject);
+
+  let subject =
+    asObject(initialSubject);
+
+  if (subjectId) {
+    const fetchedSubject =
+      await fetchEntityCached(
+        `/subjects/${subjectId}`,
+        ["subject"],
+        caches.subjects
+      );
+
+    subject = {
+      ...subject,
+      ...asObject(fetchedSubject),
+    };
+  }
+
+  const normalizedOffering = {
+    ...offering,
+    ...(offeringId
+      ? { _id: offering._id || offeringId }
+      : {}),
+    ...(Object.keys(subject).length > 0
+      ? {
+          subjectId: subject,
+          subject,
+        }
+      : {}),
+  };
+
+  const normalizedLecture = {
+    ...lecture,
+    ...(lectureId
+      ? { _id: lecture._id || lectureId }
+      : {}),
+    ...(Object.keys(normalizedOffering).length > 0
+      ? {
+          subjectOfferingId:
+            normalizedOffering,
+          subjectOffering:
+            normalizedOffering,
+        }
+      : {}),
+    ...(Object.keys(subject).length > 0
+      ? {
+          subjectId: subject,
+          subject,
+        }
+      : {}),
+  };
+
+  return {
+    ...item,
+    lecture: normalizedLecture,
+    ...(lectureId
+      ? { lectureId }
+      : {}),
+    ...(Object.keys(normalizedOffering).length > 0
+      ? {
+          subjectOfferingId:
+            normalizedOffering,
+          subjectOffering:
+            normalizedOffering,
+        }
+      : {}),
+    ...(Object.keys(subject).length > 0
+      ? {
+          subjectId: subject,
+          subject,
+          subjectName:
+            subject.subjectName ||
+            subject.name ||
+            item?.subjectName ||
+            "",
+          subjectCode:
+            subject.subjectCode ||
+            subject.code ||
+            item?.subjectCode ||
+            "",
+        }
+      : {}),
+  };
+};
+
+const getNestedName = (
+  value
+) => {
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    return (
+      value.name ||
+      value.title ||
+      value.label ||
+      ""
+    );
+  }
+
+  return String(
+    value || ""
+  ).trim();
+};
+
 const getLectureData = (
   item
-) =>
-  item?.lecture || {};
+) => {
+  const lecture =
+    item?.lecture ||
+    item?.lectureId ||
+    item?.lectureData ||
+    item;
+
+  return lecture &&
+    typeof lecture === "object"
+    ? lecture
+    : {};
+};
 
 const getClassData = (
   item
-) =>
-  getLectureData(item)?.class ||
-  item?.class ||
-  {};
+) => {
+  const lecture =
+    getLectureData(item);
+
+  const classData =
+    lecture?.class ||
+    lecture?.classId ||
+    item?.class ||
+    item?.classId;
+
+  return classData &&
+    typeof classData === "object"
+    ? classData
+    : {};
+};
+
+const getSubjectOfferingData = (
+  item
+) => {
+  const lecture =
+    getLectureData(item);
+
+  const offering =
+    lecture?.subjectOfferingId ||
+    lecture?.subjectOffering ||
+    item?.subjectOfferingId ||
+    item?.subjectOffering;
+
+  return offering &&
+    typeof offering === "object"
+    ? offering
+    : {};
+};
 
 const getSubjectData = (
   item
-) =>
-  item?.subject ||
-  getLectureData(item)?.subject ||
-  {};
+) => {
+  const lecture =
+    getLectureData(item);
+
+  const offering =
+    getSubjectOfferingData(item);
+
+  const subjectData =
+    item?.subject ||
+    item?.subjectId ||
+    lecture?.subject ||
+    lecture?.subjectId ||
+    offering?.subjectId ||
+    offering?.subject;
+
+  return subjectData &&
+    typeof subjectData === "object"
+    ? subjectData
+    : {};
+};
+
+const getTeacherData = (
+  item
+) => {
+  const lecture =
+    getLectureData(item);
+
+  const teacher =
+    item?.teacher ||
+    item?.teacherId ||
+    lecture?.teacher ||
+    lecture?.teacherId ||
+    item?.createdBy;
+
+  return teacher &&
+    typeof teacher === "object"
+    ? teacher
+    : {};
+};
 
 const getTeacherName = (
   item
-) =>
-  item?.teacher?.name ||
-  item?.createdBy?.name ||
-  item?.name ||
-  getLectureData(item)?.teacher?.name ||
-  "—";
+) => {
+  const teacher =
+    getTeacherData(item);
+
+  return (
+    teacher?.name ||
+    teacher?.username ||
+    item?.teacherName ||
+    item?.createdBy?.name ||
+    "—"
+  );
+};
 
 const getClassLabel = (
   item
@@ -175,13 +632,18 @@ const getClassLabel = (
     getClassData(item);
 
   const academicYear =
-    classData?.academicYear ||
-    item?.academicYear ||
-    "";
+    getNestedName(
+      classData?.academicYearId ||
+      classData?.academicYear ||
+      item?.academicYearId ||
+      item?.academicYear
+    );
 
   const roomNumber =
     classData?.roomNumber ||
+    classData?.name ||
     item?.roomNumber ||
+    item?.className ||
     "";
 
   const gender =
@@ -212,11 +674,13 @@ const getSubjectLabel = (
   const name =
     subjectData?.subjectName ||
     subjectData?.name ||
+    item?.subjectName ||
     "—";
 
   const code =
     subjectData?.subjectCode ||
     subjectData?.code ||
+    item?.subjectCode ||
     "";
 
   return code
@@ -227,15 +691,27 @@ const getSubjectLabel = (
 const getDayLabel = (
   item
 ) => {
+  const lecture =
+    getLectureData(item);
+
   const dayId =
-    getLectureData(item)
-      ?.dayOfWeek ??
-    item?.dayOfWeek;
+    lecture?.dayOfWeek ??
+    lecture?.day ??
+    item?.dayOfWeek ??
+    item?.day;
+
+  const normalizedDay =
+    String(dayId || "")
+      .trim()
+      .toLowerCase();
 
   return (
     Days.find(
       (day) =>
-        day.id === dayId
+        String(day.id || "")
+          .trim()
+          .toLowerCase() ===
+        normalizedDay
     )?.day ||
     "—"
   );
@@ -244,15 +720,18 @@ const getDayLabel = (
 const getSlotLabel = (
   item
 ) => {
+  const lecture =
+    getLectureData(item);
+
   const slotId =
-    getLectureData(item)
-      ?.slot ??
+    lecture?.slot ??
     item?.slot;
 
   return (
     Slots.find(
       (slot) =>
-        slot.id === slotId
+        String(slot.id) ===
+        String(slotId)
     )?.name ||
     "—"
   );
@@ -353,14 +832,49 @@ const validatePdf = (
   };
 };
 
+const repairArabicEncoding = (
+  value
+) => {
+  const text = String(
+    value || ""
+  );
+
+  if (
+    !/[ÃÂØÙ]/.test(text)
+  ) {
+    return text;
+  }
+
+  try {
+    const bytes =
+      Uint8Array.from(
+        text,
+        (character) =>
+          character.charCodeAt(0) & 255
+      );
+
+    const decoded =
+      new TextDecoder(
+        "utf-8",
+        { fatal: true }
+      ).decode(bytes);
+
+    return decoded || text;
+  } catch {
+    return text;
+  }
+};
+
 const getFileName = (
   file,
   index = 0
 ) =>
-  file?.originalName ||
-  file?.filename ||
-  file?.name ||
-  `ملف التحضير ${index + 1}`;
+  repairArabicEncoding(
+    file?.originalName ||
+      file?.filename ||
+      file?.name ||
+      `ملف التحضير ${index + 1}`
+  );
 
 const getFileSize = (
   file
@@ -375,6 +889,17 @@ const getFileSize = (
     1024
   ).toFixed(2)} MB`;
 };
+
+const getFileUrl = (
+  file
+) =>
+  file?.url ||
+  file?.fileUrl ||
+  file?.downloadUrl ||
+  file?.path ||
+  file?.filePath ||
+  "";
+
 
 
 const DetailCard = ({
@@ -478,8 +1003,60 @@ const Profile = () => {
   const [open, setOpen] =
     useState(false);
 
+  const [resolvedPreparation, setResolvedPreparation] =
+    useState(null);
+
+  const [relationsLoading, setRelationsLoading] =
+    useState(false);
+
   const permissions =
     usePermissions("preparation");
+
+  useEffect(() => {
+    let active = true;
+
+    const hydratePreparation =
+      async () => {
+        if (!preparation) {
+          setResolvedPreparation(null);
+          return;
+        }
+
+        setRelationsLoading(true);
+
+        const hydrated =
+          await resolvePreparationRelations(
+            preparation,
+            createRelationCaches()
+          );
+
+        if (!active) {
+          return;
+        }
+
+        setResolvedPreparation(
+          hydrated
+        );
+        setRelationsLoading(false);
+      };
+
+    hydratePreparation();
+
+    return () => {
+      active = false;
+    };
+  }, [preparation]);
+
+  const item = useMemo(
+    () =>
+      resolvedPreparation ||
+      preparation ||
+      null,
+    [
+      resolvedPreparation,
+      preparation,
+    ]
+  );
 
   const handleDelete =
     async () => {
@@ -515,7 +1092,10 @@ const Profile = () => {
       }
     };
 
-  if (loading) {
+  if (
+    loading ||
+    relationsLoading
+  ) {
     return <Loading />;
   }
 
@@ -548,9 +1128,6 @@ const Profile = () => {
       </Container>
     );
   }
-
-  const item =
-    preparation;
 
   const details = [
     {
@@ -952,7 +1529,13 @@ const Profile = () => {
 
                     <Button
                       component="a"
-                      href={file?.url}
+                      href={
+                        getFileUrl(file) ||
+                        undefined
+                      }
+                      disabled={
+                        !getFileUrl(file)
+                      }
                       target="_blank"
                       rel="noreferrer"
                       download

@@ -1,282 +1,124 @@
-export const unwrapClassPayload = (payload) => {
-  let current = payload;
+export const getEntityId = (value) =>
+  String(value?._id || value?.id || value || "").trim();
 
-  for (let index = 0; index < 6; index += 1) {
-    if (!current || typeof current !== "object" || Array.isArray(current)) {
-      break;
-    }
+export const unwrapApiData = (response) =>
+  response?.data?.data ?? response?.data ?? response;
 
-    const next =
-      current.data ??
-      current.result ??
-      current.payload ??
-      current.response;
-
-    if (!next || next === current) {
-      break;
-    }
-
-    current = next;
-  }
-
-  return current;
-};
-
-export const extractClasses = (payload) => {
-  const data = unwrapClassPayload(payload);
-
-  if (Array.isArray(data)) {
-    return data;
-  }
-
+export const extractApiList = (response, keys = []) => {
+  const payload = unwrapApiData(response);
+  if (Array.isArray(payload)) return payload;
   return (
-    [
-      data?.classes,
-      data?.items,
-      data?.docs,
-      data?.records,
-      data?.results,
-      data?.list,
-    ].find(Array.isArray) || []
+    [...keys.map((key) => payload?.[key]), payload?.classes, payload?.items, payload?.docs, payload?.results, payload?.records, payload?.data]
+      .find(Array.isArray) || []
   );
 };
 
-export const extractClass = (payload) => {
-  const data = unwrapClassPayload(payload);
-  return data?.class || data?.classroom || data?.record || data?.item || data || null;
+export const extractClass = (response) => {
+  const payload = unwrapApiData(response);
+  return payload?.class || payload?.classroom || payload;
 };
 
-export const extractClassStudents = (payload) => {
-  const data = unwrapClassPayload(payload);
+const populated = (primary, fallback) =>
+  primary && typeof primary === "object"
+    ? primary
+    : fallback && typeof fallback === "object"
+      ? fallback
+      : null;
 
-  if (Array.isArray(data)) {
-    return data;
-  }
+export const getClassId = (item) => getEntityId(item);
+export const getClassName = (item) => String(item?.name || item?.className || "").trim();
+export const getClassRoomNumber = (item) => String(item?.roomNumber || item?.room || "—").trim();
 
-  return (
-    [
-      data?.students,
-      data?.classStudents,
-      data?.items,
-      data?.docs,
-      data?.records,
-      data?.results,
-    ].find(Array.isArray) || []
-  );
+export const getClassAcademicYearObject = (item) =>
+  populated(item?.academicYearId, item?.academicYear);
+export const getClassAcademicYearId = (item) =>
+  getEntityId(getClassAcademicYearObject(item) || item?.academicYearId);
+export const getClassAcademicYear = (item) => {
+  const obj = getClassAcademicYearObject(item);
+  return String(
+    obj?.name || item?.academicYearName || (typeof item?.academicYear === "string" ? item.academicYear : "") || "—"
+  ).trim();
 };
 
-export const extractClassesPagination = (payload, fallback = {}) => {
-  const data = unwrapClassPayload(payload);
-  const pagination = data?.pagination || data?.meta || data?.pageInfo || {};
-
-  const page =
-    Number(
-      pagination?.page ??
-        pagination?.currentPage ??
-        data?.page ??
-        fallback.page ??
-        1
-    ) || 1;
-
-  const limit =
-    Number(
-      pagination?.limit ??
-        pagination?.perPage ??
-        data?.limit ??
-        fallback.limit ??
-        10
-    ) || 10;
-
-  const total =
-    Number(
-      pagination?.total ??
-        pagination?.totalItems ??
-        pagination?.count ??
-        data?.total ??
-        data?.count ??
-        fallback.total ??
-        0
-    ) || 0;
-
-  const totalPages =
-    Number(
-      pagination?.totalPages ??
-        pagination?.pages ??
-        data?.totalPages ??
-        data?.pages ??
-        Math.ceil(total / limit)
-    ) || 1;
-
-  return { page, limit, total, totalPages: Math.max(totalPages, 1) };
+export const getClassGradeLevelObject = (item) =>
+  populated(item?.gradeLevelId, item?.gradeLevel);
+export const getClassGradeLevelId = (item) =>
+  getEntityId(getClassGradeLevelObject(item) || item?.gradeLevelId);
+export const getClassGradeLevelName = (item) => {
+  const obj = getClassGradeLevelObject(item);
+  return String(obj?.name || item?.gradeLevelName || item?.gradeName || "—").trim();
 };
 
-export const getClassId = (classItem) =>
-  classItem?._id || classItem?.id || classItem?.classId || "";
+export const getClassStageObject = (item) => {
+  const grade = getClassGradeLevelObject(item);
+  return populated(grade?.stageId, grade?.stage) || populated(item?.stageId, item?.stage);
+};
+export const getClassStageName = (item) =>
+  String(getClassStageObject(item)?.name || item?.stageName || "—").trim();
 
-export const getClassAcademicYear = (classItem) =>
-  classItem?.academicYear || classItem?.year || "—";
+export const getClassDisplayName = (item) =>
+  getClassName(item) ||
+  [getClassGradeLevelName(item) !== "—" ? getClassGradeLevelName(item) : "", getClassRoomNumber(item) !== "—" ? getClassRoomNumber(item) : ""]
+    .filter(Boolean)
+    .join(" - ") ||
+  "فصل بدون اسم";
 
-export const getClassRoomNumber = (classItem) =>
-  classItem?.roomNumber || classItem?.room || classItem?.classRoom || "—";
+export const getClassGender = (item) => {
+  const value = String(item?.gender || "").trim().toLowerCase();
+  return value === "mixed" ? "both" : value;
+};
+export const getClassGenderLabel = (item) =>
+  ({ male: "بنين", female: "بنات", both: "مختلط" }[getClassGender(item)] || "—");
 
-export const getClassDisplayName = (classItem) => {
-  const room = getClassRoomNumber(classItem);
-  const year = getClassAcademicYear(classItem);
-
-  if (room !== "—") {
-    return `فصل ${room}`;
-  }
-
-  return year !== "—" ? `فصل ${year}` : "فصل بدون اسم";
+export const getClassTeacherObject = (item) =>
+  populated(item?.teacherInChargeId, item?.teacherInCharge);
+export const getClassTeacherId = (item) =>
+  getEntityId(getClassTeacherObject(item) || item?.teacherInChargeId);
+export const getClassTeacherName = (item) => {
+  const teacher = getClassTeacherObject(item);
+  return String(teacher?.name || teacher?.fullName || item?.teacherInChargeName || "بدون معلم مسؤول").trim();
 };
 
-export const getClassGender = (classItem) => classItem?.gender || "";
-
-export const getClassGenderLabel = (classItem) => {
-  const labels = { male: "بنين", female: "بنات", mixed: "مختلط" };
-  const gender = getClassGender(classItem);
-  return labels[gender] || gender || "—";
+export const getClassCapacity = (item) => {
+  const value = Number(item?.maxCapacity ?? item?.capacity ?? 0);
+  return Number.isFinite(value) ? value : 0;
 };
-
-export const getClassCapacity = (classItem) =>
-  Number(classItem?.maxCapacity ?? classItem?.capacity ?? 0) || 0;
-
-export const getClassTeacher = (classItem) =>
-  classItem?.teacherInCharge ||
-  classItem?.teacher ||
-  classItem?.teacherInChargeId ||
-  null;
-
-export const getClassTeacherId = (classItem) => {
-  const teacher = getClassTeacher(classItem);
-  return typeof teacher === "string"
-    ? teacher
-    : teacher?._id || teacher?.id || teacher?.teacherId || "";
+export const getClassStudents = (item) =>
+  Array.isArray(item?.students)
+    ? item.students
+    : Array.isArray(item?.enrollments)
+      ? item.enrollments.map((row) => row?.studentId || row?.student || row)
+      : [];
+export const getClassStudentCount = (item) => {
+  const explicit = Number(item?.studentsCount ?? item?.studentCount ?? item?.enrollmentsCount ?? item?.enrollmentCount);
+  return Number.isFinite(explicit) ? explicit : getClassStudents(item).length;
 };
-
-export const getClassTeacherName = (classItem) => {
-  const teacher = getClassTeacher(classItem);
-
-  if (!teacher) {
-    return "غير محدد";
-  }
-
-  return typeof teacher === "string"
-    ? teacher
-    : teacher?.name ||
-        teacher?.fullName ||
-        teacher?.teacherName ||
-        teacher?.email ||
-        "غير محدد";
+export const getClassAvailableSeats = (item) =>
+  Math.max(0, getClassCapacity(item) - getClassStudentCount(item));
+export const getClassOccupancy = (item) => {
+  const capacity = getClassCapacity(item);
+  return capacity ? Math.min(100, Math.round((getClassStudentCount(item) / capacity) * 100)) : 0;
 };
+export const isClassActive = (item) => item?.isActive !== false && item?.status !== "inactive";
 
-export const getClassSubjects = (classItem) => {
-  const subjects =
-    classItem?.subjects ?? classItem?.subjectIds ?? classItem?.assignedSubjects ?? [];
-  return Array.isArray(subjects) ? subjects : [];
-};
+export const buildClassPayload = (form = {}) => ({
+  name: String(form?.name || "").trim(),
+  academicYearId: getEntityId(form?.academicYearId),
+  gradeLevelId: getEntityId(form?.gradeLevelId),
+  gender: String(form?.gender || "") === "mixed" ? "both" : String(form?.gender || ""),
+  teacherInChargeId: getEntityId(form?.teacherInChargeId),
+  roomNumber: String(form?.roomNumber || "").trim(),
+  maxCapacity: Number(form?.maxCapacity),
+  isActive: form?.isActive !== false,
+});
 
-export const getClassSubjectIds = (classItem) =>
-  getClassSubjects(classItem)
-    .map((subject) =>
-      typeof subject === "string"
-        ? subject
-        : subject?._id || subject?.id || subject?.subjectId
-    )
-    .filter(Boolean);
-
-export const getClassSubjectNames = (classItem) =>
-  getClassSubjects(classItem)
-    .map((subject) =>
-      typeof subject === "string"
-        ? subject
-        : subject?.name ||
-          subject?.title ||
-          subject?.subjectName ||
-          subject?._id ||
-          subject?.id
-    )
-    .filter(Boolean);
-
-export const getClassStudents = (classItem) => {
-  const students =
-    classItem?.students ?? classItem?.studentIds ?? classItem?.enrolledStudents ?? [];
-  return Array.isArray(students) ? students : [];
-};
-
-export const getClassStudentCount = (classItem) =>
-  Number(
-    classItem?.studentsCount ??
-      classItem?.studentCount ??
-      classItem?.enrollmentCount ??
-      getClassStudents(classItem).length
-  ) || 0;
-
-export const isClassActive = (classItem) =>
-  classItem?.isActive ??
-  classItem?.active ??
-  classItem?.status === "active";
-
-export const parseClassSubjectIds = (value) =>
-  Array.from(
-    new Set(
-      String(value || "")
-        .split(/[\n,]+/)
-        .map((item) => item.trim())
-        .filter(Boolean)
-    )
-  );
-
-export const buildClassPayload = (form) => {
-  const payload = {
-    academicYear: form.academicYear?.trim(),
-    gender: form.gender,
-    subjectIds: parseClassSubjectIds(form.subjectIds),
-    teacherInChargeId: form.teacherInChargeId?.trim(),
-    roomNumber: form.roomNumber?.trim(),
-    maxCapacity: Number(form.maxCapacity),
-    isActive: Boolean(form.isActive),
-  };
-
-  Object.keys(payload).forEach((key) => {
-    if (payload[key] === "" || payload[key] === null || payload[key] === undefined) {
-      delete payload[key];
-    }
-  });
-
-  if (Array.isArray(payload.subjectIds) && payload.subjectIds.length === 0) {
-    delete payload.subjectIds;
-  }
-
-  if (!Number.isFinite(payload.maxCapacity)) {
-    delete payload.maxCapacity;
-  }
-
-  return payload;
-};
-
-export default {
-  unwrapClassPayload,
-  extractClasses,
-  extractClass,
-  extractClassStudents,
-  extractClassesPagination,
-  getClassId,
-  getClassAcademicYear,
-  getClassRoomNumber,
-  getClassDisplayName,
-  getClassGender,
-  getClassGenderLabel,
-  getClassCapacity,
-  getClassTeacher,
-  getClassTeacherId,
-  getClassTeacherName,
-  getClassSubjects,
-  getClassSubjectIds,
-  getClassSubjectNames,
-  getClassStudents,
-  getClassStudentCount,
-  isClassActive,
-  parseClassSubjectIds,
-  buildClassPayload,
-};
+export const getClassFormValues = (item) => ({
+  name: getClassName(item),
+  academicYearId: getClassAcademicYearId(item),
+  gradeLevelId: getClassGradeLevelId(item),
+  gender: getClassGender(item),
+  teacherInChargeId: getClassTeacherId(item),
+  roomNumber: getClassRoomNumber(item) === "—" ? "" : getClassRoomNumber(item),
+  maxCapacity: getClassCapacity(item) || 30,
+  isActive: isClassActive(item),
+});

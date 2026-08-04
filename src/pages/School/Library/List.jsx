@@ -17,6 +17,7 @@ import {
   SchoolRounded,
   SearchOffRounded,
   VisibilityRounded,
+  OpenInNewRounded,
 } from "@mui/icons-material";
 
 import {
@@ -31,31 +32,55 @@ import Container from "@/components/Container/Container";
 import SearchFilter from "@/components/Filters/SearchFilter";
 import SelectFilter from "@/components/Filters/SelectFilter";
 import PaginationControls from "@/components/Pagination";
-import ListCard from "@/components/Cards/ListCard";
 
 import Add from "./Add";
+import Edit from "./Edit";
+import Delete from "./Delete";
 
-import Years from "@/utils/constants/Years";
 import useDebounce from "@/utils/hooks/useDebounce";
 import { useSubjects } from "@/utils/hooks/apis/useSubjects";
 import { useLibraries } from "@/utils/hooks/apis/useLibraries";
 import usePermissions from "@/utils/hooks/usePermissions";
+import {
+  fetchLibraryAcademicYears,
+} from "@/APIs/school/library";
 
 const getArray = (value) =>
   Array.isArray(value) ? value : [];
 
+const normalizeId = (value) => {
+  if (value && typeof value === "object") {
+    return String(value._id || value.id || "").trim();
+  }
+
+  return String(value || "").trim();
+};
+
 const getItemId = (item) =>
-  item?._id || item?.id || "";
+  normalizeId(item);
+
+const getSubjectData = (item) => {
+  if (item?.subject && typeof item.subject === "object") {
+    return item.subject;
+  }
+
+  if (
+    item?.subjectId &&
+    typeof item.subjectId === "object"
+  ) {
+    return item.subjectId;
+  }
+
+  return null;
+};
 
 const getSubjectId = (item) =>
-  item?.subjectId ||
-  item?.subject?._id ||
-  item?.subject?.id ||
-  "";
+  normalizeId(
+    item?.subjectId || item?.subject
+  );
 
 const getSubjectName = (item) => {
-  const subject =
-    item?.subject || {};
+  const subject = getSubjectData(item) || {};
 
   const name =
     subject?.subjectName ||
@@ -78,10 +103,315 @@ const getSubjectName = (item) => {
     : name;
 };
 
-const getResponseData = (response) =>
-  response?.data?.data ||
-  response?.data ||
-  response;
+const getAcademicYearId = (item) =>
+  normalizeId(
+    item?.academicYearId ||
+      (typeof item?.academicYear === "object"
+        ? item.academicYear
+        : "")
+  );
+
+const getAcademicYearData = (item) => {
+  if (
+    item?.academicYearId &&
+    typeof item.academicYearId === "object"
+  ) {
+    return item.academicYearId;
+  }
+
+  if (
+    item?.academicYear &&
+    typeof item.academicYear === "object"
+  ) {
+    return item.academicYear;
+  }
+
+  return null;
+};
+
+const getAcademicYearName = (
+  item,
+  academicYearMap = new Map()
+) => {
+  const direct = getAcademicYearData(item);
+  const id = getAcademicYearId(item);
+  const mapped = id
+    ? academicYearMap.get(id)
+    : null;
+
+  return (
+    direct?.name ||
+    direct?.label ||
+    mapped?.name ||
+    mapped?.label ||
+    (typeof item?.academicYear === "string"
+      ? item.academicYear
+      : "") ||
+    "غير محددة"
+  );
+};
+
+const getResponseList = (response) => {
+  const payload =
+    response?.data?.data ??
+    response?.data ??
+    response;
+
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.docs)) return payload.docs;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+};
+
+const enrichLibraryItem = (
+  item,
+  subjectMap,
+  academicYearMap
+) => {
+  const subjectId = getSubjectId(item);
+  const directSubject = getSubjectData(item);
+  const subjectData =
+    directSubject ||
+    (subjectId
+      ? subjectMap.get(subjectId)
+      : null);
+
+  const academicYearId =
+    getAcademicYearId(item);
+
+  return {
+    ...item,
+    _id: getItemId(item),
+    id: getItemId(item),
+    subjectId,
+    subject: subjectData || item?.subject,
+    subjectName:
+      subjectData?.subjectName ||
+      subjectData?.name ||
+      item?.subjectName ||
+      "",
+    subjectCode:
+      subjectData?.subjectCode ||
+      subjectData?.code ||
+      item?.subjectCode ||
+      "",
+    academicYearId,
+    academicYear: getAcademicYearName(
+      item,
+      academicYearMap
+    ),
+  };
+};
+
+const CompactLibraryCard = ({
+  item,
+  setItems,
+  setLocalPagination,
+  permissions,
+  academicYearMap,
+}) => {
+  const itemId = getItemId(item);
+  const title = item?.title || "بدون عنوان";
+  const link = String(item?.link || "").trim();
+  const subjectName = getSubjectName(item);
+  const academicYearName = getAcademicYearName(
+    item,
+    academicYearMap
+  );
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        height: "100%",
+        minHeight: 238,
+        p: 1.45,
+        display: "flex",
+        flexDirection: "column",
+        border:
+          "1px solid rgba(36,74,112,0.14)",
+        borderRadius: "16px",
+        background:
+          "linear-gradient(180deg, rgba(255,252,247,.98), rgba(255,255,255,.94))",
+        boxShadow:
+          "0 8px 20px rgba(18,47,77,0.055)",
+        transition:
+          "transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease",
+
+        "&:hover": {
+          transform: "translateY(-2px)",
+          borderColor:
+            "rgba(36,74,112,0.24)",
+          boxShadow:
+            "0 14px 28px rgba(18,47,77,0.09)",
+        },
+      }}
+    >
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        gap={1}
+      >
+        <Stack direction="row" gap={0.7}>
+          {permissions.edit && (
+            <Edit
+              item={item}
+              setItems={setItems}
+            />
+          )}
+
+          {permissions.delete && (
+            <Delete
+              id={itemId}
+              setItems={setItems}
+              setLocalPagination={
+                setLocalPagination
+              }
+            />
+          )}
+        </Stack>
+
+        <Box
+          sx={{
+            width: 46,
+            height: 46,
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+            color:
+              "var(--color-navy-deep)",
+            backgroundColor:
+              "var(--color-gold-soft)",
+            border:
+              "1px solid rgba(211,164,79,.20)",
+            borderRadius: "13px",
+
+            "& svg": {
+              fontSize: 23,
+            },
+          }}
+        >
+          <LibraryBooksRounded />
+        </Box>
+      </Stack>
+
+      <Box sx={{ mt: 1.25, minWidth: 0 }}>
+        <Typography
+          title={title}
+          sx={{
+            color:
+              "var(--color-navy-deep)",
+            fontSize: "15px",
+            fontWeight: 800,
+            lineHeight: 1.45,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {title}
+        </Typography>
+
+        <Stack spacing={0.65} sx={{ mt: 1.05 }}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            gap={0.7}
+          >
+            <MenuBookRounded
+              sx={{
+                color:
+                  "var(--color-gold-dark)",
+                fontSize: 17,
+              }}
+            />
+
+            <Typography
+              title={subjectName}
+              sx={{
+                minWidth: 0,
+                color:
+                  "var(--color-text)",
+                fontSize: "11px",
+                fontWeight: 700,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {subjectName}
+            </Typography>
+          </Stack>
+
+          <Stack
+            direction="row"
+            alignItems="center"
+            gap={0.7}
+          >
+            <SchoolRounded
+              sx={{
+                color:
+                  "var(--color-gold-dark)",
+                fontSize: 17,
+              }}
+            />
+
+            <Typography
+              sx={{
+                color:
+                  "var(--color-muted)",
+                fontSize: "10.5px",
+                fontWeight: 700,
+              }}
+            >
+              {academicYearName}
+            </Typography>
+          </Stack>
+        </Stack>
+      </Box>
+
+      <Box sx={{ flexGrow: 1 }} />
+
+      <Button
+        component="a"
+        href={link || undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        disabled={!link}
+        variant="contained"
+        startIcon={<OpenInNewRounded />}
+        sx={{
+          mt: 1.35,
+          minHeight: 40,
+          borderRadius: "11px",
+          color:
+            "var(--color-white)",
+          background:
+            "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
+          boxShadow:
+            "0 7px 16px rgba(18,47,77,.14)",
+          fontSize: "11px",
+          fontWeight: 800,
+          textTransform: "none",
+
+          "& .MuiButton-startIcon": {
+            marginLeft: "6px",
+            marginRight: 0,
+          },
+
+          "&:hover": {
+            background:
+              "linear-gradient(135deg, var(--color-navy), var(--color-navy-deep))",
+          },
+        }}
+      >
+        فتح المصدر
+      </Button>
+    </Paper>
+  );
+};
 
 const List = () => {
   const [items, setItems] =
@@ -94,9 +424,15 @@ const List = () => {
     useState("");
 
   const [
-    academicYear,
-    setAcademicYear,
+    academicYearId,
+    setAcademicYearId,
   ] = useState("");
+
+  const [academicYears, setAcademicYears] =
+    useState([]);
+
+  const [loadingAcademicYears, setLoadingAcademicYears] =
+    useState(false);
 
   const [page, setPage] =
     useState(1);
@@ -123,20 +459,84 @@ const List = () => {
     limit: 1000,
   });
 
-  const mappedSubjects =
-    getArray(subjects).map(
-      (item) => ({
-        id:
-          item?._id ||
-          item?.id,
-        label:
-          item?.subjectCode
+  const subjectMap = useMemo(
+    () =>
+      new Map(
+        getArray(subjects)
+          .map((item) => [
+            normalizeId(item),
+            item,
+          ])
+          .filter(([id]) => Boolean(id))
+      ),
+    [subjects]
+  );
+
+  const mappedSubjects = useMemo(
+    () =>
+      getArray(subjects).map(
+        (item) => ({
+          id: normalizeId(item),
+          label: item?.subjectCode
             ? `${item.subjectName} - ${item.subjectCode}`
             : item?.subjectName ||
               item?.name ||
               "مادة",
-      })
-    );
+        })
+      ),
+    [subjects]
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    const loadAcademicYears = async () => {
+      setLoadingAcademicYears(true);
+
+      const response =
+        await fetchLibraryAcademicYears();
+
+      if (!active) {
+        return;
+      }
+
+      if (response?.status === false) {
+        setAcademicYears([]);
+      } else {
+        setAcademicYears(
+          getResponseList(response).map(
+            (item) => ({
+              id: normalizeId(item),
+              name:
+                item?.name ||
+                item?.label ||
+                item?.title ||
+                "سنة دراسية",
+            })
+          )
+        );
+      }
+
+      setLoadingAcademicYears(false);
+    };
+
+    loadAcademicYears();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const academicYearMap = useMemo(
+    () =>
+      new Map(
+        academicYears.map((item) => [
+          item.id,
+          item,
+        ])
+      ),
+    [academicYears]
+  );
 
   const filters = useMemo(
     () => ({
@@ -147,8 +547,8 @@ const List = () => {
         undefined,
       subjectId:
         subject || undefined,
-      academicYear:
-        academicYear ||
+      academicYearId:
+        academicYearId ||
         undefined,
     }),
     [
@@ -156,7 +556,7 @@ const List = () => {
       limit,
       debouncedItemName,
       subject,
-      academicYear,
+      academicYearId,
     ]
   );
 
@@ -171,9 +571,20 @@ const List = () => {
 
   useEffect(() => {
     setItems(
-      getArray(libraries)
+      getArray(libraries).map(
+        (item) =>
+          enrichLibraryItem(
+            item,
+            subjectMap,
+            academicYearMap
+          )
+      )
     );
-  }, [libraries]);
+  }, [
+    libraries,
+    subjectMap,
+    academicYearMap,
+  ]);
 
   useEffect(() => {
     if (pagination) {
@@ -189,7 +600,7 @@ const List = () => {
     limit,
     debouncedItemName,
     subject,
-    academicYear,
+    academicYearId,
   ]);
 
   const currentPagination =
@@ -199,7 +610,7 @@ const List = () => {
   const activeFiltersCount = [
     itemName,
     subject,
-    academicYear,
+    academicYearId,
   ].filter(Boolean).length;
 
   const stats = useMemo(
@@ -219,10 +630,7 @@ const List = () => {
 
       years: new Set(
         items
-          .map(
-            (item) =>
-              item?.academicYear
-          )
+          .map(getAcademicYearId)
           .filter(Boolean)
       ).size,
     }),
@@ -242,16 +650,18 @@ const List = () => {
         المادة:
           getSubjectName(item),
         "السنة الدراسية":
-          item?.academicYear ||
-          "غير محددة",
+          getAcademicYearName(
+            item,
+            academicYearMap
+          ),
       })),
-    [items]
+    [items, academicYearMap]
   );
 
   const resetFilters = () => {
     setItemName("");
     setSubject("");
-    setAcademicYear("");
+    setAcademicYearId("");
     setPage(1);
   };
 
@@ -729,17 +1139,18 @@ const List = () => {
             />
 
             <SelectFilter
-              value={academicYear}
+              value={academicYearId}
               onChange={
-                setAcademicYear
+                setAcademicYearId
               }
               label="السنة الدراسية"
               icon={SchoolRounded}
               allLabel="جميع السنوات"
-              options={Years.map(
+              disabled={loadingAcademicYears}
+              options={academicYears.map(
                 (year) => ({
-                  value: year,
-                  label: year,
+                  value: year.id,
+                  label: year.name,
                 })
               )}
             />
@@ -940,6 +1351,7 @@ const List = () => {
                           item
                           xs={12}
                           sm={6}
+                          md={6}
                           lg={4}
                           xl={3}
                           key={
@@ -949,14 +1361,15 @@ const List = () => {
                             index
                           }
                         >
-                          <ListCard
+                          <CompactLibraryCard
                             item={item}
-                            setItems={
-                              setItems
-                            }
-                            type="library"
+                            setItems={setItems}
                             setLocalPagination={
                               setLocalPagination
+                            }
+                            permissions={permissions}
+                            academicYearMap={
+                              academicYearMap
                             }
                           />
                         </Grid>

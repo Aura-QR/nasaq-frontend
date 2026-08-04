@@ -43,7 +43,10 @@ import {
   fetchLectures,
 } from "@/APIs/school/lectures";
 
-import { deletePreparation } from "@/APIs/school/preparation";
+import {
+  deletePreparation,
+  fetchPreparations,
+} from "@/APIs/school/preparation";
 
 import Slots from "@/utils/constants/Slots";
 import Days from "@/utils/constants/Days";
@@ -87,6 +90,59 @@ const extractLectures = (
   );
 };
 
+const extractPreparations = (
+  response
+) => {
+  const data =
+    response?.data ??
+    response;
+
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  return (
+    [
+      data?.docs,
+      data?.items,
+      data?.preparations,
+      data?.results,
+      data?.records,
+      data?.data,
+    ].find(Array.isArray) || []
+  );
+};
+
+const getPreparationLectureId = (
+  preparation
+) => {
+  const lecture =
+    preparation?.lecture ||
+    preparation?.lectureId;
+
+  if (
+    lecture &&
+    typeof lecture === "object"
+  ) {
+    return String(
+      lecture._id ||
+        lecture.id ||
+        ""
+    ).trim();
+  }
+
+  return String(
+    lecture || ""
+  ).trim();
+};
+
+const getPreparationId = (
+  preparation
+) =>
+  preparation?._id ||
+  preparation?.id ||
+  "";
+
 const getLectureId = (
   lecture
 ) =>
@@ -94,20 +150,35 @@ const getLectureId = (
   lecture?.id ||
   "";
 
-const getLectureSubjectName = (
-  lecture
-) =>
-  lecture?.subject
-    ?.subjectName ||
-  lecture?.subject?.name ||
-  lecture?.subjectId
-    ?.subjectName ||
-  lecture?.subjectId?.name ||
-  lecture?.subjectOffering
-    ?.subject?.name ||
-  lecture?.subjectOfferingId
-    ?.subjectId?.name ||
-  "مادة غير محددة";
+const getSubjectName = (subject) => {
+  if (!subject || typeof subject !== "object") {
+    return "";
+  }
+
+  return (
+    subject.subjectName ||
+    subject.name ||
+    subject.title ||
+    ""
+  );
+};
+
+const getLectureSubjectName = (lecture) => {
+  const subjectOffering =
+    lecture?.subjectOffering ||
+    lecture?.subjectOfferingId ||
+    null;
+
+  return (
+    getSubjectName(lecture?.subject) ||
+    getSubjectName(lecture?.subjectId) ||
+    getSubjectName(subjectOffering?.subject) ||
+    getSubjectName(subjectOffering?.subjectId) ||
+    lecture?.subjectName ||
+    subjectOffering?.subjectName ||
+    "مادة غير محددة"
+  );
+};
 
 const getLectureClass = (
   lecture
@@ -164,10 +235,14 @@ const fetchTeacherLectures =
     }
 
     const request =
-      fetchLectures({
-        teacherId:
-          key,
-      })
+      fetchLectures(
+        {
+          teacherId: key,
+        },
+        {
+          force,
+        }
+      )
         .then((response) => {
           if (
             response?.status ===
@@ -349,9 +424,101 @@ const Schedule = ({
             return;
           }
 
-          setLectures(
+          const lectureList =
             extractLectures(
               response
+            );
+
+          let preparationResponse =
+            await fetchPreparations({
+              teacherId:
+                teacherData._id,
+              limit: 500,
+            });
+
+          let preparationList =
+            preparationResponse?.status ===
+              false
+              ? []
+              : extractPreparations(
+                  preparationResponse
+                );
+
+          if (
+            preparationList.length === 0 &&
+            lectureList.length > 0
+          ) {
+            const perLectureResults =
+              await Promise.all(
+                lectureList.map(
+                  async (lecture) => {
+                    const lectureId =
+                      getLectureId(
+                        lecture
+                      );
+
+                    if (!lectureId) {
+                      return [];
+                    }
+
+                    const result =
+                      await fetchPreparations({
+                        lecture:
+                          lectureId,
+                        limit: 10,
+                      });
+
+                    return result?.status ===
+                      false
+                      ? []
+                      : extractPreparations(
+                          result
+                        );
+                  }
+                )
+              );
+
+            preparationList =
+              perLectureResults.flat();
+          }
+
+          const preparationByLecture =
+            new Map();
+
+          preparationList.forEach(
+            (preparation) => {
+              const lectureId =
+                getPreparationLectureId(
+                  preparation
+                );
+
+              if (
+                lectureId &&
+                getPreparationId(
+                  preparation
+                )
+              ) {
+                preparationByLecture.set(
+                  lectureId,
+                  preparation
+                );
+              }
+            }
+          );
+
+          setLectures(
+            lectureList.map(
+              (lecture) => ({
+                ...lecture,
+                preparation:
+                  preparationByLecture.get(
+                    getLectureId(
+                      lecture
+                    )
+                  ) ||
+                  lecture?.preparation ||
+                  null,
+              })
             )
           );
         } catch (requestError) {
@@ -385,7 +552,9 @@ const Schedule = ({
     if (
       teacherData?._id
     ) {
-      fetchScheduleData();
+      fetchScheduleData({
+        force: true,
+      });
     }
   }, [
     teacherData?._id,
@@ -1288,12 +1457,17 @@ const LecturePreparation = ({
       ? preparation[0]
       : preparation;
 
+  const preparationId =
+    getPreparationId(
+      preparationItem
+    );
+
   const hasPreparation =
-    Boolean(preparationItem?._id);
+    Boolean(preparationId);
 
   const handleDelete =
     async () => {
-      if (!preparationItem?._id) {
+      if (!preparationId) {
         return;
       }
 
@@ -1302,7 +1476,7 @@ const LecturePreparation = ({
 
         const response =
           await deletePreparation(
-            preparationItem._id
+            preparationId
           );
 
         if (!response?.status) {
@@ -1357,7 +1531,7 @@ const LecturePreparation = ({
                 event.stopPropagation();
 
                 navigate(
-                  `/school/preparation/edit/${preparationItem._id}`
+                  `/school/preparation/edit/${preparationId}`
                 );
               }}
               sx={{

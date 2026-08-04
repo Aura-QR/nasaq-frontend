@@ -118,15 +118,10 @@ const getId = (value) => {
   return String(value || "").trim();
 };
 
-const normalizeDay = (value) => {
-  const day = String(value || "")
+const normalizeDay = (value) =>
+  String(value || "")
     .trim()
     .toLowerCase();
-
-  return day
-    ? `${day.charAt(0).toUpperCase()}${day.slice(1)}`
-    : "";
-};
 
 const getAcademicYearId = (item) =>
   getId(item?.academicYearId || item?.academicYear);
@@ -602,8 +597,12 @@ const Add = () => {
         return;
       }
 
-      const rawOfferings =
-        extractList(offeringsResponse);
+      const rawOfferings = extractList(
+        offeringsResponse
+      ).filter(
+        (item) =>
+          getGradeLevelId(item) === gradeLevelId
+      );
 
       const assignments =
         assignmentsResponse?.status === false
@@ -958,6 +957,7 @@ const Add = () => {
 
             <Grid item xs={12} sm={6} lg={4}>
               <Select
+                key={`term-${selectedClassId}-${selectedTermId}`}
                 register={register}
                 registerName="termId"
                 error={errors.termId?.message}
@@ -980,6 +980,7 @@ const Add = () => {
 
             <Grid item xs={12} sm={6} lg={4}>
               <Select
+                key={`offering-${selectedTermId}-${selectedOfferingId}-${offeringOptions.length}`}
                 register={register}
                 registerName="subjectOfferingId"
                 error={
@@ -1013,6 +1014,7 @@ const Add = () => {
 
             <Grid item xs={12} sm={6} lg={4}>
               <Select
+                key={`teacher-${selectedOfferingId}-${selectedTeacherId || queryTeacherId}-${teacherOptions.length}`}
                 register={register}
                 registerName="teacherId"
                 error={

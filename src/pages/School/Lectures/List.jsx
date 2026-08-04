@@ -88,57 +88,165 @@ const STAT_CARDS = [
 const getArray = (value) =>
   Array.isArray(value) ? value : [];
 
+const getId = (value) => {
+  if (value && typeof value === "object") {
+    return String(value._id || value.id || "").trim();
+  }
+
+  return String(value || "").trim();
+};
+
+const getEntityName = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return (
+    value.name ||
+    value.title ||
+    value.label ||
+    ""
+  );
+};
+
+const getLectureClass = (item) =>
+  item?.class ||
+  (item?.classId && typeof item.classId === "object"
+    ? item.classId
+    : null);
+
+const getLectureTeacher = (item) =>
+  item?.teacher ||
+  (item?.teacherId && typeof item.teacherId === "object"
+    ? item.teacherId
+    : null);
+
+const getLectureOffering = (item) =>
+  (item?.subjectOfferingId &&
+  typeof item.subjectOfferingId === "object"
+    ? item.subjectOfferingId
+    : null) ||
+  (item?.subjectOffering &&
+  typeof item.subjectOffering === "object"
+    ? item.subjectOffering
+    : null);
+
+const getLectureSubject = (item) => {
+  const offering = getLectureOffering(item);
+
+  return (
+    item?.subject ||
+    (item?.subjectId && typeof item.subjectId === "object"
+      ? item.subjectId
+      : null) ||
+    offering?.subjectId ||
+    offering?.subject ||
+    offering?.subjectDetails ||
+    (offering?.subjectName || offering?.name
+      ? offering
+      : null)
+  );
+};
+
 const mapLectures = (data = []) =>
   getArray(data).map((item) => {
-    const classData = item?.class;
+    const classData = getLectureClass(item);
+    const teacherData = getLectureTeacher(item);
+    const offeringData = getLectureOffering(item);
+    const subjectData = getLectureSubject(item);
+
     const subjectName =
-      item?.subject?.subjectName ||
+      subjectData?.subjectName ||
+      subjectData?.name ||
+      offeringData?.subjectName ||
       item?.subjectName ||
-      "—";
+      "مادة غير محددة";
+
     const subjectCode =
-      item?.subject?.subjectCode ||
+      subjectData?.subjectCode ||
+      subjectData?.code ||
+      offeringData?.subjectCode ||
       item?.subjectCode ||
       "";
 
+    const academicYear =
+      getEntityName(classData?.academicYear) ||
+      getEntityName(classData?.academicYearId) ||
+      getEntityName(classData?.gradeLevelId) ||
+      getEntityName(classData?.gradeLevel) ||
+      "";
+
+    const roomNumber =
+      classData?.roomNumber ||
+      classData?.name ||
+      "";
+
+    const gender =
+      classData?.gender === "male"
+        ? "بنين"
+        : classData?.gender === "female"
+        ? "بنات"
+        : "";
+
+    const className =
+      [academicYear, roomNumber, gender]
+        .filter(Boolean)
+        .join(" - ") ||
+      item?.className ||
+      "—";
+
     return {
-      id: item?._id || item?.id,
-      classId:
-        classData?._id ||
-        classData?.id ||
+      id: getId(item),
+
+      classId: getId(
         item?.classId ||
-        "",
-      teacherId:
-        item?.teacher?._id ||
-        item?.teacher?.id ||
+        item?.class
+      ),
+
+      teacherId: getId(
         item?.teacherId ||
-        "",
+        item?.teacher
+      ),
+
       subjectId:
-        item?.subject?._id ||
-        item?.subject?.id ||
-        item?.subjectId ||
-        "",
-      className: classData
-        ? `${classData?.academicYear || "—"} - ${
-            classData?.roomNumber || "—"
-          } - ${
-            classData?.gender === "male"
-              ? "بنين"
-              : classData?.gender === "female"
-              ? "بنات"
-              : "—"
-          }`
-        : item?.className || "—",
+        getId(subjectData) ||
+        getId(
+          offeringData?.subjectId ||
+          offeringData?.subject
+        ),
+
+      subjectOfferingId: getId(
+        item?.subjectOfferingId ||
+        item?.subjectOffering
+      ),
+
+      termId: getId(
+        item?.termId ||
+        item?.term
+      ),
+
+      className,
+
       teacherName:
-        item?.teacher?.name ||
+        teacherData?.name ||
+        teacherData?.username ||
+        teacherData?.email ||
         item?.teacherName ||
         "—",
+
       subject: subjectCode
         ? `${subjectName} - ${subjectCode}`
         : subjectName,
+
       day:
         getArabicDays(item?.dayOfWeek) ||
         item?.dayOfWeek ||
         "—",
+
       slot:
         getLectureOrder(item?.slot) ||
         item?.slot ||
@@ -181,8 +289,8 @@ const List = () => {
 
   const filters = useMemo(
     () => ({
-      page,
-      limit,
+      page: subject ? 1 : page,
+      limit: subject ? 1000 : limit,
       teacherId:
         teacher || undefined,
       classId:
@@ -190,8 +298,6 @@ const List = () => {
       dayOfWeek:
         dayOfWeek || undefined,
       slot: slot || undefined,
-      subjectId:
-        subject || undefined,
     }),
     [
       page,
@@ -214,10 +320,18 @@ const List = () => {
     usePermissions("lectures");
 
   useEffect(() => {
-    setItems(
-      mapLectures(lectures)
-    );
-  }, [lectures]);
+    const mappedLectures =
+      mapLectures(lectures);
+
+    const filteredLectures = subject
+      ? mappedLectures.filter(
+          (item) =>
+            item.subjectId === subject
+        )
+      : mappedLectures;
+
+    setItems(filteredLectures);
+  }, [lectures, subject]);
 
   useEffect(() => {
     if (pagination) {
@@ -252,10 +366,10 @@ const List = () => {
 
   const stats = useMemo(
     () => ({
-      total:
-        currentPagination
-          ?.totalDocs ??
-        items.length,
+      total: subject
+        ? items.length
+        : (currentPagination?.totalDocs ??
+          items.length),
       visible: items.length,
       teachers: new Set(
         items
@@ -277,6 +391,7 @@ const List = () => {
     [
       items,
       currentPagination,
+      subject,
     ]
   );
 
@@ -1204,7 +1319,8 @@ const List = () => {
                 }
               />
 
-              {currentPagination &&
+              {!subject &&
+                currentPagination &&
                 items.length > 0 && (
                   <PaginationControls
                     pagination={

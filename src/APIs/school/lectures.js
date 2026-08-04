@@ -2,7 +2,8 @@
 import { getApiError } from "../helpers/getApiError";
 
 const ENDPOINT = "/lectures";
-const CACHE_TTL = 15000;
+const CACHE_TTL = 15_000;
+
 const cache = new Map();
 const pending = new Map();
 
@@ -13,6 +14,13 @@ const normalizeId = (value) => {
 
   return String(value || "").trim();
 };
+
+const cleanParams = (params = {}) =>
+  Object.fromEntries(
+    Object.entries(params).filter(([, value]) => {
+      return value !== undefined && value !== null && value !== "";
+    })
+  );
 
 const normalizeSuccess = (response) => {
   const payload = response?.data;
@@ -40,31 +48,17 @@ const normalizeFailure = (value, fallback) => ({
     (typeof value === "string" ? value : fallback),
 });
 
-const cleanParams = (params = {}) =>
-  Object.fromEntries(
-    Object.entries(params).filter(
-      ([, value]) =>
-        value !== undefined &&
-        value !== null &&
-        value !== ""
-    )
-  );
-
 const getCached = async (
   endpoint,
-  params,
-  fallback,
+  params = {},
+  fallback = "تعذر تحميل البيانات",
   { force = false } = {}
 ) => {
   const cleanedParams = cleanParams(params);
   const key = `${endpoint}:${JSON.stringify(cleanedParams)}`;
   const saved = cache.get(key);
 
-  if (
-    !force &&
-    saved &&
-    Date.now() - saved.createdAt < CACHE_TTL
-  ) {
+  if (!force && saved && Date.now() - saved.createdAt < CACHE_TTL) {
     return saved.value;
   }
 
@@ -76,20 +70,21 @@ const getCached = async (
     .get(endpoint, { params: cleanedParams })
     .then(normalizeSuccess)
     .then((result) => {
-      cache.set(key, {
-        value: result,
-        createdAt: Date.now(),
-      });
+      if (result?.status !== false) {
+        cache.set(key, {
+          value: result,
+          createdAt: Date.now(),
+        });
+      }
 
       return result;
     })
-    .catch((error) =>
-      normalizeFailure(
-        getApiError(error, fallback),
-        fallback
-      )
-    )
-    .finally(() => pending.delete(key));
+    .catch((error) => {
+      return normalizeFailure(getApiError(error, fallback), fallback);
+    })
+    .finally(() => {
+      pending.delete(key);
+    });
 
   pending.set(key, request);
   return request;
@@ -99,20 +94,10 @@ export const invalidateLecturesCache = () => {
   cache.clear();
 };
 
-export const fetchLectures = async (
-  filters = {},
-  options = {}
-) =>
-  getCached(
-    ENDPOINT,
-    filters,
-    "تعذر تحميل الحصص",
-    options
-  );
+export const fetchLectures = async (filters = {}, options = {}) =>
+  getCached(ENDPOINT, filters, "تعذر تحميل الحصص", options);
 
-export const fetchLecturesList = async (
-  options = {}
-) =>
+export const fetchLecturesList = async (options = {}) =>
   getCached(
     `${ENDPOINT}/list`,
     {},
@@ -120,10 +105,7 @@ export const fetchLecturesList = async (
     options
   );
 
-export const fetchSingleLecture = async (
-  id,
-  options = {}
-) => {
+export const fetchSingleLecture = async (id, options = {}) => {
   const lectureId = normalizeId(id);
 
   if (!lectureId) {
@@ -177,11 +159,8 @@ export const fetchSubjectOfferings = async (
   }
 
   return getCached(
-    "/subject-offerings",
-    {
-      gradeLevelId: gradeId,
-      termId: normalizedTermId,
-    },
+    `/subject-offerings/by-term/${normalizedTermId}`,
+    {},
     "تعذر تحميل المواد المفعلة",
     options
   );
@@ -198,18 +177,12 @@ export const fetchTeacherAssignments = async (
     options
   );
 
-export const normalizeLecturePayload = (
-  data = {}
-) => {
+export const normalizeLecturePayload = (data = {}) => {
   const payload = {
     classId: normalizeId(data.classId),
-    subjectOfferingId: normalizeId(
-      data.subjectOfferingId
-    ),
+    subjectOfferingId: normalizeId(data.subjectOfferingId),
     termId: normalizeId(data.termId),
-    dayOfWeek: String(
-      data.dayOfWeek || ""
-    ).trim(),
+    dayOfWeek: String(data.dayOfWeek || "").trim().toLowerCase(),
     slot: Number(data.slot),
   };
 
@@ -276,9 +249,7 @@ export const deleteLecture = async (id) => {
   }
 
   try {
-    const response = await api.delete(
-      `${ENDPOINT}/${lectureId}`
-    );
+    const response = await api.delete(`${ENDPOINT}/${lectureId}`);
 
     invalidateLecturesCache();
     return normalizeSuccess(response);
