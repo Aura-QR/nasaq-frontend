@@ -11,11 +11,16 @@ import Onboarding from "@/pages/Onboarding/Onboarding";
 import NoAccess from "@/pages/Others/NoAccess";
 import TeacherDashboard from "@/pages/TeacherDashboard/TeacherDashboard";
 import TeacherProjectGrading from "@/pages/TeacherProjectGrading/TeacherProjectGrading";
+import TeacherExamGrading from "@/pages/TeacherExamGrading/TeacherExamGrading";
 import TeacherExams from "@/pages/TeacherExams/TeacherExams";
 import TeacherExamAdd from "@/pages/TeacherExamAdd/TeacherExamAdd";
 import TeacherAttendance from "@/pages/TeacherAttendance/TeacherAttendance";
 import TeacherSchedule from "@/pages/TeacherSchedule/TeacherSchedule";
 import TeacherClasses from "@/pages/TeacherClasses/TeacherClasses";
+import TeacherPreparations from "@/pages/TeacherPreparations/TeacherPreparations";
+import TeacherLibrary from "@/pages/TeacherLibrary/TeacherLibrary";
+import TeacherProfile from "@/pages/TeacherProfile/TeacherProfile";
+import TeacherProjects from "@/pages/TeacherProjects/TeacherProjects";
 
 import PlatformDashboard from "@/pages/PlatformDashboard/PlatformDashboard";
 import PlatformSchools from "@/pages/PlatformSchools/PlatformSchools";
@@ -23,6 +28,7 @@ import PlatformSchoolDetails from "@/pages/PlatformSchoolDetails/PlatformSchoolD
 
 import SchoolManagersList from "@/pages/SchoolManagers/List";
 import SchoolManagerAdd from "@/pages/SchoolManagers/Add";
+import SubjectOfferings from "@/pages/SubjectOfferings/SubjectOfferings";
 
 import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
 
@@ -145,6 +151,10 @@ const AppRouter = () => {
               />
             }
           />
+          <Route
+            path="/subject-offerings"
+            element={<SubjectOfferings />}
+          />
         </Route>
 
         <Route
@@ -174,6 +184,10 @@ const AppRouter = () => {
             element={<TeacherProjectGrading />}
           />
           <Route
+            path="/teacher/grading/exams"
+            element={<TeacherExamGrading />}
+          />
+          <Route
             path="/teacher/exams"
             element={<TeacherExams />}
           />
@@ -192,6 +206,22 @@ const AppRouter = () => {
           <Route
             path="/teacher/classes"
             element={<TeacherClasses />}
+          />
+          <Route
+            path="/teacher/preparations"
+            element={<TeacherPreparations />}
+          />
+          <Route
+            path="/teacher/library"
+            element={<TeacherLibrary />}
+          />
+          <Route
+            path="/teacher/profile"
+            element={<TeacherProfile />}
+          />
+          <Route
+            path="/teacher/projects"
+            element={<TeacherProjects />}
           />
         </Route>
 

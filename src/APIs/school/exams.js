@@ -7,110 +7,66 @@ const getErrorMessage = (
   fallback = "حدث خطأ ما"
 ) =>
   error?.response?.data?.message ||
+  error?.response?.data?.error ||
   error?.message ||
   fallback;
 
-export const fetchExams = async (
-  filters = {}
-) => {
+export const fetchExams = async (filters = {}) => {
   try {
-    const response = await api.get(
-      ENDPOINT,
-      { params: filters }
-    );
-
+    const response = await api.get(ENDPOINT, {
+      params: filters,
+    });
     return response.data;
   } catch (error) {
-    return getErrorMessage(
-      error,
-      "تعذر تحميل الاختبارات"
-    );
+    return getErrorMessage(error, "تعذر تحميل الاختبارات");
   }
 };
 
-export const fetchSingleExam = async (
-  id
-) => {
+export const fetchSingleExam = async (id) => {
   try {
-    const response = await api.get(
-      `${ENDPOINT}/${id}`
-    );
-
+    const response = await api.get(`${ENDPOINT}/${id}`);
     return response.data;
   } catch (error) {
-    return getErrorMessage(
-      error,
-      "تعذر تحميل بيانات الاختبار"
-    );
+    return getErrorMessage(error, "تعذر تحميل بيانات الاختبار");
   }
 };
 
 export const addExam = async (data) => {
   try {
-    const response = await api.post(
-      ENDPOINT,
-      data
-    );
-
+    const response = await api.post(ENDPOINT, data);
     return response.data;
   } catch (error) {
-    return getErrorMessage(
-      error,
-      "تعذر إضافة الاختبار"
-    );
+    return getErrorMessage(error, "تعذر إضافة الاختبار");
   }
 };
 
-export const editExam = async (
-  data,
-  id
-) => {
+export const editExam = async (data, id) => {
   try {
-    const response = await api.patch(
-      `${ENDPOINT}/${id}`,
-      data
-    );
-
+    const response = await api.patch(`${ENDPOINT}/${id}`, data);
     return response.data;
   } catch (error) {
-    return getErrorMessage(
-      error,
-      "تعذر تعديل الاختبار"
-    );
+    return getErrorMessage(error, "تعذر تعديل الاختبار");
   }
 };
 
 export const deleteExam = async (id) => {
   try {
-    const response = await api.delete(
-      `${ENDPOINT}/${id}`
-    );
-
+    const response = await api.delete(`${ENDPOINT}/${id}`);
     return response.data;
   } catch (error) {
-    return getErrorMessage(
-      error,
-      "تعذر حذف الاختبار"
-    );
+    return getErrorMessage(error, "تعذر حذف الاختبار");
   }
 };
 
-export const addExamQuestion = async (
-  examId,
-  question
-) => {
+export const addExamQuestion = async (examId, question) => {
   try {
     const response = await api.post(
       `${ENDPOINT}/${examId}/questions`,
       question
     );
-
     return response.data;
   } catch (error) {
-    return getErrorMessage(
-      error,
-      "تعذر إضافة السؤال"
-    );
+    return getErrorMessage(error, "تعذر إضافة السؤال");
   }
 };
 
@@ -124,13 +80,9 @@ export const editExamQuestion = async (
       `${ENDPOINT}/${examId}/questions/${questionId}`,
       question
     );
-
     return response.data;
   } catch (error) {
-    return getErrorMessage(
-      error,
-      "تعذر تعديل السؤال"
-    );
+    return getErrorMessage(error, "تعذر تعديل السؤال");
   }
 };
 
@@ -142,21 +94,18 @@ export const deleteExamQuestion = async (
     const response = await api.delete(
       `${ENDPOINT}/${examId}/questions/${questionId}`
     );
-
     return response.data;
   } catch (error) {
-    return getErrorMessage(
-      error,
-      "تعذر حذف السؤال"
-    );
+    return getErrorMessage(error, "تعذر حذف السؤال");
   }
 };
 
 /**
- * يوجد اختلاف بين ملف التوثيق وPostman في اسم حقل الدرجة:
- * - Postman: achievedGrade
- * - التوثيق النصي: score + teacherNotes
- * لذلك نرسل achievedGrade أولًا ثم نستخدم الصيغة البديلة فقط عند خطأ Validation.
+ * التوثيق الحالي للباك يعتمد الصيغة التالية:
+ * { score, teacherNotes }
+ *
+ * نرسلها أولًا، ونستخدم achievedGrade فقط كحل احتياطي للتوافق
+ * مع نسخ Postman أو الباك القديمة عند ظهور خطأ Validation (400/422).
  */
 export const gradeExamStudent = async (
   examId,
@@ -166,13 +115,17 @@ export const gradeExamStudent = async (
 ) => {
   const numericScore = Number(
     scoreOrPayload && typeof scoreOrPayload === "object"
-      ? scoreOrPayload.achievedGrade ?? scoreOrPayload.score
+      ? scoreOrPayload.achievedGrade ??
+          scoreOrPayload.score ??
+          scoreOrPayload.grade
       : scoreOrPayload
   );
 
   const notes = String(
     scoreOrPayload && typeof scoreOrPayload === "object"
-      ? scoreOrPayload.teacherNotes || ""
+      ? scoreOrPayload.teacherNotes ||
+          scoreOrPayload.notes ||
+          ""
       : teacherNotes || ""
   ).trim();
 
@@ -186,36 +139,29 @@ export const gradeExamStudent = async (
 
   const url = `${ENDPOINT}/${examId}/students/${studentId}/grade`;
 
-  try {
-    const response = await api.patch(url, {
-      achievedGrade: numericScore,
-    });
+  const primaryPayload = {
+    score: numericScore,
+  };
 
+  if (notes) {
+    primaryPayload.teacherNotes = notes;
+  }
+
+  try {
+    const response = await api.patch(url, primaryPayload);
     return response.data;
   } catch (error) {
     const status = Number(error?.response?.status || 0);
 
+    // لا نكرر الطلب عند أخطاء الصلاحيات أو الشبكة أو الخادم.
     if (![400, 422].includes(status)) {
-      return getErrorMessage(
-        error,
-        "تعذر حفظ درجة الطالب"
-      );
+      return getErrorMessage(error, "تعذر حفظ درجة الطالب");
     }
 
     try {
-      const fallbackPayload = {
-        score: numericScore,
-      };
-
-      if (notes) {
-        fallbackPayload.teacherNotes = notes;
-      }
-
-      const response = await api.patch(
-        url,
-        fallbackPayload
-      );
-
+      const response = await api.patch(url, {
+        achievedGrade: numericScore,
+      });
       return response.data;
     } catch (fallbackError) {
       return getErrorMessage(

@@ -694,6 +694,33 @@ const TeacherExams = () => {
 
               <Button
                 type="button"
+                onClick={() => navigate("/teacher/grading/exams")}
+                variant="outlined"
+                startIcon={<FactCheckRounded />}
+                sx={{
+                  minHeight: 42,
+                  px: 1.7,
+                  borderColor: "rgba(255,255,255,.28)",
+                  color: "white",
+                  borderRadius: "12px",
+                  fontSize: "10px",
+                  fontWeight: 800,
+                  textTransform: "none",
+                  "&:hover": {
+                    borderColor: "rgba(255,255,255,.5)",
+                    backgroundColor: "rgba(255,255,255,.08)",
+                  },
+                  "& .MuiButton-startIcon": {
+                    marginLeft: "6px",
+                    marginRight: 0,
+                  },
+                }}
+              >
+                تصحيح الاختبارات
+              </Button>
+
+              <Button
+                type="button"
                 onClick={() => navigate("/teacher/exams/add")}
                 variant="contained"
                 startIcon={<AddRounded />}

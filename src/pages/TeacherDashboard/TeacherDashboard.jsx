@@ -1124,8 +1124,8 @@ const TeacherDashboard = () => {
             exam?.startDate ||
             exam?.endDate,
           path: getExamId(exam)
-            ? `/school/exams/${getExamId(exam)}`
-            : "/teacher/exams",
+            ? `/teacher/grading/exams?examId=${getExamId(exam)}`
+            : "/teacher/grading/exams",
         })),
         ...projects.map((project) => ({
           id: `project-${getProjectId(project)}`,
@@ -1141,8 +1141,8 @@ const TeacherDashboard = () => {
             project?.createdAt ||
             project?.dueDate,
           path: getProjectId(project)
-            ? `/school/projects/${getProjectId(project)}`
-            : "/school/projects",
+            ? `/teacher/projects?projectId=${getProjectId(project)}`
+            : "/teacher/projects",
         })),
       ]
         .filter((item) => item.id)
@@ -1299,11 +1299,11 @@ const TeacherDashboard = () => {
         },
       },
       {
-        title: "اختباراتي",
-        description: `${exams.length} اختبار • التصحيح من تفاصيل الاختبار`,
+        title: "تصحيح الاختبارات",
+        description: `راجع نتائج ${exams.length} اختبار وعدّل درجات الطلاب`,
         icon: <QuizRounded />,
         onClick: () =>
-          navigate("/teacher/exams"),
+          navigate("/teacher/grading/exams"),
       },
       {
         title: "تصحيح المشروعات",
@@ -1318,7 +1318,7 @@ const TeacherDashboard = () => {
           "افتح المصادر والروابط التعليمية المتاحة",
         icon: <LibraryBooksRounded />,
         onClick: () =>
-          navigate("/school/library"),
+          navigate("/teacher/library"),
       },
       {
         title: "فصولي وطلابي",
@@ -2111,7 +2111,7 @@ const TeacherDashboard = () => {
                   },
                 }}
               >
-                تصحيح الاختبارات اليدوي متاح من صفحة تفاصيل الاختبار؛ الباك لا يوفّر حاليًا قائمة مستقلة بالمحاولات المنتظرة.
+                صفحة تصحيح الاختبارات جاهزة وتقرأ نتائج الطلاب من تفاصيل كل اختبار. إذا لم يُرجع الباك المحاولات ستظهر ملاحظة واضحة بدل بيانات غير صحيحة.
               </Alert>
 
               {pendingCorrections.length > 0 ? (
@@ -2687,7 +2687,7 @@ const TeacherDashboard = () => {
                 <Button
                   type="button"
                   onClick={() =>
-                    navigate("/school/projects")
+                    navigate("/teacher/projects")
                   }
                   sx={{
                     p: 1,

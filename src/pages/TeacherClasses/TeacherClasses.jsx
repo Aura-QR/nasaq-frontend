@@ -49,6 +49,7 @@ import { fetchSingleClass } from "@/APIs/school/classes";
 import { fetchStudents } from "@/APIs/school/students";
 
 import nasaqLogo from "../../images/wadq-logo.png";
+import { TEACHER_UI } from "@/shared/ui/teacherUi";
 
 const normalizeId = (value) => {
   if (value && typeof value === "object") {
@@ -178,6 +179,16 @@ const getClassId = (value) => {
   );
 };
 
+const getGenderLabel = (value) => {
+  const gender = String(value || "").trim().toLowerCase();
+
+  if (gender === "male") return "بنين";
+  if (gender === "female") return "بنات";
+  if (["both", "mixed"].includes(gender)) return "مختلط";
+
+  return "";
+};
+
 const getClassLabel = (value, index = 0) => {
   const entity = getClassEntity(value);
 
@@ -199,9 +210,10 @@ const getClassLabel = (value, index = 0) => {
   ).trim();
 
   const roomLabel = roomNumber ? `فصل ${roomNumber}` : explicitName;
+  const genderLabel = getGenderLabel(entity?.gender);
 
   return (
-    [gradeName, roomLabel]
+    [gradeName, roomLabel, genderLabel]
       .filter(Boolean)
       .filter((item, itemIndex, array) => array.indexOf(item) === itemIndex)
       .join(" - ") || `فصل ${index + 1}`
@@ -329,6 +341,111 @@ const initialsOf = (name) => {
   return `${first}${last}`.toUpperCase();
 };
 
+const uniqueRows = (rows = [], getKey) => {
+  const map = new Map();
+
+  rows.forEach((row, index) => {
+    const key = String(getKey(row, index) || "").trim();
+    if (key && !map.has(key)) map.set(key, row);
+  });
+
+  return Array.from(map.values());
+};
+
+const getClassSignature = (row, index = 0) => {
+  const entity = row?.entity || getClassEntity(row) || {};
+  const grade =
+    normalizeId(entity?.gradeLevelId || entity?.gradeLevel) ||
+    String(
+      entity?.gradeLevelId?.name ||
+        entity?.gradeLevel?.name ||
+        entity?.gradeName ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+  const room = String(
+    entity?.roomNumber ||
+      entity?.className ||
+      entity?.title ||
+      entity?.displayName ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
+  const gender = String(entity?.gender || "").trim().toLowerCase();
+
+  return [grade, room, gender].filter(Boolean).join("::") || row?.id || `class-${index}`;
+};
+
+const mergeDuplicateClassRows = (rows = []) => {
+  const map = new Map();
+
+  rows.forEach((row, index) => {
+    const key = getClassSignature(row, index);
+    const existing = map.get(key);
+
+    if (!existing) {
+      map.set(key, {
+        ...row,
+        sourceClassIds: [row.id],
+      });
+      return;
+    }
+
+    const preferred =
+      (row.students?.length || 0) > (existing.students?.length || 0)
+        ? row
+        : existing;
+
+    const lectures = uniqueRows(
+      [...(existing.lectures || []), ...(row.lectures || [])],
+      (lecture, lectureIndex) =>
+        normalizeId(lecture) ||
+        [
+          lecture?.dayOfWeek,
+          lecture?.slot,
+          getSubjectData(lecture).id,
+          lectureIndex,
+        ].join("-")
+    );
+
+    const students = uniqueRows(
+      [...(existing.students || []), ...(row.students || [])],
+      (student, studentIndex) =>
+        getStudentId(student) || `${getStudentName(student, studentIndex)}-${studentIndex}`
+    );
+
+    const subjects = uniqueRows(
+      [...(existing.subjects || []), ...(row.subjects || [])],
+      (subject) => subject?.id || subject?.label || subject?.name
+    );
+
+    const entity =
+      Object.keys(row.entity || {}).length > Object.keys(existing.entity || {}).length
+        ? row.entity
+        : existing.entity;
+
+    map.set(key, {
+      ...existing,
+      id: preferred.id,
+      entity,
+      label: getClassLabel(entity, index),
+      lectures,
+      students,
+      subjects,
+      sourceClassIds: Array.from(
+        new Set([
+          ...(existing.sourceClassIds || [existing.id]),
+          row.id,
+        ].filter(Boolean))
+      ),
+    });
+  });
+
+  return Array.from(map.values());
+};
+
 const StatCard = ({ icon, title, value, helper, accent = "navy" }) => {
   const palette = {
     navy: {
@@ -353,10 +470,9 @@ const StatCard = ({ icon, title, value, helper, accent = "navy" }) => {
     <Paper
       elevation={0}
       sx={{
-        minHeight: 92,
-        p: 1.5,
+        ...TEACHER_UI.statCard,
         border: "1px solid rgba(36,74,112,.09)",
-        borderRadius: "18px",
+        borderRadius: TEACHER_UI.statCard.borderRadius,
         backgroundColor: "#fff",
         boxShadow: "0 10px 24px rgba(18,47,77,.05)",
         display: "flex",
@@ -380,7 +496,7 @@ const StatCard = ({ icon, title, value, helper, accent = "navy" }) => {
           sx={{
             mt: 0.2,
             color: "#122F4D",
-            fontSize: "23px",
+            fontSize: "20px",
             lineHeight: 1.1,
             fontWeight: 900,
           }}
@@ -402,15 +518,14 @@ const StatCard = ({ icon, title, value, helper, accent = "navy" }) => {
 
       <Box
         sx={{
-          width: 43,
-          height: 43,
+          ...TEACHER_UI.statIcon,
           display: "grid",
           placeItems: "center",
           flexShrink: 0,
-          borderRadius: "13px",
+          borderRadius: TEACHER_UI.statIcon.borderRadius,
           color: palette.color,
           backgroundColor: palette.background,
-          "& svg": { fontSize: 23 },
+          "& svg": { fontSize: 20 },
         }}
       >
         {icon}
@@ -551,19 +666,21 @@ const TeacherClasses = () => {
 
         if (requestId !== requestIdRef.current) return;
 
-        detailedRows.sort((first, second) =>
+        const mergedRows = mergeDuplicateClassRows(detailedRows);
+
+        mergedRows.sort((first, second) =>
           first.label.localeCompare(second.label, "ar")
         );
 
         const nextStudentsMap = Object.fromEntries(
-          detailedRows.map((row) => [row.id, row.students])
+          mergedRows.map((row) => [row.id, row.students])
         );
 
-        setClasses(detailedRows);
+        setClasses(mergedRows);
         setStudentsByClass(nextStudentsMap);
         setSelectedClassId((current) => {
-          if (detailedRows.some((row) => row.id === current)) return current;
-          return detailedRows[0]?.id || "";
+          if (mergedRows.some((row) => row.id === current)) return current;
+          return mergedRows[0]?.id || "";
         });
       } catch (loadError) {
         if (requestId !== requestIdRef.current) return;
@@ -711,25 +828,18 @@ const TeacherClasses = () => {
     <Box
       dir="rtl"
       sx={{
-        width: "100%",
-        minHeight: "100%",
+        ...TEACHER_UI.page,
+        minHeight: "100vh",
         backgroundColor: "#fff",
-        color: "#122F4D",
-        fontFamily: "Tajawal, sans-serif",
-        px: { xs: 1.25, md: 2.25 },
-        py: 1.5,
       }}
     >
-      <Box sx={{ width: "100%", maxWidth: 1400, mx: "auto" }}>
+      <Box sx={TEACHER_UI.container}>
         <Paper
           elevation={0}
           sx={{
             position: "relative",
             overflow: "hidden",
-            minHeight: 126,
-            px: { xs: 2, md: 3.1 },
-            py: 2,
-            borderRadius: "25px",
+            ...TEACHER_UI.hero,
             background:
               "linear-gradient(115deg, #173E64 0%, #214E78 48%, #2E628E 100%)",
             color: "#fff",
@@ -758,10 +868,9 @@ const TeacherClasses = () => {
                 src={nasaqLogo}
                 alt="نسق"
                 sx={{
-                  width: 68,
-                  height: 68,
+                  ...TEACHER_UI.heroLogo,
                   objectFit: "contain",
-                  borderRadius: "18px",
+                  borderRadius: TEACHER_UI.heroLogo.borderRadius,
                   backgroundColor: "#fff",
                   p: 0.65,
                   boxShadow: "0 10px 24px rgba(0,0,0,.12)",
@@ -786,9 +895,7 @@ const TeacherClasses = () => {
 
                 <Typography
                   sx={{
-                    fontSize: { xs: "27px", md: "34px" },
-                    lineHeight: 1.05,
-                    fontWeight: 900,
+                    ...TEACHER_UI.heroTitle,
                   }}
                 >
                   فصولي وطلابي
@@ -796,9 +903,8 @@ const TeacherClasses = () => {
 
                 <Typography
                   sx={{
-                    mt: 0.45,
+                    ...TEACHER_UI.heroSubtitle,
                     color: "rgba(255,255,255,.72)",
-                    fontSize: { xs: "10px", md: "11px" },
                   }}
                 >
                   تابع الفصول المرتبطة بجدولك وافتح بيانات الطلاب من مكان واحد
@@ -813,11 +919,11 @@ const TeacherClasses = () => {
                     onClick={() => loadData({ force: true })}
                     disabled={refreshing}
                     sx={{
-                      width: 43,
-                      height: 43,
+                      width: 36,
+                      height: 36,
                       color: "#fff",
                       border: "1px solid rgba(255,255,255,.24)",
-                      borderRadius: "13px",
+                      borderRadius: TEACHER_UI.field.borderRadius,
                     }}
                   >
                     {refreshing ? (
@@ -833,11 +939,10 @@ const TeacherClasses = () => {
                 onClick={() => navigate("/teacher/dashboard")}
                 startIcon={<ArrowBackRounded />}
                 sx={{
-                  minHeight: 43,
-                  px: 1.7,
+                  ...TEACHER_UI.button,
                   color: "#fff",
                   border: "1px solid rgba(255,255,255,.24)",
-                  borderRadius: "13px",
+                  borderRadius: TEACHER_UI.field.borderRadius,
                   fontSize: "10px",
                   fontWeight: 900,
                   "&:hover": { backgroundColor: "rgba(255,255,255,.08)" },
@@ -857,14 +962,14 @@ const TeacherClasses = () => {
 
         <Box
           sx={{
-            mt: 1.4,
+            mt: 1,
             display: "grid",
             gridTemplateColumns: {
               xs: "1fr",
               sm: "repeat(2, minmax(0, 1fr))",
               lg: "repeat(4, minmax(0, 1fr))",
             },
-            gap: 1.15,
+            gap: 0.9,
           }}
         >
           <StatCard
@@ -898,7 +1003,7 @@ const TeacherClasses = () => {
         {classes.length === 0 ? (
           <Box
             sx={{
-              minHeight: 330,
+              ...TEACHER_UI.emptyState,
               display: "grid",
               placeItems: "center",
               textAlign: "center",
@@ -932,10 +1037,9 @@ const TeacherClasses = () => {
             <Paper
               elevation={0}
               sx={{
-                mt: 1.4,
-                p: 1.25,
+                mt: 1,
+                ...TEACHER_UI.section,
                 border: "1px solid rgba(36,74,112,.09)",
-                borderRadius: "18px",
                 backgroundColor: "#fff",
               }}
             >
@@ -946,7 +1050,7 @@ const TeacherClasses = () => {
                 spacing={1.2}
               >
                 <Box>
-                  <Typography sx={{ fontSize: "14px", fontWeight: 900 }}>
+                  <Typography sx={{ fontSize: "13px", fontWeight: 900 }}>
                     فصولك الدراسية
                   </Typography>
                   <Typography sx={{ mt: 0.15, color: "#97A2AE", fontSize: "8.5px" }}>
@@ -996,10 +1100,9 @@ const TeacherClasses = () => {
                       sx={{
                         appearance: "none",
                         width: "100%",
-                        p: 1.15,
+                        ...TEACHER_UI.listCard,
                         textAlign: "right",
                         cursor: "pointer",
-                        borderRadius: "15px",
                         border: selected
                           ? "1px solid #2E628E"
                           : "1px solid rgba(36,74,112,.10)",
@@ -1049,10 +1152,9 @@ const TeacherClasses = () => {
             <Paper
               elevation={0}
               sx={{
-                mt: 1.15,
-                p: 1.3,
+                mt: 0.9,
+                ...TEACHER_UI.section,
                 border: "1px solid rgba(36,74,112,.09)",
-                borderRadius: "18px",
                 backgroundColor: "#fff",
               }}
             >
@@ -1063,7 +1165,7 @@ const TeacherClasses = () => {
                 spacing={1.2}
               >
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography sx={{ fontSize: "15px", fontWeight: 900 }}>
+                  <Typography sx={{ fontSize: "13px", fontWeight: 900 }}>
                     طلاب {selectedClass?.label || "الفصل"}
                   </Typography>
                   <Stack direction="row" flexWrap="wrap" gap={0.55} sx={{ mt: 0.55 }}>
@@ -1088,8 +1190,7 @@ const TeacherClasses = () => {
                     onClick={openAttendance}
                     startIcon={<HowToRegRounded />}
                     sx={{
-                      minHeight: 38,
-                      px: 1.4,
+                      ...TEACHER_UI.button,
                       color: "#fff",
                       backgroundColor: "#25865A",
                       borderRadius: "12px",
@@ -1106,8 +1207,7 @@ const TeacherClasses = () => {
                     startIcon={<CalendarMonthRounded />}
                     variant="outlined"
                     sx={{
-                      minHeight: 38,
-                      px: 1.4,
+                      ...TEACHER_UI.button,
                       color: "#214E78",
                       borderColor: "rgba(33,78,120,.25)",
                       borderRadius: "12px",
@@ -1122,8 +1222,7 @@ const TeacherClasses = () => {
                     onClick={openExam}
                     startIcon={<QuizRounded />}
                     sx={{
-                      minHeight: 38,
-                      px: 1.4,
+                      ...TEACHER_UI.button,
                       color: "#122F4D",
                       backgroundColor: "#F4D37D",
                       borderRadius: "12px",
@@ -1160,7 +1259,7 @@ const TeacherClasses = () => {
                       </InputAdornment>
                     ),
                   }}
-                  sx={{ "& .MuiOutlinedInput-root": { minHeight: 45, borderRadius: "13px" } }}
+                  sx={{ "& .MuiOutlinedInput-root": { ...TEACHER_UI.field } }}
                 />
 
                 <TextField
@@ -1169,7 +1268,7 @@ const TeacherClasses = () => {
                   label="حالة الحساب"
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value)}
-                  sx={{ "& .MuiOutlinedInput-root": { minHeight: 45, borderRadius: "13px" } }}
+                  sx={{ "& .MuiOutlinedInput-root": { ...TEACHER_UI.field } }}
                 >
                   <MenuItem value="all">كل الطلاب</MenuItem>
                   <MenuItem value="active">الحسابات النشطة</MenuItem>
@@ -1179,8 +1278,8 @@ const TeacherClasses = () => {
                 <Paper
                   elevation={0}
                   sx={{
-                    minHeight: 45,
-                    px: 1.25,
+                    ...TEACHER_UI.field,
+                    px: 1.1,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
@@ -1204,7 +1303,7 @@ const TeacherClasses = () => {
               {filteredStudents.length === 0 ? (
                 <Box
                   sx={{
-                    minHeight: 240,
+                    ...TEACHER_UI.emptyState,
                     display: "grid",
                     placeItems: "center",
                     textAlign: "center",
@@ -1225,7 +1324,7 @@ const TeacherClasses = () => {
                     >
                       <GroupsRounded />
                     </Box>
-                    <Typography sx={{ fontSize: "15px", fontWeight: 900 }}>
+                    <Typography sx={{ fontSize: "13px", fontWeight: 900 }}>
                       لا يوجد طلاب مطابقون
                     </Typography>
                     <Typography sx={{ color: "#98A3AE", fontSize: "9px" }}>
@@ -1258,8 +1357,7 @@ const TeacherClasses = () => {
                         key={getStudentId(student) || `${name}-${index}`}
                         elevation={0}
                         sx={{
-                          p: 1.05,
-                          minHeight: 84,
+                          ...TEACHER_UI.studentCard,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
@@ -1267,7 +1365,7 @@ const TeacherClasses = () => {
                           border: active
                             ? "1px solid rgba(37,134,90,.17)"
                             : "1px solid rgba(196,69,69,.18)",
-                          borderRadius: "15px",
+                          borderRadius: TEACHER_UI.studentCard.borderRadius,
                           backgroundColor: active
                             ? "rgba(37,134,90,.025)"
                             : "rgba(196,69,69,.025)",
@@ -1276,8 +1374,8 @@ const TeacherClasses = () => {
                         <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
                           <Avatar
                             sx={{
-                              width: 43,
-                              height: 43,
+                              width: 38,
+                              height: 38,
                               flexShrink: 0,
                               fontSize: "11px",
                               fontWeight: 900,

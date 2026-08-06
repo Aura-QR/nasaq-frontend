@@ -575,7 +575,7 @@ const getDashboardPath = (role) => {
       return "/school/dashboard";
 
     case "TEACHER":
-      return "/school/preparation";
+      return "/teacher/dashboard";
 
     case "STUDENT":
       return "/student/dashboard";

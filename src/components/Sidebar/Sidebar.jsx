@@ -9,6 +9,7 @@ import {
 import {
   AccountBalanceWallet,
   AccountTreeRounded,
+  AutoStoriesRounded,
   CalendarMonthRounded,
   Category as CategoryIcon,
   DirectionsBus,
@@ -135,6 +136,9 @@ const Sidebar = ({ active }) => {
   const subjectsPermissions =
     usePermissions("subjects");
 
+  const subjectOfferingsPermissions =
+    usePermissions("subjectOfferings");
+
   const classesPermissions =
     usePermissions("classes");
 
@@ -250,6 +254,15 @@ const Sidebar = ({ active }) => {
             icon: subjectIcon,
             to: "/school/subjects",
             show: subjectsPermissions.read,
+          },
+          {
+            name: "عروض المواد",
+            Icon: AutoStoriesRounded,
+            iconType: "mui",
+            to: "/subject-offerings",
+            show:
+              subjectOfferingsPermissions.read ||
+              subjectsPermissions.read,
           },
           {
             name: "إدارة الفصول",
@@ -408,6 +421,7 @@ const Sidebar = ({ active }) => {
     studentsPermissions.read,
     teachersPermissions.read,
     subjectsPermissions.read,
+    subjectOfferingsPermissions.read,
     classesPermissions.read,
     lecturesPermissions.read,
     gradesCriteriaPermissions.read,
