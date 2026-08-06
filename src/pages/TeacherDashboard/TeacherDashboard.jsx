@@ -1124,8 +1124,8 @@ const TeacherDashboard = () => {
             exam?.startDate ||
             exam?.endDate,
           path: getExamId(exam)
-            ? `/teacher/grading/exams?examId=${getExamId(exam)}`
-            : "/teacher/grading/exams",
+            ? `/school/exams/${getExamId(exam)}`
+            : "/teacher/exams",
         })),
         ...projects.map((project) => ({
           id: `project-${getProjectId(project)}`,
@@ -1141,8 +1141,8 @@ const TeacherDashboard = () => {
             project?.createdAt ||
             project?.dueDate,
           path: getProjectId(project)
-            ? `/teacher/projects?projectId=${getProjectId(project)}`
-            : "/teacher/projects",
+            ? `/school/projects/${getProjectId(project)}`
+            : "/school/projects",
         })),
       ]
         .filter((item) => item.id)
@@ -1267,43 +1267,24 @@ const TeacherDashboard = () => {
           "راجع ملفات التحضير الحالية وافتح تفاصيلها",
         icon: <MenuBookRounded />,
         onClick: () =>
-          navigate("/school/preparation"),
+          navigate("/teacher/preparations"),
       },
       {
-        title: nextUnpreparedLecture
-          ? "إضافة تحضير"
-          : "مراجعة التحاضير",
-        description: nextUnpreparedLecture
-          ? `ابدأ تحضير ${
-              getSubjectData(
-                nextUnpreparedLecture
-              ).name
-            } الآن`
-          : "كل حصصك الحالية لديها تحضير",
-        icon: nextUnpreparedLecture ? (
-          <AddRounded />
-        ) : (
-          <CheckCircleRounded />
-        ),
-        onClick: () => {
-          if (nextUnpreparedLecture) {
-            navigate(
-              `/school/preparation/add?lectureId=${getLectureId(
-                nextUnpreparedLecture
-              )}`
-            );
-            return;
-          }
-
-          navigate("/school/preparation");
-        },
+        title: "إضافة تحضير",
+        description:
+          "اختر الحصة من الجدول ثم ابدأ رفع ملف التحضير",
+        icon: <AddRounded />,
+        onClick: () =>
+          navigate(
+            "/teacher/schedule?mode=prepare"
+          ),
       },
       {
-        title: "تصحيح الاختبارات",
-        description: `راجع نتائج ${exams.length} اختبار وعدّل درجات الطلاب`,
+        title: "اختباراتي",
+        description: `${exams.length} اختبار • التصحيح من تفاصيل الاختبار`,
         icon: <QuizRounded />,
         onClick: () =>
-          navigate("/teacher/grading/exams"),
+          navigate("/teacher/exams"),
       },
       {
         title: "تصحيح المشروعات",
@@ -1488,6 +1469,16 @@ const TeacherDashboard = () => {
                 direction="row"
                 alignItems="center"
                 gap={0.8}
+                role="button"
+                tabIndex={0}
+                aria-label="فتح الملف الشخصي"
+                onClick={() => navigate("/teacher/profile")}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    navigate("/teacher/profile");
+                  }
+                }}
                 sx={{
                   minHeight: 36,
                   px: { xs: 0.55, sm: 0.75 },
@@ -1496,6 +1487,16 @@ const TeacherDashboard = () => {
                     "rgba(255,255,255,0.08)",
                   border:
                     "1px solid rgba(255,255,255,0.12)",
+                  cursor: "pointer",
+                  transition: "background-color .18s ease, transform .18s ease",
+                  "&:hover": {
+                    backgroundColor: "rgba(255,255,255,0.14)",
+                    transform: "translateY(-1px)",
+                  },
+                  "&:focus-visible": {
+                    outline: "2px solid rgba(255,223,140,.85)",
+                    outlineOffset: 2,
+                  },
                 }}
               >
                 <Avatar
@@ -1689,18 +1690,11 @@ const TeacherDashboard = () => {
                 <Button
                   variant="contained"
                   startIcon={<AddRounded />}
-                  disabled={!nextUnpreparedLecture}
-                  onClick={() => {
-                    if (!nextUnpreparedLecture) {
-                      return;
-                    }
-
+                  onClick={() =>
                     navigate(
-                      `/school/preparation/add?lectureId=${getLectureId(
-                        nextUnpreparedLecture
-                      )}`
-                    );
-                  }}
+                      "/teacher/schedule?mode=prepare"
+                    )
+                  }
                   sx={{
                     minHeight: 37,
                     px: 1.6,
@@ -1714,9 +1708,7 @@ const TeacherDashboard = () => {
                     textTransform: "none",
                   }}
                 >
-                  {nextUnpreparedLecture
-                    ? "ابدأ التحضير"
-                    : "كل الحصص محضّرة"}
+                  اختر حصة للتحضير
                 </Button>
 
                 <Button
@@ -2111,7 +2103,7 @@ const TeacherDashboard = () => {
                   },
                 }}
               >
-                صفحة تصحيح الاختبارات جاهزة وتقرأ نتائج الطلاب من تفاصيل كل اختبار. إذا لم يُرجع الباك المحاولات ستظهر ملاحظة واضحة بدل بيانات غير صحيحة.
+                تصحيح الاختبارات اليدوي متاح من صفحة تفاصيل الاختبار؛ الباك لا يوفّر حاليًا قائمة مستقلة بالمحاولات المنتظرة.
               </Alert>
 
               {pendingCorrections.length > 0 ? (
@@ -2414,7 +2406,7 @@ const TeacherDashboard = () => {
                             onClick={() => {
                               if (hasPreparation) {
                                 navigate(
-                                  `/school/preparation/edit/${getPreparationId(
+                                  `/teacher/preparations/${getPreparationId(
                                     preparation
                                   )}`
                                 );
@@ -2422,9 +2414,7 @@ const TeacherDashboard = () => {
                               }
 
                               navigate(
-                                `/school/preparation/add?lectureId=${getLectureId(
-                                  lecture
-                                )}`
+                                `/teacher/schedule?mode=prepare`
                               );
                             }}
                             sx={{
@@ -2557,7 +2547,7 @@ const TeacherDashboard = () => {
                               type="button"
                               onClick={() =>
                                 navigate(
-                                  `/school/preparation/edit/${id}`
+                                  `/teacher/preparations/${id}`
                                 )
                               }
                               sx={{
@@ -2586,7 +2576,7 @@ const TeacherDashboard = () => {
                   <Button
                     type="button"
                     onClick={() =>
-                      navigate("/school/preparation")
+                      navigate("/teacher/preparations")
                     }
                     endIcon={<ArrowBackRounded />}
                     sx={{
@@ -2687,7 +2677,7 @@ const TeacherDashboard = () => {
                 <Button
                   type="button"
                   onClick={() =>
-                    navigate("/teacher/projects")
+                    navigate("/school/projects")
                   }
                   sx={{
                     p: 1,

@@ -690,6 +690,9 @@ const Add = () => {
   const returnTo =
     requestedReturnTo.startsWith(
       "/school/"
+    ) ||
+    requestedReturnTo.startsWith(
+      "/teacher/"
     )
       ? requestedReturnTo
       : "";
@@ -745,6 +748,9 @@ const Add = () => {
     normalizeRole(
       currentUser?.role
     );
+
+  const isTeacherUser =
+    userRole === "TEACHER";
 
   useEffect(() => {
     let active = true;
@@ -985,7 +991,9 @@ const Add = () => {
 
         if (existingId) {
           navigate(
-            `/school/preparation/${existingId}`,
+            isTeacherUser
+              ? `/teacher/preparations/${existingId}`
+              : `/school/preparation/${existingId}`,
             { replace: true }
           );
         }
@@ -1033,6 +1041,13 @@ const Add = () => {
       if (returnTo) {
         navigate(
           returnTo,
+          { replace: true }
+        );
+      } else if (isTeacherUser) {
+        navigate(
+          createdId
+            ? `/teacher/preparations/${createdId}`
+            : "/teacher/preparations",
           { replace: true }
         );
       } else if (

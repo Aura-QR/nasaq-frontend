@@ -46,6 +46,7 @@ import SubjectIcon from "@mui/icons-material/Subject";
 const TABLE_HEADERS = [
   "المادة",
   "السنة الدراسية",
+  "درجة النجاح",
   "الاختبار النهائي",
   "المهام الأدائية",
   "الواجبات",
@@ -56,6 +57,7 @@ const TABLE_HEADERS = [
 const TABLE_BODY = [
   "subject",
   "academicYear",
+  "passingGrade",
   "final",
   "projects",
   "assignments",
@@ -116,6 +118,12 @@ const mapCriteria = (data = []) =>
         : subjectName,
       academicYear:
         item?.academicYear || "—",
+      passingGrade: formatGrade(
+        item?.passingGrade ?? 50
+      ),
+      passingGradeValue: Number(
+        item?.passingGrade ?? 50
+      ),
       final: formatGrade(item?.final),
       projects: formatGrade(item?.projects),
       assignments: formatGrade(
@@ -288,6 +296,8 @@ const List = () => {
         المادة: item.subject,
         "السنة الدراسية":
           item.academicYear,
+        "درجة النجاح":
+          item.passingGradeValue,
         "الاختبار النهائي":
           item.final,
         "المهام الأدائية":

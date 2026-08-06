@@ -82,6 +82,24 @@ const calculateTotal = (values) =>
     0
   );
 
+const normalizePassingGrade = (value) => {
+  if (
+    value === "" ||
+    value === undefined ||
+    value === null ||
+    Number.isNaN(value)
+  ) {
+    return 50;
+  }
+
+  return Number(value);
+};
+
+const isValidPassingGrade = (value) =>
+  Number.isFinite(value) &&
+  value >= 0 &&
+  value <= 100;
+
 const FORM_CARD_SX = {
   p: {
     xs: 1.5,
@@ -236,7 +254,11 @@ const Add = () => {
     formState: { errors },
     setValue,
     watch,
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      passingGrade: 50,
+    },
+  });
 
   const [loading, setLoading] =
     useState(false);
@@ -302,12 +324,33 @@ const Add = () => {
       return;
     }
 
+    const passingGrade =
+      normalizePassingGrade(
+        formData.passingGrade
+      );
+
+    if (
+      !isValidPassingGrade(
+        passingGrade
+      )
+    ) {
+      toast.error(
+        "درجة النجاح يجب أن تكون من 0 إلى 100"
+      );
+      return;
+    }
+
+    const payload = {
+      ...formData,
+      passingGrade,
+    };
+
     setLoading(true);
 
     try {
       const response =
         await addGradesCriteria(
-          formData
+          payload
         );
 
       if (!response?.status) {
@@ -474,7 +517,7 @@ const Add = () => {
               <AssessmentRounded />
             }
             title="تفاصيل توزيع الدرجات"
-            description="وزّع الدرجات بحيث يكون المجموع النهائي 100 درجة."
+            description="حدّد درجة النجاح ثم وزّع بنود التقييم بحيث يكون مجموعها 100 درجة؛ درجة النجاح لا تدخل في المجموع."
             endContent={
               <Chip
                 label={`${totalGrades} / 100`}
@@ -629,6 +672,25 @@ const GradeInputs = ({
       md: 2,
     }}
   >
+    <Grid item xs={12} sm={6} lg={4}>
+      <Input
+        register={register}
+        registerName="passingGrade"
+        error={errors.passingGrade?.message}
+        label="درجة النجاح"
+        type="number"
+        defaultValue={
+          defaultValues.passingGrade ?? 50
+        }
+        valueAsNumber
+        inputProps={{
+          min: 0,
+          max: 100,
+          step: 1,
+        }}
+      />
+    </Grid>
+
     <Grid item xs={12} sm={6} lg={4}>
       <Input
         register={register}

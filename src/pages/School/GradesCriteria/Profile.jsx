@@ -228,6 +228,13 @@ const Profile = () => {
           <SchoolRounded />,
       },
       {
+        label: "درجة النجاح",
+        value: gradeValue(
+          item?.passingGrade ?? 50
+        ),
+        icon: <GradeRounded />,
+      },
+      {
         label:
           "الاختبار النهائي",
         value: gradeValue(

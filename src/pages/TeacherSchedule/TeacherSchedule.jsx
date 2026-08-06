@@ -4,6 +4,11 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
   IconButton,
   InputAdornment,
   MenuItem,
@@ -18,11 +23,14 @@ import {
   ArrowBackRounded,
   CalendarMonthRounded,
   CheckCircleRounded,
+  CloseRounded,
+  CloudUploadRounded,
   EventAvailableRounded,
   GroupsRounded,
   HowToRegRounded,
   MenuBookRounded,
   RefreshRounded,
+  SaveRounded,
   ScheduleRounded,
   SearchRounded,
   WarningAmberRounded,
@@ -32,14 +40,22 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 import { useAuthUser } from "react-auth-kit";
-import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import {
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 
 import { fetchLectures } from "@/APIs/school/lectures";
-import { fetchPreparations } from "@/APIs/school/preparation";
+import {
+  addPreparation,
+  fetchPreparations,
+} from "@/APIs/school/preparation";
 
 import nasaqLogo from "../../images/wadq-logo.png";
 
@@ -173,14 +189,19 @@ const isFailedResponse = (response) =>
   Number(response?.statusCode) >= 400;
 
 const getErrorMessage = (response, fallback) => {
-  if (typeof response === "string") return response;
+  const message =
+    typeof response === "string"
+      ? response
+      : response?.message ||
+        response?.data?.message ||
+        response?.error ||
+        fallback;
 
-  return (
-    response?.message ||
-    response?.data?.message ||
-    response?.error ||
-    fallback
-  );
+  if (/network error|err_failed|cors/i.test(String(message || ""))) {
+    return "تعذر الاتصال بالخادم. راجع إعدادات CORS في الباك ثم أعد المحاولة.";
+  }
+
+  return message;
 };
 
 const resolveTeacherId = (authRoot, currentUser) => {
@@ -453,25 +474,25 @@ const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
     <Paper
       variant="outlined"
       sx={{
-        borderRadius: 2.4,
+        borderRadius: 3,
         borderColor: "#e3e9ef",
-        p: { xs: 1, md: 1.05 },
-        minHeight: 78,
-        boxShadow: "0 10px 24px rgba(25, 58, 86, 0.045)",
+        p: { xs: 1.15, md: 1.25 },
+        minHeight: 82,
+        boxShadow: "0 6px 16px rgba(25, 58, 86, 0.035)",
       }}
     >
       <Stack
         direction="row"
         alignItems="center"
         justifyContent="space-between"
-        spacing={1}
+        spacing={1.5}
       >
         <Box sx={{ textAlign: "right", minWidth: 0 }}>
           <Typography
             sx={{
               color: "#78879a",
               fontWeight: 800,
-              fontSize: 11,
+              fontSize: 11.5,
             }}
           >
             {title}
@@ -480,8 +501,8 @@ const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
             sx={{
               color: "#082a4b",
               fontWeight: 900,
-              fontSize: 21,
-              lineHeight: 1.25,
+              fontSize: 22,
+              lineHeight: 1.15,
               mt: 0.2,
             }}
           >
@@ -490,7 +511,7 @@ const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
           <Typography
             sx={{
               color: "#a0aaba",
-              fontSize: 9.75,
+              fontSize: 10,
               mt: 0.15,
             }}
           >
@@ -500,9 +521,9 @@ const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
 
         <Box
           sx={{
-            width: 36,
-            height: 36,
-            borderRadius: 2.2,
+            width: 38,
+            height: 38,
+            borderRadius: 1.8,
             display: "grid",
             placeItems: "center",
             bgcolor: palette.iconBg,
@@ -510,9 +531,7 @@ const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
             flexShrink: 0,
           }}
         >
-          <Box sx={{ display: "grid", placeItems: "center", "& svg": { fontSize: 19 } }}>
-            {icon}
-          </Box>
+          {icon}
         </Box>
       </Stack>
     </Paper>
@@ -521,7 +540,11 @@ const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
 
 const TeacherSchedule = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const getAuthUser = useAuthUser();
+
+  const isPreparationMode =
+    searchParams.get("mode") === "prepare";
 
   const authRoot = getAuthUser?.() || {};
   const currentUser = authRoot?.user || authRoot;
@@ -536,7 +559,21 @@ const TeacherSchedule = () => {
   const [search, setSearch] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
-  const [preparationFilter, setPreparationFilter] = useState("all");
+  const [preparationFilter, setPreparationFilter] = useState(
+    isPreparationMode ? "unprepared" : "all"
+  );
+
+  const [selectedLecture, setSelectedLecture] = useState(null);
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [submittingPreparation, setSubmittingPreparation] =
+    useState(false);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (isPreparationMode) {
+      setPreparationFilter("unprepared");
+    }
+  }, [isPreparationMode]);
 
   const loadSchedule = useCallback(
     async ({ silent = false } = {}) => {
@@ -763,6 +800,14 @@ const TeacherSchedule = () => {
     return map;
   }, [filteredLectures, visibleDays]);
 
+  const displayedDays = useMemo(() => {
+    if (!isPreparationMode) return visibleDays;
+
+    return visibleDays.filter(
+      (day) => (lecturesByDay.get(day.key) || []).length > 0
+    );
+  }, [isPreparationMode, visibleDays, lecturesByDay]);
+
   const preparedCount = enrichedLectures.filter((lecture) =>
     Boolean(getPreparationId(lecture.schedulePreparation))
   ).length;
@@ -790,53 +835,632 @@ const TeacherSchedule = () => {
     );
 
     if (hasPreparation) {
-      navigate("/school/preparation");
+      const preparationId = getPreparationId(
+        lecture.schedulePreparation
+      );
+
+      navigate(
+        preparationId
+          ? `/teacher/preparations/${preparationId}`
+          : "/teacher/preparations"
+      );
       return;
     }
 
     navigate(
-      `/school/preparation/add?lectureId=${lectureId}`
+      `/teacher/preparations/add?lectureId=${lectureId}&returnTo=%2Fteacher%2Fschedule%3Fmode%3Dprepare`
     );
+  };
+
+  const closePreparationDialog = () => {
+    if (submittingPreparation) return;
+    setSelectedLecture(null);
+    setUploadedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const choosePreparationFile = (event) => {
+    const file = event.target.files?.[0] || null;
+
+    if (!file) {
+      setUploadedFile(null);
+      return;
+    }
+
+    const isPdf =
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf");
+
+    if (!isPdf) {
+      toast.error("ملف التحضير يجب أن يكون بصيغة PDF");
+      event.target.value = "";
+      setUploadedFile(null);
+      return;
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("حجم ملف التحضير يجب ألا يتجاوز 20 ميجابايت");
+      event.target.value = "";
+      setUploadedFile(null);
+      return;
+    }
+
+    setUploadedFile(file);
+  };
+
+  const submitPreparationFromSchedule = async () => {
+    const lectureId = getLectureId(selectedLecture);
+
+    if (!lectureId) {
+      toast.error("تعذر تحديد الحصة المختارة");
+      return;
+    }
+
+    if (!uploadedFile) {
+      toast.error("اختر ملف التحضير أولًا");
+      return;
+    }
+
+    try {
+      setSubmittingPreparation(true);
+
+      const formData = new FormData();
+      formData.append("lecture", lectureId);
+      formData.append("files", uploadedFile);
+
+      const response = await addPreparation(formData);
+
+      if (isFailedResponse(response)) {
+        toast.error(
+          getErrorMessage(response, "تعذر حفظ ملف التحضير")
+        );
+        return;
+      }
+
+      toast.success("تم حفظ التحضير بنجاح");
+      setSelectedLecture(null);
+      setUploadedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      await loadSchedule({ silent: true });
+    } catch (submitError) {
+      toast.error(
+        submitError?.response?.data?.message ||
+          submitError?.message ||
+          "تعذر حفظ ملف التحضير"
+      );
+    } finally {
+      setSubmittingPreparation(false);
+    }
   };
 
   const clearFilters = () => {
     setSearch("");
     setSubjectFilter("");
     setClassFilter("");
-    setPreparationFilter("all");
+    setPreparationFilter(isPreparationMode ? "unprepared" : "all");
   };
+
+  if (isPreparationMode) {
+    return (
+      <Box
+        dir="rtl"
+        sx={{
+          minHeight: "100dvh",
+          bgcolor: "#f6f4ef",
+          px: { xs: 1, md: 2 },
+          py: { xs: 1, md: 1.5 },
+        }}
+      >
+        <Box sx={{ maxWidth: 1180, mx: "auto" }}>
+          <Paper
+            elevation={0}
+            sx={{
+              borderRadius: 3,
+              px: { xs: 1.5, md: 2 },
+              py: { xs: 1.35, md: 1.6 },
+              mb: 1.25,
+              border: "1px solid rgba(200,144,39,.22)",
+              background:
+                "linear-gradient(135deg, #fffdf8 0%, #fff8e9 100%)",
+              boxShadow: "0 10px 26px rgba(18,47,77,.05)",
+            }}
+          >
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              justifyContent="space-between"
+              spacing={1.25}
+            >
+              <Stack direction="row" alignItems="center" spacing={1.1}>
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 2.2,
+                    bgcolor: "#fff0cf",
+                    color: "#ad7415",
+                    display: "grid",
+                    placeItems: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <MenuBookRounded />
+                </Box>
+
+                <Box>
+                  <Typography
+                    sx={{
+                      color: "#0b2c4d",
+                      fontWeight: 900,
+                      fontSize: { xs: 20, md: 24 },
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    اختر الحصة وابدأ التحضير
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: "#7f8a98",
+                      fontSize: 12,
+                      mt: 0.25,
+                    }}
+                  >
+                    اختر حصة من القائمة، ثم ارفع ملف PDF واحفظ التحضير
+                  </Typography>
+                </Box>
+              </Stack>
+
+              <Stack direction="row" spacing={0.8}>
+                <Button
+                  variant="outlined"
+                  startIcon={<ArrowBackRounded />}
+                  onClick={() => navigate("/teacher/dashboard")}
+                  sx={{
+                    borderRadius: 2,
+                    px: 1.5,
+                    fontWeight: 900,
+                    color: "#214f77",
+                    borderColor: "#cbd7e1",
+                  }}
+                >
+                  لوحة التحكم
+                </Button>
+
+                <IconButton
+                  onClick={() => loadSchedule({ silent: true })}
+                  disabled={refreshing}
+                  sx={{
+                    border: "1px solid #d9e1e8",
+                    borderRadius: 2,
+                    color: "#214f77",
+                  }}
+                >
+                  <RefreshRounded
+                    sx={{
+                      animation: refreshing
+                        ? "spin 1s linear infinite"
+                        : "none",
+                      "@keyframes spin": {
+                        from: { transform: "rotate(0deg)" },
+                        to: { transform: "rotate(360deg)" },
+                      },
+                    }}
+                  />
+                </IconButton>
+              </Stack>
+            </Stack>
+          </Paper>
+
+          {error ? (
+            <Alert severity="error" sx={{ mb: 1.25, borderRadius: 2 }}>
+              {error}
+            </Alert>
+          ) : null}
+
+          <Paper
+            elevation={0}
+            sx={{
+              borderRadius: 2.5,
+              p: 1,
+              mb: 1.25,
+              border: "1px solid #e1e6eb",
+              bgcolor: "#fff",
+            }}
+          >
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  md: "minmax(280px, 1fr) 210px 210px",
+                },
+                gap: 0.8,
+              }}
+            >
+              <TextField
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="ابحث باسم المادة أو الفصل أو رقم الحصة"
+                size="small"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchRounded sx={{ color: "#8a95a3" }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              <TextField
+                select
+                label="المادة"
+                value={subjectFilter}
+                onChange={(event) =>
+                  setSubjectFilter(event.target.value)
+                }
+                size="small"
+              >
+                <MenuItem value="">كل المواد</MenuItem>
+                {subjectOptions.map((subject) => (
+                  <MenuItem
+                    key={subject.id || subject.label}
+                    value={subject.id || subject.label}
+                  >
+                    {subject.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <TextField
+                select
+                label="الفصل"
+                value={classFilter}
+                onChange={(event) =>
+                  setClassFilter(event.target.value)
+                }
+                size="small"
+              >
+                <MenuItem value="">كل الفصول</MenuItem>
+                {classOptions.map((classItem) => (
+                  <MenuItem key={classItem.id} value={classItem.id}>
+                    {classItem.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+          </Paper>
+
+          <Paper
+            elevation={0}
+            sx={{
+              borderRadius: 3,
+              border: "1px solid #e1e6eb",
+              bgcolor: "#fff",
+              overflow: "hidden",
+            }}
+          >
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              justifyContent="space-between"
+              spacing={0.8}
+              sx={{ px: 1.5, py: 1.2, borderBottom: "1px solid #edf0f3" }}
+            >
+              <Box>
+                <Typography
+                  sx={{ color: "#0b2c4d", fontWeight: 900, fontSize: 17 }}
+                >
+                  الحصص التي تحتاج تحضير
+                </Typography>
+                <Typography sx={{ color: "#98a2af", fontSize: 11.5 }}>
+                  {filteredLectures.length} حصة متاحة للتحضير
+                </Typography>
+              </Box>
+
+              {(search || subjectFilter || classFilter) && (
+                <Button size="small" onClick={clearFilters} sx={{ fontWeight: 800 }}>
+                  مسح الفلاتر
+                </Button>
+              )}
+            </Stack>
+
+            {loading ? (
+              <Box sx={{ minHeight: 260, display: "grid", placeItems: "center" }}>
+                <CircularProgress size={32} />
+              </Box>
+            ) : filteredLectures.length === 0 ? (
+              <Box
+                sx={{
+                  minHeight: 260,
+                  display: "grid",
+                  placeItems: "center",
+                  textAlign: "center",
+                  px: 2,
+                }}
+              >
+                <Stack alignItems="center" spacing={1}>
+                  <CheckCircleRounded sx={{ fontSize: 44, color: "#26956d" }} />
+                  <Typography sx={{ color: "#0b2c4d", fontWeight: 900 }}>
+                    لا توجد حصص تحتاج تحضير
+                  </Typography>
+                  <Typography sx={{ color: "#98a2af", fontSize: 12 }}>
+                    كل الحصص الظاهرة لديها ملف تحضير، أو لا توجد نتائج مطابقة.
+                  </Typography>
+                </Stack>
+              </Box>
+            ) : (
+              <Stack divider={<Divider flexItem />} sx={{ px: 1.1, py: 0.4 }}>
+                {displayedDays.flatMap((day) => {
+                  const dayDate = getDateForDay(weekStart, day.jsDay);
+                  const dayLectures = lecturesByDay.get(day.key) || [];
+
+                  return dayLectures.map((lecture, index) => (
+                    <Box
+                      key={getLectureId(lecture)}
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          md: "120px minmax(0, 1fr) 220px",
+                        },
+                        alignItems: "center",
+                        gap: 1,
+                        py: 1.1,
+                        px: 0.6,
+                      }}
+                    >
+                      <Stack spacing={0.25}>
+                        <Typography
+                          sx={{ color: "#8a5c0d", fontWeight: 900, fontSize: 12.5 }}
+                        >
+                          {index === 0 ? day.label : ""}
+                        </Typography>
+                        <Typography sx={{ color: "#a0a9b5", fontSize: 10.5 }}>
+                          {index === 0 ? formatDayDate(dayDate) : ""}
+                        </Typography>
+                      </Stack>
+
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={1}
+                        sx={{ minWidth: 0 }}
+                      >
+                        <Chip
+                          size="small"
+                          label={getSlotLabel(lecture)}
+                          sx={{
+                            bgcolor: "#eef3f7",
+                            color: "#284f6d",
+                            fontWeight: 900,
+                            flexShrink: 0,
+                          }}
+                        />
+
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography
+                            noWrap
+                            sx={{ color: "#0b2c4d", fontWeight: 900, fontSize: 13.5 }}
+                          >
+                            {lecture.scheduleSubject.label}
+                          </Typography>
+                          <Typography
+                            noWrap
+                            sx={{ color: "#8d98a6", fontSize: 11 }}
+                          >
+                            {lecture.scheduleClassLabel}
+                          </Typography>
+                        </Box>
+                      </Stack>
+
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        startIcon={<MenuBookRounded />}
+                        onClick={() => {
+                          setSelectedLecture(lecture);
+                          setUploadedFile(null);
+                        }}
+                        sx={{
+                          minHeight: 40,
+                          borderRadius: 2,
+                          fontWeight: 900,
+                          bgcolor: "#c89027",
+                          boxShadow: "none",
+                          "&:hover": {
+                            bgcolor: "#ad7718",
+                            boxShadow: "none",
+                          },
+                        }}
+                      >
+                        فتح نموذج التحضير
+                      </Button>
+                    </Box>
+                  ));
+                })}
+              </Stack>
+            )}
+          </Paper>
+        </Box>
+
+        <Dialog
+          open={Boolean(selectedLecture)}
+          onClose={closePreparationDialog}
+          fullWidth
+          maxWidth="sm"
+          PaperProps={{
+            sx: { borderRadius: 3, overflow: "hidden" },
+          }}
+        >
+          <DialogTitle sx={{ p: 0 }}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{ px: 1.6, py: 1.25, bgcolor: "#173f64", color: "#fff" }}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: 900, fontSize: 17 }}>
+                  رفع ملف التحضير
+                </Typography>
+                <Typography sx={{ color: "rgba(255,255,255,.72)", fontSize: 11 }}>
+                  {selectedLecture?.scheduleSubject?.label || "الحصة المختارة"}
+                </Typography>
+              </Box>
+
+              <IconButton
+                onClick={closePreparationDialog}
+                disabled={submittingPreparation}
+                sx={{ color: "#fff" }}
+              >
+                <CloseRounded />
+              </IconButton>
+            </Stack>
+          </DialogTitle>
+
+          <DialogContent sx={{ p: 1.6 }}>
+            <Stack spacing={1.25}>
+              <Paper
+                variant="outlined"
+                sx={{ p: 1.2, borderRadius: 2, bgcolor: "#fbfcfd" }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Chip
+                    size="small"
+                    label={selectedLecture ? getSlotLabel(selectedLecture) : ""}
+                    sx={{ fontWeight: 900 }}
+                  />
+                  <Box>
+                    <Typography sx={{ color: "#0b2c4d", fontWeight: 900 }}>
+                      {selectedLecture?.scheduleSubject?.label || ""}
+                    </Typography>
+                    <Typography sx={{ color: "#8f99a7", fontSize: 11 }}>
+                      {selectedLecture?.scheduleClassLabel || ""}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+
+              <Box
+                component="label"
+                sx={{
+                  minHeight: 180,
+                  border: "2px dashed #d7c28e",
+                  borderRadius: 2.5,
+                  bgcolor: uploadedFile ? "#fffaf0" : "#fffdf9",
+                  display: "grid",
+                  placeItems: "center",
+                  textAlign: "center",
+                  px: 2,
+                  cursor: "pointer",
+                  transition: "all .2s ease",
+                  "&:hover": { bgcolor: "#fff8e9", borderColor: "#c89027" },
+                }}
+              >
+                <input
+                  ref={fileInputRef}
+                  hidden
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={choosePreparationFile}
+                />
+
+                <Stack alignItems="center" spacing={0.8}>
+                  <Box
+                    sx={{
+                      width: 50,
+                      height: 50,
+                      borderRadius: 2,
+                      bgcolor: "#fff0cf",
+                      color: "#ad7415",
+                      display: "grid",
+                      placeItems: "center",
+                    }}
+                  >
+                    <CloudUploadRounded />
+                  </Box>
+                  <Typography sx={{ color: "#0b2c4d", fontWeight: 900 }}>
+                    {uploadedFile ? uploadedFile.name : "اضغط لاختيار ملف PDF"}
+                  </Typography>
+                  <Typography sx={{ color: "#9aa4b1", fontSize: 11 }}>
+                    PDF فقط — الحد الأقصى 20 ميجابايت
+                  </Typography>
+                </Stack>
+              </Box>
+            </Stack>
+          </DialogContent>
+
+          <DialogActions sx={{ px: 1.6, pb: 1.5, gap: 0.8 }}>
+            <Button
+              variant="outlined"
+              onClick={closePreparationDialog}
+              disabled={submittingPreparation}
+              sx={{ borderRadius: 2, fontWeight: 900 }}
+            >
+              إلغاء
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={
+                submittingPreparation ? (
+                  <CircularProgress size={17} color="inherit" />
+                ) : (
+                  <SaveRounded />
+                )
+              }
+              onClick={submitPreparationFromSchedule}
+              disabled={!uploadedFile || submittingPreparation}
+              sx={{
+                borderRadius: 2,
+                fontWeight: 900,
+                bgcolor: "#173f64",
+                "&:hover": { bgcolor: "#0e3151" },
+              }}
+            >
+              حفظ التحضير
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    );
+  }
 
   return (
     <Box
       dir="rtl"
       sx={{
+        minHeight: "100dvh",
         bgcolor: "#fff",
-        px: { xs: 1, md: 2 },
-        py: { xs: 1, md: 1.25 },
+        px: { xs: 1, md: 1.5 },
+        py: { xs: 1, md: 1.15 },
       }}
     >
-      <Box sx={{ maxWidth: 1400, mx: "auto" }}>
+      <Box sx={{ maxWidth: 1520, mx: "auto" }}>
         <Paper
           elevation={0}
           sx={{
             position: "relative",
             overflow: "hidden",
-            borderRadius: { xs: 2.6, md: 3 },
+            borderRadius: { xs: 2.5, md: 3 },
             color: "#fff",
             background:
               "linear-gradient(115deg, #173f64 0%, #245b86 58%, #2d6b99 100%)",
             px: { xs: 1.5, md: 2 },
-            py: { xs: 1.1, md: 1.2 },
-            mb: 1.2,
+            py: { xs: 1.25, md: 1.4 },
+            mb: 1,
           }}
         >
           <Box
             sx={{
               position: "absolute",
-              insetInlineStart: -70,
-              top: -105,
-              width: 250,
-              height: 250,
+              insetInlineStart: -90,
+              top: -120,
+              width: 310,
+              height: 310,
               borderRadius: "50%",
               border: "1px solid rgba(255,255,255,.09)",
             }}
@@ -846,7 +1470,7 @@ const TeacherSchedule = () => {
             direction={{ xs: "column", md: "row" }}
             alignItems={{ xs: "stretch", md: "center" }}
             justifyContent="space-between"
-            spacing={1.2}
+            spacing={1}
             sx={{ position: "relative", zIndex: 1 }}
           >
             <Stack
@@ -856,9 +1480,9 @@ const TeacherSchedule = () => {
             >
               <Box
                 sx={{
-                  width: { xs: 44, md: 48 },
-                  height: { xs: 44, md: 48 },
-                  borderRadius: 2,
+                  width: { xs: 46, md: 52 },
+                  height: { xs: 46, md: 52 },
+                  borderRadius: 2.5,
                   bgcolor: "#fff",
                   display: "grid",
                   placeItems: "center",
@@ -881,36 +1505,38 @@ const TeacherSchedule = () => {
               <Box>
                 <Chip
                   size="small"
-                  label="بوابة المعلم"
+                  label={isPreparationMode ? "مسار التحضير" : "بوابة المعلم"}
                   icon={<ScheduleRounded />}
                   sx={{
-                    mb: 0.35,
+                    mb: 0.3,
                     bgcolor: "rgba(255, 216, 128, .13)",
                     color: "#ffdc8e",
                     border: "1px solid rgba(255, 220, 142, .28)",
                     fontWeight: 900,
-                    fontSize: 10.5,
-                    height: 25,
-                    "& .MuiChip-icon": { color: "#ffdc8e", fontSize: 16 },
+                    "& .MuiChip-icon": { color: "#ffdc8e" },
                   }}
                 />
                 <Typography
                   sx={{
-                    fontSize: { xs: 21, md: 25 },
+                    fontSize: { xs: 23, md: 28 },
                     fontWeight: 900,
                     lineHeight: 1.05,
                   }}
                 >
-                  جدولي الدراسي
+                  {isPreparationMode
+                    ? "اختر حصة للتحضير"
+                    : "جدولي الدراسي"}
                 </Typography>
                 <Typography
                   sx={{
                     color: "rgba(255,255,255,.75)",
                     mt: 0.3,
-                    fontSize: { xs: 10, md: 10.75 },
+                    fontSize: { xs: 10.5, md: 11.5 },
                   }}
                 >
-                  تابع حصص الأسبوع والتحضيرات والحضور من مكان واحد
+                  {isPreparationMode
+                    ? "اعرض الحصص غير المحضرة، ثم ابدأ رفع ملف التحضير"
+                    : "تابع حصص الأسبوع والتحضيرات والحضور من مكان واحد"}
                 </Typography>
               </Box>
             </Stack>
@@ -930,9 +1556,9 @@ const TeacherSchedule = () => {
                   color: "#fff",
                   borderColor: "rgba(255,255,255,.28)",
                   borderRadius: 1.8,
-                  px: 1.45,
-                  minHeight: 34,
-                  fontSize: 11.5,
+                  px: 1.4,
+                  minHeight: 36,
+                  fontSize: 12,
                   fontWeight: 900,
                   "&:hover": {
                     borderColor: "rgba(255,255,255,.55)",
@@ -951,15 +1577,15 @@ const TeacherSchedule = () => {
                     }
                     disabled={refreshing}
                     sx={{
-                      width: 34,
-                      height: 34,
+                      width: 36,
+                      height: 36,
                       color: "#fff",
                       border: "1px solid rgba(255,255,255,.28)",
-                      borderRadius: 1.8,
+                      borderRadius: 2.2,
                     }}
                   >
                     {refreshing ? (
-                      <CircularProgress size={18} color="inherit" />
+                      <CircularProgress size={21} color="inherit" />
                     ) : (
                       <RefreshRounded />
                     )}
@@ -969,6 +1595,86 @@ const TeacherSchedule = () => {
             </Stack>
           </Stack>
         </Paper>
+
+        {isPreparationMode ? (
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 1,
+              px: { xs: 1, md: 1.25 },
+              py: 0.9,
+              display: "flex",
+              alignItems: { xs: "stretch", md: "center" },
+              justifyContent: "space-between",
+              flexDirection: { xs: "column", md: "row" },
+              gap: 0.8,
+              borderRadius: 2.2,
+              border: "1px solid #d8e9f5",
+              bgcolor: "#f4fbff",
+            }}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={0.9}
+              sx={{ minWidth: 0 }}
+            >
+              <Box
+                sx={{
+                  width: 38,
+                  height: 38,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                  borderRadius: 1.8,
+                  bgcolor: "#dff2ff",
+                  color: "#176a9b",
+                }}
+              >
+                <MenuBookRounded fontSize="small" />
+              </Box>
+
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  sx={{
+                    color: "#0c3557",
+                    fontWeight: 900,
+                    fontSize: 13,
+                  }}
+                >
+                  اختاري الحصة ثم اضغطي «إضافة تحضير»
+                </Typography>
+                <Typography
+                  sx={{
+                    mt: 0.1,
+                    color: "#688399",
+                    fontSize: 10.8,
+                  }}
+                >
+                  الخطوات: اختيار الحصة ← رفع ملف PDF ← حفظ التحضير
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Button
+              size="small"
+              variant="text"
+              onClick={() =>
+                navigate("/teacher/schedule", {
+                  replace: true,
+                })
+              }
+              sx={{
+                alignSelf: { xs: "flex-end", md: "center" },
+                color: "#1e5d86",
+                fontWeight: 900,
+                fontSize: 11,
+              }}
+            >
+              عرض الجدول الكامل
+            </Button>
+          </Paper>
+        ) : null}
 
         {error ? (
           <Alert
@@ -982,12 +1688,13 @@ const TeacherSchedule = () => {
                 إعادة المحاولة
               </Button>
             }
-            sx={{ mb: 2, borderRadius: 2.5 }}
+            sx={{ mb: 1, py: 0.15, borderRadius: 2, fontSize: 12 }}
           >
             {error}
           </Alert>
         ) : null}
 
+        {!isPreparationMode ? (
         <Box
           sx={{
             display: "grid",
@@ -995,8 +1702,8 @@ const TeacherSchedule = () => {
               xs: "1fr 1fr",
               lg: "repeat(4, minmax(0, 1fr))",
             },
-            gap: 1,
-            mb: 1.15,
+            gap: 0.8,
+            mb: 1,
           }}
         >
           <StatCard
@@ -1034,21 +1741,15 @@ const TeacherSchedule = () => {
             tone="blue"
           />
         </Box>
+        ) : null}
 
         <Paper
           variant="outlined"
           sx={{
-            borderRadius: 2.5,
+            borderRadius: 2.2,
             borderColor: "#e5ebf0",
             p: 0.8,
-            mb: 1.15,
-            "& .MuiInputBase-root": {
-              minHeight: 38,
-              fontSize: 11.5,
-            },
-            "& .MuiInputLabel-root": {
-              fontSize: 11,
-            },
+            mb: 1,
           }}
         >
           <Box
@@ -1056,9 +1757,11 @@ const TeacherSchedule = () => {
               display: "grid",
               gridTemplateColumns: {
                 xs: "1fr",
-                md: "minmax(240px, 1fr) 180px 180px 170px",
+                md: isPreparationMode
+                  ? "minmax(280px, 1fr) 220px 220px"
+                  : "minmax(260px, 1fr) 220px 220px 210px",
               },
-              gap: 0.75,
+              gap: 0.7,
             }}
           >
             <TextField
@@ -1112,26 +1815,28 @@ const TeacherSchedule = () => {
               ))}
             </TextField>
 
-            <TextField
-              select
-              label="حالة التحضير"
-              value={preparationFilter}
-              onChange={(event) =>
-                setPreparationFilter(event.target.value)
-              }
-              size="small"
-            >
-              <MenuItem value="all">كل الحصص</MenuItem>
-              <MenuItem value="prepared">تم التحضير</MenuItem>
-              <MenuItem value="unprepared">تحتاج تحضير</MenuItem>
-            </TextField>
+            {!isPreparationMode ? (
+              <TextField
+                select
+                label="حالة التحضير"
+                value={preparationFilter}
+                onChange={(event) =>
+                  setPreparationFilter(event.target.value)
+                }
+                size="small"
+              >
+                <MenuItem value="all">كل الحصص</MenuItem>
+                <MenuItem value="prepared">تم التحضير</MenuItem>
+                <MenuItem value="unprepared">تحتاج تحضير</MenuItem>
+              </TextField>
+            ) : null}
           </Box>
         </Paper>
 
         <Paper
           variant="outlined"
           sx={{
-            borderRadius: 2.8,
+            borderRadius: 2.5,
             borderColor: "#e5ebf0",
             overflow: "hidden",
           }}
@@ -1142,8 +1847,8 @@ const TeacherSchedule = () => {
             justifyContent="space-between"
             spacing={1}
             sx={{
-              px: { xs: 1.2, md: 1.4 },
-              py: 0.7,
+              px: { xs: 1.1, md: 1.35 },
+              py: 0.85,
               borderBottom: "1px solid #e9edf2",
             }}
           >
@@ -1152,13 +1857,17 @@ const TeacherSchedule = () => {
                 sx={{
                   color: "#082a4b",
                   fontWeight: 900,
-                  fontSize: 15,
+                  fontSize: 16,
                 }}
               >
-                الجدول الأسبوعي
+                {isPreparationMode
+                  ? "الحصص التي تحتاج تحضير"
+                  : "الجدول الأسبوعي"}
               </Typography>
-              <Typography sx={{ color: "#98a3b2", fontSize: 10.5 }}>
-                {formatWeekRange(weekStart)}
+              <Typography sx={{ color: "#98a3b2", fontSize: 12 }}>
+                {isPreparationMode
+                  ? `${filteredLectures.length} حصة جاهزة لاختيار التحضير`
+                  : formatWeekRange(weekStart)}
               </Typography>
             </Box>
 
@@ -1195,14 +1904,14 @@ const TeacherSchedule = () => {
           {loading ? (
             <Box
               sx={{
-                minHeight: 190,
+                minHeight: 330,
                 display: "grid",
                 placeItems: "center",
               }}
             >
               <Stack alignItems="center" spacing={1.2}>
-                <CircularProgress size={28} />
-                <Typography sx={{ color: "#8c98a8", fontSize: 11.5 }}>
+                <CircularProgress size={34} />
+                <Typography sx={{ color: "#8c98a8", fontSize: 13 }}>
                   جاري تحميل جدولك...
                 </Typography>
               </Stack>
@@ -1210,7 +1919,7 @@ const TeacherSchedule = () => {
           ) : enrichedLectures.length === 0 ? (
             <Box
               sx={{
-                minHeight: 190,
+                minHeight: 330,
                 display: "grid",
                 placeItems: "center",
                 px: 2,
@@ -1220,8 +1929,8 @@ const TeacherSchedule = () => {
               <Stack alignItems="center" spacing={1.2}>
                 <Box
                   sx={{
-                    width: 54,
-                    height: 54,
+                    width: 66,
+                    height: 66,
                     borderRadius: 3,
                     bgcolor: "#fff3d8",
                     color: "#b67a14",
@@ -1229,12 +1938,12 @@ const TeacherSchedule = () => {
                     placeItems: "center",
                   }}
                 >
-                  <ScheduleRounded sx={{ fontSize: 28 }} />
+                  <ScheduleRounded sx={{ fontSize: 34 }} />
                 </Box>
                 <Typography sx={{ color: "#082a4b", fontWeight: 900 }}>
                   لا توجد حصص مرتبطة بحسابك
                 </Typography>
-                <Typography sx={{ color: "#98a3b2", fontSize: 11.5 }}>
+                <Typography sx={{ color: "#98a3b2", fontSize: 13 }}>
                   راجع إسنادات المعلم والجدول من حساب الإدارة.
                 </Typography>
               </Stack>
@@ -1251,7 +1960,7 @@ const TeacherSchedule = () => {
             >
               <Stack alignItems="center" spacing={1.2}>
                 <WarningAmberRounded
-                  sx={{ fontSize: 31, color: "#ba821f" }}
+                  sx={{ fontSize: 38, color: "#ba821f" }}
                 />
                 <Typography sx={{ color: "#082a4b", fontWeight: 900 }}>
                   لا توجد حصص مطابقة للفلاتر
@@ -1266,17 +1975,22 @@ const TeacherSchedule = () => {
                 gridTemplateColumns: {
                   xs: "1fr",
                   sm: "repeat(2, minmax(0, 1fr))",
-                  lg: `repeat(${Math.min(
-                    visibleDays.length,
-                    5
-                  )}, minmax(0, 1fr))`,
+                  lg: isPreparationMode
+                    ? "repeat(2, minmax(0, 1fr))"
+                    : `repeat(${Math.min(
+                        displayedDays.length,
+                        5
+                      )}, minmax(0, 1fr))`,
+                  xl: isPreparationMode
+                    ? "repeat(3, minmax(0, 1fr))"
+                    : undefined,
                 },
-                gap: 0.65,
-                p: { xs: 0.7, md: 0.75 },
+                gap: 0.8,
+                p: { xs: 0.8, md: 1 },
                 alignItems: "start",
               }}
             >
-              {visibleDays.map((day) => {
+              {displayedDays.map((day) => {
                 const dayDate = getDateForDay(weekStart, day.jsDay);
                 const dayLectures = lecturesByDay.get(day.key) || [];
                 const isToday = day.key === todayKey;
@@ -1286,11 +2000,17 @@ const TeacherSchedule = () => {
                     key={day.key}
                     variant="outlined"
                     sx={{
-                      borderRadius: 2.3,
+                      borderRadius: 2.2,
                       overflow: "hidden",
-                      borderColor: isToday ? "#2f6f9f" : "#e3e8ee",
-                      boxShadow: isToday
-                        ? "0 7px 18px rgba(34, 91, 134, .08)"
+                      borderColor: isPreparationMode
+                        ? "#ead7aa"
+                        : isToday
+                        ? "#2f6f9f"
+                        : "#e3e8ee",
+                      boxShadow: isPreparationMode
+                        ? "0 8px 22px rgba(127, 91, 22, .07)"
+                        : isToday
+                        ? "0 10px 24px rgba(34, 91, 134, .09)"
                         : "none",
                     }}
                   >
@@ -1299,14 +2019,22 @@ const TeacherSchedule = () => {
                       alignItems="center"
                       justifyContent="space-between"
                       sx={{
-                        px: 0.85,
-                        py: 0.55,
-                        bgcolor: isToday ? "#214f77" : "#f7f9fb",
-                        color: isToday ? "#fff" : "#173d60",
+                        px: 1,
+                        py: 0.75,
+                        bgcolor: isPreparationMode
+                          ? "#fff8e9"
+                          : isToday
+                          ? "#214f77"
+                          : "#f7f9fb",
+                        color: isPreparationMode
+                          ? "#8a5c0d"
+                          : isToday
+                          ? "#fff"
+                          : "#173d60",
                       }}
                     >
                       <Box>
-                        <Typography sx={{ fontWeight: 900, fontSize: 12.75 }}>
+                        <Typography sx={{ fontWeight: 900, fontSize: 13.5 }}>
                           {day.label}
                         </Typography>
                         <Typography
@@ -1314,7 +2042,7 @@ const TeacherSchedule = () => {
                             color: isToday
                               ? "rgba(255,255,255,.72)"
                               : "#9aa6b5",
-                            fontSize: 9.75,
+                            fontSize: 11,
                           }}
                         >
                           {formatDayDate(dayDate)}
@@ -1330,17 +2058,15 @@ const TeacherSchedule = () => {
                             : "#e9eef3",
                           color: isToday ? "#fff" : "#315571",
                           fontWeight: 900,
-                          fontSize: 9,
-                          height: 21,
                         }}
                       />
                     </Stack>
 
-                    <Stack spacing={0.5} sx={{ p: 0.55 }}>
+                    <Stack spacing={0.7} sx={{ p: 0.7 }}>
                       {dayLectures.length === 0 ? (
                         <Box
                           sx={{
-                            minHeight: 66,
+                            minHeight: 76,
                             display: "grid",
                             placeItems: "center",
                             textAlign: "center",
@@ -1348,8 +2074,8 @@ const TeacherSchedule = () => {
                           }}
                         >
                           <Box>
-                            <CalendarMonthRounded sx={{ fontSize: 23 }} />
-                            <Typography sx={{ fontSize: 10.5, mt: 0.2 }}>
+                            <CalendarMonthRounded sx={{ fontSize: 22 }} />
+                            <Typography sx={{ fontSize: 12, mt: 0.3 }}>
                               لا توجد حصص
                             </Typography>
                           </Box>
@@ -1375,10 +2101,10 @@ const TeacherSchedule = () => {
                                 bgcolor: hasPreparation
                                   ? "#fbfefc"
                                   : "#fffcf6",
-                                p: 0.65,
+                                p: 0.85,
                               }}
                             >
-                              <Stack spacing={0.45}>
+                              <Stack spacing={0.6}>
                                 <Stack
                                   direction="row"
                                   alignItems="center"
@@ -1392,7 +2118,7 @@ const TeacherSchedule = () => {
                                       bgcolor: "#eef3f7",
                                       color: "#284f6d",
                                       fontWeight: 900,
-                                      fontSize: 8.75,
+                                      fontSize: 10.5,
                                     }}
                                   />
 
@@ -1418,7 +2144,7 @@ const TeacherSchedule = () => {
                                         ? "#19825f"
                                         : "#a86d0e",
                                       fontWeight: 900,
-                                      fontSize: 8.75,
+                                      fontSize: 10.5,
                                       "& .MuiChip-icon": {
                                         color: "inherit",
                                       },
@@ -1431,7 +2157,7 @@ const TeacherSchedule = () => {
                                     sx={{
                                       color: "#082a4b",
                                       fontWeight: 900,
-                                      fontSize: 11.75,
+                                      fontSize: 12.5,
                                       lineHeight: 1.35,
                                     }}
                                   >
@@ -1440,7 +2166,7 @@ const TeacherSchedule = () => {
                                   <Typography
                                     sx={{
                                       color: "#8d99a8",
-                                      fontSize: 9.75,
+                                      fontSize: 10.5,
                                       mt: 0.15,
                                     }}
                                   >
@@ -1450,8 +2176,8 @@ const TeacherSchedule = () => {
 
                                 <Stack
                                   direction="row"
-                                  spacing={0.45}
-                                  sx={{ pt: 0.15 }}
+                                  spacing={0.7}
+                                  sx={{ pt: 0.3 }}
                                 >
                                   <Button
                                     fullWidth
@@ -1468,7 +2194,7 @@ const TeacherSchedule = () => {
                                     sx={{
                                       borderRadius: 1.8,
                                       fontWeight: 900,
-                                      fontSize: 8.75,
+                                      fontSize: 10.5,
                                       bgcolor: hasPreparation
                                         ? undefined
                                         : "#c89027",
@@ -1481,26 +2207,28 @@ const TeacherSchedule = () => {
                                   >
                                     {hasPreparation
                                       ? "فتح التحضير"
+                                      : isPreparationMode
+                                      ? "ابدأ تحضير هذه الحصة"
                                       : "إضافة تحضير"}
                                   </Button>
 
-                                  <Tooltip title="تسجيل الحضور">
-                                    <IconButton
-                                      size="small"
-                                      onClick={() =>
-                                        openAttendance(lecture, day)
-                                      }
-                                      sx={{
-                                        border: "1px solid #d9e2ea",
-                                        borderRadius: 1.5,
-                                        width: 28,
-                                        height: 28,
-                                        color: "#1d5d86",
-                                      }}
-                                    >
-                                      <HowToRegRounded fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
+                                  {!isPreparationMode ? (
+                                    <Tooltip title="تسجيل الحضور">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() =>
+                                          openAttendance(lecture, day)
+                                        }
+                                        sx={{
+                                          border: "1px solid #d9e2ea",
+                                          borderRadius: 1.8,
+                                          color: "#1d5d86",
+                                        }}
+                                      >
+                                        <HowToRegRounded fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  ) : null}
                                 </Stack>
                               </Stack>
                             </Paper>

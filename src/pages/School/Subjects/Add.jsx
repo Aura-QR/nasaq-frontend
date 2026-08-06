@@ -28,9 +28,16 @@ import { addSubject } from "@/APIs/school/subjects";
 const Add = () => {
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      subjectName: "",
+      subjectCode: "",
+      isRequiredForPromotion: true,
+    },
+  });
 
   const [loading, setLoading] =
     useState(false);
@@ -50,6 +57,8 @@ const Add = () => {
         subjectCode:
           formData.subjectCode?.trim() ||
           undefined,
+        isRequiredForPromotion:
+          formData.isRequiredForPromotion !== false,
       };
 
       const response =
@@ -217,6 +226,7 @@ const Add = () => {
 
           <SubjectForm
             register={register}
+            control={control}
             errors={errors}
           />
 

@@ -23,6 +23,7 @@ import {
   ReceiptLong,
   Route,
   SchoolRounded,
+  SettingsRounded,
   ViewList,
 } from "@mui/icons-material";
 
@@ -199,6 +200,11 @@ const Sidebar = ({ active }) => {
     role === "OWNER" ||
     role === "SUPERVISOR";
 
+  const canManageSchoolSettings =
+    role === "OWNER" ||
+    role === "MANAGER" ||
+    role === "SUPERVISOR";
+
   const categories = useMemo(() => {
     const baseCategories = [
       {
@@ -275,6 +281,18 @@ const Sidebar = ({ active }) => {
             icon: lectureIcon,
             to: "/school/lectures",
             show: lecturesPermissions.read,
+          },
+        ],
+      },
+      {
+        title: "إعدادات النظام",
+        items: [
+          {
+            name: "إعدادات المدرسة",
+            Icon: SettingsRounded,
+            iconType: "mui",
+            to: "/school/settings",
+            show: canManageSchoolSettings,
           },
         ],
       },
@@ -418,6 +436,7 @@ const Sidebar = ({ active }) => {
     isTeacher,
     userId,
     canManageAcademicYears,
+    canManageSchoolSettings,
     studentsPermissions.read,
     teachersPermissions.read,
     subjectsPermissions.read,
