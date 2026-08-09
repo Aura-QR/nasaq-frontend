@@ -31,7 +31,8 @@ import ModuleTrips_Add from "@/pages/Financials/Trips/ModuleAdd";
 import ModuleTrips_Profile from "@/pages/Financials/Trips/ModuleProfile";
 import Trips_List from "@/pages/Financials/Trips/List";
 import Trips_Profile from "@/pages/Financials/Trips/Profile";
-import Trips_Add from "@/pages/Financials/Trips/Add";
+import AdditionalFees_List from "@/pages/Financials/AdditionalFees/List";
+import AdditionalFees_Add from "@/pages/Financials/AdditionalFees/Add";
 
 export const financialsRoutes = (
   <>
@@ -376,18 +377,28 @@ export const financialsRoutes = (
       }
     />
 
-    <Route
-      path="/financial/records/:studentId/trips/:tripId"
-      element={
-        <RequireAuth loginPath="/">
-          <RequirePermission
-            module="financial"
-            operation="read"
-          >
-            <Trips_Profile />
-          </RequirePermission>
-        </RequireAuth>
-      }
-    />
-  </>
+		<Route path="/financial/records/:studentId/trips/:tripId" element={
+			<RequireAuth loginPath="/">
+				<RequirePermission module="financial" operation="read">
+					<Trips_Profile />
+				</RequirePermission>
+			</RequireAuth>
+		} />
+		<Route path="/financial/additional-fees" element={
+			<RequireAuth loginPath="/">
+				<RequirePermission module="financial" operation="read">
+					<AdditionalFees_List />
+				</RequirePermission>
+			</RequireAuth>
+		} />
+
+		<Route path="/financial/additional-fees/add" element={
+			<RequireAuth loginPath="/">
+				<RequirePermission module="financial" operation="add">
+					<AdditionalFees_Add />
+				</RequirePermission>
+			</RequireAuth>
+		} />
+	</>
 );
+

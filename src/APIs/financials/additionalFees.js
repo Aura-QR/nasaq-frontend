@@ -1,105 +1,51 @@
 import { api } from "../Axios";
+import { apiError } from "./_helpers";
 
 const ENDPOINT = "/financial/additional-fees";
 
-const getErrorMessage = (
-  error,
-  fallback = "حدث خطأ ما"
-) =>
-  error?.response?.data?.message ||
-  error?.response?.data?.error ||
-  error?.message ||
-  fallback;
-
-const failure = (error, fallback) => ({
-  status: false,
-  message: getErrorMessage(error, fallback),
-  error,
-});
-
 export const fetchAdditionalFees = async () => {
   try {
-    const response = await api.get(ENDPOINT);
-    return response.data;
-  } catch (error) {
-    return failure(
-      error,
-      "تعذر تحميل الرسوم الإضافية"
-    );
+    return (await api.get(ENDPOINT)).data;
+  } catch (e) {
+    return apiError(e, "تعذر تحميل الرسوم الإضافية");
   }
 };
 
-export const fetchAdditionalFeeById = async (
-  id
-) => {
+export const fetchSingleAdditionalFee = async (id) => {
   try {
-    const response = await api.get(
-      `${ENDPOINT}/${id}`
-    );
-    return response.data;
-  } catch (error) {
-    return failure(
-      error,
-      "تعذر تحميل بيانات الرسم الإضافي"
-    );
+    return (await api.get(`${ENDPOINT}/${id}`)).data;
+  } catch (e) {
+    return apiError(e, "تعذر تحميل الرسوم الإضافية");
   }
 };
 
-export const addAdditionalFee = async (
-  payload
-) => {
+export const addAdditionalFee = async (data) => {
   try {
-    const response = await api.post(
-      ENDPOINT,
-      payload
-    );
-    return response.data;
-  } catch (error) {
-    return failure(
-      error,
-      "تعذر إضافة الرسم الإضافي"
-    );
+    return (await api.post(ENDPOINT, data)).data;
+  } catch (e) {
+    return apiError(e, "تعذر إضافة الرسوم الإضافية");
   }
 };
 
-export const deleteAdditionalFee = async (
-  id
-) => {
+export const deleteAdditionalFee = async (id) => {
   try {
-    const response = await api.delete(
-      `${ENDPOINT}/${id}`
-    );
-    return response.data;
-  } catch (error) {
-    return failure(
-      error,
-      "تعذر حذف الرسم الإضافي"
-    );
+    return (await api.delete(`${ENDPOINT}/${id}`)).data;
+  } catch (e) {
+    return apiError(e, "تعذر حذف الرسوم الإضافية");
   }
 };
 
-export const payAdditionalFee = async (
-  feeId,
-  studentId,
-  payload
-) => {
+export const payAdditionalFee = async (studentId, feeId, data) => {
   try {
-    const response = await api.post(
-      `${ENDPOINT}/${feeId}/pay/${studentId}`,
-      payload
-    );
-    return response.data;
-  } catch (error) {
-    return failure(
-      error,
-      "تعذر تسجيل دفعة الرسم الإضافي"
-    );
+    return (await api.post(`${ENDPOINT}/${feeId}/pay/${studentId}`, data)).data;
+  } catch (e) {
+    return apiError(e, "تعذر تسجيل سداد الرسوم الإضافية");
   }
 };
 
 export default {
   fetchAdditionalFees,
-  fetchAdditionalFeeById,
+  fetchSingleAdditionalFee,
   addAdditionalFee,
   deleteAdditionalFee,
   payAdditionalFee,
