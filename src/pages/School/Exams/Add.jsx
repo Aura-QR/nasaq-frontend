@@ -1,10 +1,15 @@
 import {
+  Alert,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   Grid,
+  ListItemText,
+  MenuItem,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 
@@ -33,13 +38,15 @@ import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import Back from "@/components/Back/Back";
 import Select from "@/components/Select/Select";
-import SubjectSelector from "@/components/Selector/SubjectSelector";
-import ClassSelectors from "@/components/Selector/ClassSelectors";
 import Input from "@/components/Input/Input";
 import Questions from "@/pages/School/Exams/Components/Questions";
 
 import { addExam } from "@/APIs/school/exams";
 import { fetchGradesCriteria } from "@/APIs/school/gradesCriteria";
+import { fetchAcademicYears } from "@/APIs/school/academicYears";
+import { fetchTermsByAcademicYear } from "@/APIs/school/lectures";
+import { fetchSubjectOfferings } from "@/APIs/school/subjectOfferings";
+import { getSchoolClasses } from "@/APIs/school/classes";
 
 import MCQExams from "@/utils/constants/MCQExams";
 import usePermissions from "@/utils/hooks/usePermissions";
@@ -76,6 +83,253 @@ const getResponseList = (response) => {
     payload?.results ||
     []
   );
+};
+
+const normalizeId = (value) => {
+  const resolved =
+    value?.target?.value ??
+    value;
+
+  if (
+    resolved &&
+    typeof resolved === "object"
+  ) {
+    return String(
+      resolved?._id ||
+      resolved?.id ||
+      resolved?.value ||
+      ""
+    ).trim();
+  }
+
+  return String(
+    resolved || ""
+  ).trim();
+};
+
+const extractList = (value) => {
+  let current = value;
+
+  for (
+    let index = 0;
+    index < 6;
+    index += 1
+  ) {
+    if (
+      !current ||
+      Array.isArray(current) ||
+      typeof current !== "object" ||
+      !("data" in current)
+    ) {
+      break;
+    }
+
+    current = current.data;
+  }
+
+  if (Array.isArray(current)) {
+    return current;
+  }
+
+  if (
+    !current ||
+    typeof current !== "object"
+  ) {
+    return [];
+  }
+
+  for (const key of [
+    "docs",
+    "items",
+    "results",
+    "rows",
+    "records",
+    "academicYears",
+    "years",
+    "terms",
+    "classes",
+    "offerings",
+    "subjectOfferings",
+  ]) {
+    if (
+      Array.isArray(current?.[key])
+    ) {
+      return current[key];
+    }
+  }
+
+  return [];
+};
+
+const mapAcademicYear = (item) => ({
+  id: normalizeId(item),
+  name:
+    item?.name ||
+    item?.label ||
+    item?.title ||
+    "سنة دراسية",
+});
+
+const mapTerm = (item) => ({
+  id: normalizeId(item),
+  name:
+    item?.name ||
+    item?.label ||
+    item?.title ||
+    `الترم ${item?.order || ""}`.trim(),
+  order: Number(item?.order || 0),
+});
+
+const getOfferingSubject = (offering) =>
+  offering?.subjectId ||
+  offering?.subject ||
+  null;
+
+const getOfferingGradeLevelId = (
+  offering
+) =>
+  normalizeId(
+    offering?.gradeLevelId ||
+    offering?.gradeLevel
+  );
+
+const mapSubjectFromOffering = (
+  offering
+) => {
+  const subject =
+    getOfferingSubject(offering);
+
+  const id =
+    normalizeId(subject);
+
+  const name =
+    subject?.subjectName ||
+    subject?.name ||
+    offering?.subjectName ||
+    "مادة";
+
+  const code =
+    subject?.subjectCode ||
+    subject?.code ||
+    offering?.subjectCode ||
+    "";
+
+  return {
+    id,
+    name: code
+      ? `${name} - ${code}`
+      : name,
+  };
+};
+
+const mapClass = (item) => {
+  const id = normalizeId(item);
+
+  const grade =
+    item?.gradeLevelId ||
+    item?.gradeLevel ||
+    null;
+
+  const gradeName =
+    grade?.name ||
+    item?.gradeLevelName ||
+    "";
+
+  const room =
+    item?.roomNumber ||
+    item?.name ||
+    "";
+
+  const label = [
+    gradeName,
+    room,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+
+  return {
+    id,
+    name:
+      label ||
+      `فصل ${id.slice(-4)}`,
+    gradeLevelId:
+      normalizeId(grade),
+  };
+};
+
+const criteriaMatchesSelection = (
+  criteria,
+  {
+    subjectId,
+    academicYearId,
+    termId,
+    yearTermIds,
+  }
+) => {
+  const offering =
+    criteria?.subjectOffering ||
+    criteria?.subjectOfferingId;
+
+  const criteriaSubjectId =
+    normalizeId(
+      offering?.subjectId ||
+      offering?.subject ||
+      criteria?.subjectId ||
+      criteria?.subject
+    );
+
+  if (
+    criteriaSubjectId &&
+    criteriaSubjectId !== subjectId
+  ) {
+    return false;
+  }
+
+  const criteriaTermId =
+    normalizeId(
+      offering?.termId ||
+      offering?.term ||
+      criteria?.termId
+    );
+
+  if (
+    termId &&
+    criteriaTermId
+  ) {
+    return (
+      criteriaSubjectId === subjectId &&
+      criteriaTermId === termId
+    );
+  }
+
+  const criteriaYearId =
+    normalizeId(
+      criteria?.academicYearId ||
+      criteria?.academicYear
+    );
+
+  if (
+    criteriaYearId &&
+    academicYearId
+  ) {
+    return (
+      criteriaSubjectId === subjectId &&
+      criteriaYearId === academicYearId
+    );
+  }
+
+  if (
+    criteriaTermId &&
+    yearTermIds.has(
+      criteriaTermId
+    )
+  ) {
+    return (
+      criteriaSubjectId === subjectId
+    );
+  }
+
+  return false;
 };
 
 const getErrorMessage = (
@@ -263,13 +517,14 @@ const GradesCriteriaStatus = ({
   loading,
   hasGradesCriteria,
   subjectId,
-  academicYear,
+  academicYearId,
+  termId,
   canAddCriteria,
   navigate,
 }) => {
   if (
     !subjectId ||
-    !academicYear
+    !academicYearId
   ) {
     return (
       <Paper
@@ -443,9 +698,16 @@ const GradesCriteriaStatus = ({
               );
 
               params.set(
-                "academicYear",
-                academicYear
+                "academicYearId",
+                academicYearId
               );
+
+              if (termId) {
+                params.set(
+                  "termId",
+                  termId
+                );
+              }
 
               navigate(
                 `/school/gradesCriteria/add?${params.toString()}`
@@ -505,6 +767,13 @@ const Add = () => {
     watch,
   } = useForm({
     defaultValues: {
+      academicYearId: "",
+      termId: "",
+      subjectId: "",
+      examType: "",
+      startDate: "",
+      endDate: "",
+      duration: "",
       questions: [
         createQuestion(),
       ],
@@ -529,18 +798,30 @@ const Add = () => {
     setGradesCriteriaLoading,
   ] = useState(false);
 
-  const [subjectId, setSubjectId] =
-    useState("");
-
-  const [
-    academicYear,
-    setAcademicYear,
-  ] = useState("");
-
   const [
     gradesCriteria,
     setGradesCriteria,
   ] = useState([]);
+
+  const [
+    yearTermIds,
+    setYearTermIds,
+  ] = useState(new Set());
+
+  const subjectId =
+    normalizeId(
+      watch("subjectId")
+    );
+
+  const academicYearId =
+    normalizeId(
+      watch("academicYearId")
+    );
+
+  const termId =
+    normalizeId(
+      watch("termId")
+    );
 
   const navigate =
     useNavigate();
@@ -551,9 +832,46 @@ const Add = () => {
     );
 
   useEffect(() => {
+    if (!academicYearId) {
+      setYearTermIds(
+        new Set()
+      );
+      return;
+    }
+
+    let active = true;
+
+    const loadYearTerms =
+      async () => {
+        const response =
+          await fetchTermsByAcademicYear(
+            academicYearId
+          );
+
+        if (!active) {
+          return;
+        }
+
+        setYearTermIds(
+          new Set(
+            extractList(response)
+              .map(normalizeId)
+              .filter(Boolean)
+          )
+        );
+      };
+
+    loadYearTerms();
+
+    return () => {
+      active = false;
+    };
+  }, [academicYearId]);
+
+  useEffect(() => {
     if (
       !subjectId ||
-      !academicYear
+      !academicYearId
     ) {
       setGradesCriteria([]);
       setGradesCriteriaLoading(
@@ -573,15 +891,17 @@ const Add = () => {
         try {
           const response =
             await fetchGradesCriteria({
-              academicYear,
               subjectId,
+              academicYearId,
             });
 
           if (!active) {
             return;
           }
 
-          if (!response?.status) {
+          if (
+            response?.status === false
+          ) {
             setGradesCriteria([]);
 
             toast.error(
@@ -593,9 +913,20 @@ const Add = () => {
             return;
           }
 
+          const list =
+            extractList(response);
+
           setGradesCriteria(
-            getResponseList(
-              response
+            list.filter((criteria) =>
+              criteriaMatchesSelection(
+                criteria,
+                {
+                  subjectId,
+                  academicYearId,
+                  termId,
+                  yearTermIds,
+                }
+              )
             )
           );
         } catch (error) {
@@ -624,26 +955,27 @@ const Add = () => {
     };
   }, [
     subjectId,
-    academicYear,
+    academicYearId,
+    termId,
+    yearTermIds,
   ]);
 
   const hasGradesCriteria =
     useMemo(() => {
       if (
         !subjectId ||
-        !academicYear ||
+        !academicYearId ||
         gradesCriteriaLoading
       ) {
         return null;
       }
 
       return (
-        gradesCriteria.length >
-        0
+        gradesCriteria.length > 0
       );
     }, [
       subjectId,
-      academicYear,
+      academicYearId,
       gradesCriteria,
       gradesCriteriaLoading,
     ]);
@@ -678,17 +1010,89 @@ const Add = () => {
       return;
     }
 
+    const normalizedSubjectId =
+      normalizeId(
+        formData.subjectId
+      );
+
+    const normalizedYearId =
+      normalizeId(
+        formData.academicYearId
+      );
+
+    const normalizedTermId =
+      normalizeId(
+        formData.termId
+      );
+
+    const normalizedClassIds =
+      getArray(
+        formData.classIds
+      )
+        .map(normalizeId)
+        .filter(Boolean);
+
+    const duration =
+      Number(
+        formData.duration
+      );
+
+    if (
+      !normalizedYearId ||
+      !normalizedTermId ||
+      !normalizedSubjectId
+    ) {
+      toast.error(
+        "اختر السنة والترم والمادة"
+      );
+      return;
+    }
+
+    if (
+      normalizedClassIds.length === 0
+    ) {
+      toast.error(
+        "اختر فصلًا واحدًا على الأقل"
+      );
+      return;
+    }
+
+    if (
+      !Number.isFinite(duration) ||
+      duration < 1
+    ) {
+      toast.error(
+        "مدة الاختبار يجب أن تكون دقيقة واحدة على الأقل"
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
       const payload = {
-        ...formData,
-        duration: Number(
-          formData.duration
-        ),
+        subjectId:
+          normalizedSubjectId,
+        academicYearId:
+          normalizedYearId,
+        termId:
+          normalizedTermId,
+        classIds:
+          normalizedClassIds,
+        examType:
+          formData.examType,
+        startDate:
+          formData.startDate,
+        endDate:
+          formData.endDate,
+        duration,
+        questions:
+          getArray(
+            formData.questions
+          ).map(
+            normalizeQuestion
+          ),
       };
-
-      delete payload.subjectName;
 
       const response =
         await addExam(payload);
@@ -807,12 +1211,7 @@ const Add = () => {
             register={register}
             errors={errors}
             setValue={setValue}
-            onSubjectChange={
-              setSubjectId
-            }
-            onAcademicYearChange={
-              setAcademicYear
-            }
+            watch={watch}
           />
         </Paper>
 
@@ -824,9 +1223,10 @@ const Add = () => {
             hasGradesCriteria
           }
           subjectId={subjectId}
-          academicYear={
-            academicYear
+          academicYearId={
+            academicYearId
           }
+          termId={termId}
           canAddCriteria={
             criteriaPermissions.add
           }
@@ -964,165 +1364,786 @@ const DataInputs = ({
   register,
   errors,
   setValue,
-  onSubjectChange,
-  onAcademicYearChange,
+  watch,
 }) => {
   const [
-    selectedClassIds,
-    setSelectedClassIds,
+    academicYears,
+    setAcademicYears,
   ] = useState([]);
 
-  const handleSubjectChange = (
+  const [terms, setTerms] =
+    useState([]);
+
+  const [
+    offerings,
+    setOfferings,
+  ] = useState([]);
+
+  const [
+    schoolClasses,
+    setSchoolClasses,
+  ] = useState([]);
+
+  const [
+    loadingYears,
+    setLoadingYears,
+  ] = useState(true);
+
+  const [
+    loadingTerms,
+    setLoadingTerms,
+  ] = useState(false);
+
+  const [
+    loadingOfferings,
+    setLoadingOfferings,
+  ] = useState(false);
+
+  const [
+    loadingClasses,
+    setLoadingClasses,
+  ] = useState(false);
+
+  const [
+    setupError,
+    setSetupError,
+  ] = useState("");
+
+  const academicYearId =
+    normalizeId(
+      watch("academicYearId")
+    );
+
+  const termId =
+    normalizeId(
+      watch("termId")
+    );
+
+  const subjectId =
+    normalizeId(
+      watch("subjectId")
+    );
+
+  const selectedClassIds =
+    getArray(
+      watch("classIds")
+    )
+      .map(normalizeId)
+      .filter(Boolean);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadYears =
+      async () => {
+        setLoadingYears(true);
+        setSetupError("");
+
+        try {
+          const response =
+            await fetchAcademicYears();
+
+          if (!active) {
+            return;
+          }
+
+          if (
+            response?.status === false
+          ) {
+            setAcademicYears([]);
+            setSetupError(
+              response?.message ||
+                "تعذر تحميل السنوات الدراسية"
+            );
+            return;
+          }
+
+          setAcademicYears(
+            extractList(response)
+              .map(mapAcademicYear)
+              .filter(
+                (item) =>
+                  item.id &&
+                  item.name
+              )
+          );
+        } catch (error) {
+          if (active) {
+            setAcademicYears([]);
+            setSetupError(
+              error?.response?.data
+                ?.message ||
+                "تعذر تحميل السنوات الدراسية"
+            );
+          }
+        } finally {
+          if (active) {
+            setLoadingYears(false);
+          }
+        }
+      };
+
+    loadYears();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadTerms =
+      async () => {
+        setTerms([]);
+        setOfferings([]);
+
+        if (!academicYearId) {
+          return;
+        }
+
+        setLoadingTerms(true);
+        setSetupError("");
+
+        try {
+          const response =
+            await fetchTermsByAcademicYear(
+              academicYearId
+            );
+
+          if (!active) {
+            return;
+          }
+
+          if (
+            response?.status === false
+          ) {
+            setTerms([]);
+            setSetupError(
+              response?.message ||
+                "تعذر تحميل الترمات"
+            );
+            return;
+          }
+
+          setTerms(
+            extractList(response)
+              .map(mapTerm)
+              .filter(
+                (item) =>
+                  item.id
+              )
+              .sort(
+                (a, b) =>
+                  a.order - b.order
+              )
+          );
+        } catch (error) {
+          if (active) {
+            setTerms([]);
+            setSetupError(
+              error?.response?.data
+                ?.message ||
+                "تعذر تحميل الترمات"
+            );
+          }
+        } finally {
+          if (active) {
+            setLoadingTerms(false);
+          }
+        }
+      };
+
+    loadTerms();
+
+    return () => {
+      active = false;
+    };
+  }, [academicYearId]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadOfferings =
+      async () => {
+        setOfferings([]);
+
+        if (!termId) {
+          return;
+        }
+
+        setLoadingOfferings(true);
+        setSetupError("");
+
+        try {
+          const response =
+            await fetchSubjectOfferings({
+              termId,
+            });
+
+          if (!active) {
+            return;
+          }
+
+          if (
+            response?.status === false
+          ) {
+            setOfferings([]);
+            setSetupError(
+              response?.message ||
+                "تعذر تحميل المواد المفعلة"
+            );
+            return;
+          }
+
+          setOfferings(
+            extractList(response)
+          );
+        } catch (error) {
+          if (active) {
+            setOfferings([]);
+            setSetupError(
+              error?.response?.data
+                ?.message ||
+                "تعذر تحميل المواد المفعلة"
+            );
+          }
+        } finally {
+          if (active) {
+            setLoadingOfferings(false);
+          }
+        }
+      };
+
+    loadOfferings();
+
+    return () => {
+      active = false;
+    };
+  }, [termId]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadClasses =
+      async () => {
+        setSchoolClasses([]);
+
+        if (!academicYearId) {
+          return;
+        }
+
+        setLoadingClasses(true);
+
+        try {
+          const response =
+            await getSchoolClasses({
+              page: 1,
+              limit: 1000,
+              academicYearId,
+            });
+
+          if (!active) {
+            return;
+          }
+
+          if (
+            response?.status === false
+          ) {
+            setSchoolClasses([]);
+            return;
+          }
+
+          setSchoolClasses(
+            extractList(response)
+          );
+        } catch {
+          if (active) {
+            setSchoolClasses([]);
+          }
+        } finally {
+          if (active) {
+            setLoadingClasses(false);
+          }
+        }
+      };
+
+    loadClasses();
+
+    return () => {
+      active = false;
+    };
+  }, [academicYearId]);
+
+  const subjectOptions =
+    useMemo(() => {
+      const map = new Map();
+
+      offerings.forEach(
+        (offering) => {
+          const subject =
+            mapSubjectFromOffering(
+              offering
+            );
+
+          if (
+            subject.id &&
+            !map.has(subject.id)
+          ) {
+            map.set(
+              subject.id,
+              subject
+            );
+          }
+        }
+      );
+
+      return Array.from(
+        map.values()
+      );
+    }, [offerings]);
+
+  const availableGradeLevelIds =
+    useMemo(
+      () =>
+        new Set(
+          offerings
+            .filter(
+              (offering) =>
+                normalizeId(
+                  getOfferingSubject(
+                    offering
+                  )
+                ) === subjectId
+            )
+            .map(
+              getOfferingGradeLevelId
+            )
+            .filter(Boolean)
+        ),
+      [offerings, subjectId]
+    );
+
+  const classOptions =
+    useMemo(
+      () =>
+        schoolClasses
+          .map(mapClass)
+          .filter(
+            (item) =>
+              item.id &&
+              (
+                !subjectId ||
+                availableGradeLevelIds
+                  .size === 0 ||
+                availableGradeLevelIds.has(
+                  item.gradeLevelId
+                )
+              )
+          ),
+      [
+        schoolClasses,
+        subjectId,
+        availableGradeLevelIds,
+      ]
+    );
+
+  useEffect(() => {
+    if (
+      selectedClassIds.length ===
+        0 ||
+      classOptions.length === 0
+    ) {
+      return;
+    }
+
+    const allowedIds =
+      new Set(
+        classOptions.map(
+          (item) => item.id
+        )
+      );
+
+    const validIds =
+      selectedClassIds.filter(
+        (id) =>
+          allowedIds.has(id)
+      );
+
+    if (
+      validIds.length !==
+      selectedClassIds.length
+    ) {
+      setValue(
+        "classIds",
+        validIds,
+        {
+          shouldDirty: true,
+          shouldValidate: true,
+        }
+      );
+    }
+  }, [
+    classOptions,
+    selectedClassIds,
+    setValue,
+  ]);
+
+  const updateValue = (
+    field,
     value
   ) => {
     setValue(
-      "subjectId",
-      value
-    );
-
-    onSubjectChange?.(
-      value
-    );
-  };
-
-  const handleAcademicYearChange = (
-    value
-  ) => {
-    setValue(
-      "academicYear",
-      value
-    );
-
-    setSelectedClassIds([]);
-    setValue(
-      "classIds",
-      []
-    );
-
-    onAcademicYearChange?.(
-      value
+      field,
+      value,
+      {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      }
     );
   };
 
   return (
-    <Grid
-      container
-      spacing={{
-        xs: 1.5,
-        md: 2,
-      }}
-      alignItems="center"
-    >
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <SubjectSelector
-          register={register}
-          errors={errors}
-          label="المادة"
-          required
-          onChange={
-            handleSubjectChange
-          }
-        />
-      </Grid>
+    <>
+      {setupError && (
+        <Alert
+          severity="warning"
+          sx={{
+            mb: 1.4,
+            borderRadius: "12px",
+            fontSize: "10px",
+          }}
+        >
+          {setupError}
+        </Alert>
+      )}
 
       <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
+        container
+        spacing={{
+          xs: 1.5,
+          md: 2,
+        }}
+        alignItems="flex-start"
       >
-        <Select
-          register={register}
-          registerName="examType"
-          data={MCQExams}
-          name="value"
-          error={
-            errors.examType
-              ?.message
-          }
-          label="نوع الاختبار"
-          required
-        />
-      </Grid>
+        <Grid
+          item
+          xs={12}
+          sm={6}
+          lg={4}
+        >
+          <Select
+            key={`year-${academicYearId}-${academicYears.length}`}
+            register={register}
+            registerName="academicYearId"
+            data={academicYears}
+            name="name"
+            error={
+              errors
+                .academicYearId
+                ?.message
+            }
+            label="السنة الدراسية"
+            required
+            disabled={loadingYears}
+            defaultValue={
+              academicYearId
+            }
+            onChange={(value) => {
+              const nextValue =
+                normalizeId(value);
 
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <Input
-          register={register}
-          registerName="startDate"
-          error={
-            errors.startDate
-              ?.message
-          }
-          label="تاريخ البدء"
-          required
-          type="date"
-        />
-      </Grid>
+              updateValue(
+                "academicYearId",
+                nextValue
+              );
+              updateValue(
+                "termId",
+                ""
+              );
+              updateValue(
+                "subjectId",
+                ""
+              );
+              updateValue(
+                "classIds",
+                []
+              );
+            }}
+          />
+        </Grid>
 
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <Input
-          register={register}
-          registerName="endDate"
-          error={
-            errors.endDate
-              ?.message
-          }
-          label="تاريخ الانتهاء"
-          required
-          type="date"
-        />
-      </Grid>
+        <Grid
+          item
+          xs={12}
+          sm={6}
+          lg={4}
+        >
+          <Select
+            key={`term-${academicYearId}-${termId}-${terms.length}`}
+            register={register}
+            registerName="termId"
+            data={terms}
+            name="name"
+            error={
+              errors.termId
+                ?.message
+            }
+            label="الترم"
+            required
+            disabled={
+              loadingTerms ||
+              !academicYearId ||
+              terms.length === 0
+            }
+            defaultValue={termId}
+            onChange={(value) => {
+              const nextValue =
+                normalizeId(value);
 
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <Input
-          register={register}
-          registerName="duration"
-          error={
-            errors.duration
-              ?.message
-          }
-          label="المدة بالدقائق"
-          required
-          valueAsNumber
-          type="number"
-        />
-      </Grid>
+              updateValue(
+                "termId",
+                nextValue
+              );
+              updateValue(
+                "subjectId",
+                ""
+              );
+              updateValue(
+                "classIds",
+                []
+              );
+            }}
+          />
+        </Grid>
 
-      <ClassSelectors
-        register={register}
-        errors={errors}
-        selectedClassIds={
-          selectedClassIds
-        }
-        setSelectedClassIds={
-          setSelectedClassIds
-        }
-        onAcademicYearChange={
-          handleAcademicYearChange
-        }
-        setValue={setValue}
-      />
-    </Grid>
+        <Grid
+          item
+          xs={12}
+          sm={6}
+          lg={4}
+        >
+          <Select
+            key={`subject-${termId}-${subjectId}-${subjectOptions.length}`}
+            register={register}
+            registerName="subjectId"
+            data={subjectOptions}
+            name="name"
+            error={
+              errors.subjectId
+                ?.message
+            }
+            label="المادة"
+            required
+            disabled={
+              loadingOfferings ||
+              !termId ||
+              subjectOptions.length === 0
+            }
+            defaultValue={
+              subjectId
+            }
+            onChange={(value) => {
+              const nextValue =
+                normalizeId(value);
+
+              updateValue(
+                "subjectId",
+                nextValue
+              );
+              updateValue(
+                "classIds",
+                []
+              );
+            }}
+          />
+        </Grid>
+
+        <Grid
+          item
+          xs={12}
+          sm={6}
+          lg={4}
+        >
+          <Select
+            register={register}
+            registerName="examType"
+            data={MCQExams}
+            name="value"
+            error={
+              errors.examType
+                ?.message
+            }
+            label="نوع الاختبار"
+            required
+          />
+        </Grid>
+
+        <Grid
+          item
+          xs={12}
+          sm={6}
+          lg={4}
+        >
+          <Input
+            register={register}
+            registerName="startDate"
+            error={
+              errors.startDate
+                ?.message
+            }
+            label="تاريخ البدء"
+            required
+            type="date"
+          />
+        </Grid>
+
+        <Grid
+          item
+          xs={12}
+          sm={6}
+          lg={4}
+        >
+          <Input
+            register={register}
+            registerName="endDate"
+            error={
+              errors.endDate
+                ?.message
+            }
+            label="تاريخ الانتهاء"
+            required
+            type="date"
+          />
+        </Grid>
+
+        <Grid
+          item
+          xs={12}
+          sm={6}
+          lg={4}
+        >
+          <Input
+            register={register}
+            registerName="duration"
+            error={
+              errors.duration
+                ?.message
+            }
+            label="المدة بالدقائق"
+            required
+            valueAsNumber
+            type="number"
+            inputProps={{
+              min: 1,
+              step: 1,
+            }}
+          />
+        </Grid>
+
+        <Grid
+          item
+          xs={12}
+          sm={6}
+          lg={8}
+        >
+          <TextField
+            select
+            fullWidth
+            label="الفصول"
+            value={
+              selectedClassIds
+            }
+            onChange={(event) => {
+              const value =
+                event.target.value;
+
+              updateValue(
+                "classIds",
+                typeof value ===
+                  "string"
+                  ? value.split(",")
+                  : value
+              );
+            }}
+            disabled={
+              loadingClasses ||
+              !academicYearId ||
+              !subjectId ||
+              classOptions.length === 0
+            }
+            error={
+              Boolean(
+                errors.classIds
+              )
+            }
+            helperText={
+              errors.classIds
+                ?.message ||
+              (!academicYearId
+                ? "اختر السنة الدراسية أولًا"
+                : !subjectId
+                ? "اختر المادة أولًا"
+                : classOptions.length ===
+                  0
+                ? "لا توجد فصول متاحة لهذه المادة في السنة المختارة"
+                : `${classOptions.length} فصل متاح`)
+            }
+            SelectProps={{
+              multiple: true,
+              renderValue: (
+                selected
+              ) =>
+                classOptions
+                  .filter(
+                    (item) =>
+                      selected.includes(
+                        item.id
+                      )
+                  )
+                  .map(
+                    (item) =>
+                      item.name
+                  )
+                  .join("، "),
+              MenuProps: {
+                PaperProps: {
+                  sx: {
+                    maxHeight: 320,
+                    borderRadius:
+                      "12px",
+                  },
+                },
+              },
+            }}
+          >
+            {classOptions.map(
+              (item) => (
+                <MenuItem
+                  key={item.id}
+                  value={item.id}
+                >
+                  <Checkbox
+                    size="small"
+                    checked={
+                      selectedClassIds.includes(
+                        item.id
+                      )
+                    }
+                  />
+                  <ListItemText
+                    primary={
+                      item.name
+                    }
+                  />
+                </MenuItem>
+              )
+            )}
+          </TextField>
+        </Grid>
+      </Grid>
+    </>
   );
 };
 

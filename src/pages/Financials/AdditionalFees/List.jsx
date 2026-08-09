@@ -45,7 +45,8 @@ const TABLE_BODY = [
 ];
 
 const TARGET_LABELS = {
-  all: "كل الطلاب",
+  school: "كل الطلاب",
+  all: "كل الطلاب", // توافق مع البيانات القديمة إن وجدت
   student: "طالب محدد",
   class: "فصل محدد",
   academicYear: "سنة دراسية",
@@ -127,7 +128,9 @@ const AdditionalFeesListPage = () => {
   const allStudentsCount =
     additionalFees.filter(
       (item) =>
-        item?.targetType === "all"
+        ["school", "all"].includes(
+          item?.targetType
+        )
     ).length;
 
   const targetedCount =
@@ -204,7 +207,7 @@ const AdditionalFeesListPage = () => {
       >
         <FinancialHeader
           title="الرسوم الإضافية"
-          description="أضف رسوم الكتب والزي والأنشطة وغيرها، وحدد الطلاب المستهدفين."
+          description="أنشئ الرسوم الإضافية وحدد الطلاب المستهدفين بها."
           count={additionalFees.length}
           actions={addAction}
         />

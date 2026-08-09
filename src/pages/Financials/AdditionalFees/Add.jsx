@@ -46,7 +46,7 @@ import Years from "@/utils/constants/Years";
 
 const TARGET_TYPES = [
   {
-    value: "all",
+    value: "school",
     label: "كل الطلاب",
   },
   {
@@ -115,7 +115,7 @@ const AdditionalFeesAddPage = () => {
     formState: { errors },
   } = useForm({
     defaultValues: {
-      targetType: "all",
+      targetType: "school",
       targetId: "",
       targetAcademicYear: "",
     },
