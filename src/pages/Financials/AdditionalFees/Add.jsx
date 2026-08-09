@@ -1,4 +1,4 @@
-import { Box, Grid, MenuItem, Paper, Stack, Typography } from "@mui/material";
+import { Box, Grid, MenuItem, Paper, Stack, Typography, CircularProgress } from "@mui/material";
 import { AccountBalanceWalletRounded } from "@mui/icons-material";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -10,6 +10,7 @@ import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
 import { FormActions, formFieldsSx, pageCardSx } from "@/components/financial/FinancialShell";
 import Select from "@/components/Select/Select";
+import { useFinancialAcademicYears } from "@/utils/hooks/apis/financials/useFinancialAcademicYears";
 
 const AdditionalFeesAddPage = () => {
   const {
@@ -27,6 +28,8 @@ const AdditionalFeesAddPage = () => {
   const navigate = useNavigate();
   const selectedTargetType = watch("targetType");
 
+  const { academicYears, loadingAcademicYears } = useFinancialAcademicYears();
+
   const onSubmit = async (data) => {
     setLoading(true);
 
@@ -39,19 +42,23 @@ const AdditionalFeesAddPage = () => {
 
     if (data.targetType === "student" || data.targetType === "class") {
       if (!data.targetId) {
-        toast.error("يرجى إدخال معرف الهدف (targetId)");
+        toast.error(
+          data.targetType === "student"
+            ? "يرجى إدخال معرف الطالب (targetId)"
+            : "يرجى إدخال معرف الفصل (targetId)"
+        );
         setLoading(false);
         return;
       }
       payload.targetId = data.targetId;
     } else if (data.targetType === "academicYear") {
-      if (!data.targetAcademicYear && !data.targetId) {
-        toast.error("يرجى تحديد السنة الدراسية");
+      if (!data.targetId) {
+        toast.error("يرجى اختيار السنة الدراسية");
         setLoading(false);
         return;
       }
-      if (data.targetAcademicYear) payload.targetAcademicYear = data.targetAcademicYear;
-      if (data.targetId) payload.targetId = data.targetId;
+      // targetId = ObjectId of the AcademicYear
+      payload.targetId = data.targetId;
     }
 
     const response = await addAdditionalFee(payload);
@@ -60,7 +67,11 @@ const AdditionalFeesAddPage = () => {
       toast.success("تم إضافة الرسوم الإضافية بنجاح");
       navigate("/financial/additional-fees");
     } else {
-      toast.error(typeof response === "string" ? response : response?.message || "حدث خطأ أثناء إضافة الرسوم الإضافية");
+      toast.error(
+        typeof response === "string"
+          ? response
+          : response?.message || "حدث خطأ أثناء إضافة الرسوم الإضافية"
+      );
     }
     setLoading(false);
   };
@@ -145,7 +156,11 @@ const AdditionalFeesAddPage = () => {
                   register={register}
                   registerName="targetId"
                   error={errors.targetId?.message}
-                  label={selectedTargetType === "student" ? "معرف الطالب (targetId)" : "معرف الفصل (targetId)"}
+                  label={
+                    selectedTargetType === "student"
+                      ? "معرف الطالب (targetId)"
+                      : "معرف الفصل (targetId)"
+                  }
                   required
                 />
               </Grid>
@@ -153,13 +168,33 @@ const AdditionalFeesAddPage = () => {
 
             {selectedTargetType === "academicYear" && (
               <Grid item xs={12} sm={6}>
-                <Input
-                  register={register}
-                  registerName="targetAcademicYear"
-                  error={errors.targetAcademicYear?.message}
-                  label="السنة الدراسية (مثل: 2025-2026)"
-                  required
-                />
+                {loadingAcademicYears ? (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, p: 1 }}>
+                    <CircularProgress size={18} />
+                    <Typography sx={{ fontSize: 12, color: "var(--color-muted)" }}>
+                      جاري تحميل السنوات الدراسية...
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Select
+                    register={register}
+                    registerName="targetId"
+                    error={errors.targetId?.message}
+                    label="السنة الدراسية"
+                    required
+                  >
+                    {academicYears.map((year) => (
+                      <MenuItem key={year.id} value={year.id}>
+                        {year.name}
+                      </MenuItem>
+                    ))}
+                    {academicYears.length === 0 && (
+                      <MenuItem disabled value="">
+                        لا توجد سنوات دراسية
+                      </MenuItem>
+                    )}
+                  </Select>
+                )}
               </Grid>
             )}
 
