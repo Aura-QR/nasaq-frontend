@@ -62,6 +62,70 @@ const BODY = [
 ];
 
 
+
+const getCategoryItems = (value, depth = 0) => {
+  if (!value || depth > 5) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value !== "object") {
+    return [];
+  }
+
+  for (const key of [
+    "docs",
+    "items",
+    "results",
+    "categories",
+    "data",
+  ]) {
+    const items = getCategoryItems(
+      value?.[key],
+      depth + 1
+    );
+
+    if (items.length > 0) {
+      return items;
+    }
+  }
+
+  return [];
+};
+
+const normalizeCategoryOptions = (value) =>
+  getCategoryItems(value)
+    .map((item) => {
+      const id =
+        item?._id ||
+        item?.id ||
+        item?.value ||
+        "";
+
+      const label =
+        item?.name ||
+        item?.label ||
+        item?.title ||
+        "";
+
+      if (!id || !label) {
+        return null;
+      }
+
+      return {
+        ...item,
+        _id: String(id),
+        id: String(id),
+        value: String(id),
+        name: String(label),
+        label: String(label),
+      };
+    })
+    .filter(Boolean);
+
 const ExpensesListPage = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -71,8 +135,13 @@ const ExpensesListPage = () => {
   const [localPagination, setLocalPagination] = useState(null);
 
   const debouncedName = useDebounce(name, 500);
-  const permissions = usePermissions("financial");
+  const permissions = usePermissions("expenses");
   const { categories = [] } = useExpenseCategories();
+
+  const categoryOptions = useMemo(
+    () => normalizeCategoryOptions(categories),
+    [categories]
+  );
 
   const filters = useMemo(
     () => ({
@@ -146,6 +215,13 @@ const ExpensesListPage = () => {
   };
 
   const handleDelete = async (id, setActive) => {
+    if (!permissions?.delete) {
+      toast.error(
+        "ليس لديك صلاحية حذف المصروفات"
+      );
+      return;
+    }
+
     const response = await deleteExpense(id);
 
     if (response?.status) {
@@ -352,9 +428,9 @@ const ExpensesListPage = () => {
               label="التصنيف"
               icon={CategoryRounded}
               allLabel="كل التصنيفات"
-              options={categories.map((category) => ({
-                value: category?._id || category?.id,
-                label: category?.name,
+              options={categoryOptions.map((category) => ({
+                value: category._id,
+                label: category.name,
               }))}
             />
 

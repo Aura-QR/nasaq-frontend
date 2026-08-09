@@ -1,6 +1,6 @@
 import { Box, Grid } from "@mui/material";
 import { ReceiptLongRounded } from "@mui/icons-material";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -15,6 +15,71 @@ import FinancialFormShell from "@/components/financial/FinancialFormShell";
 import Years from "@/utils/constants/Years";
 import { getCurrencyFieldLabel } from "@/utils/financial/financialUtils";
 import { useExpenseCategories } from "@/utils/hooks/apis/expenses/useExpenseCategories";
+import usePermissions from "@/utils/hooks/usePermissions";
+
+
+const getCategoryItems = (value, depth = 0) => {
+  if (!value || depth > 5) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value !== "object") {
+    return [];
+  }
+
+  for (const key of [
+    "docs",
+    "items",
+    "results",
+    "categories",
+    "data",
+  ]) {
+    const items = getCategoryItems(
+      value?.[key],
+      depth + 1
+    );
+
+    if (items.length > 0) {
+      return items;
+    }
+  }
+
+  return [];
+};
+
+const normalizeCategoryOptions = (value) =>
+  getCategoryItems(value)
+    .map((item) => {
+      const id =
+        item?._id ||
+        item?.id ||
+        item?.value ||
+        "";
+
+      const label =
+        item?.name ||
+        item?.label ||
+        item?.title ||
+        "";
+
+      if (!id || !label) {
+        return null;
+      }
+
+      return {
+        ...item,
+        _id: String(id),
+        id: String(id),
+        value: String(id),
+        name: String(label),
+        label: String(label),
+      };
+    })
+    .filter(Boolean);
 
 const ExpensesAddPage = () => {
   const now = new Date();
@@ -34,8 +99,22 @@ const ExpensesAddPage = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { categories = [] } = useExpenseCategories();
+  const permissions =
+    usePermissions("expenses");
+
+  const categoryOptions = useMemo(
+    () => normalizeCategoryOptions(categories),
+    [categories]
+  );
 
   const onSubmit = async (formValues) => {
+    if (!permissions?.add) {
+      toast.error(
+        "ليس لديك صلاحية إضافة المصروفات"
+      );
+      return;
+    }
+
     const payload = {
       name: formValues.name,
       amount: Number(formValues.amount),
@@ -118,7 +197,7 @@ const ExpensesAddPage = () => {
               <Select
                 register={register}
                 registerName="categoryId"
-                data={categories}
+                data={categoryOptions}
                 name="name"
                 error={errors.categoryId?.message}
                 label="التصنيف"

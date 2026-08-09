@@ -28,6 +28,7 @@ import { useForm } from "react-hook-form";
 import {
   useNavigate,
   useParams,
+  useSearchParams,
 } from "react-router-dom";
 import { useAuthUser } from "react-auth-kit";
 import { toast } from "react-toastify";
@@ -38,8 +39,13 @@ import Select from "@/components/Select/Select";
 import Loading from "@/components/Loading";
 
 import { usePreparation } from "@/utils/hooks/apis/usePreparation";
-import { fetchLectures } from "@/APIs/school/lectures";
-import { editPreparation } from "@/APIs/school/preparation";
+import {
+  fetchLectures,
+} from "@/APIs/school/lectures";
+import {
+  editPreparation,
+  replacePreparationFile,
+} from "@/APIs/school/preparation";
 
 import Slots from "@/utils/constants/Slots";
 import Days from "@/utils/constants/Days";
@@ -119,6 +125,8 @@ const getResponseId = (
   return (
     payload?._id ||
     payload?.id ||
+    payload?.preparation?._id ||
+    payload?.preparation?.id ||
     ""
   );
 };
@@ -140,33 +148,152 @@ const getArray = (
     ? value
     : [];
 
+const getEntityId = (
+  value
+) => {
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    return String(
+      value._id ||
+        value.id ||
+        ""
+    ).trim();
+  }
+
+  return String(
+    value || ""
+  ).trim();
+};
+
+const getNestedName = (
+  value
+) => {
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    return (
+      value.name ||
+      value.title ||
+      value.label ||
+      ""
+    );
+  }
+
+  return String(
+    value || ""
+  ).trim();
+};
+
 const getLectureData = (
   item
-) =>
-  item?.lecture || {};
+) => {
+  const lecture =
+    item?.lecture ||
+    item?.lectureId ||
+    item?.lectureData ||
+    item;
+
+  return lecture &&
+    typeof lecture === "object"
+    ? lecture
+    : {};
+};
 
 const getClassData = (
   item
-) =>
-  getLectureData(item)?.class ||
-  item?.class ||
-  {};
+) => {
+  const lecture =
+    getLectureData(item);
+
+  const classData =
+    lecture?.class ||
+    lecture?.classId ||
+    item?.class ||
+    item?.classId;
+
+  return classData &&
+    typeof classData === "object"
+    ? classData
+    : {};
+};
+
+const getSubjectOfferingData = (
+  item
+) => {
+  const lecture =
+    getLectureData(item);
+
+  const offering =
+    lecture?.subjectOfferingId ||
+    lecture?.subjectOffering ||
+    item?.subjectOfferingId ||
+    item?.subjectOffering;
+
+  return offering &&
+    typeof offering === "object"
+    ? offering
+    : {};
+};
 
 const getSubjectData = (
   item
-) =>
-  item?.subject ||
-  getLectureData(item)?.subject ||
-  {};
+) => {
+  const lecture =
+    getLectureData(item);
+
+  const offering =
+    getSubjectOfferingData(item);
+
+  const subjectData =
+    item?.subject ||
+    item?.subjectId ||
+    lecture?.subject ||
+    lecture?.subjectId ||
+    offering?.subjectId ||
+    offering?.subject;
+
+  return subjectData &&
+    typeof subjectData === "object"
+    ? subjectData
+    : {};
+};
+
+const getTeacherData = (
+  item
+) => {
+  const lecture =
+    getLectureData(item);
+
+  const teacher =
+    item?.teacher ||
+    item?.teacherId ||
+    lecture?.teacher ||
+    lecture?.teacherId ||
+    item?.createdBy;
+
+  return teacher &&
+    typeof teacher === "object"
+    ? teacher
+    : {};
+};
 
 const getTeacherName = (
   item
-) =>
-  item?.teacher?.name ||
-  item?.createdBy?.name ||
-  item?.name ||
-  getLectureData(item)?.teacher?.name ||
-  "—";
+) => {
+  const teacher =
+    getTeacherData(item);
+
+  return (
+    teacher?.name ||
+    teacher?.username ||
+    item?.teacherName ||
+    item?.createdBy?.name ||
+    "—"
+  );
+};
 
 const getClassLabel = (
   item
@@ -175,13 +302,18 @@ const getClassLabel = (
     getClassData(item);
 
   const academicYear =
-    classData?.academicYear ||
-    item?.academicYear ||
-    "";
+    getNestedName(
+      classData?.academicYearId ||
+      classData?.academicYear ||
+      item?.academicYearId ||
+      item?.academicYear
+    );
 
   const roomNumber =
     classData?.roomNumber ||
+    classData?.name ||
     item?.roomNumber ||
+    item?.className ||
     "";
 
   const gender =
@@ -212,11 +344,13 @@ const getSubjectLabel = (
   const name =
     subjectData?.subjectName ||
     subjectData?.name ||
+    item?.subjectName ||
     "—";
 
   const code =
     subjectData?.subjectCode ||
     subjectData?.code ||
+    item?.subjectCode ||
     "";
 
   return code
@@ -227,15 +361,27 @@ const getSubjectLabel = (
 const getDayLabel = (
   item
 ) => {
+  const lecture =
+    getLectureData(item);
+
   const dayId =
-    getLectureData(item)
-      ?.dayOfWeek ??
-    item?.dayOfWeek;
+    lecture?.dayOfWeek ??
+    lecture?.day ??
+    item?.dayOfWeek ??
+    item?.day;
+
+  const normalizedDay =
+    String(dayId || "")
+      .trim()
+      .toLowerCase();
 
   return (
     Days.find(
       (day) =>
-        day.id === dayId
+        String(day.id || "")
+          .trim()
+          .toLowerCase() ===
+        normalizedDay
     )?.day ||
     "—"
   );
@@ -244,15 +390,18 @@ const getDayLabel = (
 const getSlotLabel = (
   item
 ) => {
+  const lecture =
+    getLectureData(item);
+
   const slotId =
-    getLectureData(item)
-      ?.slot ??
+    lecture?.slot ??
     item?.slot;
 
   return (
     Slots.find(
       (slot) =>
-        slot.id === slotId
+        String(slot.id) ===
+        String(slotId)
     )?.name ||
     "—"
   );
@@ -353,14 +502,49 @@ const validatePdf = (
   };
 };
 
+const repairArabicEncoding = (
+  value
+) => {
+  const text = String(
+    value || ""
+  );
+
+  if (
+    !/[ÃÂØÙ]/.test(text)
+  ) {
+    return text;
+  }
+
+  try {
+    const bytes =
+      Uint8Array.from(
+        text,
+        (character) =>
+          character.charCodeAt(0) & 255
+      );
+
+    const decoded =
+      new TextDecoder(
+        "utf-8",
+        { fatal: true }
+      ).decode(bytes);
+
+    return decoded || text;
+  } catch {
+    return text;
+  }
+};
+
 const getFileName = (
   file,
   index = 0
 ) =>
-  file?.originalName ||
-  file?.filename ||
-  file?.name ||
-  `ملف التحضير ${index + 1}`;
+  repairArabicEncoding(
+    file?.originalName ||
+      file?.filename ||
+      file?.name ||
+      `ملف التحضير ${index + 1}`
+  );
 
 const getFileSize = (
   file
@@ -563,6 +747,21 @@ const Edit = () => {
   const { id } =
     useParams();
 
+  const [searchParams] =
+    useSearchParams();
+
+  const requestedReturnTo =
+    searchParams.get(
+      "returnTo"
+    ) || "";
+
+  const returnTo =
+    requestedReturnTo.startsWith(
+      "/school/"
+    )
+      ? requestedReturnTo
+      : "";
+
   const authUser =
     useAuthUser();
 
@@ -606,7 +805,8 @@ const Edit = () => {
         try {
           const response =
             await fetchLectures(
-              filters
+              filters,
+              { force: true }
             );
 
           if (!active) {
@@ -664,11 +864,17 @@ const Edit = () => {
       return;
     }
 
+    const lectureData =
+      getLectureData(
+        preparation
+      );
+
     const lectureId =
-      preparation?.lecture?._id ||
-      preparation?.lecture?.id ||
-      preparation?.lecture ||
-      "";
+      getEntityId(
+        preparation?.lecture ||
+        preparation?.lectureId ||
+        lectureData
+      );
 
     const file =
       getArray(
@@ -682,6 +888,33 @@ const Edit = () => {
     setDefaultLectureId(
       lectureId
     );
+
+    if (
+      lectureId &&
+      Object.keys(
+        lectureData
+      ).length > 0
+    ) {
+      setLectures(
+        (previous) => {
+          const exists =
+            previous.some(
+              (lecture) =>
+                getEntityId(
+                  lecture
+                ) ===
+                lectureId
+            );
+
+          return exists
+            ? previous
+            : [
+                lectureData,
+                ...previous,
+              ];
+        }
+      );
+    }
 
     setOriginalFile(file);
     setSelectedFile(null);
@@ -744,61 +977,70 @@ const Edit = () => {
     setLoading(true);
 
     try {
-      let dataToSend;
-
-      if (fileChanged) {
-        const formData =
-          new FormData();
-
-        if (lectureChanged) {
-          formData.append(
-            "lecture",
-            formValues.lecture
+      if (lectureChanged) {
+        const updateResponse =
+          await editPreparation(
+            {
+              lecture:
+                formValues.lecture,
+            },
+            id
           );
+
+        if (
+          !updateResponse?.status
+        ) {
+          toast.error(
+            getErrorMessage(
+              updateResponse,
+              "حدث خطأ أثناء تعديل التحضير"
+            )
+          );
+          return;
         }
-
-        formData.append(
-          "files",
-          selectedFile
-        );
-
-        dataToSend =
-          formData;
-      } else {
-        dataToSend = {
-          lecture:
-            formValues.lecture,
-        };
       }
 
-      const response =
-        await editPreparation(
-          dataToSend,
-          id
-        );
+      if (fileChanged) {
+        const fileResponse =
+          await replacePreparationFile(
+            id,
+            selectedFile,
+            originalFile
+          );
 
-      if (!response?.status) {
-        toast.error(
-          getErrorMessage(
-            response,
-            "حدث خطأ أثناء تعديل التحضير"
-          )
-        );
-        return;
+        if (!fileResponse?.status) {
+          toast.error(
+            getErrorMessage(
+              fileResponse,
+              "تعذر استبدال ملف التحضير"
+            )
+          );
+          return;
+        }
+
+        if (
+          fileResponse?.warning
+        ) {
+          toast.warning(
+            fileResponse.warning
+          );
+        }
       }
 
       toast.success(
         "تم تعديل التحضير بنجاح"
       );
 
-      const updatedId =
-        getResponseId(
-          response
-        ) || id;
-
-      navigate(
-        `/school/preparation/${updatedId}`
-      );
+      if (returnTo) {
+        navigate(
+          returnTo,
+          { replace: true }
+        );
+      } else {
+        navigate(
+          `/school/preparation/${id}`
+        );
+      }
     } catch (error) {
       toast.error(
         error?.response?.data

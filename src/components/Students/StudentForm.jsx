@@ -11,7 +11,7 @@ import {
 import {
   ContactPhoneOutlined,
   NotesOutlined,
-  PaymentsOutlined,
+  EventAvailableOutlined,
   PersonOutlineRounded,
   SchoolOutlined,
 } from "@mui/icons-material";
@@ -21,7 +21,6 @@ import { useEffect, useState } from "react";
 import Input from "@/components/Input/Input";
 import Select from "@/components/Select/Select";
 import ClassSelector from "@/components/Selector/ClassSelector";
-import InstallmentPlanSelector from "@/components/Selector/InstallmentPlanSelector";
 
 import Status from "@/utils/constants/Status";
 import Countries from "@/utils/constants/Countries";
@@ -277,7 +276,7 @@ const NationalitySelect = ({
 
     setNationality(selectedCountry);
     setNationalityInput(nationalityName);
-  }, [defaultValues]);
+  }, [defaultValues?.nationality]);
 
   return (
     <Box
@@ -589,7 +588,14 @@ const StudentForm = ({
           {...(isEdit
             ? {
                 defaultAcademicYear:
-                  defaultValues?.academicYear,
+                  defaultValues?.academicYearId?._id ||
+                  defaultValues?.academicYearId ||
+                  defaultValues?.currentEnrollment
+                    ?.academicYearId?._id ||
+                  defaultValues?.currentEnrollment
+                    ?.academicYearId ||
+                  defaultValues?.academicYear ||
+                  "",
                 defaultGender:
                   defaultValues?.gender,
                 defaultClassId:
@@ -602,21 +608,26 @@ const StudentForm = ({
       </FormSection>
 
       <FormSection
-        icon={<PaymentsOutlined />}
-        title="التسجيل والرسوم"
-        description="تاريخ التسجيل وخطة السداد وحالة الحساب."
+        icon={<EventAvailableOutlined />}
+        title="التسجيل والحالة"
+        description="بيانات التسجيل وحالة حساب الطالب."
       >
         <Grid
           item
           xs={12}
           sm={6}
-          lg={3}
-          sx={{ display: "flex", alignItems: "flex-end" }}
+          lg={4}
+          sx={{
+            display: "flex",
+            alignItems: "flex-end",
+          }}
         >
           <Input
             register={register}
             registerName="previousSchool"
-            error={errors.previousSchool?.message}
+            error={
+              errors.previousSchool?.message
+            }
             label="المدرسة السابقة"
             type="text"
           />
@@ -626,16 +637,20 @@ const StudentForm = ({
           item
           xs={12}
           sm={6}
-          lg={3}
-          sx={{ display: "flex", alignItems: "flex-end" }}
+          lg={4}
+          sx={{
+            display: "flex",
+            alignItems: "flex-end",
+          }}
         >
           <Input
             register={register}
             registerName="registrationDate"
-            error={errors.registrationDate?.message}
+            error={
+              errors.registrationDate?.message
+            }
             label="تاريخ التسجيل"
             type="date"
-            required
           />
         </Grid>
 
@@ -643,42 +658,27 @@ const StudentForm = ({
           item
           xs={12}
           sm={6}
-          lg={3}
-          sx={{ display: "flex", alignItems: "flex-end" }}
-        >
-          <Box sx={{ width: "100%" }}>
-            <InstallmentPlanSelector
-            register={register}
-            errors={errors}
-            required={false}
-              {...(isEdit
-                ? {
-                    defaultInstallmentPlanId:
-                      defaultValues?.installmentPlanId || "",
-                  }
-                : {})}
-            />
-          </Box>
-        </Grid>
-
-        <Grid
-          item
-          xs={12}
-          sm={6}
-          lg={3}
-          sx={{ display: "flex", alignItems: "flex-end" }}
+          lg={4}
+          sx={{
+            display: "flex",
+            alignItems: "flex-end",
+          }}
         >
           <Box sx={{ width: "100%" }}>
             <Select
-            register={register}
-            registerName="isActive"
-            data={Status}
-            name="label"
-            error={errors.isActive?.message}
-            label="الحالة"
-            required
+              register={register}
+              registerName="isActive"
+              data={Status}
+              name="label"
+              error={
+                errors.isActive?.message
+              }
+              label="الحالة"
+              required
               defaultValue={
-                isEdit ? defaultValues?.isActive : 1
+                isEdit
+                  ? defaultValues?.isActive
+                  : 1
               }
             />
           </Box>

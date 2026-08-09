@@ -34,11 +34,12 @@ import Table from "@/components/Table/Table";
 import SelectFilter from "@/components/Filters/SelectFilter";
 import PaginationControls from "@/components/Pagination";
 
-import Years from "@/utils/constants/Years";
 import { useGrdaesCriterion } from "@/utils/hooks/apis/useGradesCriterion";
 import { useSubjects } from "@/utils/hooks/apis/useSubjects";
 import usePermissions from "@/utils/hooks/usePermissions";
 import { deleteGradesCriteria } from "@/APIs/school/gradesCriteria";
+import { fetchAcademicYears } from "@/APIs/school/academicYears";
+import { api } from "@/APIs/Axios";
 
 import SchoolIcon from "@mui/icons-material/School";
 import SubjectIcon from "@mui/icons-material/Subject";
@@ -46,6 +47,7 @@ import SubjectIcon from "@mui/icons-material/Subject";
 const TABLE_HEADERS = [
   "المادة",
   "السنة الدراسية",
+  "درجة النجاح",
   "الاختبار النهائي",
   "المهام الأدائية",
   "الواجبات",
@@ -56,6 +58,7 @@ const TABLE_HEADERS = [
 const TABLE_BODY = [
   "subject",
   "academicYear",
+  "passingGrade",
   "final",
   "projects",
   "assignments",
@@ -76,12 +79,12 @@ const STAT_CARDS = [
   },
   {
     key: "subjects",
-    label: "المواد في الصفحة",
+    label: "المواد المختلفة",
     icon: <MenuBookRounded />,
   },
   {
     key: "years",
-    label: "السنوات الدراسية",
+    label: "السنوات المختلفة",
     icon: <SchoolRounded />,
   },
 ];
@@ -92,36 +95,307 @@ const getArray = (value) =>
 const formatGrade = (value) =>
   `${Number(value || 0)} درجة`;
 
-const mapCriteria = (data = []) =>
-  getArray(data).map((item) => {
-    const subjectName =
-      item?.subject?.subjectName ||
-      item?.subjectName ||
-      "—";
+const OBJECT_ID_PATTERN =
+  /^[a-f\d]{24}$/i;
 
-    const subjectCode =
-      item?.subject?.subjectCode ||
-      item?.subjectCode ||
-      "";
+const normalizeId = (value) => {
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    return String(
+      value?._id ||
+      value?.id ||
+      value?.value ||
+      ""
+    ).trim();
+  }
+
+  return String(
+    value || ""
+  ).trim();
+};
+
+const getResponseList = (response) => {
+  const payload =
+    response?.data?.data ??
+    response?.data ??
+    response;
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return (
+    [
+      payload?.docs,
+      payload?.items,
+      payload?.results,
+      payload?.academicYears,
+      payload?.years,
+      payload?.data,
+    ].find(Array.isArray) || []
+  );
+};
+
+const mapAcademicYear = (item) => ({
+  id: normalizeId(item),
+  name:
+    item?.name ||
+    item?.label ||
+    item?.title ||
+    "—",
+});
+
+const resolveAcademicYear = (
+  item,
+  academicYearMap,
+  termYearMap
+) => {
+  /*
+   * New GradesCriteria response does NOT return academicYearId.
+   * It returns:
+   *
+   * subjectOffering.termId._id
+   *
+   * لذلك نحدد السنة من الترم:
+   * termId -> academicYearId/name
+   */
+  const directYearValue =
+    item?.academicYearId ??
+    item?.academicYear;
+
+  if (
+    directYearValue &&
+    typeof directYearValue ===
+      "object"
+  ) {
+    const directName =
+      directYearValue?.name ||
+      directYearValue?.label ||
+      directYearValue?.title;
+
+    if (directName) {
+      return {
+        id:
+          normalizeId(
+            directYearValue
+          ),
+        name:
+          directName,
+      };
+    }
+  }
+
+  const directYearId =
+    normalizeId(
+      directYearValue
+    );
+
+  if (directYearId) {
+    const mappedName =
+      academicYearMap.get(
+        directYearId
+      );
+
+    if (mappedName) {
+      return {
+        id:
+          directYearId,
+        name:
+          mappedName,
+      };
+    }
+  }
+
+  const termId =
+    normalizeId(
+      item?.subjectOffering
+        ?.termId ||
+      item?.termId
+    );
+
+  if (termId) {
+    const termYear =
+      termYearMap.get(
+        termId
+      );
+
+    if (termYear) {
+      return {
+        id:
+          termYear.id,
+        name:
+          termYear.name,
+      };
+    }
+  }
+
+  const legacyValue =
+    typeof item?.academicYear ===
+      "string"
+      ? item.academicYear.trim()
+      : "";
+
+  if (
+    legacyValue &&
+    !OBJECT_ID_PATTERN.test(
+      legacyValue
+    )
+  ) {
+    return {
+      id: "",
+      name:
+        legacyValue,
+    };
+  }
+
+  return {
+    id:
+      directYearId,
+    name: "—",
+  };
+};
+
+const resolveSubject = (
+  item,
+  subjectMap
+) => {
+  /*
+   * Actual response:
+   * subjectOffering.subjectId = {
+   *   _id,
+   *   subjectName,
+   *   subjectCode
+   * }
+   */
+  const offeringSubject =
+    item?.subjectOffering
+      ?.subjectId;
+
+  const value =
+    offeringSubject ??
+    item?.subjectId ??
+    item?.subject;
+
+  const directSubject =
+    value &&
+    typeof value ===
+      "object"
+      ? value
+      : null;
+
+  const id =
+    normalizeId(
+      value
+    );
+
+  const subject =
+    directSubject ||
+    subjectMap.get(id) ||
+    null;
+
+  const subjectName =
+    subject?.subjectName ||
+    subject?.name ||
+    item?.subjectName ||
+    "—";
+
+  const subjectCode =
+    subject?.subjectCode ||
+    subject?.code ||
+    item?.subjectCode ||
+    "";
+
+  return {
+    id,
+    name:
+      subjectName,
+    code:
+      subjectCode,
+    label:
+      subjectCode
+        ? `${subjectName} - ${subjectCode}`
+        : subjectName,
+  };
+};
+
+const mapCriteria = (
+  data = [],
+  subjectMap = new Map(),
+  academicYearMap = new Map(),
+  termYearMap = new Map()
+) =>
+  getArray(data).map((item) => {
+    const resolvedSubject =
+      resolveSubject(
+        item,
+        subjectMap
+      );
+
+    const resolvedYear =
+      resolveAcademicYear(
+        item,
+        academicYearMap,
+        termYearMap
+      );
 
     return {
       id: item?._id || item?.id,
+
+      subjectOfferingId:
+        normalizeId(
+          item?.subjectOfferingId ||
+          item?.subjectOffering
+        ),
+
+      termId:
+        normalizeId(
+          item?.subjectOffering
+            ?.termId ||
+          item?.termId
+        ),
+
       subjectId:
-        item?.subject?._id ||
-        item?.subject?.id ||
-        item?.subjectId ||
-        "",
-      subject: subjectCode
-        ? `${subjectName} - ${subjectCode}`
-        : subjectName,
+        resolvedSubject.id,
+
+      subject:
+        resolvedSubject.name,
+
+      subjectCode:
+        resolvedSubject.code,
+
+      subjectLabel:
+        resolvedSubject.label,
+
+      academicYearId:
+        resolvedYear.id,
+
       academicYear:
-        item?.academicYear || "—",
+        resolvedYear.name,
+
+      passingGrade: formatGrade(
+        item?.passingGrade ?? 50
+      ),
+
+      passingGradeValue: Number(
+        item?.passingGrade ?? 50
+      ),
+
       final: formatGrade(item?.final),
-      projects: formatGrade(item?.projects),
+
+      projects: formatGrade(
+        item?.projects
+      ),
+
       assignments: formatGrade(
         item?.assignments
       ),
-      quizzes: formatGrade(item?.quizzes),
+
+      quizzes: formatGrade(
+        item?.quizzes
+      ),
+
       activities: formatGrade(
         item?.activities
       ),
@@ -139,9 +413,32 @@ const List = () => {
     useState("");
 
   const [
-    academicYear,
-    setAcademicYear,
+    academicYearId,
+    setAcademicYearId,
   ] = useState("");
+
+  const [
+    academicYears,
+    setAcademicYears,
+  ] = useState([]);
+
+  const [
+    loadingAcademicYears,
+    setLoadingAcademicYears,
+  ] = useState(false);
+
+
+  const [
+    termYearMap,
+    setTermYearMap,
+  ] = useState(
+    new Map()
+  );
+
+  const [
+    loadingTermYears,
+    setLoadingTermYears,
+  ] = useState(false);
 
   const [limit, setLimit] =
     useState(10);
@@ -155,8 +452,8 @@ const List = () => {
     () => ({
       page,
       limit,
-      academicYear:
-        academicYear || undefined,
+      academicYearId:
+        academicYearId || undefined,
       subjectId:
         subject || undefined,
     }),
@@ -164,7 +461,7 @@ const List = () => {
       page,
       limit,
       subject,
-      academicYear,
+      academicYearId,
     ]
   );
 
@@ -184,18 +481,296 @@ const List = () => {
     limit: 1000,
   });
 
+
+  useEffect(() => {
+    let active = true;
+
+    const loadAcademicYears =
+      async () => {
+        setLoadingAcademicYears(
+          true
+        );
+
+        try {
+          const response =
+            await fetchAcademicYears();
+
+          if (!active) {
+            return;
+          }
+
+          if (
+            response?.status ===
+            false
+          ) {
+            setAcademicYears([]);
+
+            toast.error(
+              response?.message ||
+                "تعذر تحميل السنوات الدراسية"
+            );
+            return;
+          }
+
+          setAcademicYears(
+            getResponseList(
+              response
+            )
+              .map(
+                mapAcademicYear
+              )
+              .filter(
+                (item) =>
+                  item.id &&
+                  item.name &&
+                  item.name !== "—"
+              )
+          );
+        } catch (error) {
+          if (!active) {
+            return;
+          }
+
+          setAcademicYears([]);
+
+          toast.error(
+            error?.response?.data
+              ?.message ||
+              "تعذر تحميل السنوات الدراسية"
+          );
+        } finally {
+          if (active) {
+            setLoadingAcademicYears(
+              false
+            );
+          }
+        }
+      };
+
+    loadAcademicYears();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+
+  useEffect(() => {
+    let active = true;
+
+    const loadTermYearMap =
+      async () => {
+        if (
+          academicYears.length ===
+          0
+        ) {
+          setTermYearMap(
+            new Map()
+          );
+          return;
+        }
+
+        setLoadingTermYears(
+          true
+        );
+
+        try {
+          const results =
+            await Promise.allSettled(
+              academicYears.map(
+                async (year) => {
+                  let response;
+
+                  try {
+                    response =
+                      await api.get(
+                        `/terms/by-year/${year.id}`
+                      );
+                  } catch {
+                    response =
+                      await api.get(
+                        "/terms",
+                        {
+                          params: {
+                            academicYearId:
+                              year.id,
+                          },
+                        }
+                      );
+                  }
+
+                  return {
+                    year,
+                    terms:
+                      getResponseList(
+                        response
+                      ),
+                  };
+                }
+              )
+            );
+
+          if (!active) {
+            return;
+          }
+
+          const nextMap =
+            new Map();
+
+          results.forEach(
+            (result) => {
+              if (
+                result.status !==
+                "fulfilled"
+              ) {
+                return;
+              }
+
+              const {
+                year,
+                terms,
+              } = result.value;
+
+              getArray(
+                terms
+              ).forEach(
+                (term) => {
+                  const termId =
+                    normalizeId(
+                      term
+                    );
+
+                  if (
+                    !termId
+                  ) {
+                    return;
+                  }
+
+                  nextMap.set(
+                    termId,
+                    {
+                      id:
+                        year.id,
+                      name:
+                        year.name,
+                    }
+                  );
+                }
+              );
+            }
+          );
+
+          setTermYearMap(
+            nextMap
+          );
+        } catch {
+          if (active) {
+            setTermYearMap(
+              new Map()
+            );
+          }
+        } finally {
+          if (active) {
+            setLoadingTermYears(
+              false
+            );
+          }
+        }
+      };
+
+    loadTermYearMap();
+
+    return () => {
+      active = false;
+    };
+  }, [academicYears]);
+
+  const subjectMap =
+    useMemo(
+      () =>
+        new Map(
+          getArray(
+            subjects
+          )
+            .map((item) => {
+              const id =
+                normalizeId(
+                  item
+                );
+
+              return [
+                id,
+                item,
+              ];
+            })
+            .filter(
+              ([id]) => id
+            )
+        ),
+      [subjects]
+    );
+
+  const academicYearMap =
+    useMemo(
+      () =>
+        new Map(
+          academicYears.map(
+            (item) => [
+              item.id,
+              item.name,
+            ]
+          )
+        ),
+      [academicYears]
+    );
+
   const permissions =
     usePermissions(
       "gradesCriteria"
     );
 
   useEffect(() => {
-    setItems(
+    const mappedItems =
       mapCriteria(
-        gradesCriterion
+        gradesCriterion,
+        subjectMap,
+        academicYearMap,
+        termYearMap
+      );
+
+    /*
+     * Client-side safety filter:
+     * يضمن أن الفلاتر تعمل حتى لو GET /gradesCriteria
+     * تجاهل academicYearId/subjectId في بعض نسخ الباك.
+     */
+    setItems(
+      mappedItems.filter(
+        (item) => {
+          const matchesSubject =
+            !subject ||
+            item.subjectId ===
+              subject;
+
+          const matchesYear =
+            !academicYearId ||
+            item.academicYearId ===
+              academicYearId;
+
+          return (
+            matchesSubject &&
+            matchesYear
+          );
+        }
       )
     );
-  }, [gradesCriterion]);
+  }, [
+    gradesCriterion,
+    subjectMap,
+    academicYearMap,
+    termYearMap,
+    subject,
+    academicYearId,
+  ]);
 
   useEffect(() => {
     if (pagination) {
@@ -209,7 +784,7 @@ const List = () => {
     setPage(1);
   }, [
     limit,
-    academicYear,
+    academicYearId,
     subject,
   ]);
 
@@ -219,7 +794,7 @@ const List = () => {
 
   const activeFiltersCount = [
     subject,
-    academicYear,
+    academicYearId,
   ].filter(Boolean).length;
 
   const stats = useMemo(
@@ -241,13 +816,9 @@ const List = () => {
         items
           .map(
             (item) =>
-              item.academicYear
+              item.academicYearId
           )
-          .filter(
-            (value) =>
-              value &&
-              value !== "—"
-          )
+          .filter(Boolean)
       ).size,
     }),
     [
@@ -282,12 +853,75 @@ const List = () => {
       }
     );
 
+
+  const mappedAcademicYears =
+    academicYears.map(
+      (item) => ({
+        value: item.id,
+        label: item.name,
+      })
+    );
+
+
+  const criteriaSubjectOptions =
+    useMemo(() => {
+      const map =
+        new Map();
+
+      mapCriteria(
+        gradesCriterion,
+        subjectMap,
+        academicYearMap,
+        termYearMap
+      ).forEach(
+        (item) => {
+          if (
+            item.subjectId &&
+            item.subject &&
+            item.subject !==
+              "—"
+          ) {
+            map.set(
+              item.subjectId,
+              {
+                value:
+                  item.subjectId,
+                label:
+                  item.subjectLabel ||
+                  item.subject,
+              }
+            );
+          }
+        }
+      );
+
+      return Array.from(
+        map.values()
+      );
+    }, [
+      gradesCriterion,
+      subjectMap,
+      academicYearMap,
+      termYearMap,
+    ]);
+
+  const subjectFilterOptions =
+    criteriaSubjectOptions.length >
+    0
+      ? criteriaSubjectOptions
+      : mappedSubjects;
+
   const csvData = useMemo(
     () =>
       items.map((item) => ({
         المادة: item.subject,
+        "كود المادة":
+          item.subjectCode ||
+          "",
         "السنة الدراسية":
           item.academicYear,
+        "درجة النجاح":
+          item.passingGradeValue,
         "الاختبار النهائي":
           item.final,
         "المهام الأدائية":
@@ -304,7 +938,7 @@ const List = () => {
 
   const resetFilters = () => {
     setSubject("");
-    setAcademicYear("");
+    setAcademicYearId("");
     setPage(1);
   };
 
@@ -826,24 +1460,27 @@ const List = () => {
                 loadingSubjects
               }
               options={
-                mappedSubjects
+                subjectFilterOptions
               }
             />
 
             <SelectFilter
-              value={academicYear}
+              value={
+                academicYearId
+              }
               onChange={
-                setAcademicYear
+                setAcademicYearId
               }
               label="السنة الدراسية"
               icon={SchoolIcon}
-              allLabel="جميع السنين"
-              options={Years.map(
-                (year) => ({
-                  value: year,
-                  label: year,
-                })
-              )}
+              allLabel="جميع السنوات"
+              disabled={
+                loadingAcademicYears ||
+                loadingTermYears
+              }
+              options={
+                mappedAcademicYears
+              }
             />
           </Box>
         </Paper>
@@ -1026,7 +1663,11 @@ const List = () => {
                   TABLE_HEADERS
                 }
                 data={items}
-                loading={loading}
+                loading={
+                  loading ||
+                  loadingAcademicYears ||
+                  loadingTermYears
+                }
                 edit={
                   permissions.edit
                 }

@@ -2,6 +2,7 @@ import {
   Box,
   Button,
   Chip,
+  Grid,
   Paper,
   Stack,
   Typography,
@@ -10,10 +11,11 @@ import {
 import {
   AddCircleOutlineOutlined,
   BookmarkBorderRounded,
+  CheckCircleOutlineRounded,
   FileDownloadOutlined,
   MenuBookRounded,
+  RemoveCircleOutlineRounded,
   RestartAltRounded,
-  TagRounded,
 } from "@mui/icons-material";
 
 import {
@@ -39,11 +41,13 @@ import usePermissions from "@/utils/hooks/usePermissions";
 const TABLE_HEADERS = [
   "اسم المادة",
   "كود المادة",
+  "حالة الترحيل",
 ];
 
 const TABLE_BODY = [
   "subjectName",
   "subjectCode",
+  "promotionRequirement",
 ];
 
 const mapSubjects = (data = []) =>
@@ -53,6 +57,12 @@ const mapSubjects = (data = []) =>
       subject?.subjectName || "—",
     subjectCode:
       subject?.subjectCode || "بدون كود",
+    isRequiredForPromotion:
+      subject?.isRequiredForPromotion !== false,
+    promotionRequirement:
+      subject?.isRequiredForPromotion === false
+        ? "مادة اختيارية"
+        : "مادة أساسية",
   }));
 
 const STAT_CARDS = [
@@ -67,14 +77,14 @@ const STAT_CARDS = [
     icon: <BookmarkBorderRounded />,
   },
   {
-    key: "coded",
-    label: "مواد لها كود",
-    icon: <TagRounded />,
+    key: "required",
+    label: "مواد أساسية",
+    icon: <CheckCircleOutlineRounded />,
   },
   {
-    key: "withoutCode",
-    label: "مواد بدون كود",
-    icon: <TagRounded />,
+    key: "elective",
+    label: "مواد اختيارية",
+    icon: <RemoveCircleOutlineRounded />,
   },
 ];
 
@@ -82,8 +92,15 @@ const List = () => {
   const [items, setItems] =
     useState([]);
 
-  const [search, setSearch] =
-    useState("");
+  const [
+    searchSubjectName,
+    setSearchSubjectName,
+  ] = useState("");
+
+  const [
+    searchSubjectCode,
+    setSearchSubjectCode,
+  ] = useState("");
 
   const [limit, setLimit] =
     useState(10);
@@ -96,54 +113,34 @@ const List = () => {
     setLocalPagination,
   ] = useState(null);
 
-  const debouncedSearch =
-    useDebounce(search, 700);
+  const debouncedSearchName =
+    useDebounce(
+      searchSubjectName,
+      700
+    );
 
-  /*
-   * حقل بحث واحد للاسم أو الكود.
-   *
-   * لأن الـAPI الحالي يستخدم فلترين منفصلين
-   * subjectName وsubjectCode، نحدد الفلتر
-   * تلقائيًا من شكل القيمة المكتوبة:
-   *
-   * - الأكواد غالبًا تحتوي أرقامًا أو شرطة،
-   *   أو تكون أحرفًا إنجليزية كبيرة.
-   * - باقي القيم يتم البحث بها كاسم مادة.
-   */
-  const searchFilters = useMemo(() => {
-    const value =
-      debouncedSearch.trim();
-
-    if (!value) {
-      return {};
-    }
-
-    const looksLikeCode =
-      /\d/.test(value) ||
-      /[-_/]/.test(value) ||
-      /^[A-Z]{2,}[A-Z0-9\s-]*$/.test(
-        value
-      );
-
-    return looksLikeCode
-      ? {
-          subjectCode: value,
-        }
-      : {
-          subjectName: value,
-        };
-  }, [debouncedSearch]);
+  const debouncedSearchCode =
+    useDebounce(
+      searchSubjectCode,
+      700
+    );
 
   const filters = useMemo(
     () => ({
       page,
       limit,
-      ...searchFilters,
+      subjectName:
+        debouncedSearchName ||
+        undefined,
+      subjectCode:
+        debouncedSearchCode ||
+        undefined,
     }),
     [
       page,
       limit,
-      searchFilters,
+      debouncedSearchName,
+      debouncedSearchCode,
     ]
   );
 
@@ -172,22 +169,22 @@ const List = () => {
     setPage(1);
   }, [
     limit,
-    debouncedSearch,
+    debouncedSearchName,
+    debouncedSearchCode,
   ]);
 
   const currentPagination =
     localPagination ||
     pagination;
 
-  const activeFiltersCount =
-    search.trim() ? 1 : 0;
+  const activeFiltersCount = [
+    searchSubjectName,
+    searchSubjectCode,
+  ].filter(Boolean).length;
 
   const stats = useMemo(() => {
-    const coded = items.filter(
-      (item) =>
-        item.subjectCode &&
-        item.subjectCode !==
-          "بدون كود"
+    const required = items.filter(
+      (item) => item.isRequiredForPromotion
     ).length;
 
     return {
@@ -196,9 +193,9 @@ const List = () => {
           ?.totalDocs ??
         items.length,
       visible: items.length,
-      coded,
-      withoutCode:
-        items.length - coded,
+      required,
+      elective:
+        items.length - required,
     };
   }, [
     items,
@@ -215,12 +212,15 @@ const List = () => {
           "بدون كود"
             ? ""
             : subject.subjectCode,
+        "حالة الترحيل":
+          subject.promotionRequirement,
       })),
     [items]
   );
 
   const resetFilters = () => {
-    setSearch("");
+    setSearchSubjectName("");
+    setSearchSubjectCode("");
     setPage(1);
   };
 
@@ -413,9 +413,9 @@ const List = () => {
                   lineHeight: 1.6,
                 }}
               >
-                أنشئ المواد وعدّل أكوادها
-                لاستخدامها مع المعلمين
-                والفصول والجداول.
+                أنشئ المواد وحدد المواد الأساسية
+                والاختيارية المستخدمة في احتساب
+                نجاح الطلاب وترحيلهم.
               </Typography>
             </Box>
 
@@ -689,13 +689,13 @@ const List = () => {
             mb: 1.25,
 
             px: {
-              xs: 1.25,
-              md: 1.5,
+              xs: 1.5,
+              md: 1.75,
             },
 
             py: {
-              xs: 1.1,
-              md: 1.15,
+              xs: 1.4,
+              md: 1.55,
             },
 
             border:
@@ -715,12 +715,12 @@ const List = () => {
 
             "& .MuiInputBase-root, & .MuiOutlinedInput-root":
               {
-                minHeight: 44,
-                height: 44,
+                minHeight: 48,
+                height: 48,
 
                 backgroundColor:
                   "var(--color-white)",
-                borderRadius: "12px",
+                borderRadius: "13px",
                 fontSize: "12px",
               },
 
@@ -738,8 +738,8 @@ const List = () => {
               },
 
             "& .MuiInputBase-input": {
-              py: 0.7,
-              px: 1.4,
+              py: 0.8,
+              px: 1.5,
               fontSize: "12px",
             },
           }}
@@ -747,32 +747,26 @@ const List = () => {
           <Stack
             direction={{
               xs: "column",
-              md: "row",
+              sm: "row",
             }}
             alignItems={{
               xs: "stretch",
-              md: "center",
+              sm: "center",
             }}
-            gap={{
-              xs: 1,
-              md: 1.4,
+            justifyContent="space-between"
+            gap={1}
+            sx={{
+              mb: 1.25,
             }}
           >
-            <Box
-              sx={{
-                minWidth: {
-                  md: 205,
-                },
-                flexShrink: 0,
-              }}
-            >
+            <Box>
               <Typography
                 sx={{
                   color:
                     "var(--color-navy-deep)",
-                  fontSize: "14px",
+                  fontSize: "15px",
                   fontWeight: 800,
-                  lineHeight: 1.3,
+                  lineHeight: 1.35,
                 }}
               >
                 البحث في المواد
@@ -780,34 +774,16 @@ const List = () => {
 
               <Typography
                 sx={{
-                  mt: 0.15,
+                  mt: 0.2,
                   color:
                     "var(--color-muted)",
-                  fontSize: "9px",
-                  lineHeight: 1.45,
+                  fontSize: "9.5px",
+                  lineHeight: 1.5,
                 }}
               >
-                ابحث بالاسم أو الكود.
+                ابحث باسم المادة أو
+                بالكود الكامل.
               </Typography>
-            </Box>
-
-            <Box
-              sx={{
-                width: "100%",
-                maxWidth: {
-                  md: 590,
-                  xl: 670,
-                },
-                flex: {
-                  md: 1,
-                },
-              }}
-            >
-              <SearchFilter
-                value={search}
-                onChange={setSearch}
-                placeholder="ابحث باسم المادة أو كود المادة..."
-              />
             </Box>
 
             <Button
@@ -821,14 +797,12 @@ const List = () => {
                 <RestartAltRounded />
               }
               sx={{
-                minWidth: 108,
-                minHeight: 40,
+                minHeight: 36,
                 px: 1.25,
-                flexShrink: 0,
 
                 alignSelf: {
                   xs: "flex-start",
-                  md: "center",
+                  sm: "center",
                 },
 
                 color:
@@ -861,6 +835,47 @@ const List = () => {
               مسح البحث
             </Button>
           </Stack>
+
+          <Grid
+            container
+            spacing={{
+              xs: 1.5,
+              md: 1.35,
+            }}
+            alignItems="center"
+          >
+            <Grid
+              item
+              xs={12}
+              sm={6}
+            >
+              <SearchFilter
+                value={
+                  searchSubjectName
+                }
+                onChange={
+                  setSearchSubjectName
+                }
+                placeholder="ابحث باسم المادة..."
+              />
+            </Grid>
+
+            <Grid
+              item
+              xs={12}
+              sm={6}
+            >
+              <SearchFilter
+                value={
+                  searchSubjectCode
+                }
+                onChange={
+                  setSearchSubjectCode
+                }
+                placeholder="ابحث بكود المادة..."
+              />
+            </Grid>
+          </Grid>
         </Paper>
 
         <Paper

@@ -3,10 +3,8 @@ import {
   Button,
   Chip,
   Grid,
-  IconButton,
   Paper,
   Stack,
-  Tooltip,
   Typography,
 } from "@mui/material";
 
@@ -16,7 +14,6 @@ import {
   FileDownloadOutlined,
   Groups2Rounded,
   PeopleAltRounded,
-  RestartAltRounded,
   SchoolRounded,
   SortRounded,
 } from "@mui/icons-material";
@@ -41,7 +38,150 @@ import usePermissions from "@/utils/hooks/usePermissions";
 
 import Status from "@/utils/constants/Status";
 import Years from "@/utils/constants/Years";
-import { translateGender } from "@/utils/helpers/translateGender";
+
+const getCurrentEnrollment = (student) => {
+  const direct =
+    student?.currentEnrollment ||
+    student?.latestEnrollment ||
+    student?.enrollment;
+
+  if (direct) return direct;
+
+  if (
+    Array.isArray(
+      student?.enrollments
+    ) &&
+    student.enrollments.length
+  ) {
+    return [...student.enrollments].sort(
+      (first, second) => {
+        const firstDate =
+          new Date(
+            first?.enrolledAt ||
+              first?.createdAt ||
+              0
+          ).getTime() || 0;
+
+        const secondDate =
+          new Date(
+            second?.enrolledAt ||
+              second?.createdAt ||
+              0
+          ).getTime() || 0;
+
+        return secondDate - firstDate;
+      }
+    )[0];
+  }
+
+  return null;
+};
+
+const getStudentClass = (student) => {
+  const enrollment =
+    getCurrentEnrollment(
+      student
+    );
+
+  const candidates = [
+    student?.class,
+    typeof student?.classId ===
+      "object"
+      ? student.classId
+      : null,
+    enrollment?.class,
+    typeof enrollment?.classId ===
+      "object"
+      ? enrollment.classId
+      : null,
+  ].filter(Boolean);
+
+  return candidates[0] || null;
+};
+
+const getStudentAcademicYearLabel = (
+  student
+) => {
+  const enrollment =
+    getCurrentEnrollment(
+      student
+    );
+
+  const classData =
+    getStudentClass(student);
+
+  const candidates = [
+    student?.academicYear,
+    student?.academicYearId,
+    enrollment?.academicYear,
+    enrollment?.academicYearId,
+    classData?.academicYear,
+    classData?.academicYearId,
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      typeof candidate === "string" &&
+      !/^[a-f\d]{24}$/i.test(
+        candidate
+      )
+    ) {
+      return candidate;
+    }
+
+    if (
+      candidate &&
+      typeof candidate === "object"
+    ) {
+      const value =
+        candidate.name ||
+        candidate.label ||
+        candidate.year;
+
+      if (value) return value;
+    }
+  }
+
+  return "—";
+};
+
+const getStudentClassLabel = (
+  student
+) => {
+  const classData =
+    getStudentClass(student);
+
+  if (!classData) {
+    return "لا يوجد";
+  }
+
+  const className =
+    classData.name ||
+    classData.roomNumber ||
+    classData.className ||
+    "";
+
+  const gender =
+    classData.gender === "male"
+      ? "بنين"
+      : classData.gender ===
+        "female"
+      ? "بنات"
+      : classData.gender === "both"
+      ? "مشترك"
+      : "";
+
+  if (!className) {
+    return "فصل مسجل";
+  }
+
+  return [
+    className,
+    gender,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+};
 
 const TABLE_HEADERS = [
   "اسم الطالب",
@@ -71,20 +211,32 @@ const safeFormatDate = (value) => {
 
 const mapStudents = (data = []) =>
   data.map((item) => ({
-    id: item._id,
-    birthdate: safeFormatDate(item.birthDate),
-    name: [item.firstName, item.fatherName, item.familyName]
+    id: item._id || item.id,
+    birthdate: safeFormatDate(
+      item.birthDate
+    ),
+    name: [
+      item.firstName,
+      item.fatherName,
+      item.familyName,
+    ]
       .filter(Boolean)
       .join(" "),
-    academicYear: item.academicYear || "—",
-    phone: item.phoneNumber || "—",
-    status: item.isActive ? "نشط" : "غير نشط",
-    roomNumber: item?.class
-      ? `${item.class.roomNumber} - ${translateGender(
-          item.class.gender,
-          "class"
-        )}`
-      : "لا يوجد",
+    academicYear:
+      getStudentAcademicYearLabel(
+        item
+      ),
+    phone:
+      item.phoneNumber ||
+      item.phone ||
+      "—",
+    status: item.isActive
+      ? "نشط"
+      : "غير نشط",
+    roomNumber:
+      getStudentClassLabel(
+        item
+      ),
   }));
 
 const STAT_CARDS = [
@@ -130,7 +282,6 @@ const List = () => {
         status !== ""
           ? Boolean(Number(status))
           : undefined,
-      academicYear: academicYear || undefined,
       classId: studentClass || undefined,
     }),
     [

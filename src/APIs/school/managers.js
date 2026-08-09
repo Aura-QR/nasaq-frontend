@@ -1,46 +1,210 @@
 import {
   api,
-} from "@/shared/api/client";
+} from "../Axios";
 
 import {
   getApiError,
-} from "@/shared/api/getApiError";
+} from "../helpers/getApiError";
 
-const ENDPOINT = "/managers";
+const MANAGERS_ENDPOINT =
+  "/managers";
 
-export const getSchoolManagers =
-  async () => {
-    try {
-      const response =
-        await api.get(
-          ENDPOINT
-        );
+const MANAGERS_CACHE_TTL =
+  15_000;
 
-      return {
-        status: true,
-        data: response.data,
-      };
-    } catch (error) {
-      return getApiError(
-        error,
-        "تعذر تحميل المديرين والمشرفين"
-      );
-    }
+let managersCache = null;
+let managersCacheTime = 0;
+let managersPendingRequest = null;
+
+/**
+ * Default MANAGER permissions.
+ *
+ * These are administrative and academic
+ * permissions only. Financial, expenses and
+ * manager-management permissions are excluded.
+ *
+ * The permissions use the backend permission
+ * catalog: students have CRUD permissions,
+ * while the remaining modules use `.manage`.
+ */
+export const MANAGER_DEFAULT_PERMISSIONS = [
+  "school.students.read",
+  "school.students.create",
+  "school.students.update",
+  "school.students.delete",
+
+  "school.teachers.manage",
+  "school.subjects.manage",
+  "school.classes.manage",
+  "school.lectures.manage",
+
+  "school.gradesCriteria.manage",
+  "school.exams.manage",
+  "school.projects.manage",
+
+  "school.attendance.manage",
+  "school.preparation.manage",
+  "school.library.manage",
+];
+
+const normalizeText = (
+  value
+) =>
+  String(value || "")
+    .trim();
+
+const normalizeEmail = (
+  value
+) =>
+  normalizeText(value)
+    .toLowerCase();
+
+const normalizeRole = (
+  value
+) => {
+  const role =
+    normalizeText(value)
+      .toUpperCase();
+
+  return role ===
+    "SUPERVISOR"
+    ? "SUPERVISOR"
+    : "MANAGER";
+};
+
+const normalizePermissions = (
+  permissions
+) =>
+  Array.from(
+    new Set(
+      (
+        Array.isArray(
+          permissions
+        )
+          ? permissions
+          : []
+      )
+        .map(normalizeText)
+        .filter(
+          (permission) =>
+            permission === "*" ||
+            permission.startsWith(
+              "school."
+            )
+        )
+    )
+  );
+
+const invalidateManagersCache =
+  () => {
+    managersCache = null;
+    managersCacheTime = 0;
   };
 
-export const createSchoolManager =
+const normalizeCreatePayload = (
+  payload
+) => {
+  const role =
+    normalizeRole(
+      payload?.role
+    );
+
+  const requestedPermissions =
+    normalizePermissions(
+      payload?.permissions
+    );
+
+  const permissions =
+    role === "SUPERVISOR"
+      ? ["*"]
+      : requestedPermissions.length
+      ? requestedPermissions
+      : MANAGER_DEFAULT_PERMISSIONS;
+
+  return {
+    username:
+      normalizeText(
+        payload?.username
+      ),
+
+    email:
+      normalizeEmail(
+        payload?.email
+      ),
+
+    password:
+      payload?.password ||
+      "",
+
+    role,
+    permissions,
+  };
+};
+
+export const fetchManagers =
+  async ({
+    force = false,
+  } = {}) => {
+    const now = Date.now();
+
+    if (
+      !force &&
+      managersCache &&
+      now - managersCacheTime <
+        MANAGERS_CACHE_TTL
+    ) {
+      return managersCache;
+    }
+
+    if (
+      !force &&
+      managersPendingRequest
+    ) {
+      return managersPendingRequest;
+    }
+
+    managersPendingRequest =
+      api
+        .get(
+          MANAGERS_ENDPOINT
+        )
+        .then((response) => {
+          managersCache =
+            response.data;
+
+          managersCacheTime =
+            Date.now();
+
+          return response.data;
+        })
+        .catch((error) =>
+          getApiError(
+            error,
+            "تعذر تحميل المديرين والمشرفين"
+          )
+        )
+        .finally(() => {
+          managersPendingRequest =
+            null;
+        });
+
+    return managersPendingRequest;
+  };
+
+export const createManager =
   async (payload) => {
     try {
       const response =
         await api.post(
-          ENDPOINT,
-          payload
+          MANAGERS_ENDPOINT,
+          normalizeCreatePayload(
+            payload
+          )
         );
 
-      return {
-        status: true,
-        data: response.data,
-      };
+      invalidateManagersCache();
+
+      return response.data;
     } catch (error) {
       return getApiError(
         error,
@@ -52,41 +216,75 @@ export const createSchoolManager =
 export const updateManagerPermissions =
   async (
     managerId,
-    permissions
+    permissions =
+      MANAGER_DEFAULT_PERMISSIONS
   ) => {
+    const normalizedManagerId =
+      normalizeText(
+        managerId
+      );
+
+    if (!normalizedManagerId) {
+      return {
+        status: false,
+        message:
+          "معرّف المدير غير موجود",
+      };
+    }
+
     try {
       const response =
         await api.patch(
-          `${ENDPOINT}/${managerId}/permissions`,
+          `${MANAGERS_ENDPOINT}/${normalizedManagerId}/permissions`,
           {
-            permissions,
+            permissions:
+              normalizePermissions(
+                permissions
+              ),
           }
         );
 
-      return {
-        status: true,
-        data: response.data,
-      };
+      invalidateManagersCache();
+
+      return response.data;
     } catch (error) {
       return getApiError(
         error,
-        "تعذر تحديث الصلاحيات"
+        "تعذر تحديث صلاحيات المدير"
       );
     }
   };
 
+/**
+ * Promote an existing teacher to manager.
+ * Backend endpoint:
+ * PATCH /managers/promote/:teacherId
+ * Request body: none.
+ */
 export const promoteTeacherToManager =
   async (teacherId) => {
+    const normalizedTeacherId =
+      normalizeText(
+        teacherId
+      );
+
+    if (!normalizedTeacherId) {
+      return {
+        status: false,
+        message:
+          "معرّف المعلم غير موجود",
+      };
+    }
+
     try {
       const response =
         await api.patch(
-          `${ENDPOINT}/promote/${teacherId}`
+          `${MANAGERS_ENDPOINT}/promote/${normalizedTeacherId}`
         );
 
-      return {
-        status: true,
-        data: response.data,
-      };
+      invalidateManagersCache();
+
+      return response.data;
     } catch (error) {
       return getApiError(
         error,
@@ -95,38 +293,68 @@ export const promoteTeacherToManager =
     }
   };
 
+/**
+ * Demote a teacher-manager to teacher.
+ * Backend endpoint:
+ * PATCH /managers/demote/:teacherId
+ * Request body: none.
+ */
 export const demoteTeacherFromManager =
   async (teacherId) => {
+    const normalizedTeacherId =
+      normalizeText(
+        teacherId
+      );
+
+    if (!normalizedTeacherId) {
+      return {
+        status: false,
+        message:
+          "معرّف المعلم غير موجود",
+      };
+    }
+
     try {
       const response =
         await api.patch(
-          `${ENDPOINT}/demote/${teacherId}`
+          `${MANAGERS_ENDPOINT}/demote/${normalizedTeacherId}`
         );
 
-      return {
-        status: true,
-        data: response.data,
-      };
+      invalidateManagersCache();
+
+      return response.data;
     } catch (error) {
       return getApiError(
         error,
-        "تعذر إلغاء دور المدير"
+        "تعذر إلغاء صلاحية المدير من المعلم"
       );
     }
   };
 
-export const deleteSchoolManager =
+export const deleteManager =
   async (managerId) => {
+    const normalizedManagerId =
+      normalizeText(
+        managerId
+      );
+
+    if (!normalizedManagerId) {
+      return {
+        status: false,
+        message:
+          "معرّف الحساب الإداري غير موجود",
+      };
+    }
+
     try {
       const response =
         await api.delete(
-          `${ENDPOINT}/${managerId}`
+          `${MANAGERS_ENDPOINT}/${normalizedManagerId}`
         );
 
-      return {
-        status: true,
-        data: response.data,
-      };
+      invalidateManagersCache();
+
+      return response.data;
     } catch (error) {
       return getApiError(
         error,
@@ -134,3 +362,38 @@ export const deleteSchoolManager =
       );
     }
   };
+
+/*
+ * Backward-compatible aliases.
+ * They prevent older school pages from breaking
+ * while the route-based List/Add pages are used.
+ */
+export const getSchoolManagers =
+  fetchManagers;
+
+export const createSchoolManager =
+  createManager;
+
+export const deleteSchoolManager =
+  deleteManager;
+
+export const promoteManager =
+  promoteTeacherToManager;
+
+export const demoteManager =
+  demoteTeacherFromManager;
+
+export default {
+  MANAGER_DEFAULT_PERMISSIONS,
+  fetchManagers,
+  getSchoolManagers,
+  createManager,
+  createSchoolManager,
+  updateManagerPermissions,
+  promoteTeacherToManager,
+  demoteTeacherFromManager,
+  promoteManager,
+  demoteManager,
+  deleteManager,
+  deleteSchoolManager,
+};

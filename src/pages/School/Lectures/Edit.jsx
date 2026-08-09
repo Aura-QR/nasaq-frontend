@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -14,16 +15,20 @@ import {
   SaveRounded,
 } from "@mui/icons-material";
 
-import { useForm } from "react-hook-form";
 import {
   useEffect,
+  useMemo,
   useState,
 } from "react";
+
+import { useForm } from "react-hook-form";
+
 import {
   useNavigate,
   useParams,
   useSearchParams,
 } from "react-router-dom";
+
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
@@ -34,178 +39,218 @@ import Loading from "@/components/Loading";
 import Days from "@/utils/constants/Days";
 import Slots from "@/utils/constants/Slots";
 import { translateGender } from "@/utils/helpers/translateGender";
-import { getChangedValues } from "@/utils/helpers/getChangedValues";
 
-import { fetchClasses } from "@/APIs/school/classes";
+import {
+  fetchClassesList,
+  fetchSingleClass,
+} from "@/APIs/school/classes";
+
+import { fetchSingleTeacher } from "@/APIs/users/teachers";
+
 import {
   editLecture,
   fetchSingleLecture,
+  fetchSubjectOfferings,
+  fetchTeacherAssignments,
+  fetchTermsByAcademicYear,
 } from "@/APIs/school/lectures";
-import {
-  fetchSingleTeacher,
-  fetchTeachersBySubjectId,
-} from "@/APIs/users/teachers";
-import { fetchSubjects } from "@/APIs/school/subjects";
-
-const getResponsePayload = (response) => {
-  if (
-    !response ||
-    typeof response === "string" ||
-    response?.status === false
-  ) {
-    return null;
-  }
-
-  return (
-    response?.data?.data ||
-    response?.data ||
-    response
-  );
-};
-
-const getResponseList = (response) => {
-  const payload =
-    getResponsePayload(response);
-
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-
-  return (
-    payload?.docs ||
-    payload?.items ||
-    payload?.results ||
-    []
-  );
-};
-
-const getErrorMessage = (
-  response,
-  fallback
-) =>
-  response?.message ||
-  response?.data?.message ||
-  (typeof response === "string"
-    ? response
-    : fallback);
-
-const mapClasses = (classes) =>
-  (Array.isArray(classes)
-    ? classes
-    : []
-  ).map((classItem) => ({
-    id:
-      classItem?._id ||
-      classItem?.id,
-    name: `${
-      classItem?.academicYear ||
-      "—"
-    } - ${
-      classItem?.roomNumber ||
-      "—"
-    } - ${translateGender(
-      classItem?.gender,
-      "class"
-    ) || "—"}`,
-  }));
-
-const mapSubjects = (subjects) =>
-  (Array.isArray(subjects)
-    ? subjects
-    : []
-  ).map((subjectItem) => ({
-    id:
-      subjectItem?._id ||
-      subjectItem?.id,
-    name:
-      subjectItem?.subjectName ||
-      subjectItem?.name ||
-      "—",
-  }));
-
-const mapTeachers = (teachers) =>
-  (Array.isArray(teachers)
-    ? teachers
-    : []
-  ).map((teacherItem) => ({
-    id:
-      teacherItem?._id ||
-      teacherItem?.id,
-    name:
-      teacherItem?.name ||
-      teacherItem?.username ||
-      "—",
-  }));
 
 const FORM_CARD_SX = {
-  p: {
-    xs: 1.5,
-    md: 2,
-  },
   mt: 1.25,
+  p: { xs: 1.5, md: 2 },
   overflow: "visible",
-  border:
-    "1px solid rgba(36,74,112,0.08)",
+  border: "1px solid rgba(36,74,112,0.08)",
   borderRadius: "18px",
-  backgroundColor:
-    "var(--color-cream)",
-  boxShadow:
-    "0 12px 28px rgba(18,47,77,0.06)",
+  backgroundColor: "var(--color-cream)",
+  boxShadow: "0 12px 28px rgba(18,47,77,0.06)",
 
   "& .MuiFormControl-root": {
     width: "100%",
     margin: 0,
   },
 
-  "& .MuiInputBase-root, & .MuiOutlinedInput-root":
-    {
-      minHeight: 48,
-      backgroundColor:
-        "var(--color-white)",
-      borderRadius: "12px",
-    },
+  "& .MuiInputBase-root, & .MuiOutlinedInput-root": {
+    minHeight: 48,
+    backgroundColor: "var(--color-white)",
+    borderRadius: "12px",
+  },
 
-  "& .MuiOutlinedInput-notchedOutline":
-    {
-      borderColor:
-        "rgba(36,74,112,0.16)",
-    },
+  "& .MuiOutlinedInput-notchedOutline": {
+    borderColor: "rgba(36,74,112,0.16)",
+  },
 
-  "& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline":
-    {
-      borderColor:
-        "rgba(36,74,112,0.28)",
-    },
-
-  "& .MuiOutlinedInput-root.Mui-focused":
-    {
-      boxShadow:
-        "0 0 0 3px rgba(211,164,79,0.10)",
-    },
-
-  "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
-    {
-      borderColor:
-        "var(--color-gold)",
-      borderWidth: "1px",
-    },
-
-  "& .MuiInputLabel-root": {
-    px: 0.65,
-    color:
-      "var(--color-muted)",
-    backgroundColor:
-      "var(--color-cream)",
-    fontSize: "10.5px",
-    fontWeight: 700,
+  "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
+    borderColor: "var(--color-gold)",
+    borderWidth: "1px",
   },
 };
 
-const SectionHeading = ({
-  icon,
-  title,
-  description,
-}) => (
+const unwrapData = (response) =>
+  response?.data?.data ??
+  response?.data ??
+  response;
+
+const extractList = (response) => {
+  const payload = unwrapData(response);
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return (
+    [
+      payload?.docs,
+      payload?.items,
+      payload?.results,
+      payload?.records,
+      payload?.classes,
+      payload?.terms,
+      payload?.offerings,
+      payload?.assignments,
+      payload?.teachers,
+      payload?.data,
+    ].find(Array.isArray) || []
+  );
+};
+
+const getId = (value) => {
+  if (value && typeof value === "object") {
+    return String(value._id || value.id || "").trim();
+  }
+
+  return String(value || "").trim();
+};
+
+const normalizeDay = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+const getAcademicYearId = (item) =>
+  getId(item?.academicYearId || item?.academicYear);
+
+const getGradeLevelId = (item) =>
+  getId(item?.gradeLevelId || item?.gradeLevel);
+
+const getLectureClass = (lecture) =>
+  lecture?.classId || lecture?.class || null;
+
+const getLectureOffering = (lecture) =>
+  lecture?.subjectOfferingId ||
+  lecture?.subjectOffering ||
+  null;
+
+const getLectureTeacher = (lecture) =>
+  lecture?.teacherId || lecture?.teacher || null;
+
+const getOfferingSubject = (item) =>
+  item?.subjectId ||
+  item?.subject ||
+  item?.subjectDetails ||
+  null;
+
+const getOfferingSubjectId = (item) =>
+  getId(getOfferingSubject(item));
+
+const getOfferingTermId = (item) =>
+  getId(item?.termId || item?.term);
+
+const getAssignmentTeacher = (item) =>
+  item?.teacherId || item?.teacher || null;
+
+const getAssignmentOfferingId = (item) =>
+  getId(
+    item?.subjectOfferingId ||
+      item?.subjectOffering
+  );
+
+const mapClass = (item) => {
+  const academicYear =
+    item?.academicYearId?.name ||
+    item?.academicYear?.name ||
+    (typeof item?.academicYear === "string"
+      ? item.academicYear
+      : "");
+
+  const className =
+    item?.name ||
+    item?.roomNumber ||
+    "فصل";
+
+  const gender = translateGender(
+    item?.gender,
+    "class"
+  );
+
+  return {
+    id: getId(item),
+    name:
+      [
+        academicYear,
+        className,
+        item?.roomNumber &&
+        item.roomNumber !== className
+          ? item.roomNumber
+          : "",
+        gender,
+      ]
+        .filter(Boolean)
+        .join(" - ") || "فصل",
+  };
+};
+
+const mapTerm = (item) => ({
+  id: getId(item),
+  name:
+    item?.name ||
+    `الترم ${item?.order || ""}`,
+  order: Number(item?.order) || 0,
+  status: item?.status || "",
+});
+
+const mapOffering = (item) => {
+  const subject = getOfferingSubject(item);
+
+  return {
+    id: getId(item),
+    subjectId: getOfferingSubjectId(item),
+    name:
+      subject?.subjectName ||
+      subject?.name ||
+      item?.subjectName ||
+      item?.name ||
+      "مادة",
+  };
+};
+
+const mapTeacher = (item) => ({
+  id: getId(item),
+  name:
+    item?.name ||
+    item?.username ||
+    item?.email ||
+    "معلم",
+});
+
+const uniqueById = (items = []) => {
+  const result = [];
+  const ids = new Set();
+
+  items.forEach((item) => {
+    const id = getId(item);
+
+    if (!id || ids.has(id)) {
+      return;
+    }
+
+    ids.add(id);
+    result.push(item);
+  });
+
+  return result;
+};
+
+const SectionHeading = () => (
   <Stack
     direction="row"
     alignItems="center"
@@ -224,49 +269,39 @@ const SectionHeading = ({
         display: "grid",
         placeItems: "center",
         flexShrink: 0,
-        color:
-          "var(--color-gold-dark)",
-        backgroundColor:
-          "var(--color-gold-soft)",
+        color: "var(--color-gold-dark)",
+        backgroundColor: "var(--color-gold-soft)",
         border:
           "1px solid rgba(211,164,79,0.22)",
         borderRadius: "12px",
-
-        "& svg": {
-          fontSize: 21,
-        },
       }}
     >
-      {icon}
+      <EditNoteRounded />
     </Box>
 
-    <Box sx={{ minWidth: 0 }}>
+    <Box>
       <Typography
         sx={{
-          color:
-            "var(--color-navy-deep)",
+          color: "var(--color-navy-deep)",
           fontSize: "16px",
           fontWeight: 800,
         }}
       >
-        {title}
+        بيانات الحصة
       </Typography>
 
       <Typography
         sx={{
           mt: 0.2,
-          color:
-            "var(--color-muted)",
+          color: "var(--color-muted)",
           fontSize: "10px",
-          lineHeight: 1.6,
         }}
       >
-        {description}
+        راجع الفصل والترم والمادة المفعلة والمعلم المسؤول.
       </Typography>
     </Box>
   </Stack>
 );
-
 
 const Edit = () => {
   const {
@@ -277,155 +312,718 @@ const Edit = () => {
     setValue,
   } = useForm();
 
-  const [loading, setLoading] =
-    useState(false);
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const [searchParams] = useSearchParams();
 
-  const [
-    lectureLoading,
-    setLectureLoading,
-  ] = useState(true);
+  const isComingFromTeacher =
+    searchParams.get("isComingFromTeacher") === "true";
 
-  const [
-    defaultValues,
-    setDefaultValues,
-  ] = useState(null);
+  const isComingFromClass =
+    searchParams.get("isComingFromClass") === "true";
 
-  const navigate =
-    useNavigate();
+  const [pageLoading, setPageLoading] = useState(true);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const { id } =
-    useParams();
+  const [lectureData, setLectureData] = useState(null);
+  const [classes, setClasses] = useState([]);
+  const [classDetails, setClassDetails] = useState(null);
+  const [terms, setTerms] = useState([]);
+  const [offerings, setOfferings] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+
+  const [selectedClassId, setSelectedClassId] = useState("");
+  const [selectedTermId, setSelectedTermId] = useState("");
+  const [selectedOfferingId, setSelectedOfferingId] = useState("");
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
+  const [selectedDay, setSelectedDay] = useState("");
+  const [selectedSlot, setSelectedSlot] = useState("");
+
+  const [message, setMessage] = useState("");
+
 
   useEffect(() => {
-    let active = true;
+    let mounted = true;
 
-    const loadLecture =
-      async () => {
-        setLectureLoading(true);
+    const loadLecture = async () => {
+      setPageLoading(true);
+      setMessage("");
 
-        try {
-          const response =
-            await fetchSingleLecture(
-              id
-            );
+      const [lectureResponse, classesResponse] =
+        await Promise.all([
+          fetchSingleLecture(id, { force: true }),
+          fetchClassesList({ force: true }),
+        ]);
 
-          const lecture =
-            getResponsePayload(
-              response
-            );
+      if (!mounted) {
+        return;
+      }
 
-          if (
-            !lecture ||
-            typeof lecture !==
-              "object"
-          ) {
-            toast.error(
-              getErrorMessage(
-                response,
-                "حدث خطأ أثناء جلب بيانات الحصة"
-              )
-            );
+      if (lectureResponse?.status === false) {
+        toast.error(
+          lectureResponse?.message ||
+            "تعذر تحميل بيانات الحصة"
+        );
+        setPageLoading(false);
+        return;
+      }
+
+      const lecture = unwrapData(lectureResponse);
+
+      if (!lecture || typeof lecture !== "object") {
+        toast.error("تعذر تحميل بيانات الحصة");
+        setPageLoading(false);
+        return;
+      }
+
+      const lectureClass = getLectureClass(lecture);
+      const lectureOffering = getLectureOffering(lecture);
+      const lectureTeacher = getLectureTeacher(lecture);
+
+      const classId = getId(lectureClass);
+      const offeringId = getId(lectureOffering);
+      const teacherId = getId(lectureTeacher);
+
+      const termId = getId(
+        lecture?.termId ||
+          lecture?.term ||
+          lectureOffering?.termId ||
+          lectureOffering?.term
+      );
+
+      const dayOfWeek = normalizeDay(
+        lecture?.dayOfWeek || lecture?.day
+      );
+
+      const slot = String(
+        Number(lecture?.slot) || ""
+      );
+
+      const normalized = {
+        classId,
+        subjectOfferingId: offeringId,
+        termId,
+        teacherId,
+        dayOfWeek,
+        slot,
+      };
+
+      setLectureData(lecture);
+      setSelectedClassId(classId);
+      setSelectedOfferingId(offeringId);
+      setSelectedTermId(termId);
+      setSelectedTeacherId(teacherId);
+      setSelectedDay(dayOfWeek);
+      setSelectedSlot(slot);
+
+      reset(normalized);
+
+      if (classesResponse?.status === false) {
+        setClasses(
+          lectureClass
+            ? [mapClass(lectureClass)]
+            : []
+        );
+        setMessage(
+          classesResponse?.message ||
+            "تعذر تحميل الفصول"
+        );
+      } else {
+        const rows = extractList(classesResponse);
+        const withCurrent = lectureClass
+          ? uniqueById([lectureClass, ...rows])
+          : rows;
+
+        setClasses(
+          withCurrent
+            .map(mapClass)
+            .filter((item) => item.id)
+        );
+      }
+
+      if (teacherId) {
+        if (
+          lectureTeacher &&
+          typeof lectureTeacher === "object"
+        ) {
+          setTeachers([mapTeacher(lectureTeacher)]);
+        } else {
+          const teacherResponse =
+            await fetchSingleTeacher(teacherId);
+
+          if (!mounted) {
             return;
           }
 
-          const normalized = {
-            ...lecture,
-            classId:
-              lecture?.classId ||
-              lecture?.class?._id ||
-              lecture?.class?.id ||
-              "",
-            subjectId:
-              lecture?.subjectId ||
-              lecture?.subject?._id ||
-              lecture?.subject?.id ||
-              "",
-            teacherId:
-              lecture?.teacherId ||
-              lecture?.teacher?._id ||
-              lecture?.teacher?.id ||
-              "",
-            slot: Number(
-              lecture?.slot
-            ),
-          };
+          const teacher = unwrapData(teacherResponse);
 
-          if (active) {
-            reset(normalized);
-            setDefaultValues(
-              normalized
-            );
-          }
-        } catch (error) {
-          toast.error(
-            error?.response?.data
-              ?.message ||
-              "حدث خطأ أثناء جلب بيانات الحصة"
-          );
-        } finally {
-          if (active) {
-            setLectureLoading(
-              false
-            );
+          if (teacher) {
+            setTeachers([mapTeacher(teacher)]);
           }
         }
-      };
+      }
+
+      setPageLoading(false);
+    };
 
     loadLecture();
 
     return () => {
-      active = false;
+      mounted = false;
     };
   }, [id, reset]);
 
-  const onSubmit = async (
-    formData
-  ) => {
-    const normalizedForm = {
-      ...formData,
+  useEffect(() => {
+    let mounted = true;
+
+    const loadClassSetup = async () => {
+      if (!selectedClassId || !lectureData) {
+        return;
+      }
+
+      setSetupLoading(true);
+
+      const classResponse =
+        await fetchSingleClass(selectedClassId, {
+          force: true,
+        });
+
+      if (!mounted) {
+        return;
+      }
+
+      if (classResponse?.status === false) {
+        setClassDetails(null);
+        setTerms([]);
+        setMessage(
+          classResponse?.message ||
+            "تعذر تحميل بيانات الفصل"
+        );
+        setSetupLoading(false);
+        return;
+      }
+
+      const details = unwrapData(classResponse);
+      const academicYearId =
+        getAcademicYearId(details);
+      const gradeLevelId =
+        getGradeLevelId(details);
+
+      setClassDetails(details);
+
+      if (!academicYearId || !gradeLevelId) {
+        setTerms([]);
+        setMessage(
+          "بيانات الفصل لا تحتوي على السنة الدراسية أو الصف الدراسي"
+        );
+        setSetupLoading(false);
+        return;
+      }
+
+      const termsResponse =
+        await fetchTermsByAcademicYear(
+          academicYearId,
+          { force: true }
+        );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (termsResponse?.status === false) {
+        setTerms([]);
+        setMessage(
+          termsResponse?.message ||
+            "تعذر تحميل الترم"
+        );
+        setSetupLoading(false);
+        return;
+      }
+
+      const mappedTerms = extractList(termsResponse)
+        .map(mapTerm)
+        .filter((item) => item.id)
+        .sort((a, b) => a.order - b.order);
+
+      const lectureTerm =
+        lectureData?.termId ||
+        lectureData?.term ||
+        getLectureOffering(lectureData)?.termId ||
+        getLectureOffering(lectureData)?.term;
+
+      const currentTermOption = lectureTerm
+        ? mapTerm(lectureTerm)
+        : null;
+
+      const termOptions = currentTermOption?.id
+        ? uniqueById([
+            currentTermOption,
+            ...mappedTerms,
+          ])
+        : mappedTerms;
+
+      setTerms(termOptions);
+
+      const selectedStillValid = termOptions.some(
+        (item) => item.id === selectedTermId
+      );
+
+      const defaultTerm =
+        termOptions.find(
+          (item) => item.status === "active"
+        ) ||
+        termOptions.find(
+          (item) => item.status === "upcoming"
+        ) ||
+        termOptions[0];
+
+      const nextTermId = selectedStillValid
+        ? selectedTermId
+        : defaultTerm?.id || "";
+
+      setSelectedTermId(nextTermId);
+      setValue("termId", nextTermId, {
+        shouldValidate: true,
+      });
+
+      setMessage(
+        nextTermId
+          ? ""
+          : "لا توجد فصول دراسية مرتبطة بهذه السنة"
+      );
+
+      setSetupLoading(false);
+    };
+
+    loadClassSetup();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    selectedClassId,
+    lectureData,
+    selectedTermId,
+    setValue,
+  ]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadOfferings = async () => {
+      const gradeLevelId =
+        getGradeLevelId(classDetails);
+
+      if (
+        !lectureData ||
+        !gradeLevelId ||
+        !selectedTermId
+      ) {
+        setOfferings([]);
+        return;
+      }
+
+      setSetupLoading(true);
+
+      const teacherId = isComingFromTeacher
+        ? selectedTeacherId
+        : "";
+
+      const [offeringsResponse, assignmentsResponse] =
+        await Promise.all([
+          fetchSubjectOfferings(
+            {
+              gradeLevelId,
+              termId: selectedTermId,
+            },
+            { force: true }
+          ),
+          fetchTeacherAssignments(
+            teacherId
+              ? { teacherId }
+              : {},
+            { force: true }
+          ),
+        ]);
+
+      if (!mounted) {
+        return;
+      }
+
+      if (offeringsResponse?.status === false) {
+        setOfferings([]);
+        setMessage(
+          offeringsResponse?.message ||
+            "تعذر تحميل المواد المفعلة"
+        );
+        setSetupLoading(false);
+        return;
+      }
+
+      const rawOfferings = extractList(
+        offeringsResponse
+      ).filter((item) => {
+        const offeringGradeId =
+          getGradeLevelId(item);
+
+        const offeringTermId =
+          getOfferingTermId(item);
+
+        const gradeMatches =
+          !offeringGradeId ||
+          offeringGradeId === gradeLevelId;
+
+        const termMatches =
+          !offeringTermId ||
+          offeringTermId === selectedTermId;
+
+        return gradeMatches && termMatches;
+      });
+
+      const currentOffering =
+        getLectureOffering(lectureData);
+
+      const currentOfferingMatches =
+        currentOffering &&
+        getId(currentOffering) &&
+        (!getOfferingTermId(currentOffering) ||
+          getOfferingTermId(currentOffering) ===
+            selectedTermId) &&
+        (!getGradeLevelId(currentOffering) ||
+          getGradeLevelId(currentOffering) ===
+            gradeLevelId);
+
+      const offeringsWithCurrent =
+        currentOfferingMatches
+          ? uniqueById([
+              currentOffering,
+              ...rawOfferings,
+            ])
+          : rawOfferings;
+
+      const assignments =
+        assignmentsResponse?.status === false
+          ? []
+          : extractList(assignmentsResponse);
+
+      let filtered = offeringsWithCurrent;
+
+      if (teacherId) {
+        const teacherAssignments = assignments.filter(
+          (item) =>
+            getId(getAssignmentTeacher(item)) ===
+            teacherId
+        );
+
+        const assignedOfferingIds = new Set(
+          teacherAssignments
+            .map(getAssignmentOfferingId)
+            .filter(Boolean)
+        );
+
+        filtered = offeringsWithCurrent.filter(
+          (item) =>
+            assignedOfferingIds.has(getId(item)) ||
+            getId(item) === selectedOfferingId
+        );
+      }
+
+      const mapped = uniqueById(filtered)
+        .map(mapOffering)
+        .filter((item) => item.id);
+
+      setOfferings(mapped);
+
+      const selectedStillValid = mapped.some(
+        (item) => item.id === selectedOfferingId
+      );
+
+      const nextOfferingId = selectedStillValid
+        ? selectedOfferingId
+        : "";
+
+      setSelectedOfferingId(nextOfferingId);
+      setValue(
+        "subjectOfferingId",
+        nextOfferingId,
+        { shouldValidate: true }
+      );
+
+      setMessage(
+        mapped.length > 0
+          ? ""
+          : teacherId
+          ? "لا توجد مادة مسندة لهذا المعلم داخل الصف والترم المختارين"
+          : "لا توجد مواد مفعلة لهذا الصف داخل الترم المختار"
+      );
+
+      setSetupLoading(false);
+    };
+
+    loadOfferings();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    lectureData,
+    classDetails,
+    selectedTermId,
+    selectedOfferingId,
+    selectedTeacherId,
+    isComingFromTeacher,
+    setValue,
+  ]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTeachers = async () => {
+      if (!lectureData) {
+        return;
+      }
+
+      if (isComingFromTeacher) {
+        if (!selectedTeacherId) {
+          setTeachers([]);
+          return;
+        }
+
+        const currentTeacher =
+          getLectureTeacher(lectureData);
+
+        if (
+          currentTeacher &&
+          typeof currentTeacher === "object" &&
+          getId(currentTeacher) === selectedTeacherId
+        ) {
+          setTeachers([mapTeacher(currentTeacher)]);
+          setValue("teacherId", selectedTeacherId);
+          return;
+        }
+
+        const response =
+          await fetchSingleTeacher(selectedTeacherId);
+
+        if (!mounted) {
+          return;
+        }
+
+        const teacher = unwrapData(response);
+
+        setTeachers(
+          teacher ? [mapTeacher(teacher)] : []
+        );
+        setValue("teacherId", selectedTeacherId);
+        return;
+      }
+
+      if (!selectedOfferingId) {
+        setTeachers([]);
+        setSelectedTeacherId("");
+        setValue("teacherId", "");
+        return;
+      }
+
+      setSetupLoading(true);
+
+      const response =
+        await fetchTeacherAssignments(
+          {
+            subjectOfferingId:
+              selectedOfferingId,
+          },
+          { force: true }
+        );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (response?.status === false) {
+        setTeachers([]);
+        setMessage(
+          response?.message ||
+            "تعذر تحميل المعلمين"
+        );
+        setSetupLoading(false);
+        return;
+      }
+
+      const rows = extractList(response).filter(
+        (item) =>
+          getAssignmentOfferingId(item) ===
+          selectedOfferingId
+      );
+
+      const teacherValues = rows
+        .map(getAssignmentTeacher)
+        .filter(Boolean);
+
+      const currentTeacher =
+        getLectureTeacher(lectureData);
+
+      if (
+        currentTeacher &&
+        getId(currentTeacher) === selectedTeacherId
+      ) {
+        teacherValues.unshift(currentTeacher);
+      }
+
+      const teacherObjects = [];
+
+      for (const teacherValue of uniqueById(
+        teacherValues
+      )) {
+        if (
+          teacherValue &&
+          typeof teacherValue === "object"
+        ) {
+          teacherObjects.push(teacherValue);
+          continue;
+        }
+
+        const teacherId = getId(teacherValue);
+
+        if (!teacherId) {
+          continue;
+        }
+
+        const teacherResponse =
+          await fetchSingleTeacher(teacherId);
+
+        if (!mounted) {
+          return;
+        }
+
+        const teacher = unwrapData(teacherResponse);
+
+        if (teacher) {
+          teacherObjects.push(teacher);
+        }
+      }
+
+      const mappedTeachers = uniqueById(
+        teacherObjects
+      )
+        .map(mapTeacher)
+        .filter((item) => item.id);
+
+      setTeachers(mappedTeachers);
+
+      const selectedStillValid = mappedTeachers.some(
+        (item) => item.id === selectedTeacherId
+      );
+
+      const nextTeacherId = selectedStillValid
+        ? selectedTeacherId
+        : "";
+
+      setSelectedTeacherId(nextTeacherId);
+      setValue("teacherId", nextTeacherId, {
+        shouldValidate: true,
+      });
+
+      if (mappedTeachers.length === 0) {
+        setMessage(
+          "لا يوجد معلم مسند لهذه المادة في الترم المختار"
+        );
+      }
+
+      setSetupLoading(false);
+    };
+
+    loadTeachers();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    lectureData,
+    selectedOfferingId,
+    selectedTeacherId,
+    isComingFromTeacher,
+    setValue,
+  ]);
+
+  const classOptions = useMemo(
+    () => classes,
+    [classes]
+  );
+
+  const termOptions = useMemo(
+    () => terms,
+    [terms]
+  );
+
+  const offeringOptions = useMemo(
+    () => offerings,
+    [offerings]
+  );
+
+  const teacherOptions = useMemo(
+    () => teachers,
+    [teachers]
+  );
+
+  const updateValue = (name, value) => {
+    setValue(name, value || "", {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+
+  const onSubmit = async (formData) => {
+    const payload = {
+      classId:
+        formData.classId || selectedClassId,
+
+      subjectOfferingId:
+        formData.subjectOfferingId ||
+        selectedOfferingId,
+
+      termId:
+        formData.termId || selectedTermId,
+
+      teacherId:
+        formData.teacherId ||
+        selectedTeacherId,
+
+      dayOfWeek: normalizeDay(
+        formData.dayOfWeek || selectedDay
+      ),
+
       slot: Number(
-        formData.slot
+        formData.slot || selectedSlot
       ),
     };
 
-    const changedData =
-      getChangedValues(
-        normalizedForm,
-        defaultValues,
-        [
-          "class",
-          "subject",
-          "teacher",
-          "preparation",
-        ]
-      );
-
     if (
-      Object.keys(
-        changedData
-      ).length === 0
+      !payload.classId ||
+      !payload.subjectOfferingId ||
+      !payload.termId ||
+      !payload.dayOfWeek ||
+      !payload.slot
     ) {
-      toast.info(
-        "لم تحدث أي بيانات للتعديل"
+      toast.error(
+        "أكملي بيانات الحصة المطلوبة"
       );
       return;
     }
 
-    setLoading(true);
+    setSaving(true);
 
     try {
-      const response =
-        await editLecture(
-          changedData,
-          id
-        );
+      const response = await editLecture(
+        payload,
+        id
+      );
 
-      if (!response?.status) {
+      if (response?.status === false) {
         toast.error(
-          getErrorMessage(
-            response,
-            "حدث خطأ أثناء تعديل بيانات الحصة"
-          )
+          response?.message ||
+            "تعذر تعديل الحصة"
         );
         return;
       }
@@ -437,19 +1035,15 @@ const Edit = () => {
       navigate(-1);
     } catch (error) {
       toast.error(
-        error?.response?.data
-          ?.message ||
-          "حدث خطأ أثناء تعديل بيانات الحصة"
+        error?.response?.data?.message ||
+          "تعذر تعديل الحصة"
       );
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  if (
-    lectureLoading &&
-    !defaultValues
-  ) {
+  if (pageLoading || !lectureData) {
     return <Loading />;
   }
 
@@ -457,35 +1051,21 @@ const Edit = () => {
     <Container>
       <Box
         component="form"
-        onSubmit={handleSubmit(
-          onSubmit
-        )}
         noValidate
         dir="rtl"
-        sx={{
-          width: "100%",
-          maxWidth: "100%",
-          minWidth: 0,
-          pb: 3,
-          color:
-            "var(--color-text)",
-        }}
+        onSubmit={handleSubmit(onSubmit)}
+        sx={{ pb: 3 }}
       >
         <Paper
           elevation={0}
           sx={{
-            px: {
-              xs: 1.25,
-              md: 1.6,
-            },
+            px: { xs: 1.25, md: 1.6 },
             py: 1.05,
             border:
               "1px solid rgba(36,74,112,0.08)",
             borderRadius: "16px",
             backgroundColor:
               "rgba(255,252,247,0.9)",
-            boxShadow:
-              "0 8px 20px rgba(18,47,77,0.04)",
           }}
         >
           <Stack
@@ -504,57 +1084,230 @@ const Edit = () => {
 
             <Typography
               sx={{
-                color:
-                  "var(--color-muted)",
+                color: "var(--color-muted)",
                 fontSize: "10px",
               }}
             >
-              عدّل بيانات الحصة
-              واحفظ التغييرات.
+              عدّل بيانات الحصة واحفظ التغييرات.
             </Typography>
           </Stack>
         </Paper>
 
-        <Paper
-          elevation={0}
-          sx={FORM_CARD_SX}
-        >
-          <SectionHeading
-            icon={
-              <EditNoteRounded />
-            }
-            title="بيانات الحصة"
-            description="راجع اليوم والوقت والفصل والمادة والمعلم المسؤول."
-          />
+        <Paper elevation={0} sx={FORM_CARD_SX}>
+          <SectionHeading />
 
-          {defaultValues && (
-            <DataInputs
-              register={register}
-              errors={errors}
-              defaultValues={
-                defaultValues
+          {message && (
+            <Alert
+              severity={
+                message.includes("تعذر")
+                  ? "error"
+                  : "info"
               }
-              setValue={setValue}
-            />
+              sx={{
+                mb: 1.5,
+                borderRadius: "12px",
+                fontSize: "10px",
+              }}
+            >
+              {message}
+            </Alert>
           )}
+
+          <Grid
+            container
+            spacing={{ xs: 1.5, md: 2 }}
+          >
+            <Grid item xs={12} sm={6} lg={4}>
+              <Select
+                key={`day-${selectedDay}`}
+                register={register}
+                registerName="dayOfWeek"
+                error={errors.dayOfWeek?.message}
+                label="اليوم"
+                required
+                data={Days}
+                name="day"
+                defaultValue={selectedDay}
+                disabled={
+                  isComingFromClass ||
+                  isComingFromTeacher
+                }
+                onChange={(value) => {
+                  setSelectedDay(value || "");
+                  updateValue("dayOfWeek", value);
+                }}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} lg={4}>
+              <Select
+                key={`slot-${selectedSlot}`}
+                register={register}
+                registerName="slot"
+                error={errors.slot?.message}
+                label="الحصة"
+                required
+                data={Slots}
+                name="name"
+                defaultValue={selectedSlot}
+                disabled={
+                  isComingFromClass ||
+                  isComingFromTeacher
+                }
+                onChange={(value) => {
+                  setSelectedSlot(value || "");
+                  updateValue("slot", value);
+                }}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} lg={4}>
+              <Select
+                key={`class-${selectedClassId}-${classOptions.length}`}
+                register={register}
+                registerName="classId"
+                error={errors.classId?.message}
+                label="الفصل"
+                required
+                data={classOptions}
+                name="name"
+                defaultValue={selectedClassId}
+                disabled={
+                  setupLoading ||
+                  isComingFromClass
+                }
+                onChange={(value) => {
+                  const nextValue = value || "";
+
+                  setSelectedClassId(nextValue);
+                  setSelectedOfferingId("");
+                  setOfferings([]);
+                  updateValue("classId", nextValue);
+                  updateValue(
+                    "subjectOfferingId",
+                    ""
+                  );
+
+                  if (!isComingFromTeacher) {
+                    setSelectedTeacherId("");
+                    setTeachers([]);
+                    updateValue("teacherId", "");
+                  }
+                }}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} lg={4}>
+              <Select
+                key={`term-${selectedTermId}-${termOptions.length}`}
+                register={register}
+                registerName="termId"
+                error={errors.termId?.message}
+                label="الترم"
+                required
+                data={termOptions}
+                name="name"
+                defaultValue={selectedTermId}
+                disabled={
+                  setupLoading ||
+                  !selectedClassId ||
+                  termOptions.length === 0
+                }
+                onChange={(value) => {
+                  const nextValue = value || "";
+
+                  setSelectedTermId(nextValue);
+                  setSelectedOfferingId("");
+                  setOfferings([]);
+                  updateValue("termId", nextValue);
+                  updateValue(
+                    "subjectOfferingId",
+                    ""
+                  );
+
+                  if (!isComingFromTeacher) {
+                    setSelectedTeacherId("");
+                    setTeachers([]);
+                    updateValue("teacherId", "");
+                  }
+                }}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} lg={4}>
+              <Select
+                key={`offering-${selectedOfferingId}-${offeringOptions.length}`}
+                register={register}
+                registerName="subjectOfferingId"
+                error={
+                  errors.subjectOfferingId?.message
+                }
+                label="المادة"
+                required
+                data={offeringOptions}
+                name="name"
+                defaultValue={selectedOfferingId}
+                disabled={
+                  setupLoading ||
+                  !selectedClassId ||
+                  !selectedTermId ||
+                  offeringOptions.length === 0
+                }
+                onChange={(value) => {
+                  const nextValue = value || "";
+
+                  setSelectedOfferingId(nextValue);
+                  updateValue(
+                    "subjectOfferingId",
+                    nextValue
+                  );
+
+                  if (!isComingFromTeacher) {
+                    setSelectedTeacherId("");
+                    setTeachers([]);
+                    updateValue("teacherId", "");
+                  }
+                }}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} lg={4}>
+              <Select
+                key={`teacher-${selectedTeacherId}-${teacherOptions.length}`}
+                register={register}
+                registerName="teacherId"
+                error={errors.teacherId?.message}
+                label="المعلم"
+                required
+                data={teacherOptions}
+                name="name"
+                defaultValue={selectedTeacherId}
+                disabled={
+                  setupLoading ||
+                  isComingFromTeacher ||
+                  !selectedOfferingId ||
+                  teacherOptions.length === 0
+                }
+                onChange={(value) => {
+                  setSelectedTeacherId(value || "");
+                  updateValue("teacherId", value);
+                }}
+              />
+            </Grid>
+          </Grid>
         </Paper>
 
         <Paper
           elevation={0}
           sx={{
             mt: 1.25,
-            px: {
-              xs: 1.25,
-              md: 1.6,
-            },
+            px: { xs: 1.25, md: 1.6 },
             py: 1.15,
             border:
               "1px solid rgba(36,74,112,0.08)",
             borderRadius: "16px",
             backgroundColor:
               "var(--color-cream)",
-            boxShadow:
-              "0 10px 24px rgba(18,47,77,0.05)",
           }}
         >
           <Stack
@@ -567,12 +1320,13 @@ const Edit = () => {
             <Button
               type="submit"
               disabled={
-                loading ||
-                lectureLoading
+                saving ||
+                setupLoading ||
+                offeringOptions.length === 0
               }
               variant="contained"
               startIcon={
-                loading ? (
+                saving ? (
                   <CircularProgress
                     size={16}
                     color="inherit"
@@ -582,65 +1336,32 @@ const Edit = () => {
                 )
               }
               sx={{
-                width: {
-                  xs: "100%",
-                  sm: 180,
-                },
                 minHeight: 44,
+                px: 2.5,
                 borderRadius: "12px",
-                color:
-                  "var(--color-white)",
                 background:
                   "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-                boxShadow:
-                  "0 9px 20px rgba(18,47,77,0.16)",
-                fontSize: "12px",
                 fontWeight: 800,
-                textTransform: "none",
-
-                "& .MuiButton-startIcon":
-                  {
-                    marginLeft:
-                      "7px",
-                    marginRight: 0,
-                  },
               }}
             >
-              {loading
+              {saving
                 ? "جاري الحفظ..."
                 : "حفظ التغييرات"}
             </Button>
 
             <Button
               type="button"
-              onClick={() =>
-                navigate(-1)
-              }
+              onClick={() => navigate(-1)}
               variant="outlined"
-              startIcon={
-                <CloseRounded />
-              }
+              startIcon={<CloseRounded />}
               sx={{
-                width: {
-                  xs: "100%",
-                  sm: 145,
-                },
                 minHeight: 44,
+                px: 2.5,
                 borderRadius: "12px",
-                color:
-                  "var(--color-navy)",
+                color: "var(--color-navy)",
                 borderColor:
                   "rgba(36,74,112,0.18)",
-                fontSize: "12px",
                 fontWeight: 800,
-                textTransform: "none",
-
-                "& .MuiButton-startIcon":
-                  {
-                    marginLeft:
-                      "7px",
-                    marginRight: 0,
-                  },
               }}
             >
               إلغاء
@@ -649,718 +1370,6 @@ const Edit = () => {
         </Paper>
       </Box>
     </Container>
-  );
-};
-
-const DataInputs = ({
-  register,
-  errors,
-  defaultValues,
-  setValue,
-}) => {
-  const [subject, setSubject] =
-    useState(
-      defaultValues
-        .subjectId ||
-        null
-    );
-
-  const [
-    lectureClass,
-    setLectureClass,
-  ] = useState(
-    defaultValues
-      .classId ||
-      null
-  );
-
-  const [
-    teacherSubjects,
-    setTeacherSubjects,
-  ] = useState([]);
-
-  const [searchParams] =
-    useSearchParams();
-
-  const isComingFromClass =
-    searchParams.get(
-      "isComingFromClass"
-    ) === "true";
-
-  const isComingFromTeacher =
-    searchParams.get(
-      "isComingFromTeacher"
-    ) === "true";
-
-  useEffect(() => {
-    if (
-      !isComingFromTeacher ||
-      !defaultValues.teacherId
-    ) {
-      return;
-    }
-
-    let active = true;
-
-    const loadTeacher =
-      async () => {
-        try {
-          const response =
-            await fetchSingleTeacher(
-              defaultValues
-                .teacherId
-            );
-
-          const teacher =
-            getResponsePayload(
-              response
-            );
-
-          if (
-            active &&
-            teacher
-          ) {
-            setTeacherSubjects(
-              Array.isArray(
-                teacher.subjects
-              )
-                ? teacher.subjects
-                : []
-            );
-          }
-        } catch {
-          if (active) {
-            setTeacherSubjects(
-              []
-            );
-          }
-        }
-      };
-
-    loadTeacher();
-
-    return () => {
-      active = false;
-    };
-  }, [
-    isComingFromTeacher,
-    defaultValues.teacherId,
-  ]);
-
-  return (
-    <Grid
-      container
-      spacing={{
-        xs: 1.5,
-        md: 2,
-      }}
-    >
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <Select
-          register={register}
-          registerName="dayOfWeek"
-          error={
-            errors.dayOfWeek
-              ?.message
-          }
-          label="اليوم"
-          required
-          data={Days}
-          defaultValue={
-            defaultValues
-              .dayOfWeek
-          }
-          name="day"
-          disabled={
-            isComingFromClass ||
-            isComingFromTeacher
-          }
-        />
-      </Grid>
-
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <Select
-          register={register}
-          registerName="slot"
-          error={
-            errors.slot?.message
-          }
-          label="الحصة"
-          required
-          data={Slots}
-          defaultValue={
-            defaultValues.slot
-          }
-          name="name"
-          disabled={
-            isComingFromClass ||
-            isComingFromTeacher
-          }
-        />
-      </Grid>
-
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <SelectClass
-          register={register}
-          errors={errors}
-          defaultValues={
-            defaultValues
-          }
-          setLectureClass={
-            setLectureClass
-          }
-          setValue={setValue}
-          setSubject={setSubject}
-          disabled={
-            isComingFromClass
-          }
-          isComingFromTeacher={
-            isComingFromTeacher
-          }
-          subject={subject}
-        />
-      </Grid>
-
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <SelectSubject
-          register={register}
-          errors={errors}
-          defaultValues={
-            defaultValues
-          }
-          setSubject={
-            setSubject
-          }
-          setValue={setValue}
-          lectureClass={
-            lectureClass
-          }
-          isComingFromTeacher={
-            isComingFromTeacher
-          }
-          teacherSubjects={
-            teacherSubjects
-          }
-        />
-      </Grid>
-
-      <Grid
-        item
-        xs={12}
-        sm={6}
-        lg={4}
-      >
-        <SelectTeacher
-          register={register}
-          errors={errors}
-          subject={subject}
-          setValue={setValue}
-          defaultValues={
-            defaultValues
-          }
-          disabled={
-            isComingFromTeacher
-          }
-        />
-      </Grid>
-    </Grid>
-  );
-};
-
-const SelectClass = ({
-  register,
-  errors,
-  defaultValues,
-  setLectureClass,
-  setValue,
-  setSubject,
-  disabled,
-  isComingFromTeacher,
-  subject,
-}) => {
-  const [loading, setLoading] =
-    useState(false);
-
-  const [
-    studentClasses,
-    setStudentClasses,
-  ] = useState([]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadClasses =
-      async () => {
-        setLoading(true);
-
-        try {
-          const response =
-            await fetchClasses(
-              isComingFromTeacher &&
-                subject
-                ? {
-                    subjectIds:
-                      subject,
-                  }
-                : undefined
-            );
-
-          const classes =
-            getResponseList(
-              response
-            );
-
-          if (active) {
-            setStudentClasses(
-              mapClasses(classes)
-            );
-          }
-        } catch (error) {
-          if (active) {
-            setStudentClasses(
-              []
-            );
-
-            toast.error(
-              error?.response?.data
-                ?.message ||
-                "حدث خطأ أثناء جلب بيانات الفصول"
-            );
-          }
-        } finally {
-          if (active) {
-            setLoading(false);
-          }
-        }
-      };
-
-    loadClasses();
-
-    return () => {
-      active = false;
-    };
-  }, [
-    isComingFromTeacher,
-    subject,
-  ]);
-
-  const handleClassChange = (
-    value
-  ) => {
-    if (!isComingFromTeacher) {
-      setValue(
-        "subjectId",
-        ""
-      );
-      setValue(
-        "teacherId",
-        ""
-      );
-      setSubject(null);
-    }
-
-    setLectureClass(value);
-  };
-
-  return (
-    <Select
-      register={register}
-      registerName="classId"
-      error={
-        errors.classId?.message
-      }
-      label="الفصل"
-      required
-      data={studentClasses}
-      name="name"
-      disabled={
-        loading ||
-        disabled
-      }
-      defaultValue={
-        defaultValues.classId
-      }
-      onChange={
-        handleClassChange
-      }
-    />
-  );
-};
-
-const SelectSubject = ({
-  register,
-  errors,
-  defaultValues,
-  setSubject,
-  setValue,
-  lectureClass,
-  isComingFromTeacher,
-  teacherSubjects,
-}) => {
-  const [loading, setLoading] =
-    useState(false);
-
-  const [subjects, setSubjects] =
-    useState([]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadSubjects =
-      async () => {
-        if (
-          isComingFromTeacher &&
-          !lectureClass
-        ) {
-          setSubjects(
-            mapSubjects(
-              teacherSubjects
-            )
-          );
-          return;
-        }
-
-        if (!lectureClass) {
-          setSubjects([]);
-          setValue(
-            "subjectId",
-            ""
-          );
-          setSubject(null);
-          return;
-        }
-
-        setLoading(true);
-
-        try {
-          const response =
-            await fetchSubjects({
-              classIds:
-                lectureClass,
-            });
-
-          const classSubjects =
-            getResponseList(
-              response
-            );
-
-          if (!active) {
-            return;
-          }
-
-          if (
-            isComingFromTeacher
-          ) {
-            const teacherIds =
-              new Set(
-                teacherSubjects.map(
-                  (item) =>
-                    item?._id ||
-                    item?.id
-                )
-              );
-
-            const intersection =
-              classSubjects.filter(
-                (item) =>
-                  teacherIds.has(
-                    item?._id ||
-                      item?.id
-                  )
-              );
-
-            setSubjects(
-              mapSubjects(
-                intersection
-              )
-            );
-
-            if (
-              intersection.length ===
-              0
-            ) {
-              setValue(
-                "subjectId",
-                ""
-              );
-
-              toast.info(
-                "لا توجد مواد للمعلم داخل هذا الفصل"
-              );
-            }
-
-            return;
-          }
-
-          setSubjects(
-            mapSubjects(
-              classSubjects
-            )
-          );
-
-          if (
-            classSubjects.length ===
-            0
-          ) {
-            setValue(
-              "subjectId",
-              ""
-            );
-
-            toast.info(
-              "لا توجد مواد مرتبطة بهذا الفصل"
-            );
-          }
-        } catch (error) {
-          if (active) {
-            setSubjects([]);
-            setValue(
-              "subjectId",
-              ""
-            );
-
-            toast.error(
-              error?.response?.data
-                ?.message ||
-                "حدث خطأ أثناء جلب بيانات المواد"
-            );
-          }
-        } finally {
-          if (active) {
-            setLoading(false);
-          }
-        }
-      };
-
-    loadSubjects();
-
-    return () => {
-      active = false;
-    };
-  }, [
-    lectureClass,
-    isComingFromTeacher,
-    teacherSubjects,
-    setSubject,
-    setValue,
-  ]);
-
-  const handleSubjectChange = (
-    value
-  ) => {
-    if (!isComingFromTeacher) {
-      setValue(
-        "teacherId",
-        ""
-      );
-    }
-
-    setSubject(value);
-  };
-
-  return (
-    <Select
-      register={register}
-      registerName="subjectId"
-      error={
-        errors.subjectId?.message
-      }
-      label="المادة"
-      required
-      data={subjects}
-      name="name"
-      disabled={
-        isComingFromTeacher
-          ? loading
-          : !lectureClass ||
-            loading
-      }
-      onChange={
-        handleSubjectChange
-      }
-      defaultValue={
-        defaultValues.subjectId ||
-        ""
-      }
-    />
-  );
-};
-
-const SelectTeacher = ({
-  register,
-  errors,
-  subject,
-  setValue,
-  defaultValues,
-  disabled,
-}) => {
-  const [loading, setLoading] =
-    useState(false);
-
-  const [teachers, setTeachers] =
-    useState([]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadTeachers =
-      async () => {
-        if (
-          disabled &&
-          defaultValues.teacherId
-        ) {
-          setLoading(true);
-
-          try {
-            const response =
-              await fetchSingleTeacher(
-                defaultValues
-                  .teacherId
-              );
-
-            const teacher =
-              getResponsePayload(
-                response
-              );
-
-            if (
-              active &&
-              teacher
-            ) {
-              setTeachers(
-                mapTeachers([
-                  teacher,
-                ])
-              );
-            }
-          } finally {
-            if (active) {
-              setLoading(false);
-            }
-          }
-
-          return;
-        }
-
-        if (!subject) {
-          setTeachers([]);
-          setValue(
-            "teacherId",
-            ""
-          );
-          return;
-        }
-
-        setLoading(true);
-
-        try {
-          const response =
-            await fetchTeachersBySubjectId(
-              subject
-            );
-
-          const payload =
-            getResponsePayload(
-              response
-            );
-
-          const teacherRows =
-            Array.isArray(payload)
-              ? payload
-              : payload?.teachers ||
-                [];
-
-          if (!active) {
-            return;
-          }
-
-          setTeachers(
-            mapTeachers(
-              teacherRows
-            )
-          );
-
-          if (
-            teacherRows.length ===
-            0
-          ) {
-            toast.info(
-              "لا يوجد معلمون مرتبطون بهذه المادة"
-            );
-          }
-        } catch (error) {
-          if (active) {
-            setTeachers([]);
-
-            toast.error(
-              error?.response?.data
-                ?.message ||
-                "حدث خطأ أثناء جلب بيانات المعلمين"
-            );
-          }
-        } finally {
-          if (active) {
-            setLoading(false);
-          }
-        }
-      };
-
-    loadTeachers();
-
-    return () => {
-      active = false;
-    };
-  }, [
-    subject,
-    disabled,
-    defaultValues.teacherId,
-    setValue,
-  ]);
-
-  return (
-    <Select
-      register={register}
-      registerName="teacherId"
-      error={
-        errors.teacherId?.message
-      }
-      label="المعلم"
-      required
-      data={teachers}
-      name="name"
-      disabled={
-        disabled ||
-        loading ||
-        (!disabled &&
-          (!subject ||
-            teachers.length ===
-              0))
-      }
-      defaultValue={
-        defaultValues.teacherId ||
-        ""
-      }
-    />
   );
 };
 

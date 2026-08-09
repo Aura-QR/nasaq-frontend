@@ -36,8 +36,14 @@ import Back from "@/components/Back/Back";
 import Select from "@/components/Select/Select";
 import Loading from "@/components/Loading";
 
-import { addPreparation } from "@/APIs/school/preparation";
-import { fetchLectures } from "@/APIs/school/lectures";
+import {
+  addPreparation,
+  fetchPreparations,
+} from "@/APIs/school/preparation";
+import {
+  fetchLectures,
+  fetchSingleLecture,
+} from "@/APIs/school/lectures";
 
 import Slots from "@/utils/constants/Slots";
 import Days from "@/utils/constants/Days";
@@ -117,6 +123,8 @@ const getResponseId = (
   return (
     payload?._id ||
     payload?.id ||
+    payload?.preparation?._id ||
+    payload?.preparation?.id ||
     ""
   );
 };
@@ -138,33 +146,152 @@ const getArray = (
     ? value
     : [];
 
+const getEntityId = (
+  value
+) => {
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    return String(
+      value._id ||
+        value.id ||
+        ""
+    ).trim();
+  }
+
+  return String(
+    value || ""
+  ).trim();
+};
+
+const getNestedName = (
+  value
+) => {
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    return (
+      value.name ||
+      value.title ||
+      value.label ||
+      ""
+    );
+  }
+
+  return String(
+    value || ""
+  ).trim();
+};
+
 const getLectureData = (
   item
-) =>
-  item?.lecture || {};
+) => {
+  const lecture =
+    item?.lecture ||
+    item?.lectureId ||
+    item?.lectureData ||
+    item;
+
+  return lecture &&
+    typeof lecture === "object"
+    ? lecture
+    : {};
+};
 
 const getClassData = (
   item
-) =>
-  getLectureData(item)?.class ||
-  item?.class ||
-  {};
+) => {
+  const lecture =
+    getLectureData(item);
+
+  const classData =
+    lecture?.class ||
+    lecture?.classId ||
+    item?.class ||
+    item?.classId;
+
+  return classData &&
+    typeof classData === "object"
+    ? classData
+    : {};
+};
+
+const getSubjectOfferingData = (
+  item
+) => {
+  const lecture =
+    getLectureData(item);
+
+  const offering =
+    lecture?.subjectOfferingId ||
+    lecture?.subjectOffering ||
+    item?.subjectOfferingId ||
+    item?.subjectOffering;
+
+  return offering &&
+    typeof offering === "object"
+    ? offering
+    : {};
+};
 
 const getSubjectData = (
   item
-) =>
-  item?.subject ||
-  getLectureData(item)?.subject ||
-  {};
+) => {
+  const lecture =
+    getLectureData(item);
+
+  const offering =
+    getSubjectOfferingData(item);
+
+  const subjectData =
+    item?.subject ||
+    item?.subjectId ||
+    lecture?.subject ||
+    lecture?.subjectId ||
+    offering?.subjectId ||
+    offering?.subject;
+
+  return subjectData &&
+    typeof subjectData === "object"
+    ? subjectData
+    : {};
+};
+
+const getTeacherData = (
+  item
+) => {
+  const lecture =
+    getLectureData(item);
+
+  const teacher =
+    item?.teacher ||
+    item?.teacherId ||
+    lecture?.teacher ||
+    lecture?.teacherId ||
+    item?.createdBy;
+
+  return teacher &&
+    typeof teacher === "object"
+    ? teacher
+    : {};
+};
 
 const getTeacherName = (
   item
-) =>
-  item?.teacher?.name ||
-  item?.createdBy?.name ||
-  item?.name ||
-  getLectureData(item)?.teacher?.name ||
-  "—";
+) => {
+  const teacher =
+    getTeacherData(item);
+
+  return (
+    teacher?.name ||
+    teacher?.username ||
+    item?.teacherName ||
+    item?.createdBy?.name ||
+    "—"
+  );
+};
 
 const getClassLabel = (
   item
@@ -173,13 +300,18 @@ const getClassLabel = (
     getClassData(item);
 
   const academicYear =
-    classData?.academicYear ||
-    item?.academicYear ||
-    "";
+    getNestedName(
+      classData?.academicYearId ||
+      classData?.academicYear ||
+      item?.academicYearId ||
+      item?.academicYear
+    );
 
   const roomNumber =
     classData?.roomNumber ||
+    classData?.name ||
     item?.roomNumber ||
+    item?.className ||
     "";
 
   const gender =
@@ -210,11 +342,13 @@ const getSubjectLabel = (
   const name =
     subjectData?.subjectName ||
     subjectData?.name ||
+    item?.subjectName ||
     "—";
 
   const code =
     subjectData?.subjectCode ||
     subjectData?.code ||
+    item?.subjectCode ||
     "";
 
   return code
@@ -225,15 +359,27 @@ const getSubjectLabel = (
 const getDayLabel = (
   item
 ) => {
+  const lecture =
+    getLectureData(item);
+
   const dayId =
-    getLectureData(item)
-      ?.dayOfWeek ??
-    item?.dayOfWeek;
+    lecture?.dayOfWeek ??
+    lecture?.day ??
+    item?.dayOfWeek ??
+    item?.day;
+
+  const normalizedDay =
+    String(dayId || "")
+      .trim()
+      .toLowerCase();
 
   return (
     Days.find(
       (day) =>
-        day.id === dayId
+        String(day.id || "")
+          .trim()
+          .toLowerCase() ===
+        normalizedDay
     )?.day ||
     "—"
   );
@@ -242,15 +388,18 @@ const getDayLabel = (
 const getSlotLabel = (
   item
 ) => {
+  const lecture =
+    getLectureData(item);
+
   const slotId =
-    getLectureData(item)
-      ?.slot ??
+    lecture?.slot ??
     item?.slot;
 
   return (
     Slots.find(
       (slot) =>
-        slot.id === slotId
+        String(slot.id) ===
+        String(slotId)
     )?.name ||
     "—"
   );
@@ -373,6 +522,14 @@ const getFileSize = (
     1024
   ).toFixed(2)} MB`;
 };
+
+const getPreparationLectureId = (
+  preparation
+) =>
+  getEntityId(
+    preparation?.lecture ||
+      preparation?.lectureId
+  );
 
 const FORM_CARD_SX = {
   mt: 1.25,
@@ -525,6 +682,21 @@ const Add = () => {
       "lectureId"
     ) || "";
 
+  const requestedReturnTo =
+    searchParams.get(
+      "returnTo"
+    ) || "";
+
+  const returnTo =
+    requestedReturnTo.startsWith(
+      "/school/"
+    ) ||
+    requestedReturnTo.startsWith(
+      "/teacher/"
+    )
+      ? requestedReturnTo
+      : "";
+
   const {
     register,
     handleSubmit,
@@ -577,6 +749,9 @@ const Add = () => {
       currentUser?.role
     );
 
+  const isTeacherUser =
+    userRole === "TEACHER";
+
   useEffect(() => {
     let active = true;
 
@@ -586,18 +761,33 @@ const Add = () => {
           true
         );
 
-        const filters =
-          isSchoolAdmin(userRole)
-            ? {}
-            : {
-                teacherId,
-              };
-
         try {
-          const response =
-            await fetchLectures(
-              filters
-            );
+          let response;
+
+          if (
+            preselectedLectureId
+          ) {
+            response =
+              await fetchSingleLecture(
+                preselectedLectureId,
+                { force: true }
+              );
+          } else {
+            const filters =
+              isSchoolAdmin(
+                userRole
+              )
+                ? {}
+                : {
+                    teacherId,
+                  };
+
+            response =
+              await fetchLectures(
+                filters,
+                { force: true }
+              );
+          }
 
           if (!active) {
             return;
@@ -615,9 +805,23 @@ const Add = () => {
             return;
           }
 
+          const loaded =
+            preselectedLectureId
+              ? [
+                  getResponseData(
+                    response
+                  ),
+                ].filter(Boolean)
+              : getResponseList(
+                  response
+                );
+
           setLectures(
-            getResponseList(
-              response
+            loaded.filter(
+              (lecture) =>
+                getEntityId(
+                  lecture
+                )
             )
           );
         } catch (error) {
@@ -645,6 +849,7 @@ const Add = () => {
       active = false;
     };
   }, [
+    preselectedLectureId,
     teacherId,
     userRole,
   ]);
@@ -711,6 +916,22 @@ const Add = () => {
   const onSubmit = async (
     formValues
   ) => {
+    if (loading) {
+      return;
+    }
+
+    const selectedLectureId =
+      getEntityId(
+        formValues?.lecture
+      );
+
+    if (!selectedLectureId) {
+      toast.error(
+        "يرجى اختيار الحصة الدراسية"
+      );
+      return;
+    }
+
     if (!uploadedFile) {
       toast.error(
         "يرجى رفع ملف التحضير"
@@ -721,12 +942,71 @@ const Add = () => {
     setLoading(true);
 
     try {
+      /*
+       * نتحقق أولًا من عدم وجود تحضير مرتبط بنفس الحصة.
+       * حتى لو تجاهل الباك فلتر lecture، نفلتر النتائج محليًا
+       * باستخدام معرّف الحصة نفسه.
+       */
+      const existingResponse =
+        await fetchPreparations({
+          lecture:
+            selectedLectureId,
+          page: 1,
+          limit: 100,
+        });
+
+      if (
+        existingResponse?.status ===
+        false
+      ) {
+        toast.error(
+          getErrorMessage(
+            existingResponse,
+            "تعذر التحقق من وجود تحضير سابق للحصة"
+          )
+        );
+        return;
+      }
+
+      const existingPreparation =
+        getResponseList(
+          existingResponse
+        ).find(
+          (preparation) =>
+            getPreparationLectureId(
+              preparation
+            ) ===
+            selectedLectureId
+        );
+
+      if (existingPreparation) {
+        const existingId =
+          getResponseId(
+            existingPreparation
+          );
+
+        toast.info(
+          "هذه الحصة لديها تحضير بالفعل"
+        );
+
+        if (existingId) {
+          navigate(
+            isTeacherUser
+              ? `/teacher/preparations/${existingId}`
+              : `/school/preparation/${existingId}`,
+            { replace: true }
+          );
+        }
+
+        return;
+      }
+
       const formData =
         new FormData();
 
       formData.append(
         "lecture",
-        formValues.lecture
+        selectedLectureId
       );
 
       formData.append(
@@ -758,11 +1038,29 @@ const Add = () => {
           response
         );
 
-      navigate(
-        createdId
-          ? `/school/preparation/${createdId}`
-          : "/school/preparation"
-      );
+      if (returnTo) {
+        navigate(
+          returnTo,
+          { replace: true }
+        );
+      } else if (isTeacherUser) {
+        navigate(
+          createdId
+            ? `/teacher/preparations/${createdId}`
+            : "/teacher/preparations",
+          { replace: true }
+        );
+      } else if (
+        preselectedLectureId
+      ) {
+        navigate(-1);
+      } else {
+        navigate(
+          createdId
+            ? `/school/preparation/${createdId}`
+            : "/school/preparation"
+        );
+      }
     } catch (error) {
       toast.error(
         error?.response?.data

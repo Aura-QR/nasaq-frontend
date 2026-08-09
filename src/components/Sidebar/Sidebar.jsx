@@ -8,6 +8,9 @@ import {
 
 import {
   AccountBalanceWallet,
+  AccountTreeRounded,
+  AutoStoriesRounded,
+  CalendarMonthRounded,
   Category as CategoryIcon,
   DirectionsBus,
   ExpandLess,
@@ -15,9 +18,13 @@ import {
   FolderCopyOutlined,
   LocalOffer,
   Logout,
+  ManageAccountsRounded,
   MoneyOff,
+  PostAddRounded,
   ReceiptLong,
   Route,
+  SchoolRounded,
+  SettingsRounded,
   ViewList,
 } from "@mui/icons-material";
 
@@ -131,6 +138,9 @@ const Sidebar = ({ active }) => {
   const subjectsPermissions =
     usePermissions("subjects");
 
+  const subjectOfferingsPermissions =
+    usePermissions("subjectOfferings");
+
   const classesPermissions =
     usePermissions("classes");
 
@@ -187,6 +197,15 @@ const Sidebar = ({ active }) => {
 
   const isTeacher = role === "TEACHER";
 
+  const canManageAcademicYears =
+    role === "OWNER" ||
+    role === "SUPERVISOR";
+
+  const canManageSchoolSettings =
+    role === "OWNER" ||
+    role === "MANAGER" ||
+    role === "SUPERVISOR";
+
   const categories = useMemo(() => {
     const baseCategories = [
       {
@@ -204,16 +223,53 @@ const Sidebar = ({ active }) => {
             to: "/users/teachers",
             show: teachersPermissions.read,
           },
+          {
+            name: "المديرون والمشرفون",
+            Icon: ManageAccountsRounded,
+            iconType: "mui",
+            to: "/school/managers",
+            show: role === "OWNER",
+          },
         ],
       },
       {
         title: "الإدارة الأكاديمية",
         items: [
           {
+            name: "السنوات الدراسية",
+            Icon: CalendarMonthRounded,
+            iconType: "mui",
+            to: "/school/academic-years",
+            show: canManageAcademicYears,
+          },
+          {
+            name: "إدارة المراحل",
+            Icon: AccountTreeRounded,
+            iconType: "mui",
+            to: "/school/stages",
+            show: classesPermissions.read,
+          },
+          {
+            name: "إدارة الصفوف",
+            Icon: SchoolRounded,
+            iconType: "mui",
+            to: "/school/grade-levels",
+            show: classesPermissions.read,
+          },
+          {
             name: "إدارة المواد",
             icon: subjectIcon,
             to: "/school/subjects",
             show: subjectsPermissions.read,
+          },
+          {
+            name: "عروض المواد",
+            Icon: AutoStoriesRounded,
+            iconType: "mui",
+            to: "/subject-offerings",
+            show:
+              subjectOfferingsPermissions.read ||
+              subjectsPermissions.read,
           },
           {
             name: "إدارة الفصول",
@@ -226,6 +282,18 @@ const Sidebar = ({ active }) => {
             icon: lectureIcon,
             to: "/school/lectures",
             show: lecturesPermissions.read,
+          },
+        ],
+      },
+      {
+        title: "إعدادات النظام",
+        items: [
+          {
+            name: "إعدادات المدرسة",
+            Icon: SettingsRounded,
+            iconType: "mui",
+            to: "/school/settings",
+            show: canManageSchoolSettings,
           },
         ],
       },
@@ -290,6 +358,13 @@ const Sidebar = ({ active }) => {
             Icon: AccountBalanceWallet,
             iconType: "mui",
             to: "/financial/records",
+            show: financialPermissions.read,
+          },
+          {
+            name: "الرسوم الإضافية",
+            Icon: PostAddRounded,
+            iconType: "mui",
+            to: "/financial/additional-fees",
             show: financialPermissions.read,
           },
           {
@@ -368,9 +443,12 @@ const Sidebar = ({ active }) => {
   }, [
     isTeacher,
     userId,
+    canManageAcademicYears,
+    canManageSchoolSettings,
     studentsPermissions.read,
     teachersPermissions.read,
     subjectsPermissions.read,
+    subjectOfferingsPermissions.read,
     classesPermissions.read,
     lecturesPermissions.read,
     gradesCriteriaPermissions.read,

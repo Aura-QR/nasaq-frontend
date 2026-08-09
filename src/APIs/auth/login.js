@@ -1,51 +1,99 @@
-﻿import {
-  api,
-} from "@/shared/api/client";
+﻿import { api } from "../Axios";
+import { getApiError } from "../helpers/getApiError";
 
-import {
-  getApiError,
-} from "@/shared/api/getApiError";
+const LOGIN_ENDPOINT = "/auth/login";
 
-const ENDPOINT = "/auth/login";
+const buildLoginPayload = (
+  identifierOrPayload,
+  password
+) => {
+  const source =
+    identifierOrPayload &&
+    typeof identifierOrPayload ===
+      "object"
+      ? identifierOrPayload
+      : {
+          identifier:
+            identifierOrPayload,
+          password,
+        };
 
+  return {
+    identifier:
+      source?.identifier?.trim() ||
+      "",
+    password:
+      source?.password || "",
+  };
+};
+
+/**
+ * Unified login for all roles:
+ * SUPER_ADMIN, OWNER, SUPERVISOR,
+ * MANAGER, TEACHER and STUDENT.
+ *
+ * Backend endpoint:
+ * POST /auth/login
+ *
+ * Supports both call styles:
+ * loginRequest(identifier, password)
+ * loginRequest({ identifier, password })
+ */
 export const loginRequest = async (
-  identifier,
-  password,
-  options = {}
+  identifierOrPayload,
+  password
 ) => {
   try {
-    const payload = {
-      identifier: String(identifier || "").trim(),
-      password: String(password || ""),
-    };
+    const response =
+      await api.post(
+        LOGIN_ENDPOINT,
+        buildLoginPayload(
+          identifierOrPayload,
+          password
+        )
+      );
 
-    if (options?.schoolSlug) {
-      payload.schoolSlug = String(
-        options.schoolSlug
-      ).trim();
-    }
-
-    if (options?.schoolId) {
-      payload.schoolId = String(
-        options.schoolId
-      ).trim();
-    }
-
-    const response = await api.post(
-      ENDPOINT,
-      payload
-    );
-
-    return {
-      status: true,
-      data: response.data,
-    };
+    return response.data;
   } catch (error) {
     return getApiError(
       error,
-      "بيانات تسجيل الدخول غير صحيحة"
+      "تعذر تسجيل الدخول"
     );
   }
 };
 
-export default loginRequest;
+/**
+ * Backward-compatible alias for pages
+ * that still import loginUserRequest.
+ */
+export const loginUserRequest =
+  loginRequest;
+
+/**
+ * Keep the current registration export
+ * unchanged until the registration flow
+ * is updated separately.
+ */
+export const registerRequest = async (
+  payload
+) => {
+  try {
+    const response = await api.post(
+      "/admin/register",
+      {
+        ...payload,
+        username:
+          payload?.username?.trim(),
+        email:
+          payload?.email?.trim(),
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    return getApiError(
+      error,
+      "تعذر إنشاء الحساب"
+    );
+  }
+};

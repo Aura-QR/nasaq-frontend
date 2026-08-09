@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
+import {
+  useAuthUser,
+  useIsAuthenticated,
+  useSignOut,
+} from "react-auth-kit";
 import {
   ArrowBackRounded,
   ArrowDownwardRounded,
@@ -535,12 +540,96 @@ function ToolPreview({ type }) {
   );
 }
 
+const readStorageValue = (key, fallback = null) => {
+  try {
+    const rawValue = window.localStorage.getItem(key);
+
+    if (!rawValue) {
+      return fallback;
+    }
+
+    try {
+      return JSON.parse(rawValue);
+    } catch {
+      return rawValue;
+    }
+  } catch {
+    return fallback;
+  }
+};
+
+const normalizeRole = (role) =>
+  String(role || "")
+    .replace(/^["']|["']$/g, "")
+    .trim()
+    .toUpperCase();
+
+const getDashboardPath = (role) => {
+  switch (normalizeRole(role)) {
+    case "SUPER_ADMIN":
+      return "/platform/dashboard";
+
+    case "OWNER":
+    case "SUPERVISOR":
+    case "MANAGER":
+      return "/school/dashboard";
+
+    case "TEACHER":
+      return "/teacher/dashboard";
+
+    case "STUDENT":
+      return "/student/dashboard";
+
+    default:
+      return "/";
+  }
+};
+
+const getUserDisplayName = (user) => {
+  const fullName =
+    user?.name ||
+    user?.fullName ||
+    user?.username ||
+    user?.email ||
+    "مستخدم نَسّق";
+
+  return String(fullName).trim();
+};
+
 function Home() {
+  const navigate = useNavigate();
+  const isAuthenticated = useIsAuthenticated();
+  const authUser = useAuthUser();
+  const signOut = useSignOut();
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeJourney, setActiveJourney] = useState(0);
   const [activeTool, setActiveTool] = useState("prepare");
   const [comparison, setComparison] = useState(56);
+
+  const authenticated = isAuthenticated();
+
+  const storedUser = readStorageValue("user", null);
+  const storedRole = readStorageValue("role", "");
+
+  const authData = authenticated ? authUser() : null;
+
+  const currentUser =
+    authData?.user ||
+    authData ||
+    storedUser ||
+    null;
+
+  const currentRole = normalizeRole(
+    currentUser?.role ||
+      authData?.role ||
+      storedRole
+  );
+
+  const userName = getUserDisplayName(currentUser);
+  const firstName = userName.split(/\s+/)[0] || "مستخدم نَسّق";
+  const dashboardPath = getDashboardPath(currentRole);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -561,6 +650,22 @@ function Home() {
   );
 
   const closeMenu = () => setMenuOpen(false);
+
+  const handleSignOut = (event) => {
+    event?.preventDefault?.();
+
+    signOut();
+
+    window.localStorage.removeItem("user");
+    window.localStorage.removeItem("role");
+    window.localStorage.removeItem("permissions");
+
+    closeMenu();
+
+    navigate("/", {
+      replace: true,
+    });
+  };
 
   return (
     <div className="wadq-home">
@@ -583,24 +688,64 @@ function Home() {
             </a>
 
             <div className="site-nav__mobile-actions">
-              <Link to="/login" onClick={closeMenu}>
-                تسجيل الدخول
-              </Link>
-              <Link to="/register" onClick={closeMenu}>
-                ابدأ الآن
-              </Link>
+              {authenticated ? (
+                <>
+                  <Link to={dashboardPath} onClick={closeMenu}>
+                    لوحة التحكم
+                  </Link>
+
+                  <Link to="/" onClick={handleSignOut}>
+                    تسجيل الخروج
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" onClick={closeMenu}>
+                    تسجيل الدخول
+                  </Link>
+
+                  <Link to="/register" onClick={closeMenu}>
+                    ابدأ الآن
+                  </Link>
+                </>
+              )}
             </div>
           </nav>
 
           <div className="site-header__actions">
-            <Link className="button button--ghost" to="/login">
-              تسجيل الدخول
-            </Link>
+            {authenticated ? (
+              <>
+                <Link
+                  className="button button--ghost"
+                  to="/"
+                  onClick={handleSignOut}
+                >
+                  تسجيل الخروج
+                </Link>
 
-            <Link className="button button--primary button--small" to="/register">
-              ابدأ الآن
-              <ArrowBackRounded />
-            </Link>
+                <Link
+                  className="button button--primary button--small"
+                  to={dashboardPath}
+                >
+                  لوحة التحكم
+                  <ArrowBackRounded />
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link className="button button--ghost" to="/login">
+                  تسجيل الدخول
+                </Link>
+
+                <Link
+                  className="button button--primary button--small"
+                  to="/register"
+                >
+                  ابدأ الآن
+                  <ArrowBackRounded />
+                </Link>
+              </>
+            )}
 
             <button
               type="button"
@@ -639,7 +784,9 @@ function Home() {
             >
               <motion.span className="eyebrow eyebrow--light" variants={reveal}>
                 <AutoAwesomeRounded />
-                تجربة تعليمية صُممت للمعلم السعودي
+                {authenticated
+                  ? `مرحبًا بعودتك يا ${firstName}`
+                  : "تجربة تعليمية صُممت للمعلم السعودي"}
               </motion.span>
 
               <motion.h1 variants={reveal}>
@@ -653,8 +800,11 @@ function Home() {
               </motion.p>
 
               <motion.div className="hero-copy__actions" variants={reveal}>
-                <Link className="button button--gold" to="/register">
-                  ابدأ مع نَسّق
+                <Link
+                  className="button button--gold"
+                  to={authenticated ? dashboardPath : "/register"}
+                >
+                  {authenticated ? "الذهاب إلى لوحة التحكم" : "ابدأ مع نَسّق"}
                   <ArrowBackRounded />
                 </Link>
 
@@ -1013,14 +1163,33 @@ function Home() {
               </p>
 
               <div className="final-cta__actions">
-                <Link className="button button--gold" to="/register">
-                  أنشئ حسابك
-                  <ArrowBackRounded />
-                </Link>
+                {authenticated ? (
+                  <>
+                    <Link className="button button--gold" to={dashboardPath}>
+                      افتح لوحة التحكم
+                      <ArrowBackRounded />
+                    </Link>
 
-                <Link className="button button--outline-light" to="/login">
-                  لدي حساب بالفعل
-                </Link>
+                    <Link
+                      className="button button--outline-light"
+                      to="/"
+                      onClick={handleSignOut}
+                    >
+                      تسجيل الخروج
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link className="button button--gold" to="/register">
+                      أنشئ حسابك
+                      <ArrowBackRounded />
+                    </Link>
+
+                    <Link className="button button--outline-light" to="/login">
+                      لدي حساب بالفعل
+                    </Link>
+                  </>
+                )}
               </div>
             </motion.div>
 

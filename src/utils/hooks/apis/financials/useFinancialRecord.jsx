@@ -1,33 +1,115 @@
-import { fetchSingleFinancialRecord } from "@/APIs/financials/financialRecords";
-import { useEffect, useState } from "react";
-import { toast } from "react-toastify";
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
-export const useFinancialRecord = (studentId) => {
-	const [financialRecord, setFinancialRecord] = useState(null);
-	const [loading, setLoading] = useState(true);
+import { api } from "@/APIs/Axios";
 
-	const fetchData = async () => {
-		if (!studentId) {
-			setFinancialRecord(null);
-			setLoading(false);
-			return;
-		}
+const extractRecord = (
+  response
+) => {
+  const payload =
+    response?.data ??
+    response;
 
-		setLoading(true);
-		const res = await fetchSingleFinancialRecord(studentId);
-		if (res.status) {
-			setFinancialRecord(res.data || null);
-		} else {
-			toast.error(res || "حدث خطأ ما أثناء جلب مصاريف الطالب");
-			setFinancialRecord(null);
-		}
-		setLoading(false);
-	};
+  const data =
+    payload?.data ??
+    payload;
 
-	useEffect(() => {
-		fetchData();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [studentId]);
+  if (
+    !data ||
+    Array.isArray(data) ||
+    typeof data !== "object"
+  ) {
+    return null;
+  }
 
-	return { financialRecord, loading, setFinancialRecord, refetch: fetchData };
+  return (
+    data?.record ||
+    data?.financialRecord ||
+    data?.item ||
+    data
+  );
 };
+
+export const useFinancialRecord = (
+  studentId,
+  academicYearId = ""
+) => {
+  const [
+    financialRecord,
+    setFinancialRecord,
+  ] = useState(null);
+
+  const [loading, setLoading] =
+    useState(Boolean(studentId));
+
+  const [error, setError] =
+    useState("");
+
+  const refetch =
+    useCallback(async () => {
+      if (!studentId) {
+        setFinancialRecord(
+          null
+        );
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError("");
+
+      try {
+        const response =
+          await api.get(
+            `/financial/records/${studentId}`,
+            {
+              params:
+                academicYearId
+                  ? {
+                      academicYearId,
+                    }
+                  : undefined,
+            }
+          );
+
+        setFinancialRecord(
+          extractRecord(
+            response
+          )
+        );
+      } catch (err) {
+        setFinancialRecord(
+          null
+        );
+
+        setError(
+          err?.response?.data
+            ?.message ||
+            err?.message ||
+            "تعذر تحميل الملف المالي للطالب"
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, [
+      studentId,
+      academicYearId,
+    ]);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  return {
+    financialRecord,
+    setFinancialRecord,
+    loading,
+    error,
+    refetch,
+  };
+};
+
+export default useFinancialRecord;

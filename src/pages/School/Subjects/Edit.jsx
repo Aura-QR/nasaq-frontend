@@ -35,10 +35,17 @@ import { useSubject } from "@/utils/hooks/apis/useSubject";
 const Edit = () => {
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
     reset,
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      subjectName: "",
+      subjectCode: "",
+      isRequiredForPromotion: true,
+    },
+  });
 
   const [loading, setLoading] =
     useState(false);
@@ -67,6 +74,8 @@ const Edit = () => {
       subjectCode:
         subject.subjectCode?.trim() ||
         "",
+      isRequiredForPromotion:
+        subject.isRequiredForPromotion !== false,
     };
 
     reset(normalizedSubject);
@@ -90,6 +99,8 @@ const Edit = () => {
         subjectCode:
           formData.subjectCode?.trim() ||
           "",
+        isRequiredForPromotion:
+          formData.isRequiredForPromotion !== false,
       };
 
       const changedData =
@@ -297,6 +308,7 @@ const Edit = () => {
             <>
               <SubjectForm
                 register={register}
+                control={control}
                 errors={errors}
               />
 

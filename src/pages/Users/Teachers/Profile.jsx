@@ -190,7 +190,23 @@ const Profile = () => {
   const subjectPermissions =
     usePermissions("subjects");
 
+  const lecturePermissions =
+    usePermissions("lectures");
+
+  // Backend rule:
+  // PATCH /teachers/:id is controlled by teachers.update only.
+  // usePermissions("teachers").edit maps to that update permission.
+  const canEditTeacherSubjects =
+    teacherPermissions.edit;
+
   const handleDelete = async () => {
+    if (!teacherPermissions.delete) {
+      toast.error(
+        "ليس لديك صلاحية حذف المعلمين"
+      );
+      return;
+    }
+
     try {
       const response =
         await deleteTeacher(id);
@@ -222,6 +238,13 @@ const Profile = () => {
 
   const handleToggleStatus =
     async () => {
+      if (!teacherPermissions.edit) {
+        toast.error(
+          "ليس لديك صلاحية تعديل حالة المعلم"
+        );
+        return;
+      }
+
       try {
         setToggleLoading(true);
 
@@ -332,6 +355,9 @@ const Profile = () => {
           permissions={
             teacherPermissions
           }
+          canViewSchedule={
+            lecturePermissions.read
+          }
           toggleLoading={
             toggleLoading
           }
@@ -350,8 +376,8 @@ const Profile = () => {
         <TeacherSubjects
           teacher={item}
           setTeacher={setItem}
-          permissions={
-            subjectPermissions
+          canEdit={
+            canEditTeacherSubjects
           }
         />
       </Stack>
@@ -370,6 +396,7 @@ const Profile = () => {
 const TeacherHeader = ({
   teacher,
   permissions,
+  canViewSchedule,
   toggleLoading,
   onToggleStatus,
   onDelete,
@@ -518,37 +545,39 @@ const TeacherHeader = ({
           flexShrink: 0,
         }}
       >
-        <Button
-          component={Link}
-          to={`/users/teachers/${teacher._id}/schedule`}
-          variant="outlined"
-          startIcon={
-            <CalendarMonthOutlined />
-          }
-          sx={{
-            minHeight: 42,
-            px: 1.7,
+        {canViewSchedule && (
+          <Button
+            component={Link}
+            to={`/users/teachers/${teacher._id}/schedule`}
+            variant="outlined"
+            startIcon={
+              <CalendarMonthOutlined />
+            }
+            sx={{
+              minHeight: 42,
+              px: 1.7,
 
-            borderRadius: "12px",
+              borderRadius: "12px",
 
-            color:
-              "var(--color-navy)",
-            borderColor:
-              "rgba(36, 74, 112, 0.16)",
+              color:
+                "var(--color-navy)",
+              borderColor:
+                "rgba(36, 74, 112, 0.16)",
 
-            fontSize: "11px",
-            fontWeight: 800,
-            textTransform: "none",
+              fontSize: "11px",
+              fontWeight: 800,
+              textTransform: "none",
 
-            "& .MuiButton-startIcon":
-              {
-                marginLeft: "6px",
-                marginRight: 0,
-              },
-          }}
-        >
-          الجدول الدراسي
-        </Button>
+              "& .MuiButton-startIcon":
+                {
+                  marginLeft: "6px",
+                  marginRight: 0,
+                },
+            }}
+          >
+            الجدول الدراسي
+          </Button>
+        )}
 
         {permissions.edit && (
           <>
@@ -809,7 +838,7 @@ const TeacherDetails = ({
 const TeacherSubjects = ({
   teacher,
   setTeacher,
-  permissions,
+  canEdit,
 }) => {
   const { id } = useParams();
 
@@ -842,6 +871,13 @@ const TeacherSubjects = ({
 
   const handleSaveChanges =
     async () => {
+      if (!canEdit) {
+        toast.error(
+          "ليس لديك صلاحية تعديل مواد المعلم"
+        );
+        return;
+      }
+
       if (
         selectedSubjects.length === 0
       ) {
@@ -979,7 +1015,7 @@ const TeacherSubjects = ({
           </Typography>
         </Box>
 
-        {permissions.edit && (
+        {canEdit && (
           <Button
             type="button"
             disabled={loading}
@@ -1020,6 +1056,16 @@ const TeacherSubjects = ({
 
           backgroundColor:
             "var(--color-white)",
+
+          pointerEvents:
+            canEdit
+              ? "auto"
+              : "none",
+
+          opacity:
+            canEdit
+              ? 1
+              : 0.72,
         }}
       >
         <SubjectCheckBoxes

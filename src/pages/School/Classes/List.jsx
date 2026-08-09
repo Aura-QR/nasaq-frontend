@@ -1,779 +1,283 @@
 import {
+  AddRounded,
+  CheckCircleRounded,
+  DeleteOutlineRounded,
+  EditRounded,
+  EventSeatRounded,
+  MeetingRoomRounded,
+  PauseCircleOutlineRounded,
+  PlayCircleOutlineRounded,
+  RefreshRounded,
+  SearchRounded,
+  VisibilityRounded,
+} from "@mui/icons-material";
+import {
+  Alert,
   Box,
   Button,
   Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  InputAdornment,
+  LinearProgress,
+  MenuItem,
   Paper,
+  Skeleton,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TablePagination,
+  TableRow,
+  TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
-
-import {
-  AddCircleOutlineOutlined,
-  CheckCircleRounded,
-  EventSeatRounded,
-  FileDownloadOutlined,
-  MeetingRoomRounded,
-  RestartAltRounded,
-  SearchOffRounded,
-} from "@mui/icons-material";
-
-import { useEffect, useMemo, useState } from "react";
-import { CSVLink } from "react-csv";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
-import Table from "@/components/Table/Table";
-import SelectFilter from "@/components/Filters/SelectFilter";
-import PaginationControls from "@/components/Pagination";
-
-import { deleteClass } from "@/APIs/school/classes";
-import { useClasses } from "@/utils/hooks/apis/useClasses";
+import {
+  deleteSchoolClass,
+  getSchoolClasses,
+  toggleSchoolClassActive,
+} from "@/APIs/school/classes";
+import { fetchAcademicYears } from "@/APIs/school/academicYears";
+import { fetchStages } from "@/APIs/school/stages";
+import { fetchGradeLevels } from "@/APIs/school/gradeLevels";
+import {
+  extractApiList,
+  getClassAcademicYear,
+  getClassAvailableSeats,
+  getClassCapacity,
+  getClassDisplayName,
+  getClassGender,
+  getClassGenderLabel,
+  getClassGradeLevelId,
+  getClassGradeLevelName,
+  getClassId,
+  getClassOccupancy,
+  getClassRoomNumber,
+  getClassStudentCount,
+  getClassTeacherName,
+  getEntityId,
+  isClassActive,
+} from "@/utils/school/classData";
 import usePermissions from "@/utils/hooks/usePermissions";
-import { translateGender } from "@/utils/helpers/translateGender";
 
-import Status from "@/utils/constants/Status";
-import Years from "@/utils/constants/Years";
-import Gender from "@/utils/constants/Gender";
+const stageIdOfGrade = (grade) =>
+  getEntityId(
+    grade?.stageId && typeof grade.stageId === "object"
+      ? grade.stageId
+      : grade?.stage && typeof grade.stage === "object"
+        ? grade.stage
+        : grade?.stageId || grade?.stage
+  );
 
-import SchoolIcon from "@mui/icons-material/School";
-import MaleIcon from "@mui/icons-material/Male";
-import SortIcon from "@mui/icons-material/Sort";
+const StatCard = ({ label, value, icon }) => (
+  <Paper elevation={0} sx={{ minHeight: 82, p: 1.25, display: "flex", alignItems: "center", gap: .9, border: "1px solid #ded8cd", borderRadius: "15px", backgroundColor: "#fff", boxShadow: "0 7px 20px rgba(36,74,112,.035)" }}>
+    <Box sx={{ width: 40, height: 40, display: "grid", placeItems: "center", color: "#b78430", backgroundColor: "#fbf0d8", borderRadius: "11px" }}>{icon}</Box>
+    <Box><Typography sx={{ color: "#7e8791", fontSize: "8px", fontWeight: 700 }}>{label}</Typography><Typography sx={{ color: "#122f4d", fontSize: "19px", fontWeight: 800 }}>{value}</Typography></Box>
+  </Paper>
+);
 
-const TABLE_HEADERS = [
-  "اسم الفصل",
-  "الرقم",
-  "النوع",
-  "الأماكن الفارغة",
-  "الحالة",
-];
-
-const TABLE_BODY = [
-  "name",
-  "roomNumber",
-  "gender",
-  "availableSeats",
-  "isActive",
-];
-
-const STAT_CARDS = [
-  {
-    key: "total",
-    label: "إجمالي الفصول",
-    icon: <MeetingRoomRounded />,
-  },
-  {
-    key: "visible",
-    label: "الظاهر في الصفحة",
-    icon: <MeetingRoomRounded />,
-  },
-  {
-    key: "active",
-    label: "الفصول النشطة",
-    icon: <CheckCircleRounded />,
-  },
-  {
-    key: "availableSeats",
-    label: "الأماكن المتاحة",
-    icon: <EventSeatRounded />,
-  },
-];
-
-const mapClasses = (data = []) =>
-  data.map((item) => {
-    const studentsCount = Array.isArray(item?.students)
-      ? item.students.length
-      : Number(item?.studentsCount || 0);
-
-    const maxCapacity = Number(item?.maxCapacity || 0);
-    const availableSeats = Math.max(0, maxCapacity - studentsCount);
-    const academicYear = item?.academicYear || "—";
-    const roomNumber = item?.roomNumber || "—";
-
-    return {
-      id: item?._id || item?.id,
-      name: `${academicYear} - ${roomNumber}`,
-      academicYear,
-      roomNumber,
-      gender: translateGender(item?.gender, "class") || "—",
-      teacherInCharge:
-        item?.teacherInCharge?.name || item?.teacherInChargeName || "—",
-      maxCapacity,
-      studentsCount,
-      availableSeats,
-      isActive: item?.isActive ? "نشط" : "غير نشط",
-      rawIsActive: Boolean(item?.isActive),
-    };
-  });
+const ConfirmDialog = ({ open, item, type, loading, onClose, onConfirm }) => {
+  const active = isClassActive(item);
+  const deleting = type === "delete";
+  const title = deleting ? "حذف الفصل" : active ? "إيقاف الفصل" : "تفعيل الفصل";
+  return (
+    <Dialog open={open} onClose={loading ? undefined : onClose} fullWidth maxWidth="xs" PaperProps={{ sx: { borderRadius: "18px" } }}>
+      <DialogTitle sx={{ color: "#122f4d", fontWeight: 800 }}>{title}</DialogTitle>
+      <DialogContent><Typography sx={{ color: "#193754", fontSize: "10.5px", lineHeight: 1.9 }}>{deleting ? "سيتم حذف" : active ? "سيتم إيقاف" : "سيتم تفعيل"} «{getClassDisplayName(item)}».</Typography></DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={loading}>إلغاء</Button>
+        <Button onClick={onConfirm} disabled={loading} variant="contained" color={deleting || active ? "error" : "success"}>{loading ? <CircularProgress size={16} color="inherit" /> : "تأكيد"}</Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 
 const List = () => {
-  const [items, setItems] = useState([]);
-  const [academicYear, setAcademicYear] = useState("");
-  const [status, setStatus] = useState("");
-  const [gender, setGender] = useState("");
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
-  const [localPagination, setLocalPagination] = useState(null);
-
-  const filters = useMemo(
-    () => ({
-      page,
-      limit,
-      gender: gender || undefined,
-      isActive:
-        status !== "" ? Boolean(Number(status)) : undefined,
-      academicYear: academicYear || undefined,
-    }),
-    [page, limit, gender, status, academicYear]
-  );
-
-  const { classes, loading, pagination } = useClasses(filters);
+  const navigate = useNavigate();
   const permissions = usePermissions("classes");
+  const [rows, setRows] = useState([]);
+  const [years, setYears] = useState([]);
+  const [stages, setStages] = useState([]);
+  const [grades, setGrades] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [yearId, setYearId] = useState("");
+  const [stageId, setStageId] = useState("");
+  const [gradeId, setGradeId] = useState("");
+  const [gender, setGender] = useState("");
+  const [status, setStatus] = useState("");
+  const [page, setPage] = useState(0);
+  const [limit, setLimit] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [dialog, setDialog] = useState({ type: "", item: null });
 
   useEffect(() => {
-    setItems(mapClasses(classes || []));
-  }, [classes]);
+    const loadOptions = async () => {
+      const [yearRes, stageRes, gradeRes] = await Promise.all([fetchAcademicYears(), fetchStages(), fetchGradeLevels()]);
+      if (yearRes?.status !== false) setYears(extractApiList(yearRes, ["academicYears", "years"]));
+      if (stageRes?.status !== false) setStages(extractApiList(stageRes, ["stages"]));
+      if (gradeRes?.status !== false) setGrades(extractApiList(gradeRes, ["gradeLevels", "grades"]));
+    };
+    loadOptions();
+  }, []);
 
-  useEffect(() => {
-    if (pagination) {
-      setLocalPagination(pagination);
+  const load = useCallback(async ({ force = false } = {}) => {
+    setLoading(true);
+    setError("");
+    const response = await getSchoolClasses(
+      { page: page + 1, limit, academicYearId: yearId || undefined, gradeLevelId: gradeId || undefined },
+      { force }
+    );
+    if (response?.status === false) {
+      setRows([]);
+      setTotal(0);
+      setError(response?.message || "تعذر تحميل الفصول");
+      setLoading(false);
+      return;
     }
-  }, [pagination]);
+    const list = extractApiList(response, ["classes"]);
+    const pagination = response?.pagination || response?.data?.pagination || response?.data?.meta || {};
+    setRows(list);
+    setTotal(Number(pagination?.totalDocs ?? pagination?.totalItems ?? pagination?.total ?? list.length));
+    setLoading(false);
+  }, [page, limit, yearId, gradeId]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPage(0); }, [yearId, gradeId, limit]);
+
+  const filteredGrades = useMemo(
+    () => grades.filter((grade) => !stageId || stageIdOfGrade(grade) === stageId).sort((a, b) => Number(a?.order || 0) - Number(b?.order || 0)),
+    [grades, stageId]
+  );
 
   useEffect(() => {
-    setPage(1);
-  }, [limit, gender, status, academicYear]);
+    if (!stageId || !gradeId) return;
+    const selected = grades.find((grade) => getEntityId(grade) === gradeId);
+    if (selected && stageIdOfGrade(selected) !== stageId) setGradeId("");
+  }, [stageId, gradeId, grades]);
 
-  const currentPagination = localPagination || pagination;
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rows.filter((item) => {
+      const searchable = [item?.name, item?.roomNumber, item?.gradeLevelId?.name, item?.gradeLevel?.name, item?.teacherInChargeId?.name, item?.teacherInCharge?.name].filter(Boolean).join(" ").toLowerCase();
+      const grade = grades.find((entry) => getEntityId(entry) === getClassGradeLevelId(item));
+      return (!q || searchable.includes(q)) &&
+        (!gender || getClassGender(item) === gender) &&
+        (!status || isClassActive(item) === (status === "active")) &&
+        (!stageId || stageIdOfGrade(grade) === stageId);
+    });
+  }, [rows, search, gender, status, stageId, grades]);
 
-  const stats = useMemo(
-    () => ({
-      total: currentPagination?.totalDocs ?? items.length,
-      visible: items.length,
-      active: items.filter((item) => item.rawIsActive).length,
-      availableSeats: items.reduce(
-        (total, item) => total + Number(item.availableSeats || 0),
-        0
-      ),
-    }),
-    [items, currentPagination]
-  );
-
-  const csvData = useMemo(
-    () =>
-      items.map((item) => ({
-        "اسم الفصل": item.name,
-        "رقم الفصل": item.roomNumber,
-        النوع: item.gender,
-        "رائد الفصل": item.teacherInCharge,
-        "السعة القصوى": item.maxCapacity,
-        "عدد الطلاب": item.studentsCount,
-        "الأماكن المتاحة": item.availableSeats,
-        الحالة: item.isActive,
-      })),
-    [items]
-  );
-
-  const activeFiltersCount = [academicYear, status, gender].filter(Boolean)
-    .length;
+  const stats = useMemo(() => ({
+    total,
+    visible: visible.length,
+    active: visible.filter(isClassActive).length,
+    seats: visible.reduce((sum, item) => sum + getClassAvailableSeats(item), 0),
+  }), [visible, total]);
 
   const resetFilters = () => {
-    setAcademicYear("");
-    setStatus("");
-    setGender("");
-    setPage(1);
+    setSearch(""); setYearId(""); setStageId(""); setGradeId(""); setGender(""); setStatus(""); setPage(0);
   };
 
-  const handleDelete = async (id, setActive) => {
-    try {
-      const response = await deleteClass(id);
-
-      if (!response?.status) {
-        toast.error(response?.message || response || "تعذر حذف الفصل");
-        return;
-      }
-
-      toast.success("تم حذف الفصل بنجاح");
-      setItems((previous) => previous.filter((item) => item.id !== id));
-
-      setLocalPagination((previous) =>
-        previous
-          ? {
-              ...previous,
-              totalDocs: Math.max(0, Number(previous.totalDocs || 1) - 1),
-            }
-          : previous
-      );
-
-      setActive(false);
-    } catch (error) {
-      toast.error(
-        error?.response?.data?.message || "حدث خطأ أثناء حذف الفصل"
-      );
+  const confirmAction = async () => {
+    const item = dialog.item;
+    if (!item) return;
+    setActionLoading(true);
+    const response = dialog.type === "delete"
+      ? await deleteSchoolClass(getClassId(item))
+      : await toggleSchoolClassActive(getClassId(item));
+    if (response?.status === false) {
+      toast.error(response?.message || "تعذر تنفيذ العملية");
+      setActionLoading(false);
+      return;
     }
+    toast.success(dialog.type === "delete" ? "تم حذف الفصل" : "تم تغيير حالة الفصل");
+    setDialog({ type: "", item: null });
+    setActionLoading(false);
+    load({ force: true });
   };
 
   return (
     <Container>
-      <Box
-        dir="rtl"
-        sx={{
-          width: "100%",
-          maxWidth: "100%",
-          minWidth: 0,
-          pb: 4,
-          overflowX: "hidden",
-          color: "var(--color-text)",
-        }}
-      >
-        <Paper
-          elevation={0}
-          sx={{
-            mb: 1.25,
-            px: { xs: 1.5, sm: 2, md: 2.4 },
-            py: { xs: 1.4, md: 1.6 },
-            border: "1px solid rgba(36,74,112,0.08)",
-            borderRadius: "18px",
-            background:
-              "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.42))",
-            boxShadow: "0 10px 24px rgba(18,47,77,0.06)",
-          }}
-        >
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            alignItems={{ xs: "stretch", sm: "center" }}
-            justifyContent="space-between"
-            gap={1.5}
-          >
-            <Box sx={{ minWidth: 0 }}>
-              <Stack direction="row" alignItems="center" spacing={0.8}>
-                <Typography
-                  component="h1"
-                  sx={{
-                    color: "var(--color-navy-deep)",
-                    fontSize: { xs: "21px", md: "25px" },
-                    fontWeight: 800,
-                    lineHeight: 1.3,
-                  }}
-                >
-                  إدارة الفصول
-                </Typography>
-
-                <Chip
-                  label={currentPagination?.totalDocs ?? items.length}
-                  size="small"
-                  sx={{
-                    height: 26,
-                    color: "var(--color-gold-dark)",
-                    backgroundColor: "var(--color-gold-soft)",
-                    border: "1px solid rgba(211,164,79,0.24)",
-                    fontSize: "10px",
-                    fontWeight: 800,
-                  }}
-                />
-              </Stack>
-
-              <Typography
-                sx={{
-                  mt: 0.45,
-                  color: "var(--color-muted)",
-                  fontSize: "11px",
-                  lineHeight: 1.6,
-                }}
-              >
-                أنشئ الفصول ونظّم السعة والطلاب والجداول من مكان واحد.
-              </Typography>
-            </Box>
-
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              gap={1}
-              sx={{ width: { xs: "100%", sm: "auto" }, flexShrink: 0 }}
-            >
-              <CSVLink
-                data={csvData}
-                filename="classes.csv"
-                style={{ textDecoration: "none" }}
-              >
-                <Button
-                  disabled={items.length === 0}
-                  variant="outlined"
-                  startIcon={<FileDownloadOutlined />}
-                  sx={{
-                    width: { xs: "100%", sm: 112 },
-                    minHeight: 42,
-                    borderRadius: "12px",
-                    color: "var(--color-navy)",
-                    borderColor: "rgba(36,74,112,0.16)",
-                    fontSize: "12px",
-                    fontWeight: 800,
-                    textTransform: "none",
-                    "& .MuiButton-startIcon": {
-                      marginLeft: "7px",
-                      marginRight: 0,
-                    },
-                    "&:hover": {
-                      color: "var(--color-gold-dark)",
-                      backgroundColor: "var(--color-gold-soft)",
-                      borderColor: "rgba(211,164,79,0.42)",
-                    },
-                  }}
-                >
-                  تصدير
-                </Button>
-              </CSVLink>
-
-              {permissions.add && (
-                <Button
-                  component={Link}
-                  to="add"
-                  variant="contained"
-                  startIcon={<AddCircleOutlineOutlined />}
-                  sx={{
-                    width: { xs: "100%", sm: 172 },
-                    minHeight: 42,
-                    borderRadius: "12px",
-                    color: "var(--color-white)",
-                    background:
-                      "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-                    boxShadow: "0 9px 20px rgba(18,47,77,0.16)",
-                    fontSize: "12px",
-                    fontWeight: 800,
-                    textTransform: "none",
-                    "& .MuiButton-startIcon": {
-                      marginLeft: "7px",
-                      marginRight: 0,
-                    },
-                    "&:hover": {
-                      background:
-                        "linear-gradient(135deg, var(--color-navy), var(--color-navy-deep))",
-                    },
-                  }}
-                >
-                  إضافة فصل جديد
-                </Button>
-              )}
+      <Box dir="rtl" sx={{ pb: 4 }}>
+        <Paper elevation={0} sx={{ p: { xs: 1.7, md: 2.1 }, border: "1px solid rgba(36,74,112,.08)", borderRadius: "18px", background: "linear-gradient(135deg,rgba(255,252,247,.98),rgba(251,240,216,.44))", boxShadow: "0 10px 24px rgba(18,47,77,.06)" }}>
+          <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "stretch", md: "center" }} justifyContent="space-between" gap={1.2}>
+            <Box><Stack direction="row" alignItems="center" spacing={.7}><Typography component="h1" sx={{ color: "#122f4d", fontSize: { xs: "21px", md: "25px" }, fontWeight: 800 }}>إدارة الفصول</Typography><Chip size="small" label={stats.total} sx={{ color: "#b78430", backgroundColor: "#fbf0d8", fontWeight: 800 }} /></Stack><Typography sx={{ mt: .35, color: "#7e8791", fontSize: "10px" }}>الفصول مرتبطة بالسنة الدراسية والصف ضمن الهيكل الأكاديمي.</Typography></Box>
+            <Stack direction={{ xs: "column", sm: "row" }} gap={.8}>
+              <Button variant="outlined" startIcon={<RefreshRounded />} onClick={() => load({ force: true })}>تحديث</Button>
+              {permissions.add && <Button component={Link} to="/school/classes/add" variant="contained" startIcon={<AddRounded />} sx={{ backgroundColor: "#244a70", boxShadow: "none", "&:hover": { backgroundColor: "#1b3d61", boxShadow: "none" } }}>إضافة فصل جديد</Button>}
             </Stack>
           </Stack>
         </Paper>
 
-        <Box
-          sx={{
-            mb: 1.25,
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "repeat(2, minmax(0, 1fr))",
-              lg: "repeat(4, minmax(0, 1fr))",
-            },
-            gap: 1,
-            minWidth: 0,
-          }}
-        >
-          {STAT_CARDS.map((card) => (
-            <Paper
-              key={card.key}
-              elevation={0}
-              sx={{
-                minWidth: 0,
-                p: 1.3,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 1,
-                border: "1px solid rgba(36,74,112,0.08)",
-                borderRadius: "18px",
-                backgroundColor: "var(--color-cream)",
-                boxShadow: "0 10px 24px rgba(18,47,77,0.055)",
-              }}
-            >
-              <Box sx={{ minWidth: 0 }}>
-                <Typography
-                  noWrap
-                  sx={{
-                    color: "var(--color-muted)",
-                    fontSize: "10px",
-                    fontWeight: 700,
-                  }}
-                >
-                  {card.label}
-                </Typography>
-
-                <Typography
-                  sx={{
-                    mt: 0.35,
-                    color: "var(--color-navy-deep)",
-                    fontSize: "20px",
-                    fontWeight: 800,
-                  }}
-                >
-                  {stats[card.key]}
-                </Typography>
-              </Box>
-
-              <Box
-                sx={{
-                  width: 40,
-                  height: 40,
-                  flexShrink: 0,
-                  display: "grid",
-                  placeItems: "center",
-                  color: "var(--color-gold-dark)",
-                  backgroundColor: "var(--color-gold-soft)",
-                  border: "1px solid rgba(211,164,79,0.22)",
-                  borderRadius: "12px",
-                  "& svg": { fontSize: 21 },
-                }}
-              >
-                {card.icon}
-              </Box>
-            </Paper>
-          ))}
+        <Box sx={{ mt: 1.25, display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(4,minmax(0,1fr))" }, gap: 1 }}>
+          <StatCard label="إجمالي الفصول" value={stats.total} icon={<MeetingRoomRounded />} />
+          <StatCard label="الظاهر في الصفحة" value={stats.visible} icon={<SearchRounded />} />
+          <StatCard label="الفصول النشطة" value={stats.active} icon={<CheckCircleRounded />} />
+          <StatCard label="الأماكن المتاحة" value={stats.seats} icon={<EventSeatRounded />} />
         </Box>
 
-        <Paper
-          elevation={0}
-          sx={{
-            width: "100%",
-            maxWidth: "100%",
-            minWidth: 0,
-            mb: 1.25,
-            px: {
-              xs: 1.5,
-              md: 1.9,
-            },
-            py: {
-              xs: 1.45,
-              md: 1.65,
-            },
-            border: "1px solid rgba(36,74,112,0.08)",
-            borderRadius: "18px",
-            backgroundColor: "var(--color-cream)",
-            boxShadow: "0 9px 22px rgba(18,47,77,0.05)",
-
-            "& .MuiFormControl-root": {
-              width: "100%",
-              minWidth: 0,
-              margin: 0,
-            },
-
-            "& .MuiInputBase-root, & .MuiOutlinedInput-root": {
-              minHeight: 50,
-              height: 50,
-              backgroundColor: "var(--color-white)",
-              borderRadius: "12px",
-              fontSize: "12px",
-            },
-
-            "& .MuiOutlinedInput-notchedOutline": {
-              borderColor: "rgba(36,74,112,0.18)",
-            },
-
-            "& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline": {
-              borderColor: "rgba(36,74,112,0.30)",
-            },
-
-            "& .MuiOutlinedInput-root.Mui-focused": {
-              boxShadow: "0 0 0 3px rgba(211,164,79,0.10)",
-            },
-
-            "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
-              borderWidth: "1px",
-              borderColor: "var(--color-gold)",
-            },
-
-            "& .MuiInputLabel-root": {
-              px: 0.65,
-              color: "var(--color-muted)",
-              backgroundColor: "var(--color-cream)",
-              fontSize: "10.5px",
-              fontWeight: 700,
-            },
-
-            "& .MuiInputLabel-root.Mui-focused": {
-              color: "var(--color-gold-dark)",
-            },
-          }}
-        >
-          <Box
-            sx={{
-              mb: {
-                xs: 1.5,
-                md: 1.7,
-              },
-            }}
-          >
-            <Typography
-              sx={{
-                color: "var(--color-navy-deep)",
-                fontSize: "15px",
-                fontWeight: 800,
-                lineHeight: 1.35,
-              }}
-            >
-              البحث والتصفية
-            </Typography>
-
-            <Typography
-              sx={{
-                mt: 0.2,
-                color: "var(--color-muted)",
-                fontSize: "9.5px",
-                lineHeight: 1.5,
-              }}
-            >
-              استخدم الفلاتر للوصول إلى الفصول بسرعة.
-            </Typography>
+        <Paper elevation={0} sx={{ mt: 1.25, p: 1.2, border: "1px solid #ded8cd", borderRadius: "16px", backgroundColor: "#fff" }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "2fr repeat(5,minmax(145px,1fr))" }, gap: .8 }}>
+            <TextField size="small" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث باسم الفصل أو الغرفة أو المعلم..." InputProps={{ startAdornment: <InputAdornment position="start"><SearchRounded /></InputAdornment> }} />
+            <TextField select size="small" label="السنة" value={yearId} onChange={(e) => setYearId(e.target.value)}><MenuItem value="">كل السنوات</MenuItem>{years.map((year) => <MenuItem key={getEntityId(year)} value={getEntityId(year)}>{year?.name}</MenuItem>)}</TextField>
+            <TextField select size="small" label="المرحلة" value={stageId} onChange={(e) => setStageId(e.target.value)}><MenuItem value="">كل المراحل</MenuItem>{stages.map((stage) => <MenuItem key={getEntityId(stage)} value={getEntityId(stage)}>{stage?.name}</MenuItem>)}</TextField>
+            <TextField select size="small" label="الصف" value={gradeId} onChange={(e) => setGradeId(e.target.value)}><MenuItem value="">كل الصفوف</MenuItem>{filteredGrades.map((grade) => <MenuItem key={getEntityId(grade)} value={getEntityId(grade)}>{grade?.name}</MenuItem>)}</TextField>
+            <TextField select size="small" label="النوع" value={gender} onChange={(e) => setGender(e.target.value)}><MenuItem value="">كل الأنواع</MenuItem><MenuItem value="male">بنين</MenuItem><MenuItem value="female">بنات</MenuItem><MenuItem value="both">مختلط</MenuItem></TextField>
+            <TextField select size="small" label="الحالة" value={status} onChange={(e) => setStatus(e.target.value)}><MenuItem value="">كل الحالات</MenuItem><MenuItem value="active">نشط</MenuItem><MenuItem value="inactive">موقوف</MenuItem></TextField>
           </Box>
-
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(2, minmax(0, 1fr))",
-                lg: "repeat(3, minmax(0, 1fr))",
-              },
-              gap: {
-                xs: 1.25,
-                md: 1.5,
-              },
-              minWidth: 0,
-
-              "& > *": {
-                minWidth: 0,
-              },
-            }}
-          >
-            <SelectFilter
-              value={academicYear}
-              onChange={setAcademicYear}
-              label="السنة الدراسية"
-              icon={SchoolIcon}
-              allLabel="جميع السنين"
-              options={Years.map((year) => ({
-                value: year,
-                label: year,
-              }))}
-            />
-
-            <SelectFilter
-              value={gender}
-              onChange={setGender}
-              label="نوع الفصل"
-              icon={MaleIcon}
-              allLabel="الكل"
-              options={Gender.map((item) => ({
-                value: item.id,
-                label: item.label,
-              }))}
-            />
-
-            <SelectFilter
-              value={status}
-              onChange={setStatus}
-              label="حالة الفصل"
-              icon={SortIcon}
-              allLabel="جميع الفصول"
-              options={Status.map((item) => ({
-                value: item.id.toString(),
-                label: item.label,
-              }))}
-            />
-          </Box>
+          <Button onClick={resetFilters} sx={{ mt: .5, color: "#7e8791", fontSize: "8.5px", fontWeight: 800 }}>إعادة ضبط الفلاتر</Button>
         </Paper>
 
-        <Paper
-          elevation={0}
-          sx={{
-            width: "100%",
-            maxWidth: "100%",
-            minWidth: 0,
-            overflow: "hidden",
-            border: "1px solid rgba(36,74,112,0.08)",
-            borderRadius: "18px",
-            backgroundColor: "var(--color-cream)",
-            boxShadow: "0 14px 32px rgba(18,47,77,0.065)",
-          }}
-        >
-          <Box
-            sx={{
-              px: { xs: 1.5, md: 1.9 },
-              py: 1.25,
-              borderBottom: "1px solid rgba(36,74,112,0.07)",
-            }}
-          >
-            <Typography
-              sx={{
-                color: "var(--color-navy-deep)",
-                fontSize: "16px",
-                fontWeight: 800,
-              }}
-            >
-              قائمة الفصول
-            </Typography>
-            <Typography
-              sx={{ mt: 0.25, color: "var(--color-muted)", fontSize: "9.5px" }}
-            >
-              افتح تفاصيل الفصل أو عدّل بياناته وجدوله حسب صلاحياتك.
-            </Typography>
-          </Box>
+        {error && <Alert severity="error" sx={{ mt: 1.25, borderRadius: "14px" }}>{error}</Alert>}
 
-          <Box
-            sx={{
-              width: "100%",
-              minWidth: 0,
-              p: { xs: 0.7, md: 1 },
-              overflowX: "auto",
-            }}
-          >
-            {loading || items.length > 0 ? (
-              <Table
-                headers={TABLE_HEADERS}
-                data={items}
-                loading={loading}
-                edit={permissions.edit}
-                body={TABLE_BODY}
-                deleteFn={permissions.delete ? handleDelete : undefined}
-                profile
-                schedule={permissions.edit}
-              />
-            ) : (
-              <Box
-                sx={{
-                  minHeight: { xs: 170, md: 195 },
-                  px: 2,
-                  py: 2.5,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  textAlign: "center",
-                  borderRadius: "14px",
-                  backgroundColor: "rgba(255,255,255,0.58)",
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 52,
-                    height: 52,
-                    mb: 1.15,
-                    display: "grid",
-                    placeItems: "center",
-                    color: "var(--color-gold-dark)",
-                    backgroundColor: "var(--color-gold-soft)",
-                    border: "1px solid rgba(211,164,79,0.22)",
-                    borderRadius: "15px",
-                    "& svg": { fontSize: 27 },
-                  }}
-                >
-                  {activeFiltersCount > 0 ? (
-                    <SearchOffRounded />
-                  ) : (
-                    <MeetingRoomRounded />
-                  )}
-                </Box>
-
-                <Typography
-                  sx={{
-                    color: "var(--color-navy-deep)",
-                    fontSize: "14px",
-                    fontWeight: 800,
-                  }}
-                >
-                  {activeFiltersCount > 0
-                    ? "لا توجد فصول مطابقة للفلاتر"
-                    : "لا توجد فصول حتى الآن"}
-                </Typography>
-
-                <Typography
-                  sx={{
-                    mt: 0.35,
-                    maxWidth: 420,
-                    color: "var(--color-muted)",
-                    fontSize: "10px",
-                    lineHeight: 1.7,
-                  }}
-                >
-                  {activeFiltersCount > 0
-                    ? "جرّب تغيير خيارات التصفية أو امسح الفلاتر لعرض جميع الفصول."
-                    : "أضف أول فصل لبدء تنظيم الطلاب والمواد والجدول الدراسي."}
-                </Typography>
-
-                {activeFiltersCount > 0 ? (
-                  <Button
-                    type="button"
-                    onClick={resetFilters}
-                    startIcon={<RestartAltRounded />}
-                    variant="outlined"
-                    sx={{
-                      mt: 1.4,
-                      minHeight: 38,
-                      px: 1.6,
-                      borderRadius: "11px",
-                      color: "var(--color-navy)",
-                      borderColor: "rgba(36,74,112,0.18)",
-                      fontSize: "10.5px",
-                      fontWeight: 800,
-                      textTransform: "none",
-                      "& .MuiButton-startIcon": {
-                        marginLeft: "6px",
-                        marginRight: 0,
-                      },
-                      "&:hover": {
-                        borderColor: "var(--color-gold)",
-                        backgroundColor: "var(--color-gold-soft)",
-                      },
-                    }}
-                  >
-                    مسح الفلاتر
-                  </Button>
-                ) : (
-                  permissions.add && (
-                    <Button
-                      component={Link}
-                      to="add"
-                      startIcon={<AddCircleOutlineOutlined />}
-                      variant="contained"
-                      sx={{
-                        mt: 1.4,
-                        minHeight: 38,
-                        px: 1.8,
-                        borderRadius: "11px",
-                        color: "var(--color-white)",
-                        background:
-                          "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-                        fontSize: "10.5px",
-                        fontWeight: 800,
-                        textTransform: "none",
-                        "& .MuiButton-startIcon": {
-                          marginLeft: "6px",
-                          marginRight: 0,
-                        },
-                        "&:hover": {
-                          background:
-                            "linear-gradient(135deg, var(--color-navy), var(--color-navy-deep))",
-                        },
-                      }}
-                    >
-                      إضافة أول فصل
-                    </Button>
-                  )
-                )}
-              </Box>
-            )}
-
-            {!loading && items.length > 0 && currentPagination && (
-              <PaginationControls
-                pagination={currentPagination}
-                page={page}
-                onPageChange={setPage}
-                limit={limit}
-                onLimitChange={setLimit}
-                label="عدد الفصول"
-              />
-            )}
-          </Box>
+        <Paper elevation={0} sx={{ mt: 1.25, overflow: "hidden", border: "1px solid #ded8cd", borderRadius: "18px", backgroundColor: "#fff" }}>
+          <TableContainer>
+            <Table sx={{ minWidth: 1080, tableLayout: "fixed" }}>
+              <TableHead><TableRow sx={{ backgroundColor: "#f1f5fa" }}>{["الفصل", "الصف", "السنة", "النوع", "المعلم", "الإشغال", "الحالة", "الإجراءات"].map((label) => <TableCell key={label} align="center" sx={{ color: "#244a70", fontSize: "8.7px", fontWeight: 800 }}>{label}</TableCell>)}</TableRow></TableHead>
+              <TableBody>
+                {loading ? [...Array(5)].map((_, rowIndex) => <TableRow key={rowIndex}>{[...Array(8)].map((__, cell) => <TableCell key={cell}><Skeleton /></TableCell>)}</TableRow>) : visible.map((item) => {
+                  const active = isClassActive(item);
+                  const occupancy = getClassOccupancy(item);
+                  return (
+                    <TableRow key={getClassId(item)} hover>
+                      <TableCell align="right"><Typography sx={{ color: "#122f4d", fontSize: "10px", fontWeight: 800 }}>{getClassDisplayName(item)}</Typography><Typography sx={{ color: "#7e8791", fontSize: "7.4px" }}>الغرفة: {getClassRoomNumber(item)}</Typography></TableCell>
+                      <TableCell align="center" sx={{ fontSize: "8.5px" }}>{getClassGradeLevelName(item)}</TableCell>
+                      <TableCell align="center" sx={{ fontSize: "8.5px" }}>{getClassAcademicYear(item)}</TableCell>
+                      <TableCell align="center"><Chip size="small" label={getClassGenderLabel(item)} sx={{ fontSize: "7.5px" }} /></TableCell>
+                      <TableCell align="center" sx={{ fontSize: "8.5px" }}>{getClassTeacherName(item)}</TableCell>
+                      <TableCell align="center"><Box sx={{ width: 120, mx: "auto" }}><Stack direction="row" justifyContent="space-between"><Typography sx={{ fontSize: "7.5px", fontWeight: 800 }}>{getClassStudentCount(item)}/{getClassCapacity(item) || "—"}</Typography><Typography sx={{ fontSize: "7px" }}>{occupancy}%</Typography></Stack><LinearProgress variant="determinate" value={occupancy} sx={{ mt: .35, height: 5, borderRadius: 99, "& .MuiLinearProgress-bar": { backgroundColor: occupancy >= 90 ? "#c94f4f" : "#d3a44f" } }} /></Box></TableCell>
+                      <TableCell align="center"><Chip size="small" label={active ? "نشط" : "موقوف"} sx={{ color: active ? "#29734A" : "#A44343", backgroundColor: active ? "rgba(116,201,154,.17)" : "rgba(201,79,79,.12)", fontSize: "7.5px", fontWeight: 800 }} /></TableCell>
+                      <TableCell align="center"><Stack direction="row" justifyContent="center" gap={.3}>
+                        <Tooltip title="عرض"><IconButton onClick={() => navigate(`/school/classes/${getClassId(item)}`)} sx={{ color: "#244a70", backgroundColor: "rgba(36,74,112,.08)" }}><VisibilityRounded fontSize="small" /></IconButton></Tooltip>
+                        {permissions.edit && <><Tooltip title="تعديل"><IconButton onClick={() => navigate(`/school/classes/edit/${getClassId(item)}`)} sx={{ color: "#244a70", backgroundColor: "rgba(36,74,112,.08)" }}><EditRounded fontSize="small" /></IconButton></Tooltip><Tooltip title={active ? "إيقاف" : "تفعيل"}><IconButton onClick={() => setDialog({ type: "status", item })} sx={{ color: active ? "#c94f4f" : "#29734A", backgroundColor: active ? "rgba(201,79,79,.09)" : "rgba(116,201,154,.14)" }}>{active ? <PauseCircleOutlineRounded fontSize="small" /> : <PlayCircleOutlineRounded fontSize="small" />}</IconButton></Tooltip></>}
+                        {permissions.delete && <Tooltip title="حذف"><IconButton onClick={() => setDialog({ type: "delete", item })} sx={{ color: "#c94f4f", backgroundColor: "rgba(201,79,79,.09)" }}><DeleteOutlineRounded fontSize="small" /></IconButton></Tooltip>}
+                      </Stack></TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          {!loading && visible.length === 0 && <Box sx={{ py: 7, textAlign: "center" }}><MeetingRoomRounded sx={{ fontSize: 46, color: "#d3a44f" }} /><Typography sx={{ mt: 1, color: "#122f4d", fontWeight: 800 }}>لا توجد فصول مطابقة</Typography></Box>}
+          <TablePagination component="div" count={total} page={page} onPageChange={(_, next) => setPage(next)} rowsPerPage={limit} onRowsPerPageChange={(e) => { setLimit(Number(e.target.value)); setPage(0); }} rowsPerPageOptions={[10, 20, 50]} labelRowsPerPage="عدد الصفوف:" />
         </Paper>
+
+        <ConfirmDialog open={Boolean(dialog.item)} item={dialog.item} type={dialog.type} loading={actionLoading} onClose={() => setDialog({ type: "", item: null })} onConfirm={confirmAction} />
       </Box>
     </Container>
   );

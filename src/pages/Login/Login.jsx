@@ -79,41 +79,273 @@ const normalizeRole = (role) =>
     .trim()
     .toUpperCase();
 
+const PERMISSION_OPERATION_MAP = {
+  read: "read",
+  view: "read",
+  add: "create",
+  create: "create",
+  edit: "update",
+  update: "update",
+  delete: "delete",
+  remove: "delete",
+  manage: "manage",
+};
+
+const PERMISSION_WRAPPER_KEYS = new Set([
+  "data",
+  "result",
+  "payload",
+  "response",
+  "permissions",
+  "permission",
+  "items",
+  "docs",
+  "records",
+  "defaults",
+  "roles",
+  "modules",
+  "allowedpermissions",
+  "managerpermissions",
+]);
+
+const addPermissionString = (
+  value,
+  output
+) => {
+  const permission =
+    String(value || "").trim();
+
+  if (!permission) {
+    return;
+  }
+
+  // Full access / already-normalized permission.
+  if (
+    permission === "*" ||
+    permission.startsWith(
+      "school."
+    )
+  ) {
+    output.add(permission);
+    return;
+  }
+
+  /*
+   * Backward-compatible flat permission format returned by /admin/login:
+   *
+   * students.read
+   * students.add
+   * students.edit
+   *
+   * Normalize it to the current frontend/backend catalog:
+   *
+   * school.students.read
+   * school.students.create
+   * school.students.update
+   */
+  const parts =
+    permission.split(".");
+
+  if (parts.length === 2) {
+    const [
+      moduleName,
+      rawOperation,
+    ] = parts;
+
+    const operation =
+      PERMISSION_OPERATION_MAP[
+        String(
+          rawOperation || ""
+        ).toLowerCase()
+      ] || rawOperation;
+
+    if (
+      moduleName &&
+      operation
+    ) {
+      output.add(
+        `school.${moduleName}.${operation}`
+      );
+    }
+  }
+};
+
+const collectPermissionStrings = (
+  value,
+  output = new Set(),
+  currentModule = ""
+) => {
+  if (typeof value === "string") {
+    addPermissionString(
+      value,
+      output
+    );
+
+    return output;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => {
+      collectPermissionStrings(
+        item,
+        output,
+        currentModule
+      );
+    });
+
+    return output;
+  }
+
+  if (
+    !value ||
+    typeof value !== "object"
+  ) {
+    return output;
+  }
+
+  Object.entries(value).forEach(
+    ([rawKey, item]) => {
+      const key =
+        String(rawKey || "").trim();
+
+      const lowerKey =
+        key.toLowerCase();
+
+      /*
+       * Example:
+       * {
+       *   "school.students.read": true
+       * }
+       */
+      if (
+        (
+          key === "*" ||
+          key.startsWith(
+            "school."
+          )
+        ) &&
+        item === true
+      ) {
+        addPermissionString(
+          key,
+          output
+        );
+      }
+
+      /*
+       * Example:
+       * {
+       *   permission: "school.students.read"
+       * }
+       *
+       * Also supports:
+       * {
+       *   key: "school.students.read"
+       * }
+       */
+      if (typeof item === "string") {
+        addPermissionString(
+          item,
+          output
+        );
+      }
+
+      /*
+       * Backward-compatible nested format:
+       * {
+       *   students: {
+       *     read: true,
+       *     add: true
+       *   }
+       * }
+       */
+      const normalizedOperation =
+        PERMISSION_OPERATION_MAP[
+          lowerKey
+        ];
+
+      if (
+        normalizedOperation &&
+        item === true &&
+        currentModule
+      ) {
+        output.add(
+          `school.${currentModule}.${normalizedOperation}`
+        );
+      }
+
+      if (
+        item &&
+        typeof item === "object"
+      ) {
+        const isWrapper =
+          PERMISSION_WRAPPER_KEYS.has(
+            lowerKey
+          ) ||
+          [
+            "role",
+            "rolename",
+            "rolecode",
+            "name",
+            "key",
+            "_id",
+            "id",
+          ].includes(lowerKey);
+
+        let nextModule =
+          currentModule;
+
+        if (
+          !isWrapper &&
+          !normalizedOperation &&
+          !key.startsWith(
+            "school."
+          )
+        ) {
+          nextModule =
+            lowerKey;
+        }
+
+        if (
+          key.startsWith(
+            "school."
+          )
+        ) {
+          const parts =
+            key.split(".");
+
+          nextModule =
+            parts[1] ||
+            currentModule;
+        }
+
+        collectPermissionStrings(
+          item,
+          output,
+          nextModule
+        );
+      }
+    }
+  );
+
+  return output;
+};
+
 const normalizePermissions = (
   permissions,
   role
 ) => {
-  if (
-    Array.isArray(permissions)
-  ) {
-    if (
-      permissions.length === 0 &&
-      FULL_ACCESS_ROLES.includes(
-        role
+  const normalized =
+    Array.from(
+      collectPermissionStrings(
+        permissions
       )
-    ) {
-      return ["*"];
-    }
-
-    return permissions;
-  }
+    );
 
   if (
-    typeof permissions ===
-      "string" &&
-    permissions.trim()
+    normalized.length > 0
   ) {
-    return [
-      permissions.trim(),
-    ];
-  }
-
-  if (
-    permissions &&
-    typeof permissions ===
-      "object"
-  ) {
-    return permissions;
+    return normalized;
   }
 
   if (
@@ -196,6 +428,38 @@ const getFirstLoginValue = (
       ) {
         return value;
       }
+    }
+  }
+
+  return null;
+};
+
+
+const getFirstNonEmptyPermissions = (
+  ...candidates
+) => {
+  for (const candidate of candidates) {
+    if (
+      Array.isArray(candidate) &&
+      candidate.length > 0
+    ) {
+      return candidate;
+    }
+
+    if (
+      typeof candidate === "string" &&
+      candidate.trim()
+    ) {
+      return candidate;
+    }
+
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      !Array.isArray(candidate) &&
+      Object.keys(candidate).length > 0
+    ) {
+      return candidate;
     }
   }
 
@@ -285,13 +549,22 @@ const extractLoginSession = (response) => {
     null;
 
   const rawPermissions =
-    rawUser?.permissions ??
-    getFirstLoginValue(objects, [
-      "permissions",
-      "managerPermissions",
-    ]) ??
-    tokenPayload?.permissions ??
-    tokenPayload?.managerPermissions;
+    getFirstNonEmptyPermissions(
+      // MANAGER permissions are commonly returned under managerPermissions.
+      // Prefer them so an empty `permissions: []` does not hide the real grants.
+      rawUser?.managerPermissions,
+      rawUser?.permissions,
+      getFirstLoginValue(
+        objects,
+        ["managerPermissions"]
+      ),
+      getFirstLoginValue(
+        objects,
+        ["permissions"]
+      ),
+      tokenPayload?.managerPermissions,
+      tokenPayload?.permissions
+    );
 
   const permissions = normalizePermissions(
     rawPermissions,

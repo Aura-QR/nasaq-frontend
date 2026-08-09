@@ -1,505 +1,271 @@
 ﻿import { api } from "../Axios";
 
 const ENDPOINT = "/classes";
+const CACHE_TTL = 15_000;
+const cache = new Map();
+const pending = new Map();
 
-const getErrorMessage = (
-  error,
-  fallbackMessage = "حدث خطأ ما"
-) =>
+const idOf = (value) =>
+  String(value?._id || value?.id || value || "").trim();
+
+const errorMessage = (error, fallback = "حدث خطأ ما") =>
   error?.response?.data?.message ||
   error?.response?.data?.error ||
   error?.message ||
-  fallbackMessage;
+  fallback;
 
-const successResult = (response) => ({
-  status: true,
-  data: response.data,
-});
+const normalize = (response) => {
+  const payload = response?.data;
+  if (payload?.status === false) {
+    return {
+      status: false,
+      message: payload?.message || "فشلت العملية",
+      data: payload?.data,
+      pagination: payload?.pagination,
+    };
+  }
 
-const errorResult = (
-  error,
-  fallbackMessage
-) => ({
+  return {
+    status: true,
+    message: payload?.message || "Success",
+    data: payload?.data ?? payload,
+    pagination: payload?.pagination || payload?.meta || payload?.paging,
+  };
+};
+
+const fail = (error, fallback) => ({
   status: false,
-  message: getErrorMessage(
-    error,
-    fallbackMessage
-  ),
+  message: errorMessage(error, fallback),
+  statusCode: error?.response?.status,
   error,
 });
 
-/* =========================================================
-   Modern API functions
-   تستخدمها صفحات SchoolClasses وSchoolClassDetails الجديدة.
-   ترجع دائمًا:
-   { status: true, data }
-   أو:
-   { status: false, message }
-========================================================= */
+const cached = async (key, request, force = false) => {
+  const saved = cache.get(key);
+  if (!force && saved && Date.now() - saved.createdAt < CACHE_TTL) {
+    return saved.value;
+  }
+  if (!force && pending.has(key)) return pending.get(key);
 
-export const getSchoolClasses = async ({
-  page = 1,
-  limit = 10,
-  ...filters
-} = {}) => {
-  try {
-    const response = await api.get(
-      ENDPOINT,
-      {
-        params: {
-          page,
-          limit,
-          ...filters,
-        },
+  const promise = request()
+    .then((value) => {
+      if (value?.status !== false) {
+        cache.set(key, { value, createdAt: Date.now() });
       }
-    );
+      return value;
+    })
+    .finally(() => pending.delete(key));
 
-    return successResult(response);
+  pending.set(key, promise);
+  return promise;
+};
+
+export const invalidateClassesCache = () => cache.clear();
+
+export const buildClassApiPayload = (payload = {}, { allowNullTeacher = false } = {}) => {
+  const teacherInChargeId = idOf(payload?.teacherInChargeId);
+  const gender = String(payload?.gender || "").trim().toLowerCase();
+
+  const body = {
+    name: String(payload?.name || "").trim(),
+    gradeLevelId: idOf(payload?.gradeLevelId),
+    academicYearId: idOf(payload?.academicYearId),
+    gender: gender === "mixed" ? "both" : gender,
+    maxCapacity: Number(payload?.maxCapacity),
+    roomNumber: String(payload?.roomNumber || "").trim(),
+    isActive: payload?.isActive === undefined ? true : Boolean(payload?.isActive),
+  };
+
+  if (!body.roomNumber) delete body.roomNumber;
+  if (teacherInChargeId) body.teacherInChargeId = teacherInChargeId;
+  else if (allowNullTeacher) body.teacherInChargeId = null;
+
+  return body;
+};
+
+export const getSchoolClasses = async (filters = {}, { force = false } = {}) => {
+  const params = Object.fromEntries(
+    Object.entries({
+      page: Number(filters?.page || 1),
+      limit: Number(filters?.limit || 10),
+      academicYearId: idOf(filters?.academicYearId) || undefined,
+      gradeLevelId: idOf(filters?.gradeLevelId) || undefined,
+    }).filter(([, value]) => value !== undefined && value !== "")
+  );
+
+  return cached(
+    `classes:list:${JSON.stringify(params)}`,
+    async () => {
+      try {
+        return normalize(await api.get(ENDPOINT, { params }));
+      } catch (error) {
+        return fail(error, "تعذر تحميل الفصول");
+      }
+    },
+    force
+  );
+};
+
+export const getSchoolClassesList = async ({ force = false } = {}) =>
+  cached(
+    "classes:list:simple",
+    async () => {
+      try {
+        return normalize(await api.get(`${ENDPOINT}/list`));
+      } catch (error) {
+        return fail(error, "تعذر تحميل قائمة الفصول");
+      }
+    },
+    force
+  );
+
+export const getSchoolClassById = async (classId, { force = false } = {}) => {
+  const id = idOf(classId);
+  if (!id) return { status: false, message: "معرّف الفصل غير موجود" };
+
+  return cached(
+    `classes:${id}`,
+    async () => {
+      try {
+        return normalize(await api.get(`${ENDPOINT}/${id}`));
+      } catch (error) {
+        return fail(error, "تعذر تحميل بيانات الفصل");
+      }
+    },
+    force
+  );
+};
+
+export const getSchoolClassStudents = async (classId, { force = false } = {}) => {
+  const id = idOf(classId);
+  if (!id) return { status: false, message: "معرّف الفصل غير موجود" };
+
+  return cached(
+    `classes:${id}:students`,
+    async () => {
+      try {
+        return normalize(await api.get(`${ENDPOINT}/${id}/students`));
+      } catch (error) {
+        return fail(error, "تعذر تحميل طلاب الفصل");
+      }
+    },
+    force
+  );
+};
+
+export const createSchoolClass = async (payload) => {
+  try {
+    const result = normalize(await api.post(ENDPOINT, buildClassApiPayload(payload)));
+    invalidateClassesCache();
+    return result;
   } catch (error) {
-    return errorResult(
-      error,
-      "تعذر تحميل الفصول"
-    );
+    return fail(error, "تعذر إضافة الفصل");
   }
 };
 
-export const getSchoolClassesList =
-  async () => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/list`
-      );
+export const updateSchoolClass = async (classId, payload) => {
+  const id = idOf(classId);
+  if (!id) return { status: false, message: "معرّف الفصل غير موجود" };
 
-      return successResult(response);
-    } catch (error) {
-      return errorResult(
-        error,
-        "تعذر تحميل قائمة الفصول"
-      );
-    }
-  };
+  try {
+    const result = normalize(
+      await api.patch(`${ENDPOINT}/${id}`, buildClassApiPayload(payload, { allowNullTeacher: true }))
+    );
+    invalidateClassesCache();
+    return result;
+  } catch (error) {
+    return fail(error, "تعذر تعديل الفصل");
+  }
+};
 
-export const getSchoolClassById =
-  async (classId) => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/${classId}`
-      );
+export const deleteSchoolClass = async (classId) => {
+  const id = idOf(classId);
+  if (!id) return { status: false, message: "معرّف الفصل غير موجود" };
+  try {
+    const result = normalize(await api.delete(`${ENDPOINT}/${id}`));
+    invalidateClassesCache();
+    return result;
+  } catch (error) {
+    return fail(error, "تعذر حذف الفصل");
+  }
+};
 
-      return successResult(response);
-    } catch (error) {
-      return errorResult(
-        error,
-        "تعذر تحميل بيانات الفصل"
-      );
-    }
-  };
+export const toggleSchoolClassActive = async (classId) => {
+  const id = idOf(classId);
+  if (!id) return { status: false, message: "معرّف الفصل غير موجود" };
+  try {
+    const result = normalize(await api.patch(`${ENDPOINT}/${id}/toggle-active`));
+    invalidateClassesCache();
+    return result;
+  } catch (error) {
+    return fail(error, "تعذر تغيير حالة الفصل");
+  }
+};
 
-export const getSchoolClassStudents =
-  async (classId) => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/${classId}/students`
-      );
+export const copyClassesFromYear = async (targetYearId, sourceYearId) => {
+  const targetId = idOf(targetYearId);
+  const sourceId = idOf(sourceYearId);
+  if (!targetId || !sourceId) {
+    return { status: false, message: "اختر السنة المصدر والسنة المستهدفة" };
+  }
+  try {
+    const result = normalize(
+      await api.post(`${ENDPOINT}/copy-from/${targetId}/${sourceId}`)
+    );
+    invalidateClassesCache();
+    return result;
+  } catch (error) {
+    return fail(error, "تعذر نسخ الفصول من السنة السابقة");
+  }
+};
 
-      return successResult(response);
-    } catch (error) {
-      return errorResult(
-        error,
-        "تعذر تحميل طلاب الفصل"
-      );
-    }
-  };
+/* Legacy compatibility */
+const legacy = async (request, fallback) => {
+  try {
+    const response = await request();
+    return response.data;
+  } catch (error) {
+    return errorMessage(error, fallback);
+  }
+};
 
-export const createSchoolClass =
-  async (payload) => {
-    try {
-      const response = await api.post(
-        ENDPOINT,
-        payload
-      );
-
-      return successResult(response);
-    } catch (error) {
-      return errorResult(
-        error,
-        "تعذر إضافة الفصل"
-      );
-    }
-  };
-
-export const updateSchoolClass =
-  async (
-    classId,
-    payload
-  ) => {
-    try {
-      const response = await api.patch(
-        `${ENDPOINT}/${classId}`,
-        payload
-      );
-
-      return successResult(response);
-    } catch (error) {
-      return errorResult(
-        error,
-        "تعذر تعديل الفصل"
-      );
-    }
-  };
-
-export const deleteSchoolClass =
-  async (classId) => {
-    try {
-      const response = await api.delete(
-        `${ENDPOINT}/${classId}`
-      );
-
-      return successResult(response);
-    } catch (error) {
-      return errorResult(
-        error,
-        "تعذر حذف الفصل"
-      );
-    }
-  };
-
-export const toggleSchoolClassActive =
-  async (classId) => {
-    try {
-      const response = await api.patch(
-        `${ENDPOINT}/${classId}/toggle-active`
-      );
-
-      return successResult(response);
-    } catch (error) {
-      return errorResult(
-        error,
-        "تعذر تغيير حالة الفصل"
-      );
-    }
-  };
-
-export const addStudentToSchoolClass =
-  async (
-    classId,
-    studentId
-  ) => {
-    try {
-      const response = await api.patch(
-        `${ENDPOINT}/${classId}/add-student/${studentId}`
-      );
-
-      return successResult(response);
-    } catch (error) {
-      return errorResult(
-        error,
-        "تعذر إضافة الطالب إلى الفصل"
-      );
-    }
-  };
-
-export const removeStudentFromSchoolClass =
-  async (
-    classId,
-    studentId
-  ) => {
-    try {
-      const response = await api.patch(
-        `${ENDPOINT}/${classId}/remove-student/${studentId}`
-      );
-
-      return successResult(response);
-    } catch (error) {
-      return errorResult(
-        error,
-        "تعذر إزالة الطالب من الفصل"
-      );
-    }
-  };
-
-export const getTeacherClasses =
-  async () => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/my-classes`
-      );
-
-      return successResult(response);
-    } catch (error) {
-      return errorResult(
-        error,
-        "تعذر تحميل فصول المعلم"
-      );
-    }
-  };
-
-export const getCurrentStudentClass =
-  async () => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/student/me`
-      );
-
-      return successResult(response);
-    } catch (error) {
-      return errorResult(
-        error,
-        "تعذر تحميل فصل الطالب"
-      );
-    }
-  };
-
-export const getCurrentStudentClassmates =
-  async () => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/student/me/mates`
-      );
-
-      return successResult(response);
-    } catch (error) {
-      return errorResult(
-        error,
-        "تعذر تحميل زملاء الفصل"
-      );
-    }
-  };
-
-/* =========================================================
-   Legacy API functions
-   نحافظ عليها لأن صفحات ومكونات المشروع القديمة ما زالت
-   تستورد الأسماء التالية مثل ClassFilter.jsx.
-
-   هذه الدوال ترجع response.data مباشرة مثل الملف القديم،
-   وفي الخطأ ترجع رسالة نصية.
-========================================================= */
-
-export const fetchClasses =
-  async (filters = {}) => {
-    try {
-      const normalizedFilters =
-        typeof filters === "string"
-          ? {
-              academicYear:
-                filters,
-            }
-          : filters || {};
-
-      const response = await api.get(
-        ENDPOINT,
-        {
-          params:
-            normalizedFilters,
-        }
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
-
-export const fetchClassesList =
-  async () => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/list`
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
-
-export const fetchSingleClass =
-  async (id) => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/${id}`
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
-
-export const fetchClassStudents =
-  async (classId) => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/${classId}/students`
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
-
-export const addClass =
-  async (data) => {
-    try {
-      const response = await api.post(
-        ENDPOINT,
-        data
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
-
-export const editClass =
-  async (
-    data,
-    id
-  ) => {
-    try {
-      const response = await api.patch(
-        `${ENDPOINT}/${id}`,
-        data
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
-
-export const deleteClass =
-  async (id) => {
-    try {
-      const response = await api.delete(
-        `${ENDPOINT}/${id}`
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
-
-export const toggleActiveClass =
-  async (id) => {
-    try {
-      const response = await api.patch(
-        `${ENDPOINT}/${id}/toggle-active`
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
-
-export const addStudentToClass =
-  async (
-    classId,
-    studentId
-  ) => {
-    try {
-      const response = await api.patch(
-        `${ENDPOINT}/${classId}/add-student/${studentId}`
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
-
-export const deleteStudentFromClass =
-  async (
-    classId,
-    studentId
-  ) => {
-    try {
-      const response = await api.patch(
-        `${ENDPOINT}/${classId}/remove-student/${studentId}`
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
-
-/* أسماء إضافية للتوافق مع أي مكونات تستخدم صياغات مختلفة. */
-
-export const fetchClass =
-  fetchSingleClass;
-
-export const removeStudentFromClass =
-  deleteStudentFromClass;
-
-export const fetchMyClasses =
-  async () => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/my-classes`
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
-
-export const fetchStudentClass =
-  async () => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/student/me`
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
-
-export const fetchClassmates =
-  async () => {
-    try {
-      const response = await api.get(
-        `${ENDPOINT}/student/me/mates`
-      );
-
-      return response.data;
-    } catch (error) {
-      return getErrorMessage(
-        error
-      );
-    }
-  };
+export const fetchClasses = (filters = {}) =>
+  legacy(() => api.get(ENDPOINT, { params: filters }), "تعذر تحميل الفصول");
+export const fetchClassesList = () =>
+  legacy(() => api.get(`${ENDPOINT}/list`), "تعذر تحميل قائمة الفصول");
+export const fetchSingleClass = (id) =>
+  legacy(() => api.get(`${ENDPOINT}/${idOf(id)}`), "تعذر تحميل بيانات الفصل");
+export const fetchClassStudents = (classId) =>
+  legacy(() => api.get(`${ENDPOINT}/${idOf(classId)}/students`), "تعذر تحميل طلاب الفصل");
+export const addClass = (data) =>
+  legacy(() => api.post(ENDPOINT, buildClassApiPayload(data)), "تعذر إضافة الفصل");
+export const editClass = (data, id) =>
+  legacy(
+    () => api.patch(`${ENDPOINT}/${idOf(id)}`, buildClassApiPayload(data, { allowNullTeacher: true })),
+    "تعذر تعديل الفصل"
+  );
+export const deleteClass = (id) =>
+  legacy(() => api.delete(`${ENDPOINT}/${idOf(id)}`), "تعذر حذف الفصل");
+export const toggleActiveClass = (id) =>
+  legacy(() => api.patch(`${ENDPOINT}/${idOf(id)}/toggle-active`), "تعذر تغيير حالة الفصل");
+export const addStudentToClass = (classId, studentId) =>
+  legacy(
+    () => api.patch(`${ENDPOINT}/${idOf(classId)}/add-student/${idOf(studentId)}`),
+    "تعذر إضافة الطالب إلى الفصل"
+  );
+export const deleteStudentFromClass = (classId, studentId) =>
+  legacy(
+    () => api.patch(`${ENDPOINT}/${idOf(classId)}/remove-student/${idOf(studentId)}`),
+    "تعذر إزالة الطالب من الفصل"
+  );
+export const fetchClass = fetchSingleClass;
+export const removeStudentFromClass = deleteStudentFromClass;
+export const fetchMyClasses = () =>
+  legacy(() => api.get(`${ENDPOINT}/my-classes`), "تعذر تحميل فصول المعلم");
+export const fetchStudentClass = () =>
+  legacy(() => api.get(`${ENDPOINT}/student/me`), "تعذر تحميل فصل الطالب");
+export const fetchClassmates = () =>
+  legacy(() => api.get(`${ENDPOINT}/student/me/mates`), "تعذر تحميل زملاء الفصل");
 
 export default {
   getSchoolClasses,
@@ -510,12 +276,7 @@ export default {
   updateSchoolClass,
   deleteSchoolClass,
   toggleSchoolClassActive,
-  addStudentToSchoolClass,
-  removeStudentFromSchoolClass,
-  getTeacherClasses,
-  getCurrentStudentClass,
-  getCurrentStudentClassmates,
-
+  copyClassesFromYear,
   fetchClasses,
   fetchClassesList,
   fetchSingleClass,

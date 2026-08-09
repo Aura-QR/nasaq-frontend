@@ -179,6 +179,9 @@ const List = () => {
   const permissions =
     usePermissions("teachers");
 
+  const lecturePermissions =
+    usePermissions("lectures");
+
   useEffect(() => {
     setItems(mapTeachers(teachers));
   }, [teachers]);
@@ -252,6 +255,13 @@ const List = () => {
     id,
     setActive
   ) => {
+    if (!permissions.delete) {
+      toast.error(
+        "ليس لديك صلاحية حذف المعلمين"
+      );
+      return;
+    }
+
     try {
       const response =
         await deleteTeacher(id);
@@ -1134,14 +1144,16 @@ const List = () => {
               data={items}
               loading={loading}
               edit={permissions.edit}
-              profile
+              profile={permissions.read}
               body={TABLE_BODY}
               deleteFn={
                 permissions.delete
                   ? handleDelete
                   : undefined
               }
-              schedule
+              schedule={
+                lecturePermissions.read
+              }
             />
 
             {currentPagination && (

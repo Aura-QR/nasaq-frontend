@@ -2,96 +2,385 @@
 
 const ENDPOINT = "/projects";
 
-export const fetchProjects = async (filters) => {
+const getErrorMessage = (
+  error,
+  fallback = "حدث خطأ ما"
+) =>
+  error?.response?.data?.message ||
+  error?.message ||
+  fallback;
+
+const isValidationError = (error) =>
+  [400, 422].includes(
+    Number(error?.response?.status)
+  );
+
+const attachCompatibilityMeta = (
+  responseData,
+  meta
+) => {
+  if (
+    responseData &&
+    typeof responseData === "object" &&
+    !Array.isArray(responseData)
+  ) {
+    return {
+      ...responseData,
+      __gradingCompatibility: meta,
+    };
+  }
+
+  return {
+    data: responseData,
+    __gradingCompatibility: meta,
+  };
+};
+
+export const fetchProjects = async (
+  filters = {}
+) => {
   try {
-    const response = await api.get(ENDPOINT, { params: filters });
+    const response = await api.get(
+      ENDPOINT,
+      { params: filters }
+    );
+
     return response.data;
-  } catch (err) {
-    return err?.response?.data?.message || "حدث خطأ ما";
+  } catch (error) {
+    return getErrorMessage(
+      error,
+      "تعذر تحميل المشروعات"
+    );
   }
 };
 
-export const fetchSingleProject = async (id) => {
+export const fetchTeacherProjects = async (
+  filters = {}
+) => {
   try {
-    const response = await api.get(ENDPOINT + "/" + id);
+    const response = await api.get(
+      `${ENDPOINT}/teacher/me`,
+      { params: filters }
+    );
+
     return response.data;
-  } catch (err) {
-    return err?.response?.data?.message || "حدث خطأ ما";
+  } catch (error) {
+    return getErrorMessage(
+      error,
+      "تعذر تحميل مشروعات المعلم"
+    );
+  }
+};
+
+export const fetchSingleProject = async (
+  id
+) => {
+  try {
+    const response = await api.get(
+      `${ENDPOINT}/${id}`
+    );
+
+    return response.data;
+  } catch (error) {
+    return getErrorMessage(
+      error,
+      "تعذر تحميل بيانات المشروع"
+    );
   }
 };
 
 export const addProject = async (data) => {
   try {
-    const response = await api.post(ENDPOINT, data);
+    const response = await api.post(
+      ENDPOINT,
+      data
+    );
+
     return response.data;
-  } catch (err) {
-    return err?.response?.data?.message || "حدث خطأ ما";
+  } catch (error) {
+    return getErrorMessage(
+      error,
+      "تعذر إضافة المشروع"
+    );
   }
 };
 
-export const editProject = async (data, id) => {
+export const editProject = async (
+  data,
+  id
+) => {
   try {
-    const response = await api.patch(ENDPOINT + "/" + id, data);
+    const response = await api.patch(
+      `${ENDPOINT}/${id}`,
+      data
+    );
+
     return response.data;
-  } catch (err) {
-    return err?.response?.data?.message || "حدث خطأ ما";
+  } catch (error) {
+    return getErrorMessage(
+      error,
+      "تعذر تعديل المشروع"
+    );
   }
 };
 
 export const deleteProject = async (id) => {
   try {
-    const response = await api.delete(ENDPOINT + "/" + id);
+    const response = await api.delete(
+      `${ENDPOINT}/${id}`
+    );
+
     return response.data;
-  } catch (err) {
-    return err?.response?.data?.message || "حدث خطأ ما";
+  } catch (error) {
+    return getErrorMessage(
+      error,
+      "تعذر حذف المشروع"
+    );
   }
 };
 
-// Add files to a project
-export const addFilesToProject = async (projectId, files) => {
+export const addFilesToProject = async (
+  projectId,
+  files = []
+) => {
   try {
     const formData = new FormData();
+
     files.forEach((file) => {
-      formData.append('files', file);
+      formData.append("files", file);
     });
-    
-    const response = await api.post(`/projects/${projectId}/files`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+
+    const response = await api.post(
+      `${ENDPOINT}/${projectId}/files`,
+      formData,
+      {
+        headers: {
+          "Content-Type":
+            "multipart/form-data",
+        },
+      }
+    );
+
     return response.data;
-  } catch (err) {
-    return err?.response?.data?.message || "حدث خطأ ما";
+  } catch (error) {
+    return getErrorMessage(
+      error,
+      "تعذر رفع ملفات المشروع"
+    );
   }
 };
 
-// Remove a file from a project
-export const removeFileFromProject = async (projectId, filename) => {
+export const removeFileFromProject = async (
+  projectId,
+  filename
+) => {
   try {
-    const response = await api.delete(`/projects/${projectId}/files/${filename}`);
+    const response = await api.delete(
+      `${ENDPOINT}/${projectId}/files/${encodeURIComponent(
+        filename
+      )}`
+    );
+
     return response.data;
-  } catch (err) {
-    return err?.response?.data?.message || "حدث خطأ ما";
+  } catch (error) {
+    return getErrorMessage(
+      error,
+      "تعذر حذف ملف المشروع"
+    );
   }
 };
 
-// Fetch all student submissions for a project
-export const fetchProjectSubmissions = async (projectId, filters) => {
+export const fetchAllProjectSubmissions =
+  async (filters = {}) => {
+    try {
+      const response = await api.get(
+        `${ENDPOINT}/submissions`,
+        { params: filters }
+      );
+
+      return response.data;
+    } catch (error) {
+      return getErrorMessage(
+        error,
+        "تعذر تحميل تسليمات المشروعات"
+      );
+    }
+  };
+
+export const fetchProjectSubmissions = async (
+  projectId,
+  filters = {}
+) => {
   try {
-    const response = await api.get(`/projects/${projectId}/submissions`, { params: filters });
+    const response = await api.get(
+      `${ENDPOINT}/${projectId}/submissions`,
+      { params: filters }
+    );
+
     return response.data;
-  } catch (err) {
-    return err?.response?.data?.message || "حدث خطأ ما";
+  } catch (error) {
+    return getErrorMessage(
+      error,
+      "تعذر تحميل تسليمات المشروع"
+    );
   }
 };
 
-// Grade a student submission
-export const gradeSubmission = async (projectId, studentId, achievedGrade) => {
+export const downloadProjectSubmission = async (
+  projectId,
+  studentId
+) => {
   try {
-    const response = await api.patch(`/projects/${projectId}/submissions/${studentId}/grade`, { achievedGrade });
+    const response = await api.get(
+      `${ENDPOINT}/${projectId}/submissions/${studentId}/download`,
+      { responseType: "blob" }
+    );
+
     return response.data;
-  } catch (err) {
-    return err?.response?.data?.message || "حدث خطأ ما";
+  } catch (error) {
+    return getErrorMessage(
+      error,
+      "تعذر تحميل ملفات التسليم"
+    );
   }
+};
+
+/**
+ * يدعم صيغتي الباك الموجودتين في الملفات المرسلة:
+ * - Postman: { achievedGrade }
+ * - API docs: { grade, feedback }
+ *
+ * يتم إعادة المحاولة بالصيغة البديلة فقط عند خطأ Validation 400/422.
+ */
+export const gradeSubmission = async (
+  projectId,
+  studentId,
+  gradeOrPayload,
+  feedback = ""
+) => {
+  const normalized =
+    gradeOrPayload &&
+    typeof gradeOrPayload === "object"
+      ? {
+          grade: Number(
+            gradeOrPayload.grade ??
+              gradeOrPayload.achievedGrade
+          ),
+          feedback: String(
+            gradeOrPayload.feedback || ""
+          ).trim(),
+        }
+      : {
+          grade: Number(gradeOrPayload),
+          feedback: String(
+            feedback || ""
+          ).trim(),
+        };
+
+  if (!projectId || !studentId) {
+    return "بيانات المشروع أو الطالب غير مكتملة";
+  }
+
+  if (!Number.isFinite(normalized.grade)) {
+    return "درجة المشروع غير صالحة";
+  }
+
+  const endpoint =
+    `${ENDPOINT}/${projectId}/submissions/${studentId}/grade`;
+
+  const documentedPayload = {
+    grade: normalized.grade,
+    ...(normalized.feedback
+      ? { feedback: normalized.feedback }
+      : {}),
+  };
+
+  const postmanPayload = {
+    achievedGrade: normalized.grade,
+  };
+
+  const attempts = normalized.feedback
+    ? [
+        {
+          payload: documentedPayload,
+          mode: "grade-feedback",
+          feedbackSaved: true,
+        },
+        {
+          payload: postmanPayload,
+          mode: "achievedGrade",
+          feedbackSaved: false,
+        },
+      ]
+    : [
+        {
+          payload: postmanPayload,
+          mode: "achievedGrade",
+          feedbackSaved: false,
+        },
+        {
+          payload: documentedPayload,
+          mode: "grade-feedback",
+          feedbackSaved: true,
+        },
+      ];
+
+  let lastError = null;
+
+  for (let index = 0; index < attempts.length; index += 1) {
+    const attempt = attempts[index];
+
+    try {
+      const response = await api.patch(
+        endpoint,
+        attempt.payload
+      );
+
+      return attachCompatibilityMeta(
+        response.data,
+        {
+          mode: attempt.mode,
+          feedbackSaved:
+            attempt.feedbackSaved ||
+            !normalized.feedback,
+        }
+      );
+    } catch (error) {
+      lastError = error;
+
+      const hasFallback =
+        index < attempts.length - 1;
+
+      if (
+        !hasFallback ||
+        !isValidationError(error)
+      ) {
+        break;
+      }
+    }
+  }
+
+  return getErrorMessage(
+    lastError,
+    "تعذر حفظ تقييم المشروع"
+  );
+};
+
+export const fetchMyProjects =
+  fetchTeacherProjects;
+
+export default {
+  fetchProjects,
+  fetchTeacherProjects,
+  fetchMyProjects,
+  fetchSingleProject,
+  addProject,
+  editProject,
+  deleteProject,
+  addFilesToProject,
+  removeFileFromProject,
+  fetchAllProjectSubmissions,
+  fetchProjectSubmissions,
+  downloadProjectSubmission,
+  gradeSubmission,
 };

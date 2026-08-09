@@ -1,11 +1,29 @@
 import {
+  AccountBalanceWalletRounded,
+  AccountTreeRounded,
+  AssessmentRounded,
+  AssignmentRounded,
+  AutoStoriesRounded,
+  CalendarMonthRounded,
+  CategoryRounded,
   DashboardRounded,
-  LogoutRounded,
-  MenuOpenRounded,
-  SupervisorAccountRounded,
+  DirectionsBusRounded,
+  EventNoteRounded,
+  FactCheckRounded,
+  FolderCopyOutlined,
   GroupsRounded,
-  SchoolRounded,
+  LibraryBooksRounded,
+  LocalOfferRounded,
+  LogoutRounded,
+  MenuBookRounded,
+  MenuOpenRounded,
   MeetingRoomRounded,
+  MoneyOffRounded,
+  ReceiptLongRounded,
+  RouteRounded,
+  SchoolRounded,
+  SupervisorAccountRounded,
+  ViewListRounded,
 } from "@mui/icons-material";
 
 import {
@@ -33,13 +51,10 @@ import {
 } from "@/shared/auth/session";
 
 import {
-  getStoredPermissions,
-  hasPermission,
-} from "@/shared/auth/permissions";
-
-import {
   ROLES,
 } from "@/shared/auth/roles";
+
+import usePermissions from "@/utils/hooks/usePermissions";
 
 import {
   getSchoolRoleLabel,
@@ -47,6 +62,179 @@ import {
 } from "@/utils/school/schoolSession";
 
 const SIDEBAR_WIDTH = 280;
+
+const NAVIGATION_SECTIONS = [
+  {
+    title: "الأفراد",
+
+    items: [
+      {
+        label: "الطلاب",
+        path: "/users/students",
+        icon: <GroupsRounded />,
+        module: "students",
+      },
+      {
+        label: "المعلمون",
+        path: "/users/teachers",
+        icon: <SchoolRounded />,
+        module: "teachers",
+      },
+    ],
+  },
+
+  {
+    title: "الإدارة الأكاديمية",
+
+    items: [
+      {
+        label: "السنوات الدراسية",
+        path: "/school/academic-years",
+        icon: <CalendarMonthRounded />,
+        allowedRoles: [
+          ROLES.OWNER,
+          ROLES.SUPERVISOR,
+        ],
+      },
+      {
+        label: "المواد",
+        path: "/school/subjects",
+        icon: <MenuBookRounded />,
+        module: "subjects",
+      },
+      {
+        label: "الفصول",
+        path: "/school/classes",
+        icon: <MeetingRoomRounded />,
+        module: "classes",
+      },
+      {
+        label: "الحصص",
+        path: "/school/lectures",
+        icon: <EventNoteRounded />,
+        module: "lectures",
+      },
+    ],
+  },
+
+  {
+    title: "التقييم والاختبارات",
+
+    items: [
+      {
+        label: "توزيع الدرجات",
+        path: "/school/gradesCriteria",
+        icon: <AssessmentRounded />,
+        module: "gradesCriteria",
+      },
+      {
+        label: "الاختبارات",
+        path: "/school/exams",
+        icon: <FactCheckRounded />,
+        module: "exams",
+      },
+      {
+        label: "المشروعات",
+        path: "/school/projects",
+        icon: <AccountTreeRounded />,
+        module: "projects",
+      },
+    ],
+  },
+
+  {
+    title: "الخدمات والمتابعة",
+
+    items: [
+      {
+        label: "الحضور",
+        path: "/school/attendance",
+        icon: <AssignmentRounded />,
+        module: "attendance",
+      },
+      {
+        label: "التحضير",
+        path: "/school/preparation",
+        icon: <AutoStoriesRounded />,
+        module: "preparation",
+      },
+      {
+        label: "المكتبة",
+        path: "/school/library",
+        icon: <LibraryBooksRounded />,
+        module: "library",
+      },
+    ],
+  },
+
+  {
+    title: "الماليات والحسابات",
+
+    items: [
+      {
+        label: "السجلات المالية",
+        path: "/financial/all-records",
+        icon: <FolderCopyOutlined />,
+        module: "financial",
+      },
+      {
+        label: "مصاريف الطلاب",
+        path: "/financial/records",
+        icon: <AccountBalanceWalletRounded />,
+        module: "financial",
+      },
+      {
+        label: "الباص",
+        path: "/financial/bus",
+        icon: <DirectionsBusRounded />,
+        module: "financial",
+      },
+      {
+        label: "الرحلات",
+        path: "/financial/trips",
+        icon: <RouteRounded />,
+        module: "financial",
+      },
+      {
+        label: "إعدادات الرسوم",
+        path: "/financial/fee-configs",
+        icon: <ReceiptLongRounded />,
+        module: "financial",
+      },
+      {
+        label: "خطط التقسيط",
+        path: "/financial/installment-plans",
+        icon: <ViewListRounded />,
+        module: "financial",
+      },
+      {
+        label: "الخصومات",
+        path: "/financial/discounts",
+        icon: <LocalOfferRounded />,
+        module: "financial",
+      },
+    ],
+  },
+
+  {
+    title: "المصروفات",
+
+    items: [
+      {
+        label: "المصروفات",
+        path: "/expenses",
+        icon: <MoneyOffRounded />,
+        module: "expenses",
+      },
+      {
+        label: "تصنيفات المصروفات",
+        path: "/expenses/categories",
+        icon: <CategoryRounded />,
+        module: "expenses",
+      },
+    ],
+  },
+];
 
 const SchoolSidebar = ({
   onClose,
@@ -75,110 +263,96 @@ const SchoolSidebar = ({
     );
 
   const canManageManagers =
-    [
-      ROLES.OWNER,
-      ROLES.SUPERVISOR,
-    ].includes(role);
+    role === ROLES.OWNER;
 
-  const permissions =
-    authState?.permissions ||
-    authState?.user
-      ?.permissions ||
-    getStoredPermissions();
+  const modulePermissions = {
+    students:
+      usePermissions(
+        "students"
+      ),
 
-  const canReadStudents =
-    canManageManagers ||
-    hasPermission(
-      permissions,
-      "school.students.read"
-    );
+    teachers:
+      usePermissions(
+        "teachers"
+      ),
 
-  const canReadTeachers =
-    canManageManagers ||
-    hasPermission(
-      permissions,
-      "school.teachers.read"
-    );
+    subjects:
+      usePermissions(
+        "subjects"
+      ),
 
-  const canReadClasses =
-    canManageManagers ||
-    hasPermission(
-      permissions,
-      "school.classes.read"
-    );
+    classes:
+      usePermissions(
+        "classes"
+      ),
 
-  const navigationItems = [
-    {
-      label:
-        "لوحة المدرسة",
+    lectures:
+      usePermissions(
+        "lectures"
+      ),
 
-      path:
-        "/school/dashboard",
+    gradesCriteria:
+      usePermissions(
+        "gradesCriteria"
+      ),
 
-      icon:
-        <DashboardRounded />,
-    },
+    exams:
+      usePermissions(
+        "exams"
+      ),
 
-    ...(canManageManagers
-      ? [
-          {
-            label:
-              "المديرون والمشرفون",
+    projects:
+      usePermissions(
+        "projects"
+      ),
 
-            path:
-              "/school/managers",
+    attendance:
+      usePermissions(
+        "attendance"
+      ),
 
-            icon:
-              <SupervisorAccountRounded />,
-          },
-        ]
-      : []),
+    preparation:
+      usePermissions(
+        "preparation"
+      ),
 
-    ...(canReadStudents
-      ? [
-          {
-            label:
-              "الطلاب",
+    library:
+      usePermissions(
+        "library"
+      ),
 
-            path:
-              "/school/students",
+    financial:
+      usePermissions(
+        "financial"
+      ),
 
-            icon:
-              <GroupsRounded />,
-          },
-        ]
-      : []),
+    expenses:
+      usePermissions(
+        "expenses"
+      ),
+  };
 
-    ...(canReadTeachers
-      ? [
-          {
-            label:
-              "المعلمون",
+  const visibleSections =
+    NAVIGATION_SECTIONS
+      .map((section) => ({
+        ...section,
 
-            path:
-              "/school/teachers",
-
-            icon:
-              <SchoolRounded />,
-          },
-        ]
-      : []),
-
-    ...(canReadClasses
-      ? [
-          {
-            label:
-              "الفصول",
-
-            path:
-              "/school/classes",
-
-            icon:
-              <MeetingRoomRounded />,
-          },
-        ]
-      : []),
-  ];
+        items:
+          section.items.filter(
+            (item) =>
+              item.allowedRoles
+                ? item.allowedRoles.includes(
+                    role
+                  )
+                : modulePermissions[
+                    item.module
+                  ]?.read
+          ),
+      }))
+      .filter(
+        (section) =>
+          section.items.length > 0
+      );
 
   const handleLogout = () => {
     signOut();
@@ -193,16 +367,23 @@ const SchoolSidebar = ({
     <Box
       dir="rtl"
       sx={{
-        width: SIDEBAR_WIDTH,
-        height: "100%",
+        width:
+          SIDEBAR_WIDTH,
 
-        display: "flex",
+        height:
+          "100%",
+
+        display:
+          "flex",
+
         flexDirection:
           "column",
 
-        overflow: "hidden",
+        overflow:
+          "hidden",
 
-        color: "#ffffff",
+        color:
+          "#ffffff",
 
         background:
           "linear-gradient(180deg, #193f64 0%, #244f78 100%)",
@@ -214,7 +395,6 @@ const SchoolSidebar = ({
       <Box
         sx={{
           flexShrink: 0,
-
           px: 2,
           pt: 1.75,
           pb: 1.35,
@@ -240,20 +420,14 @@ const SchoolSidebar = ({
               sx={{
                 width: 54,
                 height: 54,
-
                 flexShrink: 0,
-
                 objectFit:
                   "contain",
-
                 p: 0.4,
-
                 borderRadius:
                   "15px",
-
                 backgroundColor:
                   "#ffffff",
-
                 boxShadow:
                   "0 8px 18px rgba(7,22,41,0.16)",
               }}
@@ -268,11 +442,10 @@ const SchoolSidebar = ({
                 sx={{
                   fontSize:
                     "20px",
-
                   fontWeight:
                     800,
-
-                  lineHeight: 1.15,
+                  lineHeight:
+                    1.15,
                 }}
               >
                 نَسّق
@@ -285,15 +458,12 @@ const SchoolSidebar = ({
                 }
                 sx={{
                   mt: 0.25,
-
-                  maxWidth: 150,
-
+                  maxWidth:
+                    150,
                   color:
                     "rgba(255,255,255,0.68)",
-
                   fontSize:
                     "8px",
-
                   fontWeight:
                     700,
                 }}
@@ -305,7 +475,9 @@ const SchoolSidebar = ({
 
           {mobile && (
             <IconButton
-              onClick={onClose}
+              onClick={
+                onClose
+              }
               aria-label="إغلاق القائمة"
               sx={{
                 color:
@@ -320,7 +492,6 @@ const SchoolSidebar = ({
         <Divider
           sx={{
             mt: 1.6,
-
             borderColor:
               "rgba(255,255,255,0.12)",
           }}
@@ -330,110 +501,110 @@ const SchoolSidebar = ({
       <Box
         sx={{
           flex: 1,
-
           overflowY:
             "auto",
-
           overflowX:
             "hidden",
-
           px: 1.45,
           pb: 1,
-
           scrollbarWidth:
             "thin",
-
           "&::-webkit-scrollbar":
             {
               width: 5,
             },
-
           "&::-webkit-scrollbar-thumb":
             {
               borderRadius:
                 "10px",
-
               backgroundColor:
                 "rgba(255,255,255,0.18)",
             },
         }}
       >
-        <Stack spacing={0.75}>
-          {navigationItems.map(
-            (item) => (
+        <Stack spacing={1.15}>
+          <Box>
+            <SidebarLink
+              item={{
+                label:
+                  "لوحة المدرسة",
+                path:
+                  "/school/dashboard",
+                icon:
+                  <DashboardRounded />,
+              }}
+              mobile={
+                mobile
+              }
+              onClose={
+                onClose
+              }
+            />
+
+            {canManageManagers && (
+              <SidebarLink
+                item={{
+                  label:
+                    "المديرون والمشرفون",
+                  path:
+                    "/school/managers",
+                  icon:
+                    <SupervisorAccountRounded />,
+                }}
+                mobile={
+                  mobile
+                }
+                onClose={
+                  onClose
+                }
+              />
+            )}
+          </Box>
+
+          {visibleSections.map(
+            (section) => (
               <Box
                 key={
-                  item.path
+                  section.title
                 }
-                component={
-                  NavLink
-                }
-                to={item.path}
-                onClick={
-                  mobile
-                    ? onClose
-                    : undefined
-                }
-                sx={{
-                  minHeight: 52,
-                  px: 1.45,
-
-                  display:
-                    "flex",
-
-                  alignItems:
-                    "center",
-
-                  gap: 1,
-
-                  borderRadius:
-                    "14px",
-
-                  color:
-                    "rgba(255,255,255,0.77)",
-
-                  textDecoration:
-                    "none",
-
-                  fontSize:
-                    "10.5px",
-
-                  fontWeight:
-                    800,
-
-                  transition:
-                    "all 0.2s ease",
-
-                  "& svg": {
-                    fontSize:
-                      19,
-                  },
-
-                  "&:hover": {
-                    color:
-                      "#ffffff",
-
-                    backgroundColor:
-                      "rgba(255,255,255,0.08)",
-
-                    transform:
-                      "translateX(-2px)",
-                  },
-
-                  "&.active": {
-                    color:
-                      "#173c5d",
-
-                    backgroundColor:
-                      "#f3d78b",
-
-                    boxShadow:
-                      "0 10px 24px rgba(7,22,41,0.18)",
-                  },
-                }}
               >
-                {item.icon}
-                {item.label}
+                <Typography
+                  sx={{
+                    px: 1.2,
+                    mb: 0.55,
+                    color:
+                      "rgba(242,215,146,0.86)",
+                    fontSize:
+                      "8px",
+                    fontWeight:
+                      800,
+                  }}
+                >
+                  {section.title}
+                </Typography>
+
+                <Stack
+                  spacing={0.45}
+                >
+                  {section.items.map(
+                    (item) => (
+                      <SidebarLink
+                        key={
+                          item.path
+                        }
+                        item={
+                          item
+                        }
+                        mobile={
+                          mobile
+                        }
+                        onClose={
+                          onClose
+                        }
+                      />
+                    )
+                  )}
+                </Stack>
               </Box>
             )
           )}
@@ -450,16 +621,12 @@ const SchoolSidebar = ({
         <Box
           sx={{
             p: 1.2,
-
             borderRadius:
               "15px",
-
             backgroundColor:
               "rgba(255,255,255,0.075)",
-
             border:
               "1px solid rgba(255,255,255,0.1)",
-
             boxShadow:
               "0 10px 22px rgba(7,22,41,0.1)",
           }}
@@ -472,10 +639,8 @@ const SchoolSidebar = ({
             sx={{
               color:
                 "#ffffff",
-
               fontSize:
                 "9.5px",
-
               fontWeight:
                 800,
             }}
@@ -491,16 +656,12 @@ const SchoolSidebar = ({
                 title={email}
                 sx={{
                   mt: 0.2,
-
                   color:
                     "rgba(255,255,255,0.65)",
-
                   direction:
                     "ltr",
-
                   textAlign:
                     "right",
-
                   fontSize:
                     "7.5px",
                 }}
@@ -512,13 +673,10 @@ const SchoolSidebar = ({
           <Typography
             sx={{
               mt: 0.35,
-
               color:
                 "#f2d792",
-
               fontSize:
                 "7.5px",
-
               fontWeight:
                 700,
             }}
@@ -536,52 +694,38 @@ const SchoolSidebar = ({
             }
             sx={{
               width: "100%",
-              minHeight: 38,
+              minHeight:
+                38,
               mt: 1,
               px: 1,
-
               display:
                 "flex",
-
               alignItems:
                 "center",
-
               justifyContent:
                 "center",
-
               gap: 0.65,
-
               border: 0,
-
               borderRadius:
                 "11px",
-
               cursor:
                 "pointer",
-
               color:
                 "#ffffff",
-
               backgroundColor:
                 "rgba(255,255,255,0.08)",
-
               fontFamily:
                 "inherit",
-
               fontSize:
                 "8.5px",
-
               fontWeight:
                 800,
-
               transition:
                 "background-color 0.2s ease",
-
               "&:hover": {
                 backgroundColor:
                   "rgba(255,255,255,0.14)",
               },
-
               "& svg": {
                 fontSize:
                   16,
@@ -596,6 +740,66 @@ const SchoolSidebar = ({
     </Box>
   );
 };
+
+const SidebarLink = ({
+  item,
+  mobile,
+  onClose,
+}) => (
+  <Box
+    component={NavLink}
+    to={item.path}
+    onClick={
+      mobile
+        ? onClose
+        : undefined
+    }
+    sx={{
+      minHeight: 46,
+      px: 1.45,
+      display:
+        "flex",
+      alignItems:
+        "center",
+      gap: 1,
+      borderRadius:
+        "14px",
+      color:
+        "rgba(255,255,255,0.77)",
+      textDecoration:
+        "none",
+      fontSize:
+        "9.5px",
+      fontWeight:
+        800,
+      transition:
+        "all 0.2s ease",
+      "& svg": {
+        fontSize:
+          18,
+      },
+      "&:hover": {
+        color:
+          "#ffffff",
+        backgroundColor:
+          "rgba(255,255,255,0.08)",
+        transform:
+          "translateX(-2px)",
+      },
+      "&.active": {
+        color:
+          "#173c5d",
+        backgroundColor:
+          "#f3d78b",
+        boxShadow:
+          "0 10px 24px rgba(7,22,41,0.18)",
+      },
+    }}
+  >
+    {item.icon}
+    {item.label}
+  </Box>
+);
 
 export {
   SIDEBAR_WIDTH,

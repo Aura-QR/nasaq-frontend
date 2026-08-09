@@ -85,6 +85,24 @@ const calculateTotal = (values) =>
     0
   );
 
+const normalizePassingGrade = (value) => {
+  if (
+    value === "" ||
+    value === undefined ||
+    value === null ||
+    Number.isNaN(value)
+  ) {
+    return 50;
+  }
+
+  return Number(value);
+};
+
+const isValidPassingGrade = (value) =>
+  Number.isFinite(value) &&
+  value >= 0 &&
+  value <= 100;
+
 const FORM_CARD_SX = {
   p: {
     xs: 1.5,
@@ -277,6 +295,9 @@ const Edit = () => {
         gradesCriteria
           ?.subject?.id ||
         "",
+      passingGrade:
+        gradesCriteria
+          ?.passingGrade ?? 50,
     };
 
     reset(normalized);
@@ -313,9 +334,30 @@ const Edit = () => {
       return;
     }
 
+    const passingGrade =
+      normalizePassingGrade(
+        formData.passingGrade
+      );
+
+    if (
+      !isValidPassingGrade(
+        passingGrade
+      )
+    ) {
+      toast.error(
+        "درجة النجاح يجب أن تكون من 0 إلى 100"
+      );
+      return;
+    }
+
+    const normalizedForm = {
+      ...formData,
+      passingGrade,
+    };
+
     const changedData =
       getChangedValues(
-        formData,
+        normalizedForm,
         defaultValues,
         ["subject"]
       );
@@ -514,7 +556,7 @@ const Edit = () => {
               <AssessmentRounded />
             }
             title="تفاصيل توزيع الدرجات"
-            description="يجب أن يكون مجموع درجات البنود الرئيسية 100 درجة."
+            description="حدّد درجة النجاح ثم راجع بنود التقييم؛ درجة النجاح لا تدخل ضمن مجموع 100 درجة."
             endContent={
               <Chip
                 label={`${totalGrades} / 100`}
@@ -675,6 +717,25 @@ const GradeInputs = ({
       md: 2,
     }}
   >
+    <Grid item xs={12} sm={6} lg={4}>
+      <Input
+        register={register}
+        registerName="passingGrade"
+        error={errors.passingGrade?.message}
+        label="درجة النجاح"
+        type="number"
+        defaultValue={
+          defaultValues.passingGrade ?? 50
+        }
+        valueAsNumber
+        inputProps={{
+          min: 0,
+          max: 100,
+          step: 1,
+        }}
+      />
+    </Grid>
+
     <Grid item xs={12} sm={6} lg={4}>
       <Input
         register={register}
