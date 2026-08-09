@@ -5,14 +5,18 @@ import { toast } from "react-toastify";
 export const useAdditionalFees = () => {
   const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const refetch = useCallback(async () => {
     setLoading(true);
+    setError(null);
     const res = await fetchAdditionalFees();
     if (res?.status || Array.isArray(res?.data)) {
       setFees(res.data || []);
     } else {
-      toast.error(typeof res === "string" ? res : "حدث خطأ أثناء جلب الرسوم الإضافية");
+      const errMsg = typeof res === "string" ? res : res?.message || "حدث خطأ أثناء جلب الرسوم الإضافية";
+      setError(errMsg);
+      toast.error(errMsg);
       setFees([]);
     }
     setLoading(false);
@@ -22,5 +26,13 @@ export const useAdditionalFees = () => {
     refetch();
   }, [refetch]);
 
-  return { fees, loading, setFees, refetch };
+  return {
+    fees,
+    additionalFees: fees,
+    loading,
+    error,
+    setFees,
+    setAdditionalFees: setFees,
+    refetch,
+  };
 };
