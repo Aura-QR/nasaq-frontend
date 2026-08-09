@@ -20,6 +20,7 @@ import {
   Logout,
   ManageAccountsRounded,
   MoneyOff,
+  PostAddRounded,
   ReceiptLong,
   Route,
   SchoolRounded,
@@ -357,6 +358,13 @@ const Sidebar = ({ active }) => {
             Icon: AccountBalanceWallet,
             iconType: "mui",
             to: "/financial/records",
+            show: financialPermissions.read,
+          },
+          {
+            name: "الرسوم الإضافية",
+            Icon: PostAddRounded,
+            iconType: "mui",
+            to: "/financial/additional-fees",
             show: financialPermissions.read,
           },
           {

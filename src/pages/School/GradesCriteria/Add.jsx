@@ -36,7 +36,51 @@ import Select from "@/components/Select/Select";
 import SubjectSelector from "@/components/Selector/SubjectSelector";
 
 import { addGradesCriteria } from "@/APIs/school/gradesCriteria";
-import Years from "@/utils/constants/Years";
+import { fetchAcademicYears } from "@/APIs/school/academicYears";
+
+const normalizeId = (value) => {
+  if (value && typeof value === "object") {
+    return String(
+      value?._id ||
+      value?.id ||
+      ""
+    ).trim();
+  }
+
+  return String(value || "").trim();
+};
+
+const getResponseList = (response) => {
+  const payload =
+    response?.data?.data ??
+    response?.data ??
+    response;
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return (
+    [
+      payload?.docs,
+      payload?.items,
+      payload?.results,
+      payload?.academicYears,
+      payload?.years,
+      payload?.data,
+    ].find(Array.isArray) || []
+  );
+};
+
+const mapAcademicYear = (item) => ({
+  id: normalizeId(item),
+  name:
+    item?.name ||
+    item?.label ||
+    item?.title ||
+    item?.academicYear ||
+    "سنة دراسية",
+});
 
 const getResponseData = (response) =>
   response?.data?.data ||
@@ -257,11 +301,22 @@ const Add = () => {
   } = useForm({
     defaultValues: {
       passingGrade: 50,
+      academicYearId: "",
     },
   });
 
   const [loading, setLoading] =
     useState(false);
+
+  const [
+    academicYears,
+    setAcademicYears,
+  ] = useState([]);
+
+  const [
+    loadingAcademicYears,
+    setLoadingAcademicYears,
+  ] = useState(false);
 
   const navigate =
     useNavigate();
@@ -272,6 +327,11 @@ const Add = () => {
   const querySubjectId =
     searchParams.get(
       "subjectId"
+    ) || "";
+
+  const queryAcademicYearId =
+    searchParams.get(
+      "academicYearId"
     ) || "";
 
   const queryAcademicYear =
@@ -286,16 +346,101 @@ const Add = () => {
         querySubjectId
       );
     }
+  }, [
+    querySubjectId,
+    setValue,
+  ]);
 
-    if (queryAcademicYear) {
+  useEffect(() => {
+    let active = true;
+
+    const loadAcademicYears =
+      async () => {
+        setLoadingAcademicYears(
+          true
+        );
+
+        const response =
+          await fetchAcademicYears();
+
+        if (!active) {
+          return;
+        }
+
+        if (
+          response?.status === false
+        ) {
+          setAcademicYears([]);
+
+          toast.error(
+            response?.message ||
+              "تعذر تحميل السنوات الدراسية"
+          );
+        } else {
+          setAcademicYears(
+            getResponseList(
+              response
+            ).map(
+              mapAcademicYear
+            )
+          );
+        }
+
+        setLoadingAcademicYears(
+          false
+        );
+      };
+
+    loadAcademicYears();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      academicYears.length === 0
+    ) {
+      return;
+    }
+
+    if (queryAcademicYearId) {
       setValue(
-        "academicYear",
+        "academicYearId",
+        queryAcademicYearId
+      );
+      return;
+    }
+
+    if (!queryAcademicYear) {
+      return;
+    }
+
+    const normalizedQuery =
+      String(
         queryAcademicYear
+      ).trim();
+
+    const matchedYear =
+      academicYears.find(
+        (item) =>
+          item.id ===
+            normalizedQuery ||
+          item.name ===
+            normalizedQuery
+      );
+
+    if (matchedYear?.id) {
+      setValue(
+        "academicYearId",
+        matchedYear.id
       );
     }
   }, [
-    querySubjectId,
+    academicYears,
     queryAcademicYear,
+    queryAcademicYearId,
     setValue,
   ]);
 
@@ -340,8 +485,26 @@ const Add = () => {
       return;
     }
 
+    const {
+      academicYear,
+      ...restFormData
+    } = formData;
+
+    const academicYearId =
+      normalizeId(
+        restFormData.academicYearId
+      );
+
+    if (!academicYearId) {
+      toast.error(
+        "اختر السنة الدراسية"
+      );
+      return;
+    }
+
     const payload = {
-      ...formData,
+      ...restFormData,
+      academicYearId,
       passingGrade,
     };
 
@@ -474,19 +637,35 @@ const Add = () => {
               md={6}
             >
               <Select
+                key={`academic-year-${academicYears.length}-${queryAcademicYearId || queryAcademicYear}`}
                 register={register}
-                registerName="academicYear"
-                data={Years}
+                registerName="academicYearId"
+                data={academicYears}
+                name="name"
                 error={
                   errors
-                    .academicYear
+                    .academicYearId
                     ?.message
                 }
                 label="السنة الدراسية للمادة"
                 required
-                defaultValue={
-                  queryAcademicYear
+                disabled={
+                  loadingAcademicYears
                 }
+                defaultValue={
+                  queryAcademicYearId ||
+                  ""
+                }
+                onChange={(value) => {
+                  setValue(
+                    "academicYearId",
+                    value || "",
+                    {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    }
+                  );
+                }}
               />
             </Grid>
 
