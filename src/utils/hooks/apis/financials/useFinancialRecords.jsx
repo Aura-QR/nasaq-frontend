@@ -1,35 +1,170 @@
-import { fetchFinancialRecords } from "@/APIs/financials/financialRecords";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "react-toastify";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
-export const useFinancialRecords = (filters = {}) => {
-	const [financialRecords, setFinancialRecords] = useState([]);
-	const [loading, setLoading] = useState(false);
-	const [pagination, setPagination] = useState(null);
-	const [reloadKey, setReloadKey] = useState(0);
+import { api } from "@/APIs/Axios";
 
-	const filterString = useMemo(() => JSON.stringify(filters), [filters]);
+const ALLOWED_FILTERS = new Set([
+  "page",
+  "limit",
+  "classId",
+  "studentName",
+  "tuitionStatus",
+  "academicYearId",
+]);
 
-	useEffect(() => {
-		const fetchData = async () => {
-			setLoading(true);
-			const res = await fetchFinancialRecords(filters);
-			if (res.status) {
-				setFinancialRecords(res.data || []);
-				setPagination(res.pagination);
-			} else {
-				toast.error(res || "حدث خطأ ما أثناء جلب مصاريف الطلاب");
-				setFinancialRecords([]);
-				setPagination(null);
-			}
-			setLoading(false);
-		};
+const cleanFilters = (
+  filters = {}
+) =>
+  Object.fromEntries(
+    Object.entries(filters).filter(
+      ([key, value]) =>
+        ALLOWED_FILTERS.has(
+          key
+        ) &&
+        value !== undefined &&
+        value !== null &&
+        value !== ""
+    )
+  );
 
-		fetchData();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [filterString, reloadKey]);
+const extractRecords = (
+  response
+) => {
+  const payload =
+    response?.data ??
+    response;
 
-	const refetch = () => setReloadKey((prev) => prev + 1);
+  const data =
+    payload?.data ??
+    payload;
 
-	return { financialRecords, loading, pagination, setPagination, refetch };
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (
+    data &&
+    typeof data === "object"
+  ) {
+    for (const key of [
+      "docs",
+      "items",
+      "results",
+      "records",
+      "rows",
+    ]) {
+      if (
+        Array.isArray(
+          data?.[key]
+        )
+      ) {
+        return data[key];
+      }
+    }
+  }
+
+  return [];
 };
+
+const extractPagination = (
+  response
+) => {
+  const payload =
+    response?.data ??
+    response;
+
+  return (
+    payload?.pagination ||
+    payload?.meta ||
+    payload?.data?.pagination ||
+    null
+  );
+};
+
+export const useFinancialRecords = (
+  filters = {}
+) => {
+  const [
+    financialRecords,
+    setFinancialRecords,
+  ] = useState([]);
+
+  const [
+    pagination,
+    setPagination,
+  ] = useState(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
+
+  const params =
+    useMemo(
+      () =>
+        cleanFilters(
+          filters
+        ),
+      [filters]
+    );
+
+  const refetch =
+    useCallback(async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const response =
+          await api.get(
+            "/financial/records",
+            {
+              params,
+            }
+          );
+
+        setFinancialRecords(
+          extractRecords(
+            response
+          )
+        );
+
+        setPagination(
+          extractPagination(
+            response
+          )
+        );
+      } catch (err) {
+        setFinancialRecords([]);
+        setPagination(null);
+
+        setError(
+          err?.response?.data
+            ?.message ||
+            err?.message ||
+            "تعذر تحميل السجلات المالية"
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, [params]);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  return {
+    financialRecords,
+    setFinancialRecords,
+    pagination,
+    loading,
+    error,
+    refetch,
+  };
+};
+
+export default useFinancialRecords;

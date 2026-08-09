@@ -1,6 +1,7 @@
 ﻿import {
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -8,488 +9,2934 @@
   FormControl,
   Grid,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Paper,
   Select,
   Stack,
-  TextField,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
-import { useNavigate, useParams } from "react-router-dom";
+
+import {
+  AccountBalanceWalletRounded,
+  DirectionsBusRounded,
+  EventNoteRounded,
+  HistoryRounded,
+  LocalActivityRounded,
+  PaymentsRounded,
+  ReceiptLongRounded,
+  SchoolRounded,
+} from "@mui/icons-material";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  useForm,
+} from "react-hook-form";
+
+import {
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
+
 import { toast } from "react-toastify";
-import { payTuitionInstallment } from "@/APIs/financials/financialRecords";
-import { applyDiscountToTuition, removeDiscountFromTuition } from "@/APIs/financials/discounts";
+
+import {
+  payTuitionInstallment,
+} from "@/APIs/financials/financialRecords";
+
+import {
+  refundTuitionInstallment,
+} from "@/APIs/financials/financialRecordCorrections";
+
+import {
+  applyDiscountToTuition,
+  removeDiscountFromTuition,
+} from "@/APIs/financials/discounts";
+
 import Back from "@/components/Back/Back";
 import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
 import Loading from "@/components/Loading";
-import { translateGender } from "@/utils/helpers/translateGender";
-import { useDiscounts } from "@/utils/hooks/apis/financials/useDiscounts";
-import { useFinancialRecord } from "@/utils/hooks/apis/financials/useFinancialRecord";
+
+import {
+  translateGender,
+} from "@/utils/helpers/translateGender";
+
+import {
+  formatDate,
+  formatMoney,
+  getErrorMessage,
+  mapFeeStatus,
+} from "@/utils/financial/financialUtils";
+
+import {
+  useDiscounts,
+} from "@/utils/hooks/apis/financials/useDiscounts";
+
+import {
+  useFinancialRecord,
+} from "@/utils/hooks/apis/financials/useFinancialRecord";
+
+import { useFinancialAcademicYears } from "@/utils/hooks/apis/financials/useFinancialAcademicYears";
+
 import usePermissions from "@/utils/hooks/usePermissions";
 
-const FinancialRecordProfilePage = () => {
-  const { studentId } = useParams();
-  const navigate = useNavigate();
-  const { financialRecord, loading, refetch } = useFinancialRecord(studentId);
-  const permissions = usePermissions("financial");
-  const [payOpen, setPayOpen] = useState(false);
-  const [payLoading, setPayLoading] = useState(false);
-  const [selectedInstallment, setSelectedInstallment] = useState(null);
-  const [selectedDiscountId, setSelectedDiscountId] = useState("");
-  const [discountLoading, setDiscountLoading] = useState(false);
-  const { discounts, loading: discountsLoading } = useDiscounts();
+const numberOf = (...values) => {
+  for (const value of values) {
+    const numeric =
+      Number(value);
 
-  const installmentsRows = useMemo(() => {
-    const mapStatus = (status) => {
-      if (status === "paid") return "مدفوع";
-      if (status === "overdue") return "متأخر";
-      return "قيد الانتظار";
-    };
-
-    return (financialRecord?.tuition?.installments || []).map((item) => ({
-      id: item?._id || item?.installmentNumber,
-      installmentNumber: item?.installmentNumber,
-      amountRaw: Number(item?.amount || 0),
-      paidAmountRaw: Number(item?.paidAmount || 0),
-      remainingRaw: Math.max(Number(item?.amount || 0) - Number(item?.paidAmount || 0), 0),
-      amount: `${item?.amount || 0} جنيه`,
-      paidAmount: `${item?.paidAmount || 0} جنيه`,
-      dueDateRaw: item?.dueDate,
-      dueDate: item?.dueDate ? new Date(item.dueDate).toLocaleDateString("en-GB") : "—",
-      paymentDate:
-        item?.payments?.length > 0 && item?.payments[item?.payments?.length - 1]?.paidAt
-          ? new Date(item?.payments[item?.payments?.length - 1]?.paidAt).toLocaleDateString("en-GB")
-          : "—",
-      statusRaw: item?.status,
-      status: mapStatus(item?.status),
-    }));
-  }, [financialRecord]);
-
-  const handleOpenPay = (installment) => {
-    setSelectedInstallment(installment);
-    setPayOpen(true);
-  };
-
-  const handleClosePay = () => {
-    setPayOpen(false);
-    setSelectedInstallment(null);
-  };
-
-  const handlePayInstallment = async (formData) => {
-    if (!studentId) return;
-
-    setPayLoading(true);
-    const academicYearId =
-      financialRecord?.academicYearId?._id ||
-      financialRecord?.academicYearId ||
-      undefined;
-
-    const payload = {
-      installmentNumber: Number(formData.installmentNumber),
-      amount: Number(formData.amount),
-      paidAt: formData.paidAt,
-      notes: formData.notes || undefined,
-      ...(academicYearId ? { academicYearId } : {}),
-    };
-
-    const response = await payTuitionInstallment(studentId, payload);
-    if (response.status) {
-      toast.success(response.message || "تم تسجيل دفعة القسط بنجاح");
-      handleClosePay();
-      await refetch();
-    } else {
-      toast.error(response?.message || response || "حدث خطأ ما أثناء تسجيل دفعة القسط");
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== "" &&
+      Number.isFinite(
+        numeric
+      )
+    ) {
+      return numeric;
     }
-    setPayLoading(false);
-  };
+  }
 
-  const handleApplyTuitionDiscount = async () => {
-    if (!studentId) return;
-    if (!selectedDiscountId) {
-      toast.error("يرجى اختيار خصم أولاً");
-      return;
-    }
+  return 0;
+};
 
-    setDiscountLoading(true);
-    const response = await applyDiscountToTuition(studentId, { discountId: selectedDiscountId });
-    if (response.status) {
-      toast.success(response.message || "تم تطبيق الخصم على الرسوم الدراسية بنجاح");
-      setSelectedDiscountId("");
-      await refetch();
-    } else {
-      toast.error(response || "حدث خطأ ما أثناء تطبيق الخصم");
-    }
-    setDiscountLoading(false);
-  };
+const idOf = (value) => {
+  if (
+    value &&
+    typeof value ===
+      "object"
+  ) {
+    return String(
+      value?._id ||
+      value?.id ||
+      ""
+    ).trim();
+  }
 
-  const handleRemoveTuitionDiscount = async () => {
-    if (!studentId) return;
+  return String(
+    value || ""
+  ).trim();
+};
 
-    setDiscountLoading(true);
-    const response = await removeDiscountFromTuition(studentId);
-    if (response.status) {
-      toast.success(response.message || "تم إزالة الخصم من الرسوم الدراسية بنجاح");
-      await refetch();
-    } else {
-      toast.error(response || "حدث خطأ ما أثناء إزالة الخصم");
-    }
-    setDiscountLoading(false);
-  };
+const asArray = (value) =>
+  Array.isArray(value)
+    ? value
+    : [];
 
-  if (loading) {
-    return (
-      <Container>
-        <Loading />
-      </Container>
+const getStudentName = (
+  student
+) =>
+  student?.name ||
+  [
+    student?.firstName,
+    student?.fatherName,
+    student?.familyName,
+  ]
+    .filter(Boolean)
+    .join(" ") ||
+  student?.username ||
+  "—";
+
+const getEffectiveFee = (
+  value
+) => {
+  if (!value) {
+    return 0;
+  }
+
+  if (
+    value?.discount ||
+    value?.discountApplied
+  ) {
+    return numberOf(
+      value?.netFee,
+      value
+        ?.amountAfterDiscount,
+      value?.fee,
+      value?.amount
     );
   }
 
-  if (!financialRecord) {
-    return (
-      <Container>
-        <Back title={"تفاصيل مصاريف الطالب"} />
-        <Typography mt={8}>لا توجد بيانات مالية لهذا الطالب</Typography>
-      </Container>
-    );
-  }
-
-  const student = financialRecord?.studentId || {};
-  const cls = financialRecord?.classId || {};
-  const tuition = financialRecord?.tuition || {};
-  const effectiveFee = Number(tuition?.discount ? tuition?.netFee : tuition?.fee || 0);
-  const remaining = Math.max(Number(effectiveFee || 0) - Number(tuition?.totalPaid || 0), 0);
-
-  const mapFeeStatus = (status) => {
-    if (status === "paid") return "مدفوعة";
-    if (status === "partial") return "جزئية";
-    return "غير مدفوعة";
-  };
-
-  const infoCards = [
-    { key: "اسم الطالب", value: student?.name || "—" },
-    { key: "السنة الدراسية", value: financialRecord?.academicYear || cls?.academicYear || "—" },
-    {
-      key: "الفصل",
-      value: cls?.roomNumber ? `${cls?.roomNumber} - ${translateGender(cls?.gender, "class")}` : "—",
-    },
-    { key: "الخطة", value: financialRecord?.installmentPlanId?.name || "—" },
-    { key: "حالة الرسوم", value: mapFeeStatus(tuition?.status) },
-    { key: "إجمالي الرسوم", value: `${effectiveFee || 0} جنيه` },
-    { key: "إجمالي المدفوع", value: `${tuition?.totalPaid || 0} جنيه` },
-    { key: "المتبقي", value: `${remaining} جنيه` },
-  ];
-
-  const tuitionDiscount = tuition?.discount || null;
-  const activeDiscounts = (discounts || []).filter((item) => item?.isActive);
-
-  return (
-    <Container>
-      <Back title={"تفاصيل مصاريف الطالب"} />
-
-      <Paper
-        elevation={0}
-        sx={{
-          bgcolor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
-          borderRadius: "16px",
-          mt: 8,
-        }}
-      >
-        <Stack spacing={1} mb={6}>
-          <Typography variant="h4" fontWeight="bold">
-            {student?.name || "—"}
-          </Typography>
-          <Typography color="text.secondary">{student?.schoolEmail || student?.email || "—"}</Typography>
-        </Stack>
-
-        <Grid container spacing={4}>
-          {infoCards.map((field, i) => (
-            <Grid item xs={12} md={6} lg={4} key={i}>
-              <Box
-                sx={{
-                  p: 2,
-                  borderRadius: "10px",
-                  bgcolor: i % 2 === 0 ? "primary.white" : "white",
-                  transition: ".5s",
-                  "&:hover": { bgcolor: "grey.100" },
-                }}
-              >
-                <Typography variant="label" color="text.secondary" sx={{ mb: 0.5, fontWeight: 500, fontSize: "12px" }}>
-                  {field.key}
-                </Typography>
-                <Typography variant="subtitle" sx={{ display: "block", fontWeight: 500, color: "text.primary" }}>
-                  {field.value}
-                </Typography>
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
-      </Paper>
-
-      <Paper
-        elevation={0}
-        sx={{
-          bgcolor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
-          borderRadius: "16px",
-          mt: 8,
-        }}
-      >
-        <Typography variant="h5" fontWeight={700} mb={6}>
-          خدمات الطالب المالية
-        </Typography>
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={4}>
-          {permissions?.read && (
-            <Button variant="outlined" onClick={() => navigate(`/financial/bus/${studentId}`)} sx={{ minWidth: 180 }}>
-              خدمة الباص
-            </Button>
-          )}
-
-          {permissions?.read && (
-            <Button variant="contained" onClick={() => navigate(`/financial/trips`)} sx={{ minWidth: 180 }}>
-              إدارة الرحلات
-            </Button>
-          )}
-        </Stack>
-      </Paper>
-
-      <Paper
-        elevation={0}
-        sx={{
-          bgcolor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
-          borderRadius: "16px",
-          mt: 8,
-        }}
-      >
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={6}
-          justifyContent={"space-between"}
-          alignItems={{ xs: "start", md: "center" }}
-        >
-          <Stack spacing={2}>
-            <Typography variant="h5" fontWeight={700}>
-              خصم الرسوم الدراسية
-            </Typography>
-
-            {tuition?.discountApplied && tuitionDiscount ? (
-              <Typography color="text.secondary" fontWeight={500}>
-                الخصم الحالي: {tuitionDiscount?.name} ({tuitionDiscount?.percentage}%) - قيمة الخصم: {tuitionDiscount?.discountAmount || 0} جنيه
-              </Typography>
-            ) : (
-              <Typography color="text.secondary" fontWeight={500}>
-                لا يوجد خصم مطبق حالياً على الرسوم الدراسية
-              </Typography>
-            )}
-          </Stack>
-
-          {permissions?.edit && (
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={4} width={{ xs: "100%", md: "auto" }}>
-              {!tuition?.discountApplied ? (
-                <>
-                  <FormControl sx={{ minWidth: { xs: "100%", sm: 260 } }} size="small">
-                    <InputLabel id="tuition-discount-label">اختر خصم</InputLabel>
-                    <Select
-                      labelId="tuition-discount-label"
-                      value={selectedDiscountId}
-                      label="اختر خصم"
-                      onChange={(e) => setSelectedDiscountId(e.target.value)}
-                      disabled={discountsLoading || discountLoading}
-                    >
-                      {activeDiscounts.map((item) => (
-                        <MenuItem key={item._id} value={item._id}>
-                          {item.name} - {item.percentage}%
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-
-                  <Button
-                    variant="contained"
-                    onClick={handleApplyTuitionDiscount}
-                    disabled={!selectedDiscountId || discountLoading || discountsLoading}
-                    sx={{ minWidth: 140 }}
-                  >
-                    تطبيق الخصم
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={handleRemoveTuitionDiscount}
-                  disabled={discountLoading}
-                  sx={{ minWidth: 160 }}
-                >
-                  إزالة الخصم
-                </Button>
-              )}
-            </Stack>
-          )}
-        </Stack>
-      </Paper>
-
-      <Paper
-        elevation={0}
-        sx={{
-          bgcolor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
-          borderRadius: "16px",
-          mt: 8,
-        }}
-      >
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-[#1E293B]">أقساط الرسوم الدراسية</h2>
-          <span className="rounded-full bg-[#F3F4F6] px-3 py-1 text-xs font-semibold text-[#374151]">
-            عدد الأقساط: {installmentsRows.length}
-          </span>
-        </div>
-
-        {installmentsRows.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm font-medium text-gray-500">
-            لا توجد أقساط لعرضها
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-y-2">
-              <thead>
-                <tr>
-                  <th className="rounded-r-xl bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">القسط</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">المبلغ</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">المدفوع</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">الاستحقاق</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">تاريخ الدفع</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">الحالة</th>
-                  <th className="rounded-l-xl bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">الإجراء</th>
-                </tr>
-              </thead>
-              <tbody>
-                {installmentsRows.map((item) => (
-                  <tr key={item.id}>
-                    <td className="rounded-r-xl border border-[#E5E7EB] bg-white px-3 py-3 text-sm font-semibold text-[#1E293B]">
-                      #{item.installmentNumber}
-                    </td>
-                    <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm text-[#374151]">
-                      {item.amount}
-                    </td>
-                    <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm text-[#374151]">
-                      {item.paidAmount}
-                    </td>
-                    <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm text-[#374151]">
-                      {item.dueDate}
-                    </td>
-                    <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm text-[#374151]">
-                      {item.paymentDate}
-                    </td>
-                    <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm">
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.statusRaw === "paid" ? "bg-[#E7F8F1] text-[#0E9F6E]" : item.statusRaw === "overdue" ? "bg-[#FDECEC] text-[#D14343]" : "bg-[#EEF5FF] text-[#1D4ED8]"}`}>
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="rounded-l-xl border border-[#E5E7EB] bg-white px-3 py-3 text-sm">
-                      {permissions?.edit && item.statusRaw !== "paid" ? (
-                        <Button variant="contained" onClick={() => handleOpenPay(item)} sx={{ minWidth: "120px" }}>
-                          تسجيل دفعة
-                        </Button>
-                      ) : (
-                        <Typography color="text.secondary" fontSize={13}>—</Typography>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Paper>
-
-      <PayInstallmentDialog
-        open={payOpen}
-        onClose={handleClosePay}
-        installment={selectedInstallment}
-        loading={payLoading}
-        onSubmit={handlePayInstallment}
-      />
-    </Container>
+  return numberOf(
+    value?.netFee,
+    value?.fee,
+    value?.amount
   );
 };
 
-const PayInstallmentDialog = ({ open, onClose, installment, loading, onSubmit }) => {
+const derivedStatus = (
+  installments
+) => {
+  const rows =
+    asArray(
+      installments
+    );
+
+  if (
+    rows.length > 0 &&
+    rows.every(
+      (item) =>
+        item?.status ===
+        "paid"
+    )
+  ) {
+    return "paid";
+  }
+
+  const hasProgress =
+    rows.some(
+      (item) =>
+        numberOf(
+          item?.paidAmount
+        ) > 0
+    );
+
+  if (hasProgress) {
+    return "partial";
+  }
+
+  return "unpaid";
+};
+
+const statusLabel = (
+  status
+) =>
+  status === "paid"
+    ? "مدفوع بالكامل"
+    : status ===
+        "partial"
+      ? "جزئي"
+      : "غير مدفوع";
+
+const statusChipSx = (
+  status
+) => {
+  if (status === "paid") {
+    return {
+      color: "#237449",
+      bgcolor:
+        "rgba(116,201,154,.16)",
+      border:
+        "1px solid rgba(116,201,154,.28)",
+    };
+  }
+
+  if (
+    status === "partial"
+  ) {
+    return {
+      color:
+        "var(--color-gold-dark)",
+      bgcolor:
+        "var(--color-gold-soft)",
+      border:
+        "1px solid rgba(211,164,79,.22)",
+    };
+  }
+
+  return {
+    color:
+      "var(--color-muted)",
+    bgcolor:
+      "rgba(36,74,112,.06)",
+    border:
+      "1px solid rgba(36,74,112,.10)",
+  };
+};
+
+const getPaymentEventType = (
+  event
+) => {
+  const type =
+    String(
+      event?.type ||
+      event?.eventType ||
+      event?.kind ||
+      ""
+    ).toLowerCase();
+
+  if (
+    type.includes(
+      "refund"
+    ) ||
+    type.includes(
+      "reversal"
+    ) ||
+    numberOf(
+      event?.amount
+    ) < 0
+  ) {
+    return "refund";
+  }
+
+  return "payment";
+};
+
+const getPaymentDate = (
+  event
+) =>
+  event?.refundedAt ||
+  event?.paidAt ||
+  event?.createdAt ||
+  event?.date;
+
+const getEventAmount = (
+  event
+) =>
+  Math.abs(
+    numberOf(
+      event?.amount,
+      event?.paidAmount,
+      event?.refundAmount
+    )
+  );
+
+const getEventText = (
+  event
+) =>
+  event?.reason ||
+  event?.notes ||
+  event?.note ||
+  "—";
+
+const SummaryCell = ({
+  label,
+  value,
+  tone,
+}) => (
+  <Box
+    sx={{
+      p: 1.5,
+      bgcolor:
+        "#fff",
+      minWidth: 0,
+      ...(tone ===
+        "discount"
+        ? {
+            "& .value":
+              {
+                color:
+                  "#237449",
+              },
+          }
+        : {}),
+    }}
+  >
+    <Typography
+      sx={{
+        fontSize:
+          "10px",
+        color:
+          "var(--color-muted)",
+        fontWeight: 700,
+      }}
+    >
+      {label}
+    </Typography>
+
+    <Typography
+      className="value"
+      sx={{
+        mt: 0.4,
+        fontSize:
+          "17px",
+        fontWeight: 800,
+        color:
+          "var(--color-navy-deep)",
+        overflowWrap:
+          "anywhere",
+      }}
+    >
+      {value}
+    </Typography>
+  </Box>
+);
+
+const ServiceCard = ({
+  title,
+  status,
+  primary,
+  secondary,
+  icon,
+  onClick,
+  disabled,
+}) => (
+  <Paper
+    elevation={0}
+    sx={{
+      p: 1.4,
+      border:
+        "1px solid rgba(36,74,112,.09)",
+      borderRadius:
+        "14px",
+      bgcolor: "#fff",
+    }}
+  >
+    <Stack
+      direction="row"
+      justifyContent="space-between"
+      alignItems="flex-start"
+      gap={1}
+    >
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+      >
+        <Box
+          sx={{
+            width: 38,
+            height: 38,
+            display:
+              "grid",
+            placeItems:
+              "center",
+            borderRadius:
+              "11px",
+            bgcolor:
+              "var(--color-gold-soft)",
+            color:
+              "var(--color-gold-dark)",
+          }}
+        >
+          {icon}
+        </Box>
+
+        <Box>
+          <Typography
+            sx={{
+              fontSize:
+                "12px",
+              fontWeight:
+                800,
+              color:
+                "var(--color-navy-deep)",
+            }}
+          >
+            {title}
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.25,
+              fontSize:
+                "10px",
+              color:
+                "var(--color-muted)",
+            }}
+          >
+            {secondary}
+          </Typography>
+        </Box>
+      </Stack>
+
+      <Chip
+        label={status}
+        size="small"
+        sx={{
+          fontSize:
+            "9px",
+          fontWeight:
+            800,
+        }}
+      />
+    </Stack>
+
+    <Typography
+      sx={{
+        mt: 1.25,
+        fontSize:
+          "16px",
+        fontWeight:
+          800,
+        color:
+          "var(--color-navy-deep)",
+      }}
+    >
+      {primary}
+    </Typography>
+
+    {onClick && (
+      <Button
+        fullWidth
+        variant="outlined"
+        onClick={onClick}
+        disabled={
+          disabled
+        }
+        sx={{
+          mt: 1.25,
+          minHeight:
+            38,
+          borderRadius:
+            "10px",
+          fontSize:
+            "10.5px",
+          fontWeight:
+            800,
+          textTransform:
+            "none",
+        }}
+      >
+        فتح السجل
+      </Button>
+    )}
+  </Paper>
+);
+
+const FinancialRecordProfilePage =
+  () => {
+    const {
+      studentId,
+    } = useParams();
+
+    const [searchParams] =
+      useSearchParams();
+
+    const requestedAcademicYearId =
+      searchParams.get(
+        "academicYearId"
+      ) || "";
+
+    const navigate =
+      useNavigate();
+
+    const {
+      financialRecord,
+      loading,
+      refetch,
+    } =
+      useFinancialRecord(
+        studentId,
+        requestedAcademicYearId
+      );
+
+    const permissions =
+      usePermissions(
+        "financial"
+      );
+
+    const {
+      getAcademicYearLabel,
+    } =
+      useFinancialAcademicYears(
+        financialRecord
+          ?.academicYearId
+          ? [
+              financialRecord
+                .academicYearId,
+            ]
+          : []
+      );
+
+    const [
+      payOpen,
+      setPayOpen,
+    ] = useState(false);
+
+    const [
+      refundOpen,
+      setRefundOpen,
+    ] = useState(false);
+
+    const [
+      actionLoading,
+      setActionLoading,
+    ] = useState(false);
+
+    const [
+      selectedInstallment,
+      setSelectedInstallment,
+    ] = useState(null);
+
+    const [
+      selectedDiscountId,
+      setSelectedDiscountId,
+    ] = useState("");
+
+    const [
+      discountLoading,
+      setDiscountLoading,
+    ] = useState(false);
+
+    const {
+      discounts,
+      loading:
+        discountsLoading,
+    } = useDiscounts();
+
+    const student =
+      financialRecord
+        ?.studentId ||
+      financialRecord
+        ?.student ||
+      {};
+
+    const cls =
+      financialRecord
+        ?.classId ||
+      financialRecord
+        ?.class ||
+      {};
+
+    const tuition =
+      financialRecord
+        ?.tuition ||
+      {};
+
+    const installments =
+      asArray(
+        tuition?.installments
+      );
+
+    const originalFee =
+      numberOf(
+        tuition?.fee,
+        tuition?.originalFee,
+        tuition?.grossFee
+      );
+
+    const netFee =
+      getEffectiveFee(
+        tuition
+      );
+
+    const totalPaid =
+      numberOf(
+        tuition?.totalPaid,
+        tuition?.paidAmount
+      );
+
+    const remaining =
+      Math.max(
+        netFee -
+          totalPaid,
+        0
+      );
+
+    const tuitionStatus =
+      derivedStatus(
+        installments
+      );
+
+    const discount =
+      tuition?.discount ||
+      null;
+
+    const discountAmount =
+      numberOf(
+        discount?.discountAmount,
+        tuition?.discountAmount,
+        Math.max(
+          originalFee -
+            netFee,
+          0
+        )
+      );
+
+    const academicYearId =
+      idOf(
+        financialRecord
+          ?.academicYearId ||
+        cls?.academicYearId
+      );
+
+    const academicYearLabel =
+      getAcademicYearLabel(
+        academicYearId
+      );
+
+    const className =
+      cls?.roomNumber
+        ? `${cls.roomNumber} - ${
+            translateGender(
+              cls?.gender,
+              "class"
+            ) || ""
+          }`
+        : cls?.name ||
+          "—";
+
+    const planName =
+      financialRecord
+        ?.installmentPlanId
+        ?.name ||
+      financialRecord
+        ?.installmentPlan
+        ?.name ||
+      tuition
+        ?.installmentPlanId
+        ?.name ||
+      "—";
+
+    const paymentHistory =
+      useMemo(
+        () =>
+          installments
+            .flatMap(
+              (
+                installment
+              ) =>
+                asArray(
+                  installment
+                    ?.payments
+                ).map(
+                  (
+                    event,
+                    index
+                  ) => ({
+                    ...event,
+                    installmentNumber:
+                      installment
+                        ?.installmentNumber,
+                    eventKey:
+                      event?._id ||
+                      `${installment?.installmentNumber}-${index}`,
+                  })
+                )
+            )
+            .sort(
+              (a, b) =>
+                new Date(
+                  getPaymentDate(
+                    b
+                  ) || 0
+                ).getTime() -
+                new Date(
+                  getPaymentDate(
+                    a
+                  ) || 0
+                ).getTime()
+            ),
+        [installments]
+      );
+
+    const additionalFees =
+      asArray(
+        financialRecord
+          ?.additionalFees ||
+        financialRecord
+          ?.additionalFeeAssignments ||
+        financialRecord
+          ?.studentAdditionalFees
+      );
+
+    const additionalRemaining =
+      additionalFees.reduce(
+        (sum, item) => {
+          const fee =
+            numberOf(
+              item?.netFee,
+              item?.fee,
+              item?.amount,
+              item
+                ?.additionalFeeId
+                ?.amount,
+              item
+                ?.additionalFee
+                ?.amount
+            );
+
+          const paid =
+            numberOf(
+              item?.totalPaid,
+              item?.paidAmount
+            );
+
+          return (
+            sum +
+            Math.max(
+              fee - paid,
+              0
+            )
+          );
+        },
+        0
+      );
+
+    const bus =
+      financialRecord
+        ?.bus ||
+      {};
+
+    const busFee =
+      bus?.enrolled
+        ? getEffectiveFee(
+            bus
+          )
+        : 0;
+
+    const busPaid =
+      bus?.enrolled
+        ? numberOf(
+            bus?.totalPaid,
+            bus?.paidAmount
+          )
+        : 0;
+
+    const busRemaining =
+      Math.max(
+        busFee -
+          busPaid,
+        0
+      );
+
+    const trips =
+      asArray(
+        financialRecord
+          ?.trips
+      );
+
+    const tripsRemaining =
+      trips.reduce(
+        (sum, trip) => {
+          const fee =
+            getEffectiveFee(
+              trip
+            );
+
+          const paid =
+            numberOf(
+              trip?.totalPaid,
+              trip?.paidAmount
+            );
+
+          return (
+            sum +
+            Math.max(
+              fee -
+                paid,
+              0
+            )
+          );
+        },
+        0
+      );
+
+    const activeDiscounts =
+      asArray(
+        discounts
+      ).filter(
+        (item) =>
+          item?.isActive
+      );
+
+    const handleOpenPay =
+      (installment) => {
+        setSelectedInstallment(
+          installment
+        );
+        setPayOpen(true);
+      };
+
+    const handleOpenRefund =
+      (installment) => {
+        setSelectedInstallment(
+          installment
+        );
+        setRefundOpen(
+          true
+        );
+      };
+
+    const closeDialogs =
+      () => {
+        setPayOpen(
+          false
+        );
+        setRefundOpen(
+          false
+        );
+        setSelectedInstallment(
+          null
+        );
+      };
+
+    const handlePay =
+      async (
+        formData
+      ) => {
+        if (
+          !studentId ||
+          !selectedInstallment
+        ) {
+          return;
+        }
+
+        if (
+          !permissions?.edit
+        ) {
+          toast.error(
+            "ليس لديك صلاحية تسجيل الدفعات"
+          );
+          return;
+        }
+
+        const amount =
+          Number(
+            formData.amount
+          );
+
+        const installmentAmount =
+          numberOf(
+            selectedInstallment
+              ?.amount
+          );
+
+        const paidAmount =
+          numberOf(
+            selectedInstallment
+              ?.paidAmount
+          );
+
+        const installmentRemaining =
+          Math.max(
+            installmentAmount -
+              paidAmount,
+            0
+          );
+
+        if (
+          !Number.isFinite(
+            amount
+          ) ||
+          amount <= 0
+        ) {
+          toast.error(
+            "أدخل مبلغًا أكبر من صفر"
+          );
+          return;
+        }
+
+        if (
+          amount >
+          installmentRemaining
+        ) {
+          toast.error(
+            `المبلغ لا يمكن أن يتجاوز المتبقي ${formatMoney(
+              installmentRemaining
+            )}`
+          );
+          return;
+        }
+
+        setActionLoading(
+          true
+        );
+
+        const payload = {
+          installmentNumber:
+            Number(
+              selectedInstallment
+                ?.installmentNumber
+            ),
+          amount,
+          paidAt:
+            formData.paidAt,
+          notes:
+            formData.notes ||
+            undefined,
+          ...(academicYearId
+            ? {
+                academicYearId,
+              }
+            : {}),
+        };
+
+        const response =
+          await payTuitionInstallment(
+            studentId,
+            payload
+          );
+
+        if (
+          response?.status
+        ) {
+          toast.success(
+            response?.message ||
+              "تم تسجيل الدفعة بنجاح"
+          );
+
+          closeDialogs();
+          await refetch();
+        } else {
+          toast.error(
+            getErrorMessage(
+              response,
+              "تعذر تسجيل الدفعة"
+            )
+          );
+        }
+
+        setActionLoading(
+          false
+        );
+      };
+
+    const handleRefund =
+      async (
+        formData
+      ) => {
+        if (
+          !studentId ||
+          !selectedInstallment
+        ) {
+          return;
+        }
+
+        if (
+          !permissions?.edit
+        ) {
+          toast.error(
+            "ليس لديك صلاحية تصحيح الدفعات"
+          );
+          return;
+        }
+
+        const amount =
+          Number(
+            formData.amount
+          );
+
+        const paidAmount =
+          numberOf(
+            selectedInstallment
+              ?.paidAmount
+          );
+
+        if (
+          !Number.isFinite(
+            amount
+          ) ||
+          amount <= 0
+        ) {
+          toast.error(
+            "أدخل مبلغ استرداد صحيح"
+          );
+          return;
+        }
+
+        if (
+          amount >
+          paidAmount
+        ) {
+          toast.error(
+            `قيمة التصحيح لا يمكن أن تتجاوز المدفوع ${formatMoney(
+              paidAmount
+            )}`
+          );
+          return;
+        }
+
+        if (
+          !String(
+            formData.reason ||
+              ""
+          ).trim()
+        ) {
+          toast.error(
+            "سبب التصحيح مطلوب"
+          );
+          return;
+        }
+
+        setActionLoading(
+          true
+        );
+
+        const response =
+          await refundTuitionInstallment(
+            studentId,
+            selectedInstallment
+              ?.installmentNumber,
+            {
+              installmentNumber:
+                Number(
+                  selectedInstallment
+                    ?.installmentNumber
+                ),
+              amount,
+              reason:
+                formData.reason
+                  .trim(),
+              refundedAt:
+                formData.refundedAt ||
+                undefined,
+              ...(academicYearId
+                ? {
+                    academicYearId,
+                  }
+                : {}),
+            }
+          );
+
+        if (
+          response?.status
+        ) {
+          toast.success(
+            response?.message ||
+              "تم تسجيل التصحيح بنجاح"
+          );
+
+          closeDialogs();
+          await refetch();
+        } else {
+          toast.error(
+            getErrorMessage(
+              response,
+              "تعذر تسجيل التصحيح"
+            )
+          );
+        }
+
+        setActionLoading(
+          false
+        );
+      };
+
+    const handleApplyDiscount =
+      async () => {
+        if (
+          !studentId
+        ) {
+          return;
+        }
+
+        if (
+          !permissions?.edit
+        ) {
+          toast.error(
+            "ليس لديك صلاحية تعديل الرسوم"
+          );
+          return;
+        }
+
+        if (
+          !selectedDiscountId
+        ) {
+          toast.error(
+            "اختر خصمًا أولًا"
+          );
+          return;
+        }
+
+        setDiscountLoading(
+          true
+        );
+
+        const response =
+          await applyDiscountToTuition(
+            studentId,
+            {
+              discountId:
+                selectedDiscountId,
+              ...(academicYearId
+                ? {
+                    academicYearId,
+                  }
+                : {}),
+            }
+          );
+
+        if (
+          response?.status
+        ) {
+          toast.success(
+            response?.message ||
+              "تم تطبيق الخصم"
+          );
+
+          setSelectedDiscountId(
+            ""
+          );
+
+          await refetch();
+        } else {
+          toast.error(
+            getErrorMessage(
+              response,
+              "تعذر تطبيق الخصم"
+            )
+          );
+        }
+
+        setDiscountLoading(
+          false
+        );
+      };
+
+    const handleRemoveDiscount =
+      async () => {
+        if (
+          !studentId
+        ) {
+          return;
+        }
+
+        setDiscountLoading(
+          true
+        );
+
+        const response =
+          await removeDiscountFromTuition(
+            studentId,
+            academicYearId
+              ? {
+                  academicYearId,
+                }
+              : undefined
+          );
+
+        if (
+          response?.status
+        ) {
+          toast.success(
+            response?.message ||
+              "تم إزالة الخصم"
+          );
+
+          await refetch();
+        } else {
+          toast.error(
+            getErrorMessage(
+              response,
+              "تعذر إزالة الخصم"
+            )
+          );
+        }
+
+        setDiscountLoading(
+          false
+        );
+      };
+
+    if (loading) {
+      return (
+        <Container>
+          <Loading />
+        </Container>
+      );
+    }
+
+    if (
+      !financialRecord
+    ) {
+      return (
+        <Container>
+          <Back title="الملف المالي للطالب" />
+
+          <Paper
+            elevation={0}
+            sx={{
+              mt: 2,
+              p: 4,
+              textAlign:
+                "center",
+              border:
+                "1px dashed rgba(36,74,112,.18)",
+              borderRadius:
+                "16px",
+              bgcolor:
+                "var(--color-cream)",
+            }}
+          >
+            <Typography
+              sx={{
+                fontWeight:
+                  800,
+                color:
+                  "var(--color-navy-deep)",
+              }}
+            >
+              لا يوجد سجل
+              مالي لهذا
+              الطالب
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize:
+                  "10px",
+                color:
+                  "var(--color-muted)",
+              }}
+            >
+              السجل المالي
+              لا يتم إنشاؤه
+              يدويًا من
+              الواجهة.
+            </Typography>
+          </Paper>
+        </Container>
+      );
+    }
+
+    return (
+      <Container>
+        <Box
+          dir="rtl"
+          sx={{
+            pb: 4,
+          }}
+        >
+          <Back title="الملف المالي للطالب" />
+
+          <Paper
+            elevation={0}
+            sx={{
+              mt: 1.25,
+              p: {
+                xs: 1.5,
+                md: 2,
+              },
+              border:
+                "1px solid rgba(36,74,112,.09)",
+              borderRadius:
+                "18px",
+              bgcolor:
+                "var(--color-cream)",
+              boxShadow:
+                "0 12px 28px rgba(18,47,77,.05)",
+            }}
+          >
+            <Stack
+              direction={{
+                xs:
+                  "column",
+                md: "row",
+              }}
+              alignItems={{
+                xs:
+                  "flex-start",
+                md:
+                  "center",
+              }}
+              justifyContent="space-between"
+              gap={1.5}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize:
+                      "20px",
+                    fontWeight:
+                      800,
+                    color:
+                      "var(--color-navy-deep)",
+                  }}
+                >
+                  {getStudentName(
+                    student
+                  )}
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.35,
+                    fontSize:
+                      "10.5px",
+                    color:
+                      "var(--color-muted)",
+                  }}
+                >
+                  {academicYearLabel}
+                  {" · "}
+                  {className}
+                  {" · "}
+                  خطة:{" "}
+                  {planName}
+                </Typography>
+              </Box>
+
+              <Chip
+                label={statusLabel(
+                  tuitionStatus
+                )}
+                sx={{
+                  ...statusChipSx(
+                    tuitionStatus
+                  ),
+                  fontWeight:
+                    800,
+                  fontSize:
+                    "10px",
+                }}
+              />
+            </Stack>
+
+            <Box
+              sx={{
+                mt: 1.7,
+                display:
+                  "grid",
+                gridTemplateColumns:
+                  discountAmount >
+                  0
+                    ? {
+                        xs:
+                          "1fr",
+                        sm:
+                          "repeat(2,1fr)",
+                        lg:
+                          "repeat(4,1fr)",
+                      }
+                    : {
+                        xs:
+                          "1fr",
+                        sm:
+                          "repeat(3,1fr)",
+                      },
+                gap:
+                  "1px",
+                bgcolor:
+                  "rgba(36,74,112,.10)",
+                border:
+                  "1px solid rgba(36,74,112,.10)",
+                borderRadius:
+                  "12px",
+                overflow:
+                  "hidden",
+              }}
+            >
+              <SummaryCell
+                label="الرسوم الأصلية"
+                value={formatMoney(
+                  originalFee
+                )}
+              />
+
+              {discountAmount >
+                0 && (
+                <SummaryCell
+                  label={
+                    discount
+                      ?.name
+                      ? `${discount.name}${
+                          discount?.percentage
+                            ? ` ${discount.percentage}%`
+                            : ""
+                        }`
+                      : "الخصم"
+                  }
+                  value={`− ${formatMoney(
+                    discountAmount
+                  )}`}
+                  tone="discount"
+                />
+              )}
+
+              <SummaryCell
+                label="صافي المطلوب"
+                value={formatMoney(
+                  netFee
+                )}
+              />
+
+              <SummaryCell
+                label="المدفوع"
+                value={formatMoney(
+                  totalPaid
+                )}
+              />
+            </Box>
+          </Paper>
+
+          <Paper
+            elevation={0}
+            sx={{
+              mt: 1.25,
+              p: {
+                xs: 1.5,
+                md: 2,
+              },
+              border:
+                "1px solid rgba(36,74,112,.09)",
+              borderRadius:
+                "18px",
+              bgcolor:
+                "var(--color-cream)",
+            }}
+          >
+            <Stack
+              direction={{
+                xs:
+                  "column",
+                md: "row",
+              }}
+              justifyContent="space-between"
+              alignItems={{
+                xs:
+                  "stretch",
+                md:
+                  "center",
+              }}
+              gap={1}
+              sx={{
+                mb: 1.5,
+              }}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize:
+                      "16px",
+                    fontWeight:
+                      800,
+                    color:
+                      "var(--color-navy-deep)",
+                  }}
+                >
+                  أقساط المصروفات
+                  الدراسية
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.25,
+                    fontSize:
+                      "10px",
+                    color:
+                      "var(--color-muted)",
+                  }}
+                >
+                  الدفع الجزئي
+                  مسموح حتى
+                  قيمة المتبقي
+                  في القسط.
+                </Typography>
+              </Box>
+
+              <Typography
+                sx={{
+                  fontSize:
+                    "10px",
+                  fontWeight:
+                    800,
+                  color:
+                    "var(--color-muted)",
+                }}
+              >
+                المتبقي الكلي:{" "}
+                {formatMoney(
+                  remaining
+                )}
+              </Typography>
+            </Stack>
+
+            {installments.length ===
+            0 ? (
+              <Box
+                sx={{
+                  p: 3,
+                  textAlign:
+                    "center",
+                  border:
+                    "1px dashed rgba(36,74,112,.16)",
+                  borderRadius:
+                    "14px",
+                  color:
+                    "var(--color-muted)",
+                  fontSize:
+                    "11px",
+                }}
+              >
+                لا توجد أقساط
+                لعرضها.
+              </Box>
+            ) : (
+              <Stack
+                spacing={1}
+              >
+                {installments.map(
+                  (
+                    installment
+                  ) => {
+                    const amount =
+                      numberOf(
+                        installment
+                          ?.amount
+                      );
+
+                    const paid =
+                      numberOf(
+                        installment
+                          ?.paidAmount
+                      );
+
+                    const installmentRemaining =
+                      Math.max(
+                        amount -
+                          paid,
+                        0
+                      );
+
+                    const progress =
+                      amount >
+                      0
+                        ? Math.min(
+                            100,
+                            Math.max(
+                              0,
+                              (paid /
+                                amount) *
+                                100
+                            )
+                          )
+                        : 0;
+
+                    const installmentStatus =
+                      installment
+                        ?.status ===
+                      "paid"
+                        ? "paid"
+                        : paid >
+                            0
+                          ? "partial"
+                          : "unpaid";
+
+                    return (
+                      <Paper
+                        key={
+                          installment
+                            ?._id ||
+                          installment
+                            ?.installmentNumber
+                        }
+                        elevation={
+                          0
+                        }
+                        sx={{
+                          p: 1.25,
+                          border:
+                            "1px solid rgba(36,74,112,.10)",
+                          borderRadius:
+                            "13px",
+                          bgcolor:
+                            "#fff",
+                        }}
+                      >
+                        <Stack
+                          direction={{
+                            xs:
+                              "column",
+                            md:
+                              "row",
+                          }}
+                          justifyContent="space-between"
+                          alignItems={{
+                            xs:
+                              "stretch",
+                            md:
+                              "center",
+                          }}
+                          gap={1.2}
+                        >
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                          >
+                            <Box
+                              sx={{
+                                width:
+                                  30,
+                                height:
+                                  30,
+                                borderRadius:
+                                  "50%",
+                                display:
+                                  "grid",
+                                placeItems:
+                                  "center",
+                                bgcolor:
+                                  installmentStatus ===
+                                  "paid"
+                                    ? "rgba(116,201,154,.16)"
+                                    : "rgba(36,74,112,.06)",
+                                color:
+                                  installmentStatus ===
+                                  "paid"
+                                    ? "#237449"
+                                    : "var(--color-muted)",
+                                fontSize:
+                                  "10px",
+                                fontWeight:
+                                  800,
+                              }}
+                            >
+                              {
+                                installment
+                                  ?.installmentNumber
+                              }
+                            </Box>
+
+                            <Box>
+                              <Typography
+                                sx={{
+                                  fontSize:
+                                    "12px",
+                                  fontWeight:
+                                    800,
+                                  color:
+                                    "var(--color-navy-deep)",
+                                }}
+                              >
+                                القسط{" "}
+                                {
+                                  installment
+                                    ?.installmentNumber
+                                }
+                              </Typography>
+
+                              <Typography
+                                sx={{
+                                  mt: 0.2,
+                                  fontSize:
+                                    "9.5px",
+                                  color:
+                                    "var(--color-muted)",
+                                }}
+                              >
+                                استحقاق{" "}
+                                {formatDate(
+                                  installment
+                                    ?.dueDate
+                                )}
+                              </Typography>
+                            </Box>
+                          </Stack>
+
+                          <Box
+                            sx={{
+                              minWidth: {
+                                md:
+                                  180,
+                              },
+                            }}
+                          >
+                            <Stack
+                              direction="row"
+                              justifyContent="space-between"
+                              gap={1}
+                            >
+                              <Typography
+                                sx={{
+                                  fontSize:
+                                    "10px",
+                                  color:
+                                    "var(--color-muted)",
+                                }}
+                              >
+                                {formatMoney(
+                                  paid
+                                )}{" "}
+                                من{" "}
+                                {formatMoney(
+                                  amount
+                                )}
+                              </Typography>
+
+                              <Chip
+                                label={statusLabel(
+                                  installmentStatus
+                                )}
+                                size="small"
+                                sx={{
+                                  ...statusChipSx(
+                                    installmentStatus
+                                  ),
+                                  fontSize:
+                                    "8.5px",
+                                  fontWeight:
+                                    800,
+                                  height:
+                                    24,
+                                }}
+                              />
+                            </Stack>
+
+                            <LinearProgress
+                              variant="determinate"
+                              value={
+                                progress
+                              }
+                              sx={{
+                                mt: 0.7,
+                                height:
+                                  5,
+                                borderRadius:
+                                  10,
+                                bgcolor:
+                                  "rgba(36,74,112,.08)",
+                                "& .MuiLinearProgress-bar":
+                                  {
+                                    borderRadius:
+                                      10,
+                                  },
+                              }}
+                            />
+
+                            <Typography
+                              sx={{
+                                mt: 0.45,
+                                fontSize:
+                                  "9px",
+                                color:
+                                  "var(--color-muted)",
+                              }}
+                            >
+                              المتبقي:{" "}
+                              {formatMoney(
+                                installmentRemaining
+                              )}
+                            </Typography>
+                          </Box>
+
+                          <Stack
+                            direction={{
+                              xs:
+                                "column",
+                              sm:
+                                "row",
+                            }}
+                            gap={0.75}
+                          >
+                            {permissions?.edit &&
+                              installmentStatus !==
+                                "paid" && (
+                                <Button
+                                  variant="contained"
+                                  onClick={() =>
+                                    handleOpenPay(
+                                      installment
+                                    )
+                                  }
+                                  disabled={
+                                    actionLoading
+                                  }
+                                  sx={{
+                                    minWidth:
+                                      118,
+                                    borderRadius:
+                                      "10px",
+                                    fontSize:
+                                      "10px",
+                                    fontWeight:
+                                      800,
+                                    textTransform:
+                                      "none",
+                                  }}
+                                >
+                                  تسجيل دفعة
+                                </Button>
+                              )}
+
+                            {permissions?.edit &&
+                              paid >
+                                0 && (
+                                <Button
+                                  variant="outlined"
+                                  color="error"
+                                  onClick={() =>
+                                    handleOpenRefund(
+                                      installment
+                                    )
+                                  }
+                                  disabled={
+                                    actionLoading
+                                  }
+                                  sx={{
+                                    minWidth:
+                                      118,
+                                    borderRadius:
+                                      "10px",
+                                    fontSize:
+                                      "10px",
+                                    fontWeight:
+                                      800,
+                                    textTransform:
+                                      "none",
+                                  }}
+                                >
+                                  تصحيح دفعة
+                                </Button>
+                              )}
+                          </Stack>
+                        </Stack>
+                      </Paper>
+                    );
+                  }
+                )}
+              </Stack>
+            )}
+          </Paper>
+
+          <Paper
+            elevation={0}
+            sx={{
+              mt: 1.25,
+              p: {
+                xs: 1.5,
+                md: 2,
+              },
+              border:
+                "1px solid rgba(36,74,112,.09)",
+              borderRadius:
+                "18px",
+              bgcolor:
+                "var(--color-cream)",
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize:
+                  "16px",
+                fontWeight:
+                  800,
+                color:
+                  "var(--color-navy-deep)",
+              }}
+            >
+              سجل الدفعات
+              والتصحيحات
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.25,
+                mb: 1.5,
+                fontSize:
+                  "10px",
+                color:
+                  "var(--color-muted)",
+              }}
+            >
+              سجل موثّق:
+              التصحيح لا
+              يحذف الدفعة
+              الأصلية.
+            </Typography>
+
+            {paymentHistory.length ===
+            0 ? (
+              <Box
+                sx={{
+                  p: 3,
+                  textAlign:
+                    "center",
+                  border:
+                    "1px dashed rgba(36,74,112,.16)",
+                  borderRadius:
+                    "14px",
+                  color:
+                    "var(--color-muted)",
+                  fontSize:
+                    "11px",
+                }}
+              >
+                لا توجد دفعات
+                مسجلة حتى الآن.
+              </Box>
+            ) : (
+              <Stack
+                spacing={0}
+              >
+                {paymentHistory.map(
+                  (event) => {
+                    const type =
+                      getPaymentEventType(
+                        event
+                      );
+
+                    const amount =
+                      getEventAmount(
+                        event
+                      );
+
+                    return (
+                      <Box
+                        key={
+                          event.eventKey
+                        }
+                        sx={{
+                          display:
+                            "grid",
+                          gridTemplateColumns:
+                            "14px minmax(0,1fr)",
+                          gap: 1,
+                          py: 1.2,
+                          borderBottom:
+                            "1px dashed rgba(36,74,112,.12)",
+                          "&:last-of-type":
+                            {
+                              borderBottom:
+                                "none",
+                            },
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width:
+                              10,
+                            height:
+                              10,
+                            mt: 0.6,
+                            borderRadius:
+                              "50%",
+                            bgcolor:
+                              type ===
+                              "refund"
+                                ? "#d14343"
+                                : "#237449",
+                          }}
+                        />
+
+                        <Stack
+                          direction={{
+                            xs:
+                              "column",
+                            sm:
+                              "row",
+                          }}
+                          justifyContent="space-between"
+                          gap={1}
+                        >
+                          <Box>
+                            <Typography
+                              sx={{
+                                fontSize:
+                                  "11px",
+                                fontWeight:
+                                  800,
+                                color:
+                                  "var(--color-navy-deep)",
+                              }}
+                            >
+                              {type ===
+                              "refund"
+                                ? "تصحيح / استرداد"
+                                : "دفعة"}
+                              {" · "}
+                              القسط{" "}
+                              {
+                                event
+                                  ?.installmentNumber
+                              }
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                mt: 0.2,
+                                fontSize:
+                                  "9.5px",
+                                color:
+                                  "var(--color-muted)",
+                              }}
+                            >
+                              {getEventText(
+                                event
+                              )}
+                            </Typography>
+                          </Box>
+
+                          <Box
+                            sx={{
+                              textAlign: {
+                                xs:
+                                  "right",
+                                sm:
+                                  "left",
+                              },
+                            }}
+                          >
+                            <Typography
+                              sx={{
+                                fontSize:
+                                  "12px",
+                                fontWeight:
+                                  800,
+                                color:
+                                  type ===
+                                  "refund"
+                                    ? "#d14343"
+                                    : "#237449",
+                              }}
+                            >
+                              {type ===
+                              "refund"
+                                ? "−"
+                                : "+"}{" "}
+                              {formatMoney(
+                                amount
+                              )}
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                mt: 0.2,
+                                fontSize:
+                                  "9px",
+                                color:
+                                  "var(--color-muted)",
+                              }}
+                            >
+                              {formatDate(
+                                getPaymentDate(
+                                  event
+                                )
+                              )}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                      </Box>
+                    );
+                  }
+                )}
+              </Stack>
+            )}
+          </Paper>
+
+          <Paper
+            elevation={0}
+            sx={{
+              mt: 1.25,
+              p: {
+                xs: 1.5,
+                md: 2,
+              },
+              border:
+                "1px solid rgba(36,74,112,.09)",
+              borderRadius:
+                "18px",
+              bgcolor:
+                "var(--color-cream)",
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize:
+                  "16px",
+                fontWeight:
+                  800,
+                color:
+                  "var(--color-navy-deep)",
+              }}
+            >
+              أرصدة الخدمات
+              الأخرى
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.25,
+                mb: 1.5,
+                fontSize:
+                  "10px",
+                color:
+                  "var(--color-muted)",
+              }}
+            >
+              الباص والرحلات
+              والرسوم الإضافية
+              مستقلة عن رصيد
+              المصروفات الدراسية.
+            </Typography>
+
+            <Grid
+              container
+              spacing={1.25}
+            >
+              <Grid
+                item
+                xs={12}
+                md={4}
+              >
+                <ServiceCard
+                  title="الباص"
+                  status={
+                    bus?.enrolled
+                      ? mapFeeStatus(
+                          bus?.status
+                        )
+                      : "غير مشترك"
+                  }
+                  primary={
+                    bus?.enrolled
+                      ? `${formatMoney(
+                          busRemaining
+                        )} متبقي`
+                      : "لا يوجد اشتراك"
+                  }
+                  secondary={
+                    bus?.enrolled
+                      ? `المدفوع ${formatMoney(
+                          busPaid
+                        )}`
+                      : "سجل مستقل"
+                  }
+                  icon={
+                    <DirectionsBusRounded />
+                  }
+                  onClick={
+                    permissions?.read
+                      ? () =>
+                          navigate(
+                            `/financial/records/${studentId}/bus`
+                          )
+                      : undefined
+                  }
+                />
+              </Grid>
+
+              <Grid
+                item
+                xs={12}
+                md={4}
+              >
+                <ServiceCard
+                  title="الرحلات"
+                  status={`${trips.length} رحلة`}
+                  primary={`${formatMoney(
+                    tripsRemaining
+                  )} متبقي`}
+                  secondary="أرصدة الرحلات مستقلة"
+                  icon={
+                    <LocalActivityRounded />
+                  }
+                  onClick={
+                    permissions?.read
+                      ? () =>
+                          navigate(
+                            `/financial/records/${studentId}/trips`
+                          )
+                      : undefined
+                  }
+                />
+              </Grid>
+
+              <Grid
+                item
+                xs={12}
+                md={4}
+              >
+                <ServiceCard
+                  title="الرسوم الإضافية"
+                  status={`${additionalFees.length} رسوم`}
+                  primary={`${formatMoney(
+                    additionalRemaining
+                  )} متبقي`}
+                  secondary="كتب / زي / أنشطة وغيرها"
+                  icon={
+                    <ReceiptLongRounded />
+                  }
+                  onClick={
+                    permissions?.read
+                      ? () =>
+                          navigate(
+                            "/financial/additional-fees"
+                          )
+                      : undefined
+                  }
+                />
+              </Grid>
+            </Grid>
+          </Paper>
+
+          <Paper
+            elevation={0}
+            sx={{
+              mt: 1.25,
+              p: {
+                xs: 1.5,
+                md: 2,
+              },
+              border:
+                "1px solid rgba(36,74,112,.09)",
+              borderRadius:
+                "18px",
+              bgcolor:
+                "var(--color-cream)",
+            }}
+          >
+            <Stack
+              direction={{
+                xs:
+                  "column",
+                md: "row",
+              }}
+              justifyContent="space-between"
+              alignItems={{
+                xs:
+                  "stretch",
+                md:
+                  "center",
+              }}
+              gap={1.5}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize:
+                      "14px",
+                    fontWeight:
+                      800,
+                    color:
+                      "var(--color-navy-deep)",
+                  }}
+                >
+                  خصم الرسوم
+                  الدراسية
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.3,
+                    fontSize:
+                      "10px",
+                    color:
+                      "var(--color-muted)",
+                  }}
+                >
+                  {discountAmount >
+                  0
+                    ? `الخصم الحالي: ${
+                        discount?.name ||
+                        "خصم"
+                      } · ${formatMoney(
+                        discountAmount
+                      )}`
+                    : "لا يوجد خصم مطبق حاليًا."}
+                </Typography>
+              </Box>
+
+              {permissions?.edit && (
+                <Stack
+                  direction={{
+                    xs:
+                      "column",
+                    sm:
+                      "row",
+                  }}
+                  gap={1}
+                >
+                  {discountAmount <=
+                  0 ? (
+                    <>
+                      <FormControl
+                        size="small"
+                        sx={{
+                          minWidth:
+                            240,
+                        }}
+                      >
+                        <InputLabel>
+                          اختر خصم
+                        </InputLabel>
+
+                        <Select
+                          value={
+                            selectedDiscountId
+                          }
+                          label="اختر خصم"
+                          onChange={(
+                            event
+                          ) =>
+                            setSelectedDiscountId(
+                              event
+                                .target
+                                .value
+                            )
+                          }
+                          disabled={
+                            discountsLoading ||
+                            discountLoading
+                          }
+                        >
+                          {activeDiscounts.map(
+                            (
+                              item
+                            ) => (
+                              <MenuItem
+                                key={
+                                  item
+                                    ?._id ||
+                                  item?.id
+                                }
+                                value={
+                                  item
+                                    ?._id ||
+                                  item?.id
+                                }
+                              >
+                                {
+                                  item?.name
+                                }
+                                {item?.percentage
+                                  ? ` - ${item.percentage}%`
+                                  : ""}
+                              </MenuItem>
+                            )
+                          )}
+                        </Select>
+                      </FormControl>
+
+                      <Button
+                        variant="contained"
+                        onClick={
+                          handleApplyDiscount
+                        }
+                        disabled={
+                          !selectedDiscountId ||
+                          discountLoading
+                        }
+                        sx={{
+                          borderRadius:
+                            "10px",
+                          fontWeight:
+                            800,
+                          fontSize:
+                            "10px",
+                          textTransform:
+                            "none",
+                        }}
+                      >
+                        تطبيق الخصم
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      onClick={
+                        handleRemoveDiscount
+                      }
+                      disabled={
+                        discountLoading
+                      }
+                      sx={{
+                        borderRadius:
+                          "10px",
+                        fontWeight:
+                          800,
+                        fontSize:
+                          "10px",
+                        textTransform:
+                          "none",
+                      }}
+                    >
+                      إزالة الخصم
+                    </Button>
+                  )}
+                </Stack>
+              )}
+            </Stack>
+          </Paper>
+
+          <PayDialog
+            open={
+              payOpen
+            }
+            onClose={
+              closeDialogs
+            }
+            installment={
+              selectedInstallment
+            }
+            loading={
+              actionLoading
+            }
+            onSubmit={
+              handlePay
+            }
+            studentName={getStudentName(
+              student
+            )}
+          />
+
+          <RefundDialog
+            open={
+              refundOpen
+            }
+            onClose={
+              closeDialogs
+            }
+            installment={
+              selectedInstallment
+            }
+            loading={
+              actionLoading
+            }
+            onSubmit={
+              handleRefund
+            }
+          />
+        </Box>
+      </Container>
+    );
+  };
+
+const PayDialog = ({
+  open,
+  onClose,
+  installment,
+  loading,
+  onSubmit,
+  studentName,
+}) => {
   const {
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    watch,
+    formState: {
+      errors,
+    },
   } = useForm();
 
+  const amount =
+    watch("amount");
+
+  const installmentAmount =
+    numberOf(
+      installment?.amount
+    );
+
+  const paidAmount =
+    numberOf(
+      installment?.paidAmount
+    );
+
+  const remaining =
+    Math.max(
+      installmentAmount -
+        paidAmount,
+      0
+    );
+
   useEffect(() => {
-    if (installment) {
-      reset({
-        installmentNumber: installment.installmentNumber,
-        amount: installment.remainingRaw,
-        paidAt: new Date().toISOString().slice(0, 10),
-        notes: "",
-      });
+    if (
+      !open ||
+      !installment
+    ) {
+      return;
     }
-  }, [installment, reset]);
+
+    reset({
+      amount:
+        remaining ||
+        "",
+      paidAt:
+        new Date()
+          .toISOString()
+          .slice(0, 10),
+      notes: "",
+    });
+  }, [
+    open,
+    installment,
+    remaining,
+    reset,
+  ]);
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ pb: 6 }}>تسجيل دفعة القسط</DialogTitle>
-      <DialogContent>
-        <input type="hidden" {...register("installmentNumber", { required: true, valueAsNumber: true })} />
+    <Dialog
+      open={open}
+      onClose={
+        loading
+          ? undefined
+          : onClose
+      }
+      fullWidth
+      maxWidth="xs"
+      PaperProps={{
+        sx: {
+          borderRadius:
+            "16px",
+        },
+      }}
+    >
+      <DialogTitle>
+        تسجيل دفعة —{" "}
+        {studentName}
+      </DialogTitle>
 
-        <Grid container spacing={4}>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              type="number"
+      <DialogContent>
+        <Typography
+          sx={{
+            mb: 1.5,
+            fontSize:
+              "10px",
+            color:
+              "var(--color-muted)",
+          }}
+        >
+          القسط{" "}
+          {installment?.installmentNumber}
+          {" · "}
+          متبقي{" "}
+          {formatMoney(
+            remaining
+          )}
+        </Typography>
+
+        <Grid
+          container
+          spacing={1.5}
+        >
+          <Grid
+            item
+            xs={12}
+          >
+            <Input
+              register={
+                register
+              }
+              registerName="amount"
+              error={
+                errors
+                  .amount
+                  ?.message
+              }
               label="المبلغ المدفوع"
-              error={Boolean(errors.amount)}
-              helperText={errors.amount?.message || `المتبقي على القسط: ${installment?.remainingRaw || 0} جنيه`}
-              inputProps={{ min: 1, max: installment?.remainingRaw || undefined, step: "any" }}
-              {...register("amount", {
-                required: "أدخل مبلغ الدفعة",
-                valueAsNumber: true,
-                min: { value: 1, message: "المبلغ يجب أن يكون أكبر من صفر" },
-                max: {
-                  value: installment?.remainingRaw || Number.MAX_SAFE_INTEGER,
-                  message: `أقصى مبلغ متاح هو ${installment?.remainingRaw || 0} جنيه`,
-                },
-              })}
+              type="number"
+              required
+              valueAsNumber
+            />
+
+            <Typography
+              sx={{
+                mt: 0.6,
+                fontSize:
+                  "9.5px",
+                color:
+                  "var(--color-muted)",
+              }}
+            >
+              مدفوع بالفعل:{" "}
+              {formatMoney(
+                paidAmount
+              )}{" "}
+              من{" "}
+              {formatMoney(
+                installmentAmount
+              )}
+            </Typography>
+
+            {Number(
+              amount
+            ) >
+              remaining && (
+              <Typography
+                sx={{
+                  mt: 0.5,
+                  fontSize:
+                    "9.5px",
+                  color:
+                    "#d14343",
+                  fontWeight:
+                    700,
+                }}
+              >
+                المبلغ أكبر
+                من المتبقي.
+              </Typography>
+            )}
+          </Grid>
+
+          <Grid
+            item
+            xs={12}
+          >
+            <Input
+              register={
+                register
+              }
+              registerName="paidAt"
+              error={
+                errors
+                  .paidAt
+                  ?.message
+              }
+              label="تاريخ الدفع"
+              type="date"
+              required
             />
           </Grid>
-          <Grid item xs={12}>
+
+          <Grid
+            item
+            xs={12}
+          >
             <Input
-              register={register}
-              registerName={"paidAt"}
-              error={errors.paidAt?.message}
-              label={"تاريخ الدفع"}
-              required={true}
-              type={"date"}
+              register={
+                register
+              }
+              registerName="notes"
+              error={
+                errors
+                  .notes
+                  ?.message
+              }
+              label="ملاحظات (اختياري)"
+              multiline
+              rows={2}
             />
           </Grid>
         </Grid>
       </DialogContent>
-      <DialogActions sx={{ px: 12, pb: 10, pt: 1 }}>
-        <Button variant="outlined" onClick={onClose}>
+
+      <DialogActions
+        sx={{
+          px: 2,
+          pb: 2,
+        }}
+      >
+        <Button
+          onClick={
+            onClose
+          }
+          disabled={
+            loading
+          }
+        >
           إلغاء
         </Button>
-        <Button variant="contained" onClick={handleSubmit(onSubmit)} disabled={loading || !installment?.remainingRaw}>
-          تسجيل الدفع
+
+        <Button
+          variant="contained"
+          onClick={handleSubmit(
+            onSubmit
+          )}
+          disabled={
+            loading ||
+            !Number(
+              amount
+            ) ||
+            Number(
+              amount
+            ) <= 0 ||
+            Number(
+              amount
+            ) >
+              remaining
+          }
+        >
+          تسجيل الدفعة
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+const RefundDialog = ({
+  open,
+  onClose,
+  installment,
+  loading,
+  onSubmit,
+}) => {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: {
+      errors,
+    },
+  } = useForm();
+
+  const amount =
+    watch("amount");
+
+  const reason =
+    watch("reason");
+
+  const paidAmount =
+    numberOf(
+      installment?.paidAmount
+    );
+
+  useEffect(() => {
+    if (
+      !open ||
+      !installment
+    ) {
+      return;
+    }
+
+    reset({
+      amount:
+        paidAmount ||
+        "",
+      reason: "",
+      refundedAt:
+        new Date()
+          .toISOString()
+          .slice(0, 10),
+    });
+  }, [
+    open,
+    installment,
+    paidAmount,
+    reset,
+  ]);
+
+  return (
+    <Dialog
+      open={open}
+      onClose={
+        loading
+          ? undefined
+          : onClose
+      }
+      fullWidth
+      maxWidth="xs"
+      PaperProps={{
+        sx: {
+          borderRadius:
+            "16px",
+        },
+      }}
+    >
+      <DialogTitle>
+        تصحيح / استرداد
+        دفعة
+      </DialogTitle>
+
+      <DialogContent>
+        <Typography
+          sx={{
+            mb: 1.5,
+            fontSize:
+              "10px",
+            color:
+              "var(--color-muted)",
+          }}
+        >
+          المدفوع على هذا
+          القسط:{" "}
+          {formatMoney(
+            paidAmount
+          )}
+        </Typography>
+
+        <Grid
+          container
+          spacing={1.5}
+        >
+          <Grid
+            item
+            xs={12}
+          >
+            <Input
+              register={
+                register
+              }
+              registerName="amount"
+              error={
+                errors
+                  .amount
+                  ?.message
+              }
+              label="قيمة التصحيح"
+              type="number"
+              required
+              valueAsNumber
+            />
+          </Grid>
+
+          <Grid
+            item
+            xs={12}
+          >
+            <Input
+              register={
+                register
+              }
+              registerName="reason"
+              error={
+                errors
+                  .reason
+                  ?.message
+              }
+              label="سبب التصحيح"
+              required
+              multiline
+              rows={2}
+            />
+          </Grid>
+
+          <Grid
+            item
+            xs={12}
+          >
+            <Input
+              register={
+                register
+              }
+              registerName="refundedAt"
+              error={
+                errors
+                  .refundedAt
+                  ?.message
+              }
+              label="تاريخ التصحيح"
+              type="date"
+            />
+          </Grid>
+        </Grid>
+      </DialogContent>
+
+      <DialogActions
+        sx={{
+          px: 2,
+          pb: 2,
+        }}
+      >
+        <Button
+          onClick={
+            onClose
+          }
+          disabled={
+            loading
+          }
+        >
+          إلغاء
+        </Button>
+
+        <Button
+          variant="contained"
+          color="error"
+          onClick={handleSubmit(
+            onSubmit
+          )}
+          disabled={
+            loading ||
+            !Number(
+              amount
+            ) ||
+            Number(
+              amount
+            ) <= 0 ||
+            Number(
+              amount
+            ) >
+              paidAmount ||
+            !String(
+              reason ||
+                ""
+            ).trim()
+          }
+        >
+          تسجيل التصحيح
         </Button>
       </DialogActions>
     </Dialog>

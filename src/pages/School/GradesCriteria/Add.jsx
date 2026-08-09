@@ -1,11 +1,14 @@
 import {
+  Alert,
   Box,
   Button,
   Chip,
   CircularProgress,
   Grid,
+  MenuItem,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 
@@ -32,11 +35,10 @@ import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import Back from "@/components/Back/Back";
 import Input from "@/components/Input/Input";
-import Select from "@/components/Select/Select";
-import SubjectSelector from "@/components/Selector/SubjectSelector";
 
 import { addGradesCriteria } from "@/APIs/school/gradesCriteria";
 import { fetchAcademicYears } from "@/APIs/school/academicYears";
+import { api } from "@/APIs/Axios";
 
 const normalizeId = (value) => {
   if (value && typeof value === "object") {
@@ -81,6 +83,128 @@ const mapAcademicYear = (item) => ({
     item?.academicYear ||
     "سنة دراسية",
 });
+
+
+const findFirstArray = (
+  value,
+  depth = 0
+) => {
+  if (depth > 8) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (
+    !value ||
+    typeof value !== "object"
+  ) {
+    return [];
+  }
+
+  const priorityKeys = [
+    "data",
+    "subjects",
+    "docs",
+    "items",
+    "results",
+    "rows",
+    "records",
+    "list",
+  ];
+
+  for (const key of priorityKeys) {
+    if (!(key in value)) {
+      continue;
+    }
+
+    const found =
+      findFirstArray(
+        value[key],
+        depth + 1
+      );
+
+    if (found.length > 0) {
+      return found;
+    }
+  }
+
+  for (const nested of Object.values(
+    value
+  )) {
+    const found =
+      findFirstArray(
+        nested,
+        depth + 1
+      );
+
+    if (found.length > 0) {
+      return found;
+    }
+  }
+
+  return [];
+};
+
+const mapSubjectOption = (
+  item
+) => {
+  const id =
+    normalizeId(item);
+
+  const subjectName =
+    item?.subjectName ||
+    item?.name ||
+    item?.title ||
+    item?.label ||
+    "";
+
+  const subjectCode =
+    item?.subjectCode ||
+    item?.code ||
+    "";
+
+  if (!id || !subjectName) {
+    return null;
+  }
+
+  return {
+    id,
+    subjectName,
+    subjectCode,
+    label: subjectCode
+      ? `${subjectName} - ${subjectCode}`
+      : subjectName,
+  };
+};
+
+const dedupeSubjects = (
+  values = []
+) => {
+  const map = new Map();
+
+  values.forEach((item) => {
+    const mapped =
+      mapSubjectOption(item);
+
+    if (!mapped) {
+      return;
+    }
+
+    if (!map.has(mapped.id)) {
+      map.set(
+        mapped.id,
+        mapped
+      );
+    }
+  });
+
+  return Array.from(
+    map.values()
+  );
+};
 
 const getResponseData = (response) =>
   response?.data?.data ||
@@ -146,18 +270,18 @@ const isValidPassingGrade = (value) =>
 
 const FORM_CARD_SX = {
   p: {
-    xs: 1.5,
-    md: 2,
+    xs: 1.35,
+    md: 1.8,
   },
-  mt: 1.25,
+  mt: 1.15,
   overflow: "visible",
   border:
-    "1px solid rgba(36,74,112,0.08)",
-  borderRadius: "18px",
-  backgroundColor:
-    "var(--color-cream)",
+    "1px solid rgba(36,74,112,0.075)",
+  borderRadius: "20px",
+  background:
+    "linear-gradient(180deg, rgba(255,252,247,0.98), rgba(255,255,255,0.96))",
   boxShadow:
-    "0 12px 28px rgba(18,47,77,0.06)",
+    "0 12px 30px rgba(18,47,77,0.055)",
 
   "& .MuiFormControl-root": {
     width: "100%",
@@ -166,46 +290,62 @@ const FORM_CARD_SX = {
 
   "& .MuiInputBase-root, & .MuiOutlinedInput-root":
     {
-      minHeight: 48,
+      minHeight: 54,
       backgroundColor:
-        "var(--color-white)",
-      borderRadius: "12px",
+        "rgba(255,255,255,0.98)",
+      borderRadius: "14px",
+      fontSize: "13px",
     },
 
   "& .MuiOutlinedInput-notchedOutline":
     {
       borderColor:
-        "rgba(36,74,112,0.16)",
+        "rgba(36,74,112,0.18)",
     },
 
   "& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline":
     {
       borderColor:
-        "rgba(36,74,112,0.28)",
+        "rgba(36,74,112,0.34)",
     },
 
   "& .MuiOutlinedInput-root.Mui-focused":
     {
       boxShadow:
         "0 0 0 3px rgba(211,164,79,0.10)",
+      backgroundColor:
+        "#fff",
     },
 
   "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
     {
       borderColor:
         "var(--color-gold)",
-      borderWidth: "1px",
+      borderWidth: "1.5px",
     },
 
   "& .MuiInputLabel-root": {
-    px: 0.65,
+    px: 0.6,
     color:
       "var(--color-muted)",
     backgroundColor:
       "var(--color-cream)",
-    fontSize: "10.5px",
+    fontSize: "11px",
     fontWeight: 700,
   },
+
+  "& .MuiInputLabel-root.Mui-focused":
+    {
+      color:
+        "var(--color-gold-dark)",
+    },
+
+  "& .MuiFormHelperText-root":
+    {
+      mx: 0.5,
+      mt: 0.55,
+      fontSize: "9.5px",
+    },
 };
 
 const SectionHeading = ({
@@ -226,10 +366,10 @@ const SectionHeading = ({
     justifyContent="space-between"
     gap={1}
     sx={{
-      pb: 1.25,
-      mb: 1.5,
+      pb: 1.2,
+      mb: 1.35,
       borderBottom:
-        "1px solid rgba(36,74,112,0.07)",
+        "1px solid rgba(36,74,112,0.065)",
     }}
   >
     <Stack
@@ -239,8 +379,8 @@ const SectionHeading = ({
     >
       <Box
         sx={{
-          width: 40,
-          height: 40,
+          width: 42,
+          height: 42,
           display: "grid",
           placeItems: "center",
           flexShrink: 0,
@@ -250,7 +390,7 @@ const SectionHeading = ({
             "var(--color-gold-soft)",
           border:
             "1px solid rgba(211,164,79,0.22)",
-          borderRadius: "12px",
+          borderRadius: "13px",
 
           "& svg": {
             fontSize: 21,
@@ -265,8 +405,12 @@ const SectionHeading = ({
           sx={{
             color:
               "var(--color-navy-deep)",
-            fontSize: "16px",
-            fontWeight: 800,
+            fontSize: {
+              xs: "15px",
+              md: "17px",
+            },
+            fontWeight: 900,
+            letterSpacing: "-0.2px",
           }}
         >
           {title}
@@ -277,8 +421,8 @@ const SectionHeading = ({
             mt: 0.2,
             color:
               "var(--color-muted)",
-            fontSize: "10px",
-            lineHeight: 1.6,
+            fontSize: "10.5px",
+            lineHeight: 1.65,
           }}
         >
           {description}
@@ -302,8 +446,19 @@ const Add = () => {
     defaultValues: {
       passingGrade: 50,
       academicYearId: "",
+      subjectId: "",
     },
   });
+
+  useEffect(() => {
+    register(
+      "subjectId",
+      {
+        required:
+          "اختر المادة",
+      }
+    );
+  }, [register]);
 
   const [loading, setLoading] =
     useState(false);
@@ -317,6 +472,27 @@ const Add = () => {
     loadingAcademicYears,
     setLoadingAcademicYears,
   ] = useState(false);
+
+
+  const [
+    catalogSubjects,
+    setCatalogSubjects,
+  ] = useState([]);
+
+  const [
+    availableSubjects,
+    setAvailableSubjects,
+  ] = useState([]);
+
+  const [
+    loadingSubjects,
+    setLoadingSubjects,
+  ] = useState(false);
+
+  const [
+    subjectsError,
+    setSubjectsError,
+  ] = useState("");
 
   const navigate =
     useNavigate();
@@ -340,13 +516,356 @@ const Add = () => {
     ) || "";
 
   useEffect(() => {
-    if (querySubjectId) {
-      setValue(
-        "subjectId",
-        querySubjectId
-      );
-    }
+    let active = true;
+
+    const loadSubjects =
+      async () => {
+        setSubjectsError("");
+
+        const requests =
+          await Promise.allSettled([
+            api.get(
+              "/subjects/list"
+            ),
+            api.get(
+              "/subjects",
+              {
+                params: {
+                  page: 1,
+                  limit: 1000,
+                },
+              }
+            ),
+          ]);
+
+        if (!active) {
+          return;
+        }
+
+        const allItems = [];
+
+        requests.forEach(
+          (result) => {
+            if (
+              result.status !==
+              "fulfilled"
+            ) {
+              return;
+            }
+
+            allItems.push(
+              ...findFirstArray(
+                result.value
+              )
+            );
+          }
+        );
+
+        const mapped =
+          dedupeSubjects(
+            allItems
+          );
+
+        setCatalogSubjects(mapped);
+
+        if (
+          mapped.length === 0
+        ) {
+          const rejected =
+            requests
+              .filter(
+                (result) =>
+                  result.status ===
+                  "rejected"
+              )
+              .map(
+                (result) =>
+                  result.reason
+                    ?.response
+                    ?.data
+                    ?.message ||
+                  result.reason
+                    ?.message
+              )
+              .filter(Boolean);
+
+          setSubjectsError(
+            rejected[0] ||
+            "لم يتم العثور على مواد دراسية. تأكد من وجود مواد في إدارة المواد."
+          );
+        }
+
+      };
+
+    loadSubjects();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const selectedAcademicYearId =
+    watch("academicYearId");
+
+  useEffect(() => {
+    let active = true;
+
+    const loadAvailableSubjects =
+      async () => {
+        const academicYearId =
+          normalizeId(
+            selectedAcademicYearId
+          );
+
+        setValue(
+          "subjectId",
+          "",
+          {
+            shouldDirty: false,
+            shouldTouch: false,
+            shouldValidate: false,
+          }
+        );
+
+        setAvailableSubjects([]);
+        setSubjectsError("");
+
+        if (!academicYearId) {
+          return;
+        }
+
+        setLoadingSubjects(true);
+
+        try {
+          let termsResponse;
+
+          try {
+            termsResponse =
+              await api.get(
+                `/terms/by-year/${academicYearId}`
+              );
+          } catch (error) {
+            termsResponse =
+              await api.get(
+                "/terms",
+                {
+                  params: {
+                    academicYearId,
+                  },
+                }
+              );
+          }
+
+          if (!active) {
+            return;
+          }
+
+          const terms =
+            findFirstArray(
+              termsResponse
+            );
+
+          if (
+            terms.length === 0
+          ) {
+            setAvailableSubjects([]);
+            setSubjectsError(
+              "لا توجد فصول دراسية (Terms) لهذه السنة. أنشئ الترمات أولاً."
+            );
+            return;
+          }
+
+          const offeringRequests =
+            await Promise.allSettled(
+              terms
+                .map(normalizeId)
+                .filter(Boolean)
+                .map(
+                  async (termId) => {
+                    try {
+                      return await api.get(
+                        `/subject-offerings/by-term/${termId}`
+                      );
+                    } catch (error) {
+                      return await api.get(
+                        "/subject-offerings",
+                        {
+                          params: {
+                            termId,
+                          },
+                        }
+                      );
+                    }
+                  }
+                )
+            );
+
+          if (!active) {
+            return;
+          }
+
+          const offerings = [];
+
+          offeringRequests.forEach(
+            (result) => {
+              if (
+                result.status ===
+                "fulfilled"
+              ) {
+                offerings.push(
+                  ...findFirstArray(
+                    result.value
+                  )
+                );
+              }
+            }
+          );
+
+          const catalogMap =
+            new Map(
+              catalogSubjects.map(
+                (subject) => [
+                  subject.id,
+                  subject,
+                ]
+              )
+            );
+
+          const subjectMap =
+            new Map();
+
+          offerings.forEach(
+            (offering) => {
+              const subjectValue =
+                offering?.subjectId ||
+                offering?.subject;
+
+              const subjectId =
+                normalizeId(
+                  subjectValue
+                );
+
+              if (!subjectId) {
+                return;
+              }
+
+              const directSubject =
+                subjectValue &&
+                typeof subjectValue ===
+                  "object"
+                  ? subjectValue
+                  : null;
+
+              const catalogSubject =
+                catalogMap.get(
+                  subjectId
+                );
+
+              const mapped =
+                mapSubjectOption(
+                  directSubject ||
+                    catalogSubject ||
+                    {
+                      _id: subjectId,
+                      id: subjectId,
+                      subjectName:
+                        offering?.subjectName ||
+                        offering?.name ||
+                        "مادة",
+                      subjectCode:
+                        offering?.subjectCode ||
+                        offering?.code ||
+                        "",
+                    }
+                );
+
+              if (
+                mapped &&
+                !subjectMap.has(
+                  subjectId
+                )
+              ) {
+                subjectMap.set(
+                  subjectId,
+                  mapped
+                );
+              }
+            }
+          );
+
+          const nextSubjects =
+            Array.from(
+              subjectMap.values()
+            );
+
+          setAvailableSubjects(
+            nextSubjects
+          );
+
+          if (
+            nextSubjects.length ===
+            0
+          ) {
+            setSubjectsError(
+              "لا توجد مواد مفعّلة لهذه السنة الدراسية. أنشئ عروض المواد (Subject Offerings) أولاً."
+            );
+            return;
+          }
+
+          if (
+            querySubjectId &&
+            nextSubjects.some(
+              (subject) =>
+                subject.id ===
+                normalizeId(
+                  querySubjectId
+                )
+            )
+          ) {
+            setValue(
+              "subjectId",
+              normalizeId(
+                querySubjectId
+              ),
+              {
+                shouldDirty: false,
+                shouldTouch: false,
+                shouldValidate: false,
+              }
+            );
+          }
+        } catch (error) {
+          if (!active) {
+            return;
+          }
+
+          setAvailableSubjects(
+            []
+          );
+
+          setSubjectsError(
+            error?.response?.data
+              ?.message ||
+              error?.message ||
+              "تعذر تحميل المواد المفعّلة لهذه السنة"
+          );
+        } finally {
+          if (active) {
+            setLoadingSubjects(
+              false
+            );
+          }
+        }
+      };
+
+    loadAvailableSubjects();
+
+    return () => {
+      active = false;
+    };
   }, [
+    selectedAcademicYearId,
+    catalogSubjects,
     querySubjectId,
     setValue,
   ]);
@@ -485,14 +1004,14 @@ const Add = () => {
       return;
     }
 
-    const {
-      academicYear,
-      ...restFormData
-    } = formData;
-
     const academicYearId =
       normalizeId(
-        restFormData.academicYearId
+        formData.academicYearId
+      );
+
+    const subjectId =
+      normalizeId(
+        formData.subjectId
       );
 
     if (!academicYearId) {
@@ -502,9 +1021,63 @@ const Add = () => {
       return;
     }
 
+    if (!subjectId) {
+      toast.error(
+        "اختر المادة"
+      );
+      return;
+    }
+
+    const isAvailableSubject =
+      availableSubjects.some(
+        (subject) =>
+          subject.id ===
+          subjectId
+      );
+
+    if (!isAvailableSubject) {
+      toast.error(
+        "هذه المادة غير مفعّلة في السنة الدراسية المختارة. اختر مادة من القائمة المتاحة."
+      );
+      return;
+    }
+
     const payload = {
-      ...restFormData,
+      subjectId,
       academicYearId,
+
+      final: Number(
+        formData.final
+      ),
+
+      activities: Number(
+        formData.activities
+      ),
+
+      projects: Number(
+        formData.projects
+      ),
+
+      projectsCount: Number(
+        formData.projectsCount
+      ),
+
+      assignments: Number(
+        formData.assignments
+      ),
+
+      assignmentsCount: Number(
+        formData.assignmentsCount
+      ),
+
+      quizzes: Number(
+        formData.quizzes
+      ),
+
+      quizzesCount: Number(
+        formData.quizzesCount
+      ),
+
       passingGrade,
     };
 
@@ -571,17 +1144,20 @@ const Add = () => {
           elevation={0}
           sx={{
             px: {
-              xs: 1.25,
-              md: 1.6,
+              xs: 1.35,
+              md: 1.8,
             },
-            py: 1.05,
+            py: {
+              xs: 1,
+              md: 1.15,
+            },
             border:
-              "1px solid rgba(36,74,112,0.08)",
-            borderRadius: "16px",
-            backgroundColor:
-              "rgba(255,252,247,0.9)",
+              "1px solid rgba(36,74,112,0.075)",
+            borderRadius: "18px",
+            background:
+              "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.30))",
             boxShadow:
-              "0 8px 20px rgba(18,47,77,0.04)",
+              "0 8px 22px rgba(18,47,77,0.045)",
           }}
         >
           <Stack
@@ -602,7 +1178,8 @@ const Add = () => {
               sx={{
                 color:
                   "var(--color-muted)",
-                fontSize: "10px",
+                fontSize: "10.5px",
+                lineHeight: 1.6,
               }}
             >
               اختر المادة والسنة ثم
@@ -621,52 +1198,99 @@ const Add = () => {
               <SchoolRounded />
             }
             title="المادة والسنة الدراسية"
-            description="حدّد المادة والسنة التي سيطبق عليها توزيع الدرجات."
+            description="اختر السنة أولاً، ثم حدّد المادة المفعّلة عليها لإضافة توزيع الدرجات."
           />
 
           <Grid
             container
             spacing={{
-              xs: 1.5,
-              md: 2,
+              xs: 1.25,
+              md: 1.6,
             }}
+            alignItems="flex-start"
           >
             <Grid
               item
               xs={12}
               md={6}
             >
-              <Select
-                key={`academic-year-${academicYears.length}-${queryAcademicYearId || queryAcademicYear}`}
-                register={register}
-                registerName="academicYearId"
-                data={academicYears}
-                name="name"
-                error={
-                  errors
-                    .academicYearId
-                    ?.message
-                }
-                label="السنة الدراسية للمادة"
-                required
-                disabled={
-                  loadingAcademicYears
-                }
-                defaultValue={
-                  queryAcademicYearId ||
+              <TextField
+                select
+                fullWidth
+                label="السنة الدراسية"
+                value={
+                  selectedAcademicYearId ||
                   ""
                 }
-                onChange={(value) => {
+                onChange={(event) => {
+                  const value =
+                    event.target.value;
+
                   setValue(
                     "academicYearId",
                     value || "",
                     {
                       shouldDirty: true,
+                      shouldTouch: true,
                       shouldValidate: true,
                     }
                   );
+
+                  setValue(
+                    "subjectId",
+                    "",
+                    {
+                      shouldDirty: true,
+                      shouldTouch: false,
+                      shouldValidate: false,
+                    }
+                  );
                 }}
-              />
+                disabled={
+                  loadingAcademicYears
+                }
+                error={
+                  Boolean(
+                    errors
+                      .academicYearId
+                  )
+                }
+                helperText={
+                  errors
+                    .academicYearId
+                    ?.message ||
+                  (loadingAcademicYears
+                    ? "جاري تحميل السنوات الدراسية..."
+                    : "اختر السنة التي سيتم تطبيق توزيع الدرجات عليها")
+                }
+                SelectProps={{
+                  MenuProps: {
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 320,
+                        borderRadius:
+                          "14px",
+                        mt: 0.6,
+                      },
+                    },
+                  },
+                }}
+              >
+                <MenuItem value="">
+                  اختر السنة الدراسية
+                </MenuItem>
+
+                {academicYears.map(
+                  (year) => (
+                    <MenuItem
+                      key={year.id}
+                      value={year.id}
+                    >
+                      {year.name}
+                    </MenuItem>
+                  )
+                )}
+              </TextField>
             </Grid>
 
             <Grid
@@ -674,15 +1298,137 @@ const Add = () => {
               xs={12}
               md={6}
             >
-              <SubjectSelector
-                register={register}
-                errors={errors}
+              <TextField
+                select
+                fullWidth
                 label="المادة"
-                required
-                defaultSubjectId={
-                  querySubjectId
+                value={
+                  watch(
+                    "subjectId"
+                  ) || ""
                 }
-              />
+                onChange={(event) => {
+                  setValue(
+                    "subjectId",
+                    event.target.value,
+                    {
+                      shouldDirty: true,
+                      shouldTouch: true,
+                      shouldValidate: true,
+                    }
+                  );
+                }}
+                disabled={
+                  loadingSubjects ||
+                  !selectedAcademicYearId ||
+                  availableSubjects.length === 0
+                }
+                error={
+                  Boolean(
+                    errors
+                      .subjectId
+                  )
+                }
+                helperText={
+                  errors
+                    .subjectId
+                    ?.message ||
+                  (!selectedAcademicYearId
+                    ? "اختر السنة الدراسية أولاً لعرض المواد المتاحة"
+                    : availableSubjects.length > 0
+                    ? `${availableSubjects.length} مادة متاحة في هذه السنة`
+                    : "")
+                }
+                SelectProps={{
+                  MenuProps: {
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 320,
+                        borderRadius:
+                          "14px",
+                        mt: 0.6,
+                      },
+                    },
+                  },
+                }}
+              >
+                <MenuItem value="">
+                  {selectedAcademicYearId
+                    ? "اختر المادة"
+                    : "اختر السنة الدراسية أولاً"}
+                </MenuItem>
+
+                {availableSubjects.map(
+                  (subject) => (
+                    <MenuItem
+                      key={
+                        subject.id
+                      }
+                      value={
+                        subject.id
+                      }
+                    >
+                      {
+                        subject.label
+                      }
+                    </MenuItem>
+                  )
+                )}
+              </TextField>
+
+              {loadingSubjects && (
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  gap={0.7}
+                  sx={{
+                    mt: 0.7,
+                    color:
+                      "var(--color-muted)",
+                  }}
+                >
+                  <CircularProgress
+                    size={12}
+                    thickness={5}
+                  />
+                  <Typography
+                    sx={{
+                      fontSize:
+                        "9.5px",
+                    }}
+                  >
+                    جاري تحميل المواد المفعّلة لهذه السنة...
+                  </Typography>
+                </Stack>
+              )}
+
+              {!loadingSubjects &&
+                subjectsError && (
+                  <Alert
+                    severity="warning"
+                    sx={{
+                      mt: 0.8,
+                      borderRadius:
+                        "12px",
+                      py: 0.25,
+                      px: 1,
+                      fontSize:
+                        "10px",
+                      alignItems:
+                        "center",
+                      backgroundColor:
+                        "rgba(211,164,79,0.08)",
+                      color:
+                        "var(--color-navy)",
+                      border:
+                        "1px solid rgba(211,164,79,0.18)",
+                    }}
+                  >
+                    {
+                      subjectsError
+                    }
+                  </Alert>
+                )}
             </Grid>
           </Grid>
         </Paper>
@@ -699,10 +1445,10 @@ const Add = () => {
             description="حدّد درجة النجاح ثم وزّع بنود التقييم بحيث يكون مجموعها 100 درجة؛ درجة النجاح لا تدخل في المجموع."
             endContent={
               <Chip
-                label={`${totalGrades} / 100`}
+                label={`المجموع ${totalGrades} / 100`}
                 sx={{
-                  minWidth: 88,
-                  height: 34,
+                  minWidth: 118,
+                  height: 36,
                   color:
                     isTotalValid
                       ? "#237449"
@@ -739,11 +1485,11 @@ const Add = () => {
             py: 1.15,
             border:
               "1px solid rgba(36,74,112,0.08)",
-            borderRadius: "16px",
-            backgroundColor:
-              "var(--color-cream)",
+            borderRadius: "18px",
+            background:
+              "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.22))",
             boxShadow:
-              "0 10px 24px rgba(18,47,77,0.05)",
+              "0 10px 24px rgba(18,47,77,0.045)",
           }}
         >
           <Stack
@@ -775,8 +1521,8 @@ const Add = () => {
                   xs: "100%",
                   sm: 200,
                 },
-                minHeight: 44,
-                borderRadius: "12px",
+                minHeight: 46,
+                borderRadius: "13px",
                 color:
                   "var(--color-white)",
                 background:
@@ -812,8 +1558,8 @@ const Add = () => {
                   xs: "100%",
                   sm: 145,
                 },
-                minHeight: 44,
-                borderRadius: "12px",
+                minHeight: 46,
+                borderRadius: "13px",
                 color:
                   "var(--color-navy)",
                 borderColor:
@@ -880,6 +1626,11 @@ const GradeInputs = ({
         type="number"
         defaultValue={defaultValues.final}
         valueAsNumber
+        inputProps={{
+          min: 0,
+          max: 100,
+          step: 1,
+        }}
       />
     </Grid>
 
@@ -893,6 +1644,11 @@ const GradeInputs = ({
         type="number"
         defaultValue={defaultValues.activities}
         valueAsNumber
+        inputProps={{
+          min: 0,
+          max: 100,
+          step: 1,
+        }}
       />
     </Grid>
 
@@ -906,6 +1662,11 @@ const GradeInputs = ({
         type="number"
         defaultValue={defaultValues.projects}
         valueAsNumber
+        inputProps={{
+          min: 0,
+          max: 100,
+          step: 1,
+        }}
       />
     </Grid>
 
@@ -919,6 +1680,10 @@ const GradeInputs = ({
         type="number"
         defaultValue={defaultValues.projectsCount}
         valueAsNumber
+        inputProps={{
+          min: 1,
+          step: 1,
+        }}
       />
     </Grid>
 
@@ -932,6 +1697,11 @@ const GradeInputs = ({
         type="number"
         defaultValue={defaultValues.assignments}
         valueAsNumber
+        inputProps={{
+          min: 0,
+          max: 100,
+          step: 1,
+        }}
       />
     </Grid>
 
@@ -945,6 +1715,10 @@ const GradeInputs = ({
         type="number"
         defaultValue={defaultValues.assignmentsCount}
         valueAsNumber
+        inputProps={{
+          min: 1,
+          step: 1,
+        }}
       />
     </Grid>
 
@@ -958,6 +1732,11 @@ const GradeInputs = ({
         type="number"
         defaultValue={defaultValues.quizzes}
         valueAsNumber
+        inputProps={{
+          min: 0,
+          max: 100,
+          step: 1,
+        }}
       />
     </Grid>
 
@@ -971,6 +1750,10 @@ const GradeInputs = ({
         type="number"
         defaultValue={defaultValues.quizzesCount}
         valueAsNumber
+        inputProps={{
+          min: 1,
+          step: 1,
+        }}
       />
     </Grid>
   </Grid>

@@ -1,21 +1,29 @@
 ﻿import {
+  Box,
+} from "@mui/material";
+
+import {
   AccountBalanceWalletRounded,
   GroupsRounded,
   PaymentsRounded,
-  RestartAltRounded,
   SchoolRounded,
   SearchOffRounded,
   VisibilityRounded,
 } from "@mui/icons-material";
-import { Box, Paper } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
 
-import ClassFilter from "@/components/Filters/ClassFilter";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import Container from "@/components/Container/Container";
+import Table from "@/components/Table/Table";
+import PaginationControls from "@/components/Pagination";
+import FinancialClassFilter from "@/components/financial/FinancialClassFilter";
 import SearchFilter from "@/components/Filters/SearchFilter";
 import SelectFilter from "@/components/Filters/SelectFilter";
-import Container from "@/components/Container/Container";
-import PaginationControls from "@/components/Pagination";
-import Table from "@/components/Table/Table";
+
 import {
   EmptyState,
   FilterCard,
@@ -24,11 +32,16 @@ import {
   StatCard,
   StatsGrid,
 } from "@/components/financial/FinancialShell";
-import Years from "@/utils/constants/Years";
-import { formatMoney, mapFeeStatus } from "@/utils/financial/financialUtils";
+
+import {
+  formatMoney,
+  mapFeeStatus,
+} from "@/utils/financial/financialUtils";
+
 import { translateGender } from "@/utils/helpers/translateGender";
-import useDebounce from "@/utils/hooks/useDebounce";
 import { useFinancialRecords } from "@/utils/hooks/apis/financials/useFinancialRecords";
+import { useFinancialAcademicYears } from "@/utils/hooks/apis/financials/useFinancialAcademicYears";
+import useDebounce from "@/utils/hooks/useDebounce";
 import usePermissions from "@/utils/hooks/usePermissions";
 
 const HEADERS = [
@@ -39,205 +52,579 @@ const HEADERS = [
   "إجمالي المدفوع",
   "المتبقي",
 ];
+
 const BODY = [
   "studentName",
-  "academicYear",
+  "academicYearLabel",
   "className",
-  "tuitionStatus",
+  "status",
   "totalPaid",
   "remaining",
 ];
 
-const FinancialRecordsListPage = () => {
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
-  const [studentName, setStudentName] = useState("");
-  const [academicYear, setAcademicYear] = useState("");
-  const [classId, setClassId] = useState("");
-  const [tuitionStatus, setTuitionStatus] = useState("");
-  const [localPagination, setLocalPagination] = useState(null);
+const STATUS_OPTIONS = [
+  {
+    value: "paid",
+    label: "مدفوعة بالكامل",
+  },
+  {
+    value: "partial",
+    label: "جزئية",
+  },
+  {
+    value: "unpaid",
+    label: "غير مدفوعة",
+  },
+];
 
-  const debouncedStudentName = useDebounce(studentName, 500);
-  const permissions = usePermissions("financial");
+const asArray = (value) =>
+  Array.isArray(value)
+    ? value
+    : [];
 
-  const filters = useMemo(
-    () => ({
-      studentName: debouncedStudentName.trim() || undefined,
-      academicYear: academicYear || undefined,
-      classId: classId || undefined,
-      tuitionStatus: tuitionStatus || undefined,
-      page,
-      limit,
-    }),
-    [debouncedStudentName, academicYear, classId, tuitionStatus, page, limit],
-  );
+const numberOf = (...values) => {
+  for (const value of values) {
+    const numeric =
+      Number(value);
 
-  const { financialRecords = [], loading, pagination } = useFinancialRecords(filters);
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== "" &&
+      Number.isFinite(
+        numeric
+      )
+    ) {
+      return numeric;
+    }
+  }
 
-  useEffect(() => setClassId(""), [academicYear]);
-  useEffect(() => setPage(1), [limit, debouncedStudentName, academicYear, classId, tuitionStatus]);
-  useEffect(() => {
-    if (pagination) setLocalPagination(pagination);
-  }, [pagination]);
+  return 0;
+};
 
-  const mappedRecords = financialRecords.map((item) => {
-    const student = item?.studentId || item?.student || {};
-    const cls = item?.classId || item?.class || {};
-    const tuition = item?.tuition || {};
-    const effectiveFee = Number(
-      tuition?.discount ? tuition?.netFee : tuition?.fee || 0,
+const getStudentName = (
+  student
+) =>
+  student?.name ||
+  [
+    student?.firstName,
+    student?.fatherName,
+    student?.familyName,
+  ]
+    .filter(Boolean)
+    .join(" ") ||
+  student?.username ||
+  student?.email ||
+  "—";
+
+const getEffectiveFee = (
+  tuition
+) => {
+  if (!tuition) {
+    return 0;
+  }
+
+  if (
+    tuition?.discount ||
+    tuition?.discountApplied
+  ) {
+    return numberOf(
+      tuition?.netFee,
+      tuition
+        ?.amountAfterDiscount,
+      tuition?.fee
     );
-    const totalPaid = Number(tuition?.totalPaid || 0);
-    const remaining = Math.max(effectiveFee - totalPaid, 0);
+  }
 
-    return {
-      id: student?._id || student?.id,
-      studentName: student?.name || "—",
-      academicYear: item?.academicYear || cls?.academicYear || "—",
-      className: cls?.roomNumber
-        ? `${cls.roomNumber} - ${translateGender(cls.gender, "class")}`
-        : "—",
-      tuitionStatus: mapFeeStatus(tuition?.status),
-      totalPaid: formatMoney(totalPaid),
-      remaining: formatMoney(remaining),
-      totalPaidRaw: totalPaid,
-      remainingRaw: remaining,
-    };
-  });
-
-  const currentPagination = localPagination || pagination;
-  const paidCount = mappedRecords.filter((item) => item.remainingRaw === 0).length;
-  const totalPaidPage = mappedRecords.reduce((sum, item) => sum + item.totalPaidRaw, 0);
-  const totalRemainingPage = mappedRecords.reduce(
-    (sum, item) => sum + item.remainingRaw,
-    0,
-  );
-
-  const activeFilters = [studentName, academicYear, classId, tuitionStatus].filter(Boolean);
-  const resetFilters = () => {
-    setStudentName("");
-    setAcademicYear("");
-    setClassId("");
-    setTuitionStatus("");
-    setPage(1);
-  };
-
-  return (
-    <Container>
-      <Box dir="rtl" sx={{ width: "100%", minWidth: 0, pb: 4 }}>
-        <FinancialHeader
-          title="المصروفات الدراسية"
-          description="تابع الرسوم والمدفوع والمتبقي لكل طالب."
-          count={currentPagination?.totalDocs ?? mappedRecords.length}
-        />
-
-        <StatsGrid>
-          <StatCard
-            label="إجمالي السجلات"
-            value={currentPagination?.totalDocs ?? mappedRecords.length}
-            icon={<AccountBalanceWalletRounded />}
-          />
-          <StatCard
-            label="مكتملو السداد"
-            value={paidCount}
-            icon={<PaymentsRounded />}
-          />
-          <StatCard
-            label="المدفوع في الصفحة"
-            value={formatMoney(totalPaidPage)}
-            icon={<VisibilityRounded />}
-          />
-          <StatCard
-            label="المتبقي في الصفحة"
-            value={formatMoney(totalRemainingPage)}
-            icon={<GroupsRounded />}
-          />
-        </StatsGrid>
-
-        <FilterCard
-          title="البحث والتصفية"
-          description="ابحث باسم الطالب وحدّد السنة والفصل وحالة الرسوم."
-          active={activeFilters.length > 0}
-          onReset={resetFilters}
-          columns="1.35fr 1fr 1fr 1fr"
-        >
-          <SearchFilter
-            value={studentName}
-            onChange={setStudentName}
-            placeholder="ابحث باسم الطالب..."
-          />
-          <SelectFilter
-            value={academicYear}
-            onChange={setAcademicYear}
-            label="السنة الدراسية"
-            icon={SchoolRounded}
-            allLabel="كل السنوات"
-            options={Years.map((year) => ({ value: year, label: year }))}
-          />
-          <ClassFilter
-            classId={classId}
-            setClassId={setClassId}
-            academicYear={academicYear}
-          />
-          <SelectFilter
-            value={tuitionStatus}
-            onChange={setTuitionStatus}
-            label="حالة الرسوم"
-            icon={AccountBalanceWalletRounded}
-            allLabel="كل الحالات"
-            options={[
-              { value: "unpaid", label: "غير مدفوعة" },
-              { value: "partial", label: "جزئية" },
-              { value: "paid", label: "مدفوعة" },
-            ]}
-          />
-        </FilterCard>
-
-        <SectionCard
-          title="قائمة المصروفات الدراسية"
-          description="افتح ملف الطالب لمراجعة الخصم والأقساط وتسجيل الدفعات."
-        >
-          {!loading && mappedRecords.length === 0 ? (
-            <EmptyState
-              icon={<SearchOffRounded />}
-              title={
-                activeFilters.length
-                  ? "لا توجد سجلات مطابقة للفلاتر"
-                  : "لا توجد سجلات مالية لعرضها"
-              }
-              description={
-                activeFilters.length
-                  ? "غيّر الفلاتر أو امسحها لعرض نتائج أخرى."
-                  : "ستظهر سجلات المصروفات بعد إنشاء البيانات المالية للطلاب."
-              }
-              actionLabel={activeFilters.length ? "مسح الفلاتر" : undefined}
-              onAction={activeFilters.length ? resetFilters : undefined}
-            />
-          ) : (
-            <Box sx={{ p: { xs: 0.7, md: 1 } }}>
-              <Table
-                headers={HEADERS}
-                data={mappedRecords}
-                loading={loading}
-                profile={permissions?.read}
-                body={BODY}
-              />
-              {currentPagination && mappedRecords.length > 0 && (
-                <PaginationControls
-                  pagination={currentPagination}
-                  page={page}
-                  onPageChange={setPage}
-                  limit={limit}
-                  onLimitChange={setLimit}
-                  label="عدد السجلات"
-                />
-              )}
-            </Box>
-          )}
-        </SectionCard>
-      </Box>
-    </Container>
+  return numberOf(
+    tuition?.netFee,
+    tuition?.fee
   );
 };
+const mapRecord = (
+  item,
+  getAcademicYearLabel
+) => {
+  const student =
+    item?.studentId ||
+    item?.student ||
+    {};
+
+  const cls =
+    item?.classId ||
+    item?.class ||
+    {};
+
+  const tuition =
+    item?.tuition ||
+    {};
+
+  const effectiveFee =
+    getEffectiveFee(
+      tuition
+    );
+
+  const totalPaid =
+    numberOf(
+      tuition?.totalPaid,
+      tuition?.paidAmount
+    );
+
+  const remaining =
+    Math.max(
+      effectiveFee -
+        totalPaid,
+      0
+    );
+
+  const academicYearLabel =
+    getAcademicYearLabel(
+      item?.academicYearId ||
+      cls?.academicYearId
+    );
+
+  const className =
+    cls?.roomNumber
+      ? `${cls.roomNumber} - ${
+          translateGender(
+            cls?.gender,
+            "class"
+          ) || ""
+        }`
+      : cls?.name ||
+        "—";
+
+  return {
+    id:
+      student?._id ||
+      student?.id ||
+      item?._id ||
+      item?.id,
+
+    studentName:
+      getStudentName(
+        student
+      ),
+
+    academicYearLabel,
+
+    className,
+
+    status:
+      mapFeeStatus(
+        tuition?.status
+      ),
+
+    statusRaw:
+      tuition?.status ||
+      "unpaid",
+
+    totalPaid:
+      formatMoney(
+        totalPaid
+      ),
+
+    remaining:
+      formatMoney(
+        remaining
+      ),
+
+    totalPaidRaw:
+      totalPaid,
+
+    remainingRaw:
+      remaining,
+  };
+};
+
+const FinancialRecordsListPage =
+  () => {
+    const [
+      page,
+      setPage,
+    ] = useState(1);
+
+    const [
+      limit,
+      setLimit,
+    ] = useState(10);
+
+    const [
+      studentName,
+      setStudentName,
+    ] = useState("");
+
+    const [
+      academicYearId,
+      setAcademicYearId,
+    ] = useState("");
+
+    const [
+      classId,
+      setClassId,
+    ] = useState("");
+
+    const [
+      tuitionStatus,
+      setTuitionStatus,
+    ] = useState("");
+
+    const search =
+      useDebounce(
+        studentName,
+        500
+      );
+
+    const permissions =
+      usePermissions(
+        "financial"
+      );
+
+
+    const filters =
+      useMemo(
+        () => ({
+          page,
+          limit,
+
+          studentName:
+            search.trim() ||
+            undefined,
+
+          academicYearId:
+            academicYearId ||
+            undefined,
+
+          classId:
+            classId ||
+            undefined,
+
+          tuitionStatus:
+            tuitionStatus ||
+            undefined,
+        }),
+        [
+          page,
+          limit,
+          search,
+          academicYearId,
+          classId,
+          tuitionStatus,
+        ]
+      );
+
+    const {
+      financialRecords,
+      loading,
+      pagination,
+    } =
+      useFinancialRecords(
+        filters
+      );
+
+
+    const recordAcademicYearIds =
+      useMemo(
+        () =>
+          asArray(
+            financialRecords
+          )
+            .map(
+              (item) =>
+                item?.academicYearId ||
+                item?.classId
+                  ?.academicYearId
+            )
+            .filter(Boolean),
+        [financialRecords]
+      );
+
+    const {
+      academicYearOptions,
+      getAcademicYearLabel,
+      loadingAcademicYears,
+    } =
+      useFinancialAcademicYears(
+        recordAcademicYearIds
+      );
+
+    useEffect(() => {
+      setClassId("");
+    }, [academicYearId]);
+
+    useEffect(() => {
+      setPage(1);
+    }, [
+      limit,
+      search,
+      academicYearId,
+      classId,
+      tuitionStatus,
+    ]);
+
+    const rows =
+      useMemo(
+        () =>
+          asArray(
+            financialRecords
+          ).map(
+            (item) =>
+              mapRecord(
+                item,
+                getAcademicYearLabel
+              )
+          ),
+        [
+          financialRecords,
+          getAcademicYearLabel,
+        ]
+      );
+
+    const totalPaid =
+      rows.reduce(
+        (sum, item) =>
+          sum +
+          item.totalPaidRaw,
+        0
+      );
+
+    const totalRemaining =
+      rows.reduce(
+        (sum, item) =>
+          sum +
+          item.remainingRaw,
+        0
+      );
+
+    const fullyPaid =
+      rows.filter(
+        (item) =>
+          item.statusRaw ===
+          "paid"
+      ).length;
+
+    const active =
+      [
+        studentName,
+        academicYearId,
+        classId,
+        tuitionStatus,
+      ].some(Boolean);
+
+    const reset = () => {
+      setStudentName("");
+      setAcademicYearId("");
+      setClassId("");
+      setTuitionStatus("");
+      setPage(1);
+    };
+
+    return (
+      <Container>
+        <Box
+          dir="rtl"
+          sx={{
+            pb: 4,
+            minWidth: 0,
+          }}
+        >
+          <FinancialHeader
+            title="المصروفات الدراسية"
+            description="تابع الرسوم والمدفوع والمتبقي لكل طالب."
+            count={
+              pagination
+                ?.totalDocs ??
+              pagination?.total ??
+              rows.length
+            }
+          />
+
+          <StatsGrid>
+            <StatCard
+              label="إجمالي السجلات"
+              value={
+                pagination
+                  ?.totalDocs ??
+                pagination
+                  ?.total ??
+                rows.length
+              }
+              icon={
+                <AccountBalanceWalletRounded />
+              }
+            />
+
+            <StatCard
+              label="مكتملو السداد"
+              value={
+                fullyPaid
+              }
+              icon={
+                <PaymentsRounded />
+              }
+            />
+
+            <StatCard
+              label="المدفوع في الصفحة"
+              value={formatMoney(
+                totalPaid
+              )}
+              icon={
+                <VisibilityRounded />
+              }
+            />
+
+            <StatCard
+              label="المتبقي في الصفحة"
+              value={formatMoney(
+                totalRemaining
+              )}
+              icon={
+                <GroupsRounded />
+              }
+            />
+          </StatsGrid>
+
+          <FilterCard
+            description="ابحث باسم الطالب وحدد السنة والفصل وحالة الرسوم."
+            active={active}
+            onReset={reset}
+          >
+            <SearchFilter
+              value={
+                studentName
+              }
+              onChange={
+                setStudentName
+              }
+              placeholder="ابحث باسم الطالب..."
+            />
+
+            <SelectFilter
+              value={
+                academicYearId
+              }
+              onChange={
+                setAcademicYearId
+              }
+              label="السنة الدراسية"
+              icon={
+                SchoolRounded
+              }
+              allLabel="كل السنوات"
+              options={
+                academicYearOptions
+              }
+              disabled={
+                loadingAcademicYears
+              }
+            />
+
+            <FinancialClassFilter
+              classId={classId}
+              setClassId={
+                setClassId
+              }
+              academicYearId={
+                academicYearId
+              }
+            />
+
+            <SelectFilter
+              value={
+                tuitionStatus
+              }
+              onChange={
+                setTuitionStatus
+              }
+              label="حالة الرسوم"
+              icon={
+                AccountBalanceWalletRounded
+              }
+              allLabel="كل الحالات"
+              options={
+                STATUS_OPTIONS
+              }
+            />
+          </FilterCard>
+
+          <SectionCard
+            title="قائمة المصروفات الدراسية"
+            description="افتح ملف الطالب لمراجعة الخصم والأقساط وتسجيل الدفعات."
+          >
+            {!loading &&
+            rows.length === 0 ? (
+              <EmptyState
+                icon={
+                  <SearchOffRounded />
+                }
+                title={
+                  active
+                    ? "لا توجد سجلات مطابقة للفلاتر"
+                    : "لا توجد سجلات مالية لعرضها"
+                }
+                description={
+                  active
+                    ? "غيّر الفلاتر أو امسحها لعرض نتائج أخرى."
+                    : "ستظهر سجلات المصروفات بعد إنشاء السجل المالي للطالب."
+                }
+                actionLabel={
+                  active
+                    ? "مسح الفلاتر"
+                    : undefined
+                }
+                onAction={
+                  active
+                    ? reset
+                    : undefined
+                }
+              />
+            ) : (
+              <Box sx={{ p: 1 }}>
+                <Table
+                  headers={
+                    HEADERS
+                  }
+                  data={rows}
+                  loading={
+                    loading
+                  }
+                  profile={
+                    permissions?.read
+                  }
+                  body={
+                    BODY
+                  }
+                />
+
+                {pagination &&
+                  rows.length >
+                    0 && (
+                    <PaginationControls
+                      pagination={
+                        pagination
+                      }
+                      page={
+                        page
+                      }
+                      onPageChange={
+                        setPage
+                      }
+                      limit={
+                        limit
+                      }
+                      onLimitChange={
+                        setLimit
+                      }
+                      label="عدد السجلات"
+                    />
+                  )}
+              </Box>
+            )}
+          </SectionCard>
+        </Box>
+      </Container>
+    );
+  };
 
 export default FinancialRecordsListPage;
