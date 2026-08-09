@@ -1,9 +1,13 @@
 import {
   AddCircleOutlineRounded,
+  AdminPanelSettingsRounded,
+  CheckCircleRounded,
   DeleteOutlineRounded,
   ManageAccountsRounded,
-  SecurityRounded,
+  RefreshRounded,
   SearchRounded,
+  SecurityRounded,
+  SupervisorAccountRounded,
 } from "@mui/icons-material";
 
 import {
@@ -18,26 +22,15 @@ import {
   IconButton,
   InputAdornment,
   MenuItem,
-  Paper,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-
-import {
-  useNavigate,
-} from "react-router-dom";
-
-import {
-  toast,
-} from "react-toastify";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
 
@@ -371,251 +364,232 @@ const SchoolManagersList = () => {
         "تم حذف الحساب الإداري بنجاح"
       );
     };
-
   return (
     <Container>
-      <Box
-        dir="rtl"
-        sx={{ pb: 5 }}
-      >
-        <Paper
-          elevation={0}
+      <Box dir="rtl" sx={{ pb: 4, width: "100%" }}>
+        <Box
           sx={{
-            p: {
-              xs: 2.2,
-              md: 3,
-            },
-
-            borderRadius: "22px",
-
-            border:
-              "1px solid #DED8CD",
-
+            px: { xs: 2, md: 3 },
+            py: { xs: 2, md: 2.35 },
+            display: "flex",
+            flexDirection: { xs: "column", md: "row" },
+            alignItems: { xs: "stretch", md: "center" },
+            justifyContent: "space-between",
+            gap: 2,
+            borderRadius: "20px",
+            border: "1px solid #DED8CD",
             background:
-              "linear-gradient(135deg, #244A70 0%, #122F4D 100%)",
-
-            color: "#FFFFFF",
-
-            boxShadow:
-              "0 15px 34px rgba(18,47,77,0.14)",
+              "linear-gradient(135deg, #FFFDF8 0%, #F8F2E7 100%)",
+            boxShadow: "0 8px 22px rgba(18,47,77,0.035)",
           }}
         >
-          <Stack
-            direction={{
-              xs: "column",
-              md: "row",
-            }}
-            justifyContent="space-between"
-            alignItems={{
-              xs: "stretch",
-              md: "center",
-            }}
-            spacing={2}
-          >
-            <Stack
-              direction="row"
-              spacing={1.5}
-              alignItems="center"
-            >
-              <Box
+          <Box>
+            <Stack direction="row" alignItems="center" spacing={0.9}>
+              <Typography
                 sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "15px",
-                  display: "grid",
-                  placeItems: "center",
-                  bgcolor:
-                    "rgba(255,255,255,0.12)",
-                  color: "#F2D792",
+                  color: "#122F4D",
+                  fontSize: { xs: "22px", md: "27px" },
+                  fontWeight: 900,
+                  lineHeight: 1.25,
                 }}
               >
-                <ManageAccountsRounded />
-              </Box>
+                إدارة المديرين والمشرفين
+              </Typography>
 
-              <Box>
-                <Typography
-                  sx={{
-                    fontSize: {
-                      xs: "19px",
-                      md: "23px",
-                    },
-                    fontWeight: 900,
-                  }}
-                >
-                  المديرون والمشرفون
-                </Typography>
-
-                <Typography
-                  sx={{
-                    mt: 0.35,
-                    fontSize: "12px",
-                    color:
-                      "rgba(255,255,255,0.76)",
-                  }}
-                >
-                  أنشئ حسابات الإدارة وتابعها من مكان واحد.
-                </Typography>
+              <Box
+                sx={{
+                  minWidth: 27,
+                  height: 27,
+                  px: 0.7,
+                  display: "grid",
+                  placeItems: "center",
+                  borderRadius: "999px",
+                  color: "#B78430",
+                  bgcolor: "#FBF0D8",
+                  fontSize: "12px",
+                  fontWeight: 900,
+                }}
+              >
+                {items.length}
               </Box>
             </Stack>
 
+            <Typography
+              sx={{
+                mt: 0.55,
+                color: "#7E8791",
+                fontSize: "12px",
+                fontWeight: 600,
+              }}
+            >
+              إدارة الحسابات الإدارية والأدوار والصلاحيات من مكان واحد.
+            </Typography>
+          </Box>
+
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1}
+            sx={{ flexShrink: 0 }}
+          >
             <Button
               variant="contained"
-              startIcon={
-                <AddCircleOutlineRounded />
-              }
-              onClick={() =>
-                navigate(
-                  "/school/managers/add"
-                )
-              }
+              startIcon={<AddCircleOutlineRounded />}
+              onClick={() => navigate("/school/managers/add")}
               sx={{
-                minHeight: 46,
-                px: 2.6,
-                borderRadius: "13px",
-                bgcolor: "#D3A44F",
-                color: "#122F4D",
+                minHeight: 48,
+                px: 2.3,
+                borderRadius: "12px",
+                bgcolor: "#244A70",
+                color: "#FFFFFF",
+                fontSize: "13px",
                 fontWeight: 900,
                 boxShadow: "none",
+                "& .MuiButton-startIcon": { ml: 0.7, mr: 0 },
                 "&:hover": {
-                  bgcolor: "#F2D792",
+                  bgcolor: "#122F4D",
                   boxShadow: "none",
                 },
               }}
             >
               إضافة حساب إداري
             </Button>
+
+            <Button
+              variant="outlined"
+              startIcon={<RefreshRounded />}
+              onClick={() => loadManagers(true)}
+              disabled={loading}
+              sx={{
+                minHeight: 48,
+                px: 2,
+                borderRadius: "12px",
+                borderColor: "#C9D3DC",
+                color: "#244A70",
+                bgcolor: "rgba(255,255,255,0.55)",
+                fontSize: "13px",
+                fontWeight: 900,
+                "& .MuiButton-startIcon": { ml: 0.65, mr: 0 },
+                "&:hover": {
+                  borderColor: "#244A70",
+                  bgcolor: "#FFFFFF",
+                },
+              }}
+            >
+              تحديث
+            </Button>
           </Stack>
-        </Paper>
+        </Box>
 
         <Box
           sx={{
-            mt: 2,
+            mt: 1.6,
             display: "grid",
             gridTemplateColumns: {
-              xs: "1fr 1fr",
-              lg: "repeat(4, 1fr)",
+              xs: "1fr",
+              sm: "repeat(2,minmax(0,1fr))",
+              lg: "repeat(4,minmax(0,1fr))",
             },
-            gap: 1.4,
+            gap: 1.2,
           }}
         >
           <StatCard
             label="إجمالي الحسابات"
             value={items.length}
-          />
-          <StatCard
-            label="المشرفون"
-            value={supervisorsCount}
-          />
-          <StatCard
-            label="المديرون"
-            value={managersCount}
+            icon={<AdminPanelSettingsRounded />}
           />
           <StatCard
             label="الحسابات النشطة"
             value={activeCount}
+            icon={<CheckCircleRounded />}
+          />
+          <StatCard
+            label="المديرون"
+            value={managersCount}
+            icon={<ManageAccountsRounded />}
+          />
+          <StatCard
+            label="المشرفون"
+            value={supervisorsCount}
+            icon={<SupervisorAccountRounded />}
           />
         </Box>
 
-        <Paper
-          elevation={0}
+        <Box
           sx={{
-            mt: 2,
-            p: 1.6,
-            borderRadius: "18px",
-            border:
-              "1px solid #DED8CD",
-            bgcolor: "#FFFCF7",
+            mt: 1.5,
+            p: 1.25,
+            borderRadius: "16px",
+            bgcolor: "#FFFFFF",
+            border: "1px solid #DED8CD",
+            boxShadow: "0 5px 16px rgba(18,47,77,0.025)",
           }}
         >
-          <Stack
-            direction={{
-              xs: "column",
-              md: "row",
-            }}
-            spacing={1.3}
-          >
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
             <TextField
               fullWidth
               value={search}
-              onChange={(event) =>
-                setSearch(
-                  event.target.value
-                )
-              }
-              placeholder="ابحث باسم المستخدم أو البريد الإلكتروني"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="ابحث باسم المستخدم أو البريد الإلكتروني..."
               size="small"
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchRounded
-                      sx={{
-                        color:
-                          "#315E88",
-                      }}
-                    />
+                    <SearchRounded sx={{ color: "#7E8791", fontSize: 23 }} />
                   </InputAdornment>
                 ),
               }}
               sx={{
                 flex: 1,
-                "& .MuiOutlinedInput-root":
-                  {
-                    borderRadius:
-                      "13px",
-                    bgcolor:
-                      "#FFFFFF",
+                "& .MuiOutlinedInput-root": {
+                  minHeight: 48,
+                  borderRadius: "12px",
+                  bgcolor: "#FFFCF7",
+                  fontSize: "13px",
+                  "& fieldset": { borderColor: "#D8D2C8" },
+                  "&:hover fieldset": { borderColor: "#BFC9D2" },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "#244A70",
+                    borderWidth: "1px",
                   },
+                },
               }}
             />
 
             <TextField
               select
               value={roleFilter}
-              onChange={(event) =>
-                setRoleFilter(
-                  event.target.value
-                )
-              }
-              label="الدور"
+              onChange={(event) => setRoleFilter(event.target.value)}
               size="small"
               sx={{
-                width: {
-                  xs: "100%",
-                  md: 220,
-                },
-                "& .MuiOutlinedInput-root":
-                  {
-                    borderRadius:
-                      "13px",
-                    bgcolor:
-                      "#FFFFFF",
+                width: { xs: "100%", md: 220 },
+                "& .MuiOutlinedInput-root": {
+                  minHeight: 48,
+                  borderRadius: "12px",
+                  bgcolor: "#FFFCF7",
+                  fontSize: "13px",
+                  "& fieldset": { borderColor: "#D8D2C8" },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "#244A70",
+                    borderWidth: "1px",
                   },
+                },
               }}
             >
-              <MenuItem value="">
-                كل الأدوار
-              </MenuItem>
-
-              <MenuItem value="SUPERVISOR">
-                مشرف
-              </MenuItem>
-
-              <MenuItem value="MANAGER">
-                مدير
-              </MenuItem>
+              <MenuItem value="">كل الأدوار</MenuItem>
+              <MenuItem value="MANAGER">مدير</MenuItem>
+              <MenuItem value="SUPERVISOR">مشرف</MenuItem>
             </TextField>
           </Stack>
-        </Paper>
+        </Box>
 
-        <Paper
-          elevation={0}
+        <Box
           sx={{
-            mt: 2,
+            mt: 1.4,
             overflow: "hidden",
-            borderRadius: "20px",
-            border:
-              "1px solid #DED8CD",
+            borderRadius: "17px",
+            border: "1px solid #DED8CD",
             bgcolor: "#FFFFFF",
+            boxShadow: "0 7px 20px rgba(18,47,77,0.03)",
           }}
         >
           {loading ? (
@@ -626,10 +600,9 @@ const SchoolManagersList = () => {
                 placeItems: "center",
               }}
             >
-              <CircularProgress />
+              <CircularProgress sx={{ color: "#244A70" }} />
             </Box>
-          ) : filteredItems.length ===
-            0 ? (
+          ) : filteredItems.length === 0 ? (
             <Box
               sx={{
                 minHeight: 320,
@@ -640,18 +613,27 @@ const SchoolManagersList = () => {
               }}
             >
               <Box>
-                <ManageAccountsRounded
+                <Box
                   sx={{
-                    fontSize: 48,
-                    color: "#D3A44F",
+                    width: 64,
+                    height: 64,
+                    mx: "auto",
+                    display: "grid",
+                    placeItems: "center",
+                    borderRadius: "18px",
+                    bgcolor: "#FBF0D8",
+                    color: "#B78430",
                   }}
-                />
+                >
+                  <ManageAccountsRounded sx={{ fontSize: 32 }} />
+                </Box>
 
                 <Typography
                   sx={{
-                    mt: 1,
-                    color: "#193754",
-                    fontWeight: 800,
+                    mt: 1.2,
+                    color: "#122F4D",
+                    fontSize: "15px",
+                    fontWeight: 900,
                   }}
                 >
                   لا توجد حسابات إدارية لعرضها
@@ -661,250 +643,219 @@ const SchoolManagersList = () => {
                   sx={{
                     mt: 0.5,
                     color: "#7E8791",
-                    fontSize: "13px",
+                    fontSize: "12px",
                   }}
                 >
-                  أضف أول حساب مشرف أو مدير للمدرسة.
+                  غيّر البحث أو الفلتر، أو أضف حسابًا إداريًا جديدًا.
                 </Typography>
               </Box>
             </Box>
           ) : (
-            <Box
-              sx={{
-                overflowX: "auto",
-              }}
-            >
+            <Box sx={{ overflowX: "auto" }}>
               <Box
                 component="table"
                 sx={{
                   width: "100%",
-                  minWidth: 760,
-                  borderCollapse:
-                    "collapse",
-
+                  minWidth: 860,
+                  borderCollapse: "collapse",
                   "& th": {
-                    py: 1.6,
-                    px: 2,
+                    py: 1.35,
+                    px: 1.7,
                     textAlign: "right",
-                    bgcolor: "#F8F5EF",
+                    bgcolor: "#F1F5F9",
                     color: "#315E88",
-                    fontSize: "12px",
+                    fontSize: "11px",
                     fontWeight: 900,
-                    borderBottom:
-                      "1px solid #DED8CD",
+                    borderBottom: "1px solid #DED8CD",
+                    whiteSpace: "nowrap",
                   },
-
                   "& td": {
-                    py: 1.5,
-                    px: 2,
+                    py: 1.25,
+                    px: 1.7,
                     color: "#193754",
-                    fontSize: "13px",
-                    borderBottom:
-                      "1px solid #EEEAE2",
+                    fontSize: "12px",
+                    borderBottom: "1px solid #EEEAE2",
+                    verticalAlign: "middle",
                   },
-
-                  "& tbody tr:hover": {
-                    bgcolor: "#FFFCF7",
-                  },
+                  "& tbody tr:hover": { bgcolor: "#FFFCF7" },
+                  "& tbody tr:last-of-type td": { borderBottom: 0 },
                 }}
               >
                 <thead>
                   <tr>
-                    <th>اسم المستخدم</th>
-                    <th>البريد الإلكتروني</th>
+                    <th>المستخدم</th>
+                    <th>التواصل</th>
                     <th>الدور</th>
                     <th>الحالة</th>
-                    <th>الإجراءات</th>
+                    <th style={{ textAlign: "center", width: 150 }}>
+                      الإجراءات
+                    </th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {filteredItems.map(
-                    (item) => {
-                      const id =
-                        getManagerId(
-                          item
-                        );
+                  {filteredItems.map((item) => {
+                    const id = getManagerId(item);
+                    const role = getManagerRole(item);
+                    const status = getManagerStatus(item);
+                    const name = getManagerUsername(item);
 
-                      const role =
-                        getManagerRole(
-                          item
-                        );
+                    return (
+                      <tr key={id || getManagerEmail(item)}>
+                        <td>
+                          <Stack direction="row" alignItems="center" spacing={1}>
+                            <Box
+                              sx={{
+                                width: 36,
+                                height: 36,
+                                flexShrink: 0,
+                                display: "grid",
+                                placeItems: "center",
+                                borderRadius: "10px",
+                                bgcolor: "#EEF3F7",
+                                color: "#244A70",
+                                fontSize: "12px",
+                                fontWeight: 900,
+                              }}
+                            >
+                              {String(name).trim().charAt(0).toUpperCase()}
+                            </Box>
 
-                      const status =
-                        getManagerStatus(
-                          item
-                        );
-
-                      return (
-                        <tr
-                          key={
-                            id ||
-                            getManagerEmail(
-                              item
-                            )
-                          }
-                        >
-                          <td>
                             <Typography
                               sx={{
-                                fontSize:
-                                  "13px",
-                                fontWeight:
-                                  800,
+                                color: "#122F4D",
+                                fontSize: "12.5px",
+                                fontWeight: 900,
                               }}
                             >
-                              {getManagerUsername(
-                                item
-                              )}
+                              {name}
                             </Typography>
-                          </td>
+                          </Stack>
+                        </td>
 
-                          <td>
-                            {getManagerEmail(
-                              item
-                            )}
-                          </td>
+                        <td>
+                          <Typography
+                            sx={{
+                              color: "#244A70",
+                              direction: "ltr",
+                              textAlign: "right",
+                              fontSize: "11px",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {getManagerEmail(item)}
+                          </Typography>
+                        </td>
 
-                          <td>
-                            <Chip
-                              size="small"
-                              label={
-                                ROLE_LABELS[
-                                  role
-                                ] ||
-                                role ||
-                                "—"
-                              }
-                              sx={{
-                                bgcolor:
-                                  role ===
-                                  "SUPERVISOR"
-                                    ? "#FBF0D8"
-                                    : "#DDEEE8",
-                                color:
-                                  role ===
-                                  "SUPERVISOR"
-                                    ? "#8A6220"
-                                    : "#075244",
-                                fontWeight:
-                                  800,
-                              }}
-                            />
-                          </td>
+                        <td>
+                          <Chip
+                            size="small"
+                            label={ROLE_LABELS[role] || role || "—"}
+                            sx={{
+                              height: 27,
+                              bgcolor:
+                                role === "SUPERVISOR" ? "#FBF0D8" : "#EEF3F7",
+                              color:
+                                role === "SUPERVISOR" ? "#8A6220" : "#244A70",
+                              borderRadius: "8px",
+                              fontSize: "10px",
+                              fontWeight: 900,
+                            }}
+                          />
+                        </td>
 
-                          <td>
-                            <Chip
-                              size="small"
-                              label={
-                                status ===
-                                "active"
-                                  ? "نشط"
-                                  : "غير نشط"
-                              }
-                              sx={{
-                                bgcolor:
-                                  status ===
-                                  "active"
-                                    ? "#E7F8F1"
-                                    : "#FDECEC",
-                                color:
-                                  status ===
-                                  "active"
-                                    ? "#0E7A5E"
-                                    : "#C94F4F",
-                                fontWeight:
-                                  800,
-                              }}
-                            />
-                          </td>
+                        <td>
+                          <Chip
+                            size="small"
+                            icon={status === "active" ? <CheckCircleRounded /> : undefined}
+                            label={status === "active" ? "نشط" : "غير نشط"}
+                            sx={{
+                              height: 28,
+                              bgcolor: status === "active" ? "#E7F8F1" : "#FDECEC",
+                              color: status === "active" ? "#0E7A5E" : "#C94F4F",
+                              borderRadius: "9px",
+                              fontSize: "10px",
+                              fontWeight: 900,
+                              "& .MuiChip-icon": {
+                                color: "inherit",
+                                fontSize: 16,
+                              },
+                            }}
+                          />
+                        </td>
 
-                          <td>
-                            <Stack
-                              direction="row"
-                              spacing={0.5}
-                              alignItems="center"
-                            >
-                              {role ===
-                                "MANAGER" && (
-                                <Tooltip title="تطبيق صلاحيات المدير الإدارية والأكاديمية">
-                                  <span>
-                                    <IconButton
-                                      onClick={() =>
-                                        handleSyncPermissions(
-                                          item
-                                        )
-                                      }
-                                      disabled={
-                                        !id ||
-                                        syncingManagerId ===
-                                          id
-                                      }
-                                      sx={{
-                                        color:
-                                          "#244A70",
-                                        bgcolor:
-                                          "#EEF3F7",
-
-                                        "&:hover":
-                                          {
-                                            bgcolor:
-                                              "#DDE7EF",
-                                          },
-                                      }}
-                                    >
-                                      {syncingManagerId ===
-                                      id ? (
-                                        <CircularProgress
-                                          size={20}
-                                        />
-                                      ) : (
-                                        <SecurityRounded />
-                                      )}
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-                              )}
-
-                              <Tooltip title="حذف الحساب">
+                        <td>
+                          <Stack direction="row" spacing={0.65} justifyContent="center">
+                            {role === "MANAGER" && (
+                              <Tooltip title="تطبيق صلاحيات المدير الافتراضية">
                                 <span>
                                   <IconButton
-                                    color="error"
-                                    onClick={() =>
-                                      setDeleteTarget(
-                                        item
-                                      )
-                                    }
-                                    disabled={
-                                      !id
-                                    }
+                                    onClick={() => handleSyncPermissions(item)}
+                                    disabled={!id || syncingManagerId === id}
+                                    size="small"
+                                    sx={{
+                                      width: 36,
+                                      height: 36,
+                                      color: "#244A70",
+                                      bgcolor: "#EEF3F7",
+                                      border: "1px solid #DDE5EC",
+                                      "&:hover": { bgcolor: "#E2EAF1" },
+                                    }}
                                   >
-                                    <DeleteOutlineRounded />
+                                    {syncingManagerId === id ? (
+                                      <CircularProgress size={18} />
+                                    ) : (
+                                      <SecurityRounded sx={{ fontSize: 20 }} />
+                                    )}
                                   </IconButton>
                                 </span>
                               </Tooltip>
-                            </Stack>
-                          </td>
-                        </tr>
-                      );
-                    }
-                  )}
+                            )}
+
+                            <Tooltip title="حذف الحساب">
+                              <span>
+                                <IconButton
+                                  onClick={() => setDeleteTarget(item)}
+                                  disabled={!id}
+                                  size="small"
+                                  sx={{
+                                    width: 36,
+                                    height: 36,
+                                    color: "#C94F4F",
+                                    bgcolor: "#FDECEC",
+                                    border: "1px solid #F3D4D4",
+                                    "&:hover": { bgcolor: "#F9DDDD" },
+                                  }}
+                                >
+                                  <DeleteOutlineRounded sx={{ fontSize: 20 }} />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </Stack>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </Box>
             </Box>
           )}
-        </Paper>
+        </Box>
       </Box>
 
       <Dialog
-        open={Boolean(
-          deleteTarget
-        )}
-        onClose={() =>
-          !deleting &&
-          setDeleteTarget(null)
-        }
-        dir="rtl"
+        open={Boolean(deleteTarget)}
+        onClose={() => {
+          if (!deleting) setDeleteTarget(null);
+        }}
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{
+          sx: {
+            borderRadius: "18px",
+            border: "1px solid #DED8CD",
+          },
+        }}
       >
         <DialogTitle
           sx={{
@@ -917,24 +868,24 @@ const SchoolManagersList = () => {
 
         <DialogContent>
           <Typography
-            color="text.secondary"
+            sx={{
+              color: "#5D6A76",
+              fontSize: "13px",
+              lineHeight: 1.8,
+            }}
           >
-            هل أنت متأكد من حذف حساب{" "}
-            <strong>
-              {getManagerUsername(
-                deleteTarget
-              )}
-            </strong>
-            ؟
+            سيتم حذف حساب "{getManagerUsername(deleteTarget)}" نهائيًا. لا يمكن التراجع عن هذه العملية.
           </Typography>
         </DialogContent>
 
-        <DialogActions>
+        <DialogActions sx={{ p: 2 }}>
           <Button
-            onClick={() =>
-              setDeleteTarget(null)
-            }
+            onClick={() => setDeleteTarget(null)}
             disabled={deleting}
+            sx={{
+              color: "#315E88",
+              fontWeight: 800,
+            }}
           >
             إلغاء
           </Button>
@@ -944,10 +895,12 @@ const SchoolManagersList = () => {
             variant="contained"
             onClick={handleDelete}
             disabled={deleting}
+            sx={{
+              borderRadius: "10px",
+              boxShadow: "none",
+            }}
           >
-            {deleting
-              ? "جاري الحذف..."
-              : "حذف"}
+            {deleting ? "جاري الحذف..." : "حذف"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -955,41 +908,61 @@ const SchoolManagersList = () => {
   );
 };
 
-const StatCard = ({
-  label,
-  value,
-}) => (
-  <Paper
-    elevation={0}
+const StatCard = ({ label, value, icon }) => (
+  <Box
     sx={{
-      p: 1.7,
-      borderRadius: "17px",
-      border:
-        "1px solid #DED8CD",
+      minHeight: 98,
+      px: 2,
+      py: 1.65,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 1.4,
+      borderRadius: "16px",
+      border: "1px solid #DED8CD",
       bgcolor: "#FFFFFF",
+      boxShadow: "0 6px 18px rgba(18,47,77,0.025)",
     }}
   >
-    <Typography
-      sx={{
-        color: "#7E8791",
-        fontSize: "11px",
-        fontWeight: 700,
-      }}
-    >
-      {label}
-    </Typography>
+    <Box>
+      <Typography
+        sx={{
+          color: "#7E8791",
+          fontSize: "11px",
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </Typography>
 
-    <Typography
+      <Typography
+        sx={{
+          mt: 0.4,
+          color: "#122F4D",
+          fontSize: "22px",
+          fontWeight: 900,
+        }}
+      >
+        {value}
+      </Typography>
+    </Box>
+
+    <Box
       sx={{
-        mt: 0.45,
-        color: "#122F4D",
-        fontSize: "23px",
-        fontWeight: 900,
+        width: 48,
+        height: 48,
+        flexShrink: 0,
+        display: "grid",
+        placeItems: "center",
+        borderRadius: "13px",
+        color: "#B78430",
+        bgcolor: "#FBF0D8",
+        "& svg": { fontSize: 25 },
       }}
     >
-      {value}
-    </Typography>
-  </Paper>
+      {icon}
+    </Box>
+  </Box>
 );
 
 export default SchoolManagersList;

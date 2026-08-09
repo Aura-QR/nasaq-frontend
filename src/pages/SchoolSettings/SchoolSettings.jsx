@@ -156,7 +156,7 @@ const SchoolSettings = () => {
 
       
 
-        const settings =
+        const settings =    
           extractSettings(response);
 
         const defaultPassingGrade =
