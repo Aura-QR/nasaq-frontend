@@ -234,7 +234,7 @@ const AdditionalFeesListPage = () => {
           />
 
           <StatCard
-            label="على كل الطلاب"
+            label="الرسوم العامة"
             value={
               allStudentsCount
             }

@@ -26,7 +26,7 @@ import {
 } from "react";
 
 import { CSVLink } from "react-csv";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
@@ -34,10 +34,12 @@ import Table from "@/components/Table/Table";
 import SelectFilter from "@/components/Filters/SelectFilter";
 import PaginationControls from "@/components/Pagination";
 
-import { useGrdaesCriterion } from "@/utils/hooks/apis/useGradesCriterion";
 import { useSubjects } from "@/utils/hooks/apis/useSubjects";
 import usePermissions from "@/utils/hooks/usePermissions";
-import { deleteGradesCriteria } from "@/APIs/school/gradesCriteria";
+import {
+  deleteGradesCriteria,
+  fetchGradesCriteria,
+} from "@/APIs/school/gradesCriteria";
 import { fetchAcademicYears } from "@/APIs/school/academicYears";
 import { api } from "@/APIs/Axios";
 
@@ -403,8 +405,26 @@ const mapCriteria = (
   });
 
 const List = () => {
+  const location =
+    useLocation();
+
   const [items, setItems] =
     useState([]);
+
+  const [
+    gradesCriterion,
+    setGradesCriterion,
+  ] = useState([]);
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(false);
+
+  const [
+    pagination,
+    setPagination,
+  ] = useState(null);
 
   const [page, setPage] =
     useState(1);
@@ -465,13 +485,89 @@ const List = () => {
     ]
   );
 
-  const {
-    gradesCriterion,
-    loading,
-    pagination,
-  } = useGrdaesCriterion(
-    filters
-  );
+  /*
+   * مهم:
+   * لا نعتمد على cache خاص بالـhook هنا.
+   * بعد Edit/Add نطلب القائمة من الـAPI من جديد حتى تظهر
+   * آخر القيم مباشرة في الـList.
+   */
+  useEffect(() => {
+    let active = true;
+
+    const loadGradesCriteria =
+      async () => {
+        setLoading(true);
+
+        try {
+          const response =
+            await fetchGradesCriteria(
+              filters
+            );
+
+          if (!active) {
+            return;
+          }
+
+          if (
+            response?.status === false
+          ) {
+            setGradesCriterion([]);
+            setPagination(null);
+
+            toast.error(
+              response?.message ||
+                "تعذر تحميل توزيعات الدرجات"
+            );
+            return;
+          }
+
+          setGradesCriterion(
+            getResponseList(
+              response
+            )
+          );
+
+          const nextPagination =
+            response?.pagination ||
+            response?.data?.pagination ||
+            null;
+
+          setPagination(
+            nextPagination
+          );
+
+          setLocalPagination(
+            nextPagination
+          );
+        } catch (error) {
+          if (!active) {
+            return;
+          }
+
+          setGradesCriterion([]);
+          setPagination(null);
+
+          toast.error(
+            error?.response?.data
+              ?.message ||
+              "تعذر تحميل توزيعات الدرجات"
+          );
+        } finally {
+          if (active) {
+            setLoading(false);
+          }
+        }
+      };
+
+    loadGradesCriteria();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    filters,
+    location.key,
+  ]);
 
   const {
     subjects = [],
@@ -963,6 +1059,15 @@ const List = () => {
 
       toast.success(
         "تم حذف توزيع الدرجات بنجاح"
+      );
+
+      setGradesCriterion(
+        (previousItems) =>
+          previousItems.filter(
+            (item) =>
+              (item?._id ||
+                item?.id) !== id
+          )
       );
 
       setItems(

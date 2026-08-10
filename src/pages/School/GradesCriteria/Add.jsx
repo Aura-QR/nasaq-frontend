@@ -15,6 +15,7 @@ import {
 import {
   AssessmentRounded,
   CloseRounded,
+  EditRounded,
   SaveRounded,
   SchoolRounded,
 } from "@mui/icons-material";
@@ -36,7 +37,10 @@ import Container from "@/components/Container/Container";
 import Back from "@/components/Back/Back";
 import Input from "@/components/Input/Input";
 
-import { addGradesCriteria } from "@/APIs/school/gradesCriteria";
+import {
+  addGradesCriteria,
+  fetchGradesCriteria,
+} from "@/APIs/school/gradesCriteria";
 import { fetchAcademicYears } from "@/APIs/school/academicYears";
 import { api } from "@/APIs/Axios";
 
@@ -51,6 +55,51 @@ const normalizeId = (value) => {
 
   return String(value || "").trim();
 };
+
+const getCriteriaId = (criteria) =>
+  normalizeId(
+    criteria?._id ||
+    criteria?.id
+  );
+
+const getCriteriaSubjectId = (criteria) =>
+  normalizeId(
+    criteria?.subjectId ||
+    criteria?.subject ||
+    criteria?.subjectOffering
+      ?.subjectId ||
+    criteria?.subjectOffering
+      ?.subject ||
+    (
+      criteria?.subjectOfferingId &&
+      typeof criteria.subjectOfferingId === "object"
+        ? criteria.subjectOfferingId
+            ?.subjectId
+        : ""
+    )
+  );
+
+const getCriteriaAcademicYearId = (criteria) =>
+  normalizeId(
+    criteria?.academicYearId ||
+    (
+      criteria?.academicYear &&
+      typeof criteria.academicYear === "object"
+        ? criteria.academicYear
+        : ""
+    ) ||
+    criteria?.subjectOffering
+      ?.academicYearId ||
+    (
+      criteria?.subjectOfferingId &&
+      typeof criteria.subjectOfferingId === "object"
+        ? criteria.subjectOfferingId
+            ?.academicYearId
+        : ""
+    )
+  );
+
+
 
 const getResponseList = (response) => {
   const payload =
@@ -464,6 +513,16 @@ const Add = () => {
     useState(false);
 
   const [
+    checkingExisting,
+    setCheckingExisting,
+  ] = useState(false);
+
+  const [
+    existingCriteria,
+    setExistingCriteria,
+  ] = useState(null);
+
+  const [
     academicYears,
     setAcademicYears,
   ] = useState([]);
@@ -520,6 +579,7 @@ const Add = () => {
 
     const loadSubjects =
       async () => {
+        setLoadingSubjects(true);
         setSubjectsError("");
 
         const requests =
@@ -567,6 +627,7 @@ const Add = () => {
           );
 
         setCatalogSubjects(mapped);
+        setAvailableSubjects(mapped);
 
         if (
           mapped.length === 0
@@ -591,10 +652,11 @@ const Add = () => {
 
           setSubjectsError(
             rejected[0] ||
-            "لم يتم العثور على مواد دراسية. تأكد من وجود مواد في إدارة المواد."
+            "لم يتم العثور على مواد دراسية. أضف المواد أولاً من إدارة المواد."
           );
         }
 
+        setLoadingSubjects(false);
       };
 
     loadSubjects();
@@ -605,266 +667,45 @@ const Add = () => {
   }, []);
 
   const selectedAcademicYearId =
-    watch("academicYearId");
+    normalizeId(
+      watch("academicYearId")
+    );
+
+  const selectedSubjectId =
+    normalizeId(
+      watch("subjectId")
+    );
 
   useEffect(() => {
-    let active = true;
+    if (
+      catalogSubjects.length === 0
+    ) {
+      return;
+    }
 
-    const loadAvailableSubjects =
-      async () => {
-        const academicYearId =
+    if (
+      querySubjectId &&
+      catalogSubjects.some(
+        (subject) =>
+          subject.id ===
           normalizeId(
-            selectedAcademicYearId
-          );
-
-        setValue(
-          "subjectId",
-          "",
-          {
-            shouldDirty: false,
-            shouldTouch: false,
-            shouldValidate: false,
-          }
-        );
-
-        setAvailableSubjects([]);
-        setSubjectsError("");
-
-        if (!academicYearId) {
-          return;
+            querySubjectId
+          )
+      )
+    ) {
+      setValue(
+        "subjectId",
+        normalizeId(
+          querySubjectId
+        ),
+        {
+          shouldDirty: false,
+          shouldTouch: false,
+          shouldValidate: false,
         }
-
-        setLoadingSubjects(true);
-
-        try {
-          let termsResponse;
-
-          try {
-            termsResponse =
-              await api.get(
-                `/terms/by-year/${academicYearId}`
-              );
-          } catch (error) {
-            termsResponse =
-              await api.get(
-                "/terms",
-                {
-                  params: {
-                    academicYearId,
-                  },
-                }
-              );
-          }
-
-          if (!active) {
-            return;
-          }
-
-          const terms =
-            findFirstArray(
-              termsResponse
-            );
-
-          if (
-            terms.length === 0
-          ) {
-            setAvailableSubjects([]);
-            setSubjectsError(
-              "لا توجد فصول دراسية (Terms) لهذه السنة. أنشئ الترمات أولاً."
-            );
-            return;
-          }
-
-          const offeringRequests =
-            await Promise.allSettled(
-              terms
-                .map(normalizeId)
-                .filter(Boolean)
-                .map(
-                  async (termId) => {
-                    try {
-                      return await api.get(
-                        `/subject-offerings/by-term/${termId}`
-                      );
-                    } catch (error) {
-                      return await api.get(
-                        "/subject-offerings",
-                        {
-                          params: {
-                            termId,
-                          },
-                        }
-                      );
-                    }
-                  }
-                )
-            );
-
-          if (!active) {
-            return;
-          }
-
-          const offerings = [];
-
-          offeringRequests.forEach(
-            (result) => {
-              if (
-                result.status ===
-                "fulfilled"
-              ) {
-                offerings.push(
-                  ...findFirstArray(
-                    result.value
-                  )
-                );
-              }
-            }
-          );
-
-          const catalogMap =
-            new Map(
-              catalogSubjects.map(
-                (subject) => [
-                  subject.id,
-                  subject,
-                ]
-              )
-            );
-
-          const subjectMap =
-            new Map();
-
-          offerings.forEach(
-            (offering) => {
-              const subjectValue =
-                offering?.subjectId ||
-                offering?.subject;
-
-              const subjectId =
-                normalizeId(
-                  subjectValue
-                );
-
-              if (!subjectId) {
-                return;
-              }
-
-              const directSubject =
-                subjectValue &&
-                typeof subjectValue ===
-                  "object"
-                  ? subjectValue
-                  : null;
-
-              const catalogSubject =
-                catalogMap.get(
-                  subjectId
-                );
-
-              const mapped =
-                mapSubjectOption(
-                  directSubject ||
-                    catalogSubject ||
-                    {
-                      _id: subjectId,
-                      id: subjectId,
-                      subjectName:
-                        offering?.subjectName ||
-                        offering?.name ||
-                        "مادة",
-                      subjectCode:
-                        offering?.subjectCode ||
-                        offering?.code ||
-                        "",
-                    }
-                );
-
-              if (
-                mapped &&
-                !subjectMap.has(
-                  subjectId
-                )
-              ) {
-                subjectMap.set(
-                  subjectId,
-                  mapped
-                );
-              }
-            }
-          );
-
-          const nextSubjects =
-            Array.from(
-              subjectMap.values()
-            );
-
-          setAvailableSubjects(
-            nextSubjects
-          );
-
-          if (
-            nextSubjects.length ===
-            0
-          ) {
-            setSubjectsError(
-              "لا توجد مواد مفعّلة لهذه السنة الدراسية. أنشئ عروض المواد (Subject Offerings) أولاً."
-            );
-            return;
-          }
-
-          if (
-            querySubjectId &&
-            nextSubjects.some(
-              (subject) =>
-                subject.id ===
-                normalizeId(
-                  querySubjectId
-                )
-            )
-          ) {
-            setValue(
-              "subjectId",
-              normalizeId(
-                querySubjectId
-              ),
-              {
-                shouldDirty: false,
-                shouldTouch: false,
-                shouldValidate: false,
-              }
-            );
-          }
-        } catch (error) {
-          if (!active) {
-            return;
-          }
-
-          setAvailableSubjects(
-            []
-          );
-
-          setSubjectsError(
-            error?.response?.data
-              ?.message ||
-              error?.message ||
-              "تعذر تحميل المواد المفعّلة لهذه السنة"
-          );
-        } finally {
-          if (active) {
-            setLoadingSubjects(
-              false
-            );
-          }
-        }
-      };
-
-    loadAvailableSubjects();
-
-    return () => {
-      active = false;
-    };
+      );
+    }
   }, [
-    selectedAcademicYearId,
     catalogSubjects,
     querySubjectId,
     setValue,
@@ -963,6 +804,145 @@ const Add = () => {
     setValue,
   ]);
 
+  useEffect(() => {
+    if (
+      !selectedAcademicYearId ||
+      !selectedSubjectId
+    ) {
+      setExistingCriteria(null);
+      setCheckingExisting(false);
+      return;
+    }
+
+    let active = true;
+
+    const checkExistingCriteria =
+      async () => {
+        setCheckingExisting(true);
+        setExistingCriteria(null);
+
+        try {
+          let response =
+            await fetchGradesCriteria({
+              subjectId:
+                selectedSubjectId,
+              academicYearId:
+                selectedAcademicYearId,
+              page: 1,
+              limit: 1000,
+            });
+
+          if (!active) {
+            return;
+          }
+
+          let list =
+            response?.status === false
+              ? []
+              : findFirstArray(response);
+
+          let matched =
+            list.find((criteria) => {
+              const subjectId =
+                getCriteriaSubjectId(
+                  criteria
+                );
+
+              const academicYearId =
+                getCriteriaAcademicYearId(
+                  criteria
+                );
+
+              return (
+                subjectId ===
+                  selectedSubjectId &&
+                (
+                  !academicYearId ||
+                  academicYearId ===
+                    selectedAcademicYearId
+                )
+              );
+            });
+
+          /*
+           * دعم السجلات القديمة التي قد لا تظهر عند استخدام
+           * filters الحديثة لأنها محفوظة بـ subjectOfferingId.
+           */
+          if (!matched) {
+            const fallbackResponse =
+              await fetchGradesCriteria({
+                page: 1,
+                limit: 1000,
+              });
+
+            if (!active) {
+              return;
+            }
+
+            if (
+              fallbackResponse?.status !==
+              false
+            ) {
+              list =
+                findFirstArray(
+                  fallbackResponse
+                );
+
+              matched =
+                list.find(
+                  (criteria) => {
+                    const subjectId =
+                      getCriteriaSubjectId(
+                        criteria
+                      );
+
+                    const academicYearId =
+                      getCriteriaAcademicYearId(
+                        criteria
+                      );
+
+                    return (
+                      subjectId ===
+                        selectedSubjectId &&
+                      (
+                        !academicYearId ||
+                        academicYearId ===
+                          selectedAcademicYearId
+                      )
+                    );
+                  }
+                );
+            }
+          }
+
+          setExistingCriteria(
+            matched || null
+          );
+        } catch {
+          /*
+           * فشل check المسبق لا يمنع المستخدم من العمل.
+           * الـBackend يظل هو مصدر الحماية النهائي من التكرار.
+           */
+          if (active) {
+            setExistingCriteria(null);
+          }
+        } finally {
+          if (active) {
+            setCheckingExisting(false);
+          }
+        }
+      };
+
+    checkExistingCriteria();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    selectedAcademicYearId,
+    selectedSubjectId,
+  ]);
+
   const watchedValues =
     watch();
 
@@ -981,6 +961,13 @@ const Add = () => {
   const onSubmit = async (
     formData
   ) => {
+    if (existingCriteria) {
+      toast.info(
+        "يوجد توزيع درجات لهذه المادة والسنة بالفعل"
+      );
+      return;
+    }
+
     if (!isTotalValid) {
       toast.error(
         "يجب أن يكون مجموع الدرجات 100 درجة"
@@ -1028,16 +1015,16 @@ const Add = () => {
       return;
     }
 
-    const isAvailableSubject =
-      availableSubjects.some(
+    const subjectExists =
+      catalogSubjects.some(
         (subject) =>
           subject.id ===
           subjectId
       );
 
-    if (!isAvailableSubject) {
+    if (!subjectExists) {
       toast.error(
-        "هذه المادة غير مفعّلة في السنة الدراسية المختارة. اختر مادة من القائمة المتاحة."
+        "المادة المختارة غير موجودة في قائمة مواد المدرسة"
       );
       return;
     }
@@ -1090,12 +1077,24 @@ const Add = () => {
         );
 
       if (!response?.status) {
-        toast.error(
+        const message =
           getErrorMessage(
             response,
             "حدث خطأ أثناء إضافة توزيع الدرجات"
+          );
+
+        if (
+          /موجودة بالفعل|مكرر|duplicate|already exists/i.test(
+            String(message)
           )
-        );
+        ) {
+          toast.info(
+            "يوجد توزيع درجات لهذه المادة والسنة بالفعل"
+          );
+        } else {
+          toast.error(message);
+        }
+
         return;
       }
 
@@ -1182,9 +1181,9 @@ const Add = () => {
                 lineHeight: 1.6,
               }}
             >
-              اختر المادة والسنة ثم
-              وزّع 100 درجة على
-              البنود.
+              اختر السنة والمادة من
+              بيانات المدرسة ثم وزّع
+              100 درجة على البنود.
             </Typography>
           </Stack>
         </Paper>
@@ -1198,7 +1197,7 @@ const Add = () => {
               <SchoolRounded />
             }
             title="المادة والسنة الدراسية"
-            description="اختر السنة أولاً، ثم حدّد المادة المفعّلة عليها لإضافة توزيع الدرجات."
+            description="اختر السنة الدراسية والمادة من قائمة مواد المدرسة، ثم حدّد توزيع الدرجات."
           />
 
           <Grid
@@ -1236,15 +1235,6 @@ const Add = () => {
                     }
                   );
 
-                  setValue(
-                    "subjectId",
-                    "",
-                    {
-                      shouldDirty: true,
-                      shouldTouch: false,
-                      shouldValidate: false,
-                    }
-                  );
                 }}
                 disabled={
                   loadingAcademicYears
@@ -1320,7 +1310,6 @@ const Add = () => {
                 }}
                 disabled={
                   loadingSubjects ||
-                  !selectedAcademicYearId ||
                   availableSubjects.length === 0
                 }
                 error={
@@ -1333,11 +1322,11 @@ const Add = () => {
                   errors
                     .subjectId
                     ?.message ||
-                  (!selectedAcademicYearId
-                    ? "اختر السنة الدراسية أولاً لعرض المواد المتاحة"
+                  (loadingSubjects
+                    ? "جاري تحميل مواد المدرسة..."
                     : availableSubjects.length > 0
-                    ? `${availableSubjects.length} مادة متاحة في هذه السنة`
-                    : "")
+                    ? `${availableSubjects.length} مادة متاحة في المدرسة`
+                    : "لا توجد مواد دراسية متاحة")
                 }
                 SelectProps={{
                   MenuProps: {
@@ -1353,9 +1342,7 @@ const Add = () => {
                 }}
               >
                 <MenuItem value="">
-                  {selectedAcademicYearId
-                    ? "اختر المادة"
-                    : "اختر السنة الدراسية أولاً"}
+                  اختر المادة
                 </MenuItem>
 
                 {availableSubjects.map(
@@ -1397,7 +1384,7 @@ const Add = () => {
                         "9.5px",
                     }}
                   >
-                    جاري تحميل المواد المفعّلة لهذه السنة...
+                    جاري تحميل مواد المدرسة...
                   </Typography>
                 </Stack>
               )}
@@ -1431,6 +1418,101 @@ const Add = () => {
                 )}
             </Grid>
           </Grid>
+
+          {checkingExisting && (
+            <Stack
+              direction="row"
+              alignItems="center"
+              gap={0.8}
+              sx={{
+                mt: 1.2,
+                px: 0.4,
+                color:
+                  "var(--color-muted)",
+              }}
+            >
+              <CircularProgress
+                size={14}
+                thickness={5}
+              />
+              <Typography
+                sx={{
+                  fontSize: "10px",
+                  fontWeight: 700,
+                }}
+              >
+                جاري التحقق من وجود توزيع درجات سابق...
+              </Typography>
+            </Stack>
+          )}
+
+          {!checkingExisting &&
+            existingCriteria && (
+              <Alert
+                severity="info"
+                sx={{
+                  mt: 1.25,
+                  borderRadius: "14px",
+                  alignItems: "center",
+                  "& .MuiAlert-message": {
+                    width: "100%",
+                  },
+                }}
+                action={
+                  getCriteriaId(
+                    existingCriteria
+                  ) ? (
+                    <Button
+                      type="button"
+                      size="small"
+                      variant="contained"
+                      startIcon={
+                        <EditRounded />
+                      }
+                      onClick={() =>
+                        navigate(
+                          `/school/gradesCriteria/edit/${getCriteriaId(
+                            existingCriteria
+                          )}`
+                        )
+                      }
+                      sx={{
+                        minHeight: 34,
+                        borderRadius:
+                          "10px",
+                        fontWeight: 800,
+                        textTransform:
+                          "none",
+                      }}
+                    >
+                      تعديل التوزيع الحالي
+                    </Button>
+                  ) : null
+                }
+              >
+                <Typography
+                  sx={{
+                    fontSize: "11px",
+                    fontWeight: 900,
+                    color:
+                      "var(--color-navy-deep)",
+                  }}
+                >
+                  يوجد توزيع درجات لهذه المادة والسنة بالفعل
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.2,
+                    fontSize: "9.5px",
+                    color:
+                      "var(--color-muted)",
+                  }}
+                >
+                  لا يمكن إنشاء توزيع جديد لنفس المادة والسنة. يمكنك تعديل التوزيع الحالي بدلًا من ذلك.
+                </Typography>
+              </Alert>
+            )}
         </Paper>
 
         <Paper
@@ -1503,6 +1585,10 @@ const Add = () => {
               type="submit"
               disabled={
                 loading ||
+                checkingExisting ||
+                Boolean(
+                  existingCriteria
+                ) ||
                 !isTotalValid
               }
               variant="contained"
@@ -1541,6 +1627,10 @@ const Add = () => {
             >
               {loading
                 ? "جاري الحفظ..."
+                : checkingExisting
+                ? "جاري التحقق..."
+                : existingCriteria
+                ? "التوزيع موجود بالفعل"
                 : "حفظ توزيع الدرجات"}
             </Button>
 

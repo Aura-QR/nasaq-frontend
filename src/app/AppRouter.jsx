@@ -35,6 +35,7 @@ import SchoolManagersList from "@/pages/SchoolManagers/List";
 import SchoolManagerAdd from "@/pages/SchoolManagers/Add";
 import SubjectOfferings from "@/pages/SubjectOfferings/SubjectOfferings";
 import SchoolSettings from "@/pages/SchoolSettings/SchoolSettings";
+import SchoolDashboard from "@/pages/SchoolDashboard/SchoolDashboard";
 
 import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
 
@@ -166,12 +167,7 @@ const AppRouter = () => {
         >
           <Route
             path="/school/dashboard"
-            element={
-              <Navigate
-                to="/users/students"
-                replace
-              />
-            }
+            element={<SchoolDashboard />}
           />
 
           <Route

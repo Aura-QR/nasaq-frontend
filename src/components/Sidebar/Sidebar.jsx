@@ -12,6 +12,12 @@ import {
   AutoStoriesRounded,
   CalendarMonthRounded,
   Category as CategoryIcon,
+  DashboardRounded,
+  GroupsRounded,
+  HowToRegRounded,
+  FactCheckRounded,
+  AssignmentTurnedInRounded,
+  AccountCircleRounded,
   DirectionsBus,
   ExpandLess,
   ExpandMore,
@@ -19,8 +25,8 @@ import {
   LocalOffer,
   Logout,
   ManageAccountsRounded,
+  PersonAddAlt1Rounded,
   MoneyOff,
-  PostAddRounded,
   ReceiptLong,
   Route,
   SchoolRounded,
@@ -121,7 +127,7 @@ const ROLE_LABELS = {
   SUPER_ADMIN: "مدير المنصة",
 };
 
-const Sidebar = ({ active }) => {
+const Sidebar = ({ active, setActive }) => {
   /*
    * نظام الصلاحيات الجديد يخزن الصلاحيات كمصفوفة:
    * ["school.students.read", ...]
@@ -208,6 +214,18 @@ const Sidebar = ({ active }) => {
 
   const categories = useMemo(() => {
     const baseCategories = [
+      {
+        title: "الرئيسية",
+        items: [
+          {
+            name: "لوحة التحكم",
+            Icon: DashboardRounded,
+            iconType: "mui",
+            to: "/school/dashboard",
+            show: !isTeacher,
+          },
+        ],
+      },
       {
         title: "الأفراد",
         items: [
@@ -361,13 +379,6 @@ const Sidebar = ({ active }) => {
             show: financialPermissions.read,
           },
           {
-            name: "الرسوم الإضافية",
-            Icon: PostAddRounded,
-            iconType: "mui",
-            to: "/financial/additional-fees",
-            show: financialPermissions.read,
-          },
-          {
             name: "الباص",
             Icon: DirectionsBus,
             iconType: "mui",
@@ -426,26 +437,198 @@ const Sidebar = ({ active }) => {
     ];
 
     if (isTeacher) {
-      baseCategories.push({
-        title: "المعلم",
-        items: [
-          {
-            name: "جدولي",
-            icon: scheduleIcon,
-            to: `/users/teachers/${userId}/schedule`,
-            show: true,
-          },
-        ],
-      });
+      /*
+       * المعلم يستخدم نفس هيكل لوحة الإدارة، لكن كل رابط
+       * إداري يظهر فقط عند وجود الصلاحية الفعلية في الجلسة.
+       * مهام المعلم الشخصية تظل متاحة دائمًا عبر /teacher/*.
+       */
+      return [
+        {
+          title: "الرئيسية",
+          items: [
+            {
+              name: "لوحة التحكم",
+              Icon: DashboardRounded,
+              iconType: "mui",
+              to: "/teacher/dashboard",
+              show: true,
+            },
+            {
+              name: "جدولي الدراسي",
+              icon: scheduleIcon,
+              to: "/teacher/schedule",
+              show: true,
+            },
+            {
+              name: "فصولي وطلابي",
+              Icon: GroupsRounded,
+              iconType: "mui",
+              to: "/teacher/classes",
+              show: true,
+            },
+          ],
+        },
+        {
+          title: "الأفراد",
+          items: [
+            {
+              name: "إدارة الطلاب",
+              icon: userIcon,
+              // صفحة الطلاب الخاصة بالمعلم تعرض طلاب فصوله فقط.
+              to: "/teacher/students",
+              show: studentsPermissions.read,
+            },
+            {
+              name: "إضافة طالب",
+              Icon: PersonAddAlt1Rounded,
+              iconType: "mui",
+              to: "/users/students/add",
+              show: studentsPermissions.add,
+            },
+            {
+              name: "إدارة المعلمين",
+              icon: teacherIcon,
+              to: "/users/teachers",
+              show: teachersPermissions.read,
+            },
+          ],
+        },
+        {
+          title: "الإدارة الأكاديمية",
+          items: [
+            {
+              name: "إدارة المواد",
+              icon: subjectIcon,
+              to: "/school/subjects",
+              show: subjectsPermissions.read,
+            },
+            {
+              name: "عروض المواد",
+              Icon: AutoStoriesRounded,
+              iconType: "mui",
+              to: "/subject-offerings",
+              show:
+                subjectOfferingsPermissions.read ||
+                subjectsPermissions.read,
+            },
+            {
+              name: "إدارة الفصول",
+              icon: userIcon,
+              // نستخدم صفحة فصول المعلم بدل صفحة الإدارة العامة.
+              to: "/teacher/classes",
+              show: classesPermissions.read,
+            },
+            {
+              name: "إدارة الحصص",
+              icon: lectureIcon,
+              // مسار مستقل للحصص داخل بوابة المعلم.
+              to: "/teacher/lectures",
+              show: lecturesPermissions.read,
+            },
+          ],
+        },
+        {
+          title: "التقييم والاختبارات",
+          items: [
+            {
+              name: "اختباراتي",
+              icon: examsIcon,
+              to: "/teacher/exams",
+              show: true,
+            },
+            {
+              name: "تصحيح الاختبارات",
+              Icon: FactCheckRounded,
+              iconType: "mui",
+              to: "/teacher/grading/exams",
+              show: true,
+            },
+            {
+              name: "مشروعاتي",
+              icon: projectsIcon,
+              to: "/teacher/projects",
+              show: true,
+            },
+            {
+              name: "تصحيح المشروعات",
+              Icon: AssignmentTurnedInRounded,
+              iconType: "mui",
+              to: "/teacher/grading/projects",
+              show: true,
+            },
+            {
+              name: "توزيع الدرجات",
+              icon: gradesCriteriaIcon,
+              to: "/school/gradesCriteria",
+              show: gradesCriteriaPermissions.read,
+            },
+          ],
+        },
+        {
+          title: "الخدمات والمتابعة",
+          items: [
+            {
+              name: "تسجيل الحضور",
+              Icon: HowToRegRounded,
+              iconType: "mui",
+              to: "/teacher/attendance",
+              show: true,
+            },
+            {
+              name: "تحضيراتي",
+              icon: preparationIcon,
+              to: "/teacher/preparations",
+              show: true,
+            },
+            {
+              name: "المكتبة",
+              icon: booksIcon,
+              to: "/teacher/library",
+              show: true,
+            },
+          ],
+        },
+        {
+          title: "الماليات والحسابات",
+          items: [
+            {
+              name: "السجلات المالية",
+              Icon: FolderCopyOutlined,
+              iconType: "mui",
+              to: "/financial/all-records",
+              show: financialPermissions.read,
+            },
+            {
+              name: "مصاريف الطلاب",
+              Icon: AccountBalanceWallet,
+              iconType: "mui",
+              to: "/financial/records",
+              show: financialPermissions.read,
+            },
+          ],
+        },
+        {
+          title: "الحساب",
+          items: [
+            {
+              name: "حسابي",
+              Icon: AccountCircleRounded,
+              iconType: "mui",
+              to: "/teacher/profile",
+              show: true,
+            },
+          ],
+        },
+      ];
     }
 
     return baseCategories;
   }, [
     isTeacher,
-    userId,
     canManageAcademicYears,
     canManageSchoolSettings,
     studentsPermissions.read,
+    studentsPermissions.add,
     teachersPermissions.read,
     subjectsPermissions.read,
     subjectOfferingsPermissions.read,
@@ -505,8 +688,12 @@ const Sidebar = ({ active }) => {
           />
 
           <div>
-            <strong>لوحة الإدارة</strong>
-            <small>نَسّق لإدارة المنصة</small>
+            <strong>{isTeacher ? "بوابة المعلم" : "لوحة الإدارة"}</strong>
+            <small>
+              {isTeacher
+                ? "لوحتك التعليمية بصلاحيات المعلم"
+                : "نَسّق لإدارة المنصة"}
+            </small>
           </div>
         </div>
 
@@ -517,6 +704,7 @@ const Sidebar = ({ active }) => {
                 key={category.title}
                 category={category}
                 pathname={location.pathname}
+                setActive={setActive}
               />
             ))}
           </Stack>
@@ -550,7 +738,7 @@ const Sidebar = ({ active }) => {
   );
 };
 
-const Category = ({ category, pathname }) => {
+const Category = ({ category, pathname, setActive }) => {
   const visibleItems = category.items.filter(
     (item) => item.show
   );
@@ -606,7 +794,7 @@ const Category = ({ category, pathname }) => {
       <Collapse in={open}>
         <Stack spacing={0.7} mt={0.8}>
           {visibleItems.map((item) => (
-            <Item key={item.to} element={item} />
+            <Item key={item.to} element={item} setActive={setActive} />
           ))}
         </Stack>
       </Collapse>
@@ -614,7 +802,7 @@ const Category = ({ category, pathname }) => {
   );
 };
 
-const Item = ({ element }) => {
+const Item = ({ element, setActive }) => {
   const [hovered, setHovered] =
     useState(false);
   const IconComponent = element.Icon;
@@ -627,6 +815,11 @@ const Item = ({ element }) => {
       }
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={() => {
+        if (window.innerWidth < 769) {
+          setActive?.(false);
+        }
+      }}
     >
       <span className="item-icon">
         {element.iconType === "mui" &&

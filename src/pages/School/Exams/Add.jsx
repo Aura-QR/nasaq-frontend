@@ -46,6 +46,8 @@ import { fetchGradesCriteria } from "@/APIs/school/gradesCriteria";
 import { fetchAcademicYears } from "@/APIs/school/academicYears";
 import { fetchTermsByAcademicYear } from "@/APIs/school/lectures";
 import { fetchSubjectOfferings } from "@/APIs/school/subjectOfferings";
+import { fetchSubjects } from "@/APIs/school/subjects";
+import { fetchGradeLevels } from "@/APIs/school/gradeLevels";
 import { getSchoolClasses } from "@/APIs/school/classes";
 
 import MCQExams from "@/utils/constants/MCQExams";
@@ -107,6 +109,22 @@ const normalizeId = (value) => {
   ).trim();
 };
 
+const getArray = (value) => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (
+    value === undefined ||
+    value === null ||
+    value === ""
+  ) {
+    return [];
+  }
+
+  return [value];
+};
+
 const extractList = (value) => {
   let current = value;
 
@@ -147,7 +165,10 @@ const extractList = (value) => {
     "academicYears",
     "years",
     "terms",
+    "gradeLevels",
+    "grades",
     "classes",
+    "subjects",
     "offerings",
     "subjectOfferings",
   ]) {
@@ -222,6 +243,59 @@ const mapSubjectFromOffering = (
   };
 };
 
+const mapGradeLevel = (item) => ({
+  id: normalizeId(item),
+  name:
+    item?.name ||
+    item?.label ||
+    item?.title ||
+    item?.gradeName ||
+    "صف دراسي",
+  order: Number(item?.order || 0),
+});
+
+const mapCatalogSubject = (item) => {
+  const id = normalizeId(item);
+
+  const name =
+    item?.subjectName ||
+    item?.name ||
+    item?.label ||
+    "مادة";
+
+  const code =
+    item?.subjectCode ||
+    item?.code ||
+    "";
+
+  return {
+    id,
+    name: code
+      ? `${name} - ${code}`
+      : name,
+  };
+};
+
+const localizeFieldError = (message) => {
+  if (!message) {
+    return "";
+  }
+
+  const normalized =
+    String(message).trim();
+
+  if (
+    normalized ===
+      "This Field Is Required" ||
+    normalized.toLowerCase() ===
+      "this field is required"
+  ) {
+    return "هذا الحقل مطلوب";
+  }
+
+  return normalized;
+};
+
 const mapClass = (item) => {
   const id = normalizeId(item);
 
@@ -263,70 +337,125 @@ const criteriaMatchesSelection = (
     subjectId,
     academicYearId,
     termId,
+    gradeLevelId,
     yearTermIds,
   }
 ) => {
   const offering =
     criteria?.subjectOffering ||
-    criteria?.subjectOfferingId;
+    (
+      criteria?.subjectOfferingId &&
+      typeof criteria.subjectOfferingId === "object"
+        ? criteria.subjectOfferingId
+        : null
+    );
 
   const criteriaSubjectId =
     normalizeId(
-      offering?.subjectId ||
-      offering?.subject ||
       criteria?.subjectId ||
-      criteria?.subject
+      criteria?.subject ||
+      offering?.subjectId ||
+      offering?.subject
     );
 
   if (
-    criteriaSubjectId &&
+    !criteriaSubjectId ||
     criteriaSubjectId !== subjectId
   ) {
     return false;
   }
 
-  const criteriaTermId =
-    normalizeId(
-      offering?.termId ||
-      offering?.term ||
-      criteria?.termId
-    );
-
-  if (
-    termId &&
-    criteriaTermId
-  ) {
-    return (
-      criteriaSubjectId === subjectId &&
-      criteriaTermId === termId
-    );
-  }
-
   const criteriaYearId =
     normalizeId(
       criteria?.academicYearId ||
-      criteria?.academicYear
+      (
+        criteria?.academicYear &&
+        typeof criteria.academicYear === "object"
+          ? criteria.academicYear
+          : ""
+      ) ||
+      offering?.academicYearId
     );
 
+  const criteriaTermId =
+    normalizeId(
+      criteria?.termId ||
+      criteria?.term ||
+      offering?.termId ||
+      offering?.term
+    );
+
+  const criteriaGradeLevelId =
+    normalizeId(
+      criteria?.gradeLevelId ||
+      criteria?.gradeLevel ||
+      offering?.gradeLevelId ||
+      offering?.gradeLevel
+    );
+
+  /*
+   * الشكل الجديد:
+   * Grades Criteria محفوظ بـ subjectId + academicYearId.
+   * هنا لا نشترط Subject Offering أو termId.
+   */
   if (
     criteriaYearId &&
     academicYearId
   ) {
     return (
-      criteriaSubjectId === subjectId &&
       criteriaYearId === academicYearId
     );
   }
 
-  if (
-    criteriaTermId &&
-    yearTermIds.has(
-      criteriaTermId
-    )
-  ) {
-    return (
-      criteriaSubjectId === subjectId
-    );
+  /*
+   * الشكل القديم:
+   * Grades Criteria محفوظ بـ subjectOfferingId فقط.
+   * الـSubject Offering يحمل الصف والترم، فنطابقهم مع
+   * اختيارات صفحة الاختبار.
+   */
+  if (offering) {
+    if (
+      gradeLevelId &&
+      criteriaGradeLevelId &&
+      criteriaGradeLevelId !== gradeLevelId
+    ) {
+      return false;
+    }
+
+    if (
+      termId &&
+      criteriaTermId &&
+      criteriaTermId !== termId
+    ) {
+      return false;
+    }
+
+    if (
+      termId &&
+      criteriaTermId === termId
+    ) {
+      return true;
+    }
+
+    if (
+      criteriaTermId &&
+      yearTermIds.has(
+        criteriaTermId
+      )
+    ) {
+      return true;
+    }
+
+    /*
+     * بعض الـresponses القديمة لا تعمل populate للترم
+     * ولكن تعمل populate للصف والمادة فقط.
+     */
+    if (
+      gradeLevelId &&
+      criteriaGradeLevelId === gradeLevelId
+    ) {
+      return true;
+    }
   }
 
   return false;
@@ -670,7 +799,7 @@ const GradesCriteriaStatus = ({
             fontWeight: 800,
           }}
         >
-          لا يوجد توزيع درجات لهذه المادة
+          لا يوجد توزيع درجات مطابق لهذه المادة
         </Typography>
 
         <Typography
@@ -769,6 +898,7 @@ const Add = () => {
     defaultValues: {
       academicYearId: "",
       termId: "",
+      gradeLevelId: "",
       subjectId: "",
       examType: "",
       startDate: "",
@@ -821,6 +951,11 @@ const Add = () => {
   const termId =
     normalizeId(
       watch("termId")
+    );
+
+  const gradeLevelId =
+    normalizeId(
+      watch("gradeLevelId")
     );
 
   const navigate =
@@ -889,10 +1024,16 @@ const Add = () => {
         );
 
         try {
-          const response =
+          /*
+           * أول محاولة للشكل الجديد:
+           * subjectId + academicYearId.
+           */
+          let response =
             await fetchGradesCriteria({
               subjectId,
               academicYearId,
+              page: 1,
+              limit: 1000,
             });
 
           if (!active) {
@@ -913,10 +1054,10 @@ const Add = () => {
             return;
           }
 
-          const list =
+          let list =
             extractList(response);
 
-          setGradesCriteria(
+          let matched =
             list.filter((criteria) =>
               criteriaMatchesSelection(
                 criteria,
@@ -924,10 +1065,56 @@ const Add = () => {
                   subjectId,
                   academicYearId,
                   termId,
+                  gradeLevelId,
                   yearTermIds,
                 }
               )
-            )
+            );
+
+          /*
+           * لو البحث المفلتر لم يجد شيئًا، نجلب القائمة
+           * بدون subjectId/academicYearId حتى ندعم السجلات
+           * القديمة المحفوظة بـ subjectOfferingId فقط.
+           */
+          if (matched.length === 0) {
+            const fallbackResponse =
+              await fetchGradesCriteria({
+                page: 1,
+                limit: 1000,
+              });
+
+            if (!active) {
+              return;
+            }
+
+            if (
+              fallbackResponse?.status !==
+              false
+            ) {
+              list =
+                extractList(
+                  fallbackResponse
+                );
+
+              matched =
+                list.filter(
+                  (criteria) =>
+                    criteriaMatchesSelection(
+                      criteria,
+                      {
+                        subjectId,
+                        academicYearId,
+                        termId,
+                        gradeLevelId,
+                        yearTermIds,
+                      }
+                    )
+                );
+            }
+          }
+
+          setGradesCriteria(
+            matched
           );
         } catch (error) {
           if (active) {
@@ -957,6 +1144,7 @@ const Add = () => {
     subjectId,
     academicYearId,
     termId,
+    gradeLevelId,
     yearTermIds,
   ]);
 
@@ -1015,6 +1203,11 @@ const Add = () => {
         formData.subjectId
       );
 
+    const normalizedGradeLevelId =
+      normalizeId(
+        formData.gradeLevelId
+      );
+
     const normalizedYearId =
       normalizeId(
         formData.academicYearId
@@ -1040,10 +1233,11 @@ const Add = () => {
     if (
       !normalizedYearId ||
       !normalizedTermId ||
+      !normalizedGradeLevelId ||
       !normalizedSubjectId
     ) {
       toast.error(
-        "اختر السنة والترم والمادة"
+        "اختر السنة والترم والصف والمادة"
       );
       return;
     }
@@ -1375,8 +1569,18 @@ const DataInputs = ({
     useState([]);
 
   const [
+    gradeLevels,
+    setGradeLevels,
+  ] = useState([]);
+
+  const [
     offerings,
     setOfferings,
+  ] = useState([]);
+
+  const [
+    catalogSubjects,
+    setCatalogSubjects,
   ] = useState([]);
 
   const [
@@ -1395,8 +1599,18 @@ const DataInputs = ({
   ] = useState(false);
 
   const [
+    loadingGradeLevels,
+    setLoadingGradeLevels,
+  ] = useState(false);
+
+  const [
     loadingOfferings,
     setLoadingOfferings,
+  ] = useState(false);
+
+  const [
+    loadingCatalogSubjects,
+    setLoadingCatalogSubjects,
   ] = useState(false);
 
   const [
@@ -1417,6 +1631,11 @@ const DataInputs = ({
   const termId =
     normalizeId(
       watch("termId")
+    );
+
+  const gradeLevelId =
+    normalizeId(
+      watch("gradeLevelId")
     );
 
   const subjectId =
@@ -1484,6 +1703,131 @@ const DataInputs = ({
       };
 
     loadYears();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadGradeLevels =
+      async () => {
+        setLoadingGradeLevels(
+          true
+        );
+
+        try {
+          const response =
+            await fetchGradeLevels();
+
+          if (!active) {
+            return;
+          }
+
+          if (
+            response?.status === false
+          ) {
+            setGradeLevels([]);
+            setSetupError(
+              response?.message ||
+                "تعذر تحميل الصفوف الدراسية"
+            );
+            return;
+          }
+
+          setGradeLevels(
+            extractList(response)
+              .map(mapGradeLevel)
+              .filter(
+                (item) =>
+                  item.id &&
+                  item.name
+              )
+              .sort(
+                (a, b) =>
+                  a.order - b.order
+              )
+          );
+        } catch (error) {
+          if (active) {
+            setGradeLevels([]);
+            setSetupError(
+              error?.response?.data
+                ?.message ||
+                "تعذر تحميل الصفوف الدراسية"
+            );
+          }
+        } finally {
+          if (active) {
+            setLoadingGradeLevels(
+              false
+            );
+          }
+        }
+      };
+
+    loadGradeLevels();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCatalogSubjects =
+      async () => {
+        setLoadingCatalogSubjects(
+          true
+        );
+
+        try {
+          const response =
+            await fetchSubjects({
+              page: 1,
+              limit: 1000,
+            });
+
+          if (!active) {
+            return;
+          }
+
+          if (
+            response?.status === false
+          ) {
+            setCatalogSubjects([]);
+            return;
+          }
+
+          const normalized =
+            extractList(response)
+              .map(mapCatalogSubject)
+              .filter(
+                (item) =>
+                  item.id &&
+                  item.name
+              );
+
+          setCatalogSubjects(
+            normalized
+          );
+        } catch {
+          if (active) {
+            setCatalogSubjects([]);
+          }
+        } finally {
+          if (active) {
+            setLoadingCatalogSubjects(
+              false
+            );
+          }
+        }
+      };
+
+    loadCatalogSubjects();
 
     return () => {
       active = false;
@@ -1568,7 +1912,10 @@ const DataInputs = ({
       async () => {
         setOfferings([]);
 
-        if (!termId) {
+        if (
+          !termId ||
+          !gradeLevelId
+        ) {
           return;
         }
 
@@ -1576,9 +1923,10 @@ const DataInputs = ({
         setSetupError("");
 
         try {
-          const response =
+          let response =
             await fetchSubjectOfferings({
               termId,
+              gradeLevelId,
             });
 
           if (!active) {
@@ -1596,9 +1944,53 @@ const DataInputs = ({
             return;
           }
 
-          setOfferings(
-            extractList(response)
-          );
+          let list =
+            extractList(response);
+
+          /*
+           * بعض نسخ الباك القديمة ترجع قائمة فارغة من
+           * /subject-offerings/by-term/:termId
+           * رغم وجود البيانات في list endpoint.
+           * نجرب المسار الاحتياطي قبل اعتبار الترم بلا مواد.
+           */
+          if (list.length === 0) {
+            const fallbackResponse =
+              await fetchSubjectOfferings(
+                {
+                  termId,
+                  gradeLevelId,
+                },
+                {
+                  forceListEndpoint:
+                    true,
+                }
+              );
+
+            if (!active) {
+              return;
+            }
+
+            if (
+              fallbackResponse?.status !==
+              false
+            ) {
+              const fallbackList =
+                extractList(
+                  fallbackResponse
+                );
+
+              if (
+                fallbackList.length > 0
+              ) {
+                response =
+                  fallbackResponse;
+                list =
+                  fallbackList;
+              }
+            }
+          }
+
+          setOfferings(list);
         } catch (error) {
           if (active) {
             setOfferings([]);
@@ -1620,7 +2012,10 @@ const DataInputs = ({
     return () => {
       active = false;
     };
-  }, [termId]);
+  }, [
+    termId,
+    gradeLevelId,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -1629,7 +2024,10 @@ const DataInputs = ({
       async () => {
         setSchoolClasses([]);
 
-        if (!academicYearId) {
+        if (
+          !academicYearId ||
+          !gradeLevelId
+        ) {
           return;
         }
 
@@ -1641,6 +2039,7 @@ const DataInputs = ({
               page: 1,
               limit: 1000,
               academicYearId,
+              gradeLevelId,
             });
 
           if (!active) {
@@ -1673,7 +2072,10 @@ const DataInputs = ({
     return () => {
       active = false;
     };
-  }, [academicYearId]);
+  }, [
+    academicYearId,
+    gradeLevelId,
+  ]);
 
   const subjectOptions =
     useMemo(() => {
@@ -1698,31 +2100,34 @@ const DataInputs = ({
         }
       );
 
-      return Array.from(
-        map.values()
-      );
-    }, [offerings]);
+      const offeringSubjects =
+        Array.from(
+          map.values()
+        );
 
-  const availableGradeLevelIds =
-    useMemo(
-      () =>
-        new Set(
-          offerings
-            .filter(
-              (offering) =>
-                normalizeId(
-                  getOfferingSubject(
-                    offering
-                  )
-                ) === subjectId
-            )
-            .map(
-              getOfferingGradeLevelId
-            )
-            .filter(Boolean)
-        ),
-      [offerings, subjectId]
-    );
+      if (
+        offeringSubjects.length > 0
+      ) {
+        return offeringSubjects;
+      }
+
+      /*
+       * CreateExamDto يحتاج subjectId وليس subjectOfferingId.
+       * لذلك لو الترم لا يرجع عروض مواد، نظهر كتالوج مواد
+       * المدرسة بدل ما يكون الحقل مقفول تمامًا.
+       */
+      return catalogSubjects;
+    }, [
+      offerings,
+      catalogSubjects,
+    ]);
+
+  const usingCatalogFallback =
+    termId &&
+    gradeLevelId &&
+    !loadingOfferings &&
+    offerings.length === 0 &&
+    subjectOptions.length > 0;
 
   const classOptions =
     useMemo(
@@ -1733,18 +2138,15 @@ const DataInputs = ({
             (item) =>
               item.id &&
               (
-                !subjectId ||
-                availableGradeLevelIds
-                  .size === 0 ||
-                availableGradeLevelIds.has(
-                  item.gradeLevelId
-                )
+                !gradeLevelId ||
+                !item.gradeLevelId ||
+                item.gradeLevelId ===
+                  gradeLevelId
               )
           ),
       [
         schoolClasses,
-        subjectId,
-        availableGradeLevelIds,
+        gradeLevelId,
       ]
     );
 
@@ -1831,7 +2233,7 @@ const DataInputs = ({
           item
           xs={12}
           sm={6}
-          lg={4}
+          lg={3}
         >
           <Select
             key={`year-${academicYearId}-${academicYears.length}`}
@@ -1839,11 +2241,11 @@ const DataInputs = ({
             registerName="academicYearId"
             data={academicYears}
             name="name"
-            error={
+            error={localizeFieldError(
               errors
                 .academicYearId
                 ?.message
-            }
+            )}
             label="السنة الدراسية"
             required
             disabled={loadingYears}
@@ -1863,6 +2265,10 @@ const DataInputs = ({
                 ""
               );
               updateValue(
+                "gradeLevelId",
+                ""
+              );
+              updateValue(
                 "subjectId",
                 ""
               );
@@ -1878,7 +2284,7 @@ const DataInputs = ({
           item
           xs={12}
           sm={6}
-          lg={4}
+          lg={3}
         >
           <Select
             key={`term-${academicYearId}-${termId}-${terms.length}`}
@@ -1886,10 +2292,10 @@ const DataInputs = ({
             registerName="termId"
             data={terms}
             name="name"
-            error={
+            error={localizeFieldError(
               errors.termId
                 ?.message
-            }
+            )}
             label="الترم"
             required
             disabled={
@@ -1922,23 +2328,72 @@ const DataInputs = ({
           item
           xs={12}
           sm={6}
-          lg={4}
+          lg={3}
         >
           <Select
-            key={`subject-${termId}-${subjectId}-${subjectOptions.length}`}
+            key={`grade-${academicYearId}-${gradeLevelId}-${gradeLevels.length}`}
+            register={register}
+            registerName="gradeLevelId"
+            data={gradeLevels}
+            name="name"
+            error={localizeFieldError(
+              errors
+                .gradeLevelId
+                ?.message
+            )}
+            label="الصف الدراسي"
+            required
+            disabled={
+              loadingGradeLevels ||
+              !academicYearId ||
+              gradeLevels.length === 0
+            }
+            defaultValue={
+              gradeLevelId
+            }
+            onChange={(value) => {
+              const nextValue =
+                normalizeId(value);
+
+              updateValue(
+                "gradeLevelId",
+                nextValue
+              );
+              updateValue(
+                "subjectId",
+                ""
+              );
+              updateValue(
+                "classIds",
+                []
+              );
+            }}
+          />
+        </Grid>
+
+        <Grid
+          item
+          xs={12}
+          sm={6}
+          lg={3}
+        >
+          <Select
+            key={`subject-${termId}-${gradeLevelId}-${subjectId}-${subjectOptions.length}`}
             register={register}
             registerName="subjectId"
             data={subjectOptions}
             name="name"
-            error={
+            error={localizeFieldError(
               errors.subjectId
                 ?.message
-            }
+            )}
             label="المادة"
             required
             disabled={
               loadingOfferings ||
+              loadingCatalogSubjects ||
               !termId ||
+              !gradeLevelId ||
               subjectOptions.length === 0
             }
             defaultValue={
@@ -1958,23 +2413,54 @@ const DataInputs = ({
               );
             }}
           />
+
+          <Typography
+            sx={{
+              mt: 0.55,
+              px: 0.35,
+              minHeight: 16,
+              color:
+                usingCatalogFallback
+                  ? "#a06a13"
+                  : "var(--color-muted)",
+              fontSize: "9.5px",
+              fontWeight:
+                usingCatalogFallback
+                  ? 700
+                  : 500,
+            }}
+          >
+            {loadingOfferings ||
+            loadingCatalogSubjects
+              ? "جاري تحميل المواد..."
+              : !termId
+              ? "اختر الترم أولًا"
+              : !gradeLevelId
+              ? "اختر الصف الدراسي أولًا"
+              : subjectOptions.length ===
+                0
+              ? "لا توجد مواد متاحة حاليًا"
+              : usingCatalogFallback
+              ? "لا توجد عروض مواد لهذا الصف والترم؛ تم عرض مواد المدرسة المتاحة."
+              : `${subjectOptions.length} مادة مفعّلة لهذا الصف والترم`}
+          </Typography>
         </Grid>
 
         <Grid
           item
           xs={12}
           sm={6}
-          lg={4}
+          lg={3}
         >
           <Select
             register={register}
             registerName="examType"
             data={MCQExams}
             name="value"
-            error={
+            error={localizeFieldError(
               errors.examType
                 ?.message
-            }
+            )}
             label="نوع الاختبار"
             required
           />
@@ -1984,15 +2470,15 @@ const DataInputs = ({
           item
           xs={12}
           sm={6}
-          lg={4}
+          lg={3}
         >
           <Input
             register={register}
             registerName="startDate"
-            error={
+            error={localizeFieldError(
               errors.startDate
                 ?.message
-            }
+            )}
             label="تاريخ البدء"
             required
             type="date"
@@ -2003,15 +2489,15 @@ const DataInputs = ({
           item
           xs={12}
           sm={6}
-          lg={4}
+          lg={3}
         >
           <Input
             register={register}
             registerName="endDate"
-            error={
+            error={localizeFieldError(
               errors.endDate
                 ?.message
-            }
+            )}
             label="تاريخ الانتهاء"
             required
             type="date"
@@ -2022,15 +2508,15 @@ const DataInputs = ({
           item
           xs={12}
           sm={6}
-          lg={4}
+          lg={3}
         >
           <Input
             register={register}
             registerName="duration"
-            error={
+            error={localizeFieldError(
               errors.duration
                 ?.message
-            }
+            )}
             label="المدة بالدقائق"
             required
             valueAsNumber
@@ -2045,8 +2531,15 @@ const DataInputs = ({
         <Grid
           item
           xs={12}
-          sm={6}
-          lg={8}
+          sm={12}
+          lg={12}
+          sx={{
+            "& .MuiFormHelperText-root": {
+              mx: 0.35,
+              mt: 0.55,
+              fontSize: "9.5px",
+            },
+          }}
         >
           <TextField
             select
@@ -2070,6 +2563,7 @@ const DataInputs = ({
             disabled={
               loadingClasses ||
               !academicYearId ||
+              !gradeLevelId ||
               !subjectId ||
               classOptions.length === 0
             }
@@ -2083,11 +2577,13 @@ const DataInputs = ({
                 ?.message ||
               (!academicYearId
                 ? "اختر السنة الدراسية أولًا"
+                : !gradeLevelId
+                ? "اختر الصف الدراسي أولًا"
                 : !subjectId
                 ? "اختر المادة أولًا"
                 : classOptions.length ===
                   0
-                ? "لا توجد فصول متاحة لهذه المادة في السنة المختارة"
+                ? "لا توجد فصول متاحة لهذا الصف في السنة المختارة"
                 : `${classOptions.length} فصل متاح`)
             }
             SelectProps={{
@@ -2113,6 +2609,8 @@ const DataInputs = ({
                     maxHeight: 320,
                     borderRadius:
                       "12px",
+                    direction: "rtl",
+                    mt: 0.5,
                   },
                 },
               },
