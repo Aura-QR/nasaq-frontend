@@ -33,16 +33,16 @@ import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import Table from "@/components/Table/Table";
 import SelectFilter from "@/components/Filters/SelectFilter";
-import ClassFilter from "@/components/Filters/ClassFilter";
 import PaginationControls from "@/components/Pagination";
 
 import { useSubjects } from "@/utils/hooks/apis/useSubjects";
 import { useExams } from "@/utils/hooks/apis/useExams";
 import usePermissions from "@/utils/hooks/usePermissions";
 
-import { deleteExam } from "@/APIs/school/exams";
+import { deleteExam, fetchSingleExam } from "@/APIs/school/exams";
+import { fetchAcademicYears } from "@/APIs/school/academicYears";
+import { fetchTermsByAcademicYear } from "@/APIs/school/lectures";
 
-import Years from "@/utils/constants/Years";
 import MCQExams from "@/utils/constants/MCQExams";
 
 import SchoolIcon from "@mui/icons-material/School";
@@ -95,6 +95,57 @@ const STAT_CARDS = [
 const getArray = (value) =>
   Array.isArray(value) ? value : [];
 
+const normalizeId = (value) => {
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    return String(
+      value?._id ||
+        value?.id ||
+        value?.value ||
+        ""
+    ).trim();
+  }
+
+  return String(value || "").trim();
+};
+
+const getResponseData = (response) =>
+  response?.data?.data ??
+  response?.data ??
+  response;
+
+const extractList = (response) => {
+  const payload =
+    getResponseData(response);
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (
+    !payload ||
+    typeof payload !== "object"
+  ) {
+    return [];
+  }
+
+  return (
+    [
+      payload?.docs,
+      payload?.items,
+      payload?.results,
+      payload?.rows,
+      payload?.records,
+      payload?.academicYears,
+      payload?.years,
+      payload?.terms,
+      payload?.data,
+    ].find(Array.isArray) || []
+  );
+};
+
 const getExamTypeLabel = (value) =>
   MCQExams.find(
     (exam) =>
@@ -124,13 +175,206 @@ const formatDate = (value) => {
   );
 };
 
-const mapExams = (data = []) =>
-  getArray(data).map((item) => {
+const getOfferingData = (item) => {
+  const candidates = [
+    item?.subjectOffering,
+    item?.gradesCriteria
+      ?.subjectOfferingId,
+    item?.gradesCriteria
+      ?.subjectOffering,
+  ];
+
+  return (
+    candidates.find(
+      (value) =>
+        value &&
+        typeof value === "object"
+    ) || null
+  );
+};
+
+const getSubjectData = (item) => {
+  const offering =
+    getOfferingData(item);
+
+  const candidates = [
+    offering?.subjectId,
+    offering?.subject,
+    item?.gradesCriteria?.subjectId,
+    item?.subjectId,
+    item?.subject,
+  ];
+
+  return (
+    candidates.find(
+      (value) =>
+        value &&
+        typeof value === "object"
+    ) || null
+  );
+};
+
+const getSubjectId = (item) => {
+  const subject = getSubjectData(item);
+  const offering =
+    getOfferingData(item);
+
+  return normalizeId(
+    subject ||
+      offering?.subjectId ||
+      offering?.subject ||
+      item?.subjectId ||
+      item?.subject
+  );
+};
+
+const getTermId = (item) => {
+  const offering =
+    getOfferingData(item);
+
+  return normalizeId(
+    offering?.termId ||
+      offering?.term ||
+      item?.termId ||
+      item?.term
+  );
+};
+
+const getAcademicYearId = (
+  item,
+  termYearMap
+) => {
+  const direct = [
+    item?.academicYearId,
+    item?.gradesCriteria
+      ?.academicYearId,
+    getOfferingData(item)
+      ?.academicYearId,
+  ]
+    .map(normalizeId)
+    .find(Boolean);
+
+  if (direct) {
+    return direct;
+  }
+
+  const termId = getTermId(item);
+  return (
+    termYearMap.get(termId)?.id ||
+    ""
+  );
+};
+
+const getAcademicYearName = (
+  item,
+  termYearMap,
+  academicYearMap
+) => {
+  const directObjects = [
+    item?.academicYearId,
+    item?.academicYear,
+    item?.gradesCriteria
+      ?.academicYearId,
+    item?.gradesCriteria
+      ?.academicYear,
+    getOfferingData(item)
+      ?.academicYearId,
+  ];
+
+  for (const value of directObjects) {
+    if (
+      value &&
+      typeof value === "object"
+    ) {
+      const label =
+        value?.name ||
+        value?.label ||
+        value?.title;
+
+      if (label) {
+        return label;
+      }
+    }
+  }
+
+  const yearId = getAcademicYearId(
+    item,
+    termYearMap
+  );
+
+  if (yearId) {
+    return (
+      academicYearMap.get(yearId)
+        ?.name ||
+      academicYearMap.get(yearId)
+        ?.label ||
+      "—"
+    );
+  }
+
+  if (
+    typeof item?.academicYear ===
+      "string" &&
+    item.academicYear.trim()
+  ) {
+    return item.academicYear;
+  }
+
+  return "—";
+};
+
+const getClassList = (item) =>
+  getArray(
+    item?.classes?.length
+      ? item.classes
+      : item?.classIds
+  );
+
+const getClassLabel = (classItem) => {
+  if (
+    !classItem ||
+    typeof classItem === "string"
+  ) {
+    return "";
+  }
+
+  const room =
+    classItem?.roomNumber ||
+    classItem?.name ||
+    "";
+
+  const gender =
+    classItem?.gender === "female"
+      ? "بنات"
+      : classItem?.gender === "male"
+      ? "بنين"
+      : "";
+
+  return [room, gender]
+    .filter(Boolean)
+    .join(" - ");
+};
+
+const mapExams = (
+  data = [],
+  detailsMap = new Map(),
+  termYearMap = new Map(),
+  academicYearMap = new Map()
+) =>
+  getArray(data).map((baseItem) => {
+    const id = normalizeId(baseItem);
+    const detail =
+      detailsMap.get(id) || null;
+
+    const item = detail
+      ? {
+          ...baseItem,
+          ...detail,
+        }
+      : baseItem;
+
     const subjectData =
-      item?.gradesCriteria
-        ?.subjectId ||
-      item?.subject ||
-      {};
+      getSubjectData(item) || {};
 
     const subjectName =
       subjectData?.subjectName ||
@@ -145,31 +389,40 @@ const mapExams = (data = []) =>
       "";
 
     const classes =
-      getArray(
-        item?.classes?.length
-          ? item.classes
-          : item?.classIds
-      );
+      getClassList(item);
 
     return {
-      id: item?._id || item?.id,
+      id:
+        item?._id || item?.id || id,
+      subjectOfferingId:
+        normalizeId(
+          item?.subjectOfferingId ||
+            getOfferingData(item)
+        ),
       subjectId:
-        subjectData?._id ||
-        subjectData?.id ||
-        item?.subjectId ||
-        "",
+        getSubjectId(item),
       subject: subjectCode
         ? `${subjectName} - ${subjectCode}`
         : subjectName,
       createdBy:
         item?.createdBy?.name ||
+        item?.createdBy?.username ||
         item?.createdByName ||
         "—",
+      academicYearId:
+        getAcademicYearId(
+          item,
+          termYearMap
+        ),
       academicYear:
-        item?.academicYear ||
-        item?.gradesCriteria
-          ?.academicYear ||
-        "—",
+        getAcademicYearName(
+          item,
+          termYearMap,
+          academicYearMap
+        ),
+      termId: getTermId(item),
+      examTypeValue:
+        item?.examType || "",
       examType:
         getExamTypeLabel(
           item?.examType
@@ -181,16 +434,20 @@ const mapExams = (data = []) =>
         item?.endDate
       ),
       duration:
-        item?.duration ??
-        "—",
+        item?.duration ?? "—",
       classIds: classes
-        .map(
-          (classItem) =>
-            classItem?._id ||
-            classItem?.id ||
-            classItem
-        )
+        .map(normalizeId)
         .filter(Boolean),
+      classOptions: classes
+        .map((classItem) => ({
+          id: normalizeId(classItem),
+          label:
+            getClassLabel(classItem),
+        }))
+        .filter(
+          (classItem) =>
+            classItem.id
+        ),
     };
   });
 
@@ -227,15 +484,30 @@ const List = () => {
     setLocalPagination,
   ] = useState(null);
 
+  const [
+    academicYears,
+    setAcademicYears,
+  ] = useState([]);
+
+  const [
+    termYearMap,
+    setTermYearMap,
+  ] = useState(new Map());
+
+  const [
+    examDetailsMap,
+    setExamDetailsMap,
+  ] = useState(new Map());
+
   const filters = useMemo(
     () => ({
       page,
       limit,
-      academicYear:
+      academicYearId:
         academicYear || undefined,
       subjectId:
         subject || undefined,
-      classIds:
+      classId:
         classFilter || undefined,
       examType:
         examType || undefined,
@@ -264,14 +536,224 @@ const List = () => {
     limit: 1000,
   });
 
+  const academicYearMap =
+    useMemo(
+      () =>
+        new Map(
+          academicYears.map(
+            (year) => [
+              year.id,
+              year,
+            ]
+          )
+        ),
+      [academicYears]
+    );
+
   const permissions =
     usePermissions("exams");
 
   useEffect(() => {
-    setItems(
-      mapExams(exams)
+    let active = true;
+
+    const loadAcademicStructure =
+      async () => {
+        try {
+          const response =
+            await fetchAcademicYears();
+
+          if (
+            !active ||
+            response?.status === false
+          ) {
+            return;
+          }
+
+          const years =
+            extractList(response)
+              .map((year) => ({
+                id: normalizeId(year),
+                name:
+                  year?.name ||
+                  year?.label ||
+                  year?.title ||
+                  "سنة دراسية",
+              }))
+              .filter(
+                (year) => year.id
+              );
+
+          setAcademicYears(years);
+
+          const termPairs =
+            await Promise.all(
+              years.map(async (year) => {
+                const termsResponse =
+                  await fetchTermsByAcademicYear(
+                    year.id
+                  );
+
+                if (
+                  termsResponse?.status ===
+                  false
+                ) {
+                  return [];
+                }
+
+                return extractList(
+                  termsResponse
+                )
+                  .map((term) => [
+                    normalizeId(term),
+                    year,
+                  ])
+                  .filter(
+                    ([termId]) =>
+                      Boolean(termId)
+                  );
+              })
+            );
+
+          if (!active) {
+            return;
+          }
+
+          setTermYearMap(
+            new Map(
+              termPairs.flat()
+            )
+          );
+        } catch {
+          if (active) {
+            setAcademicYears([]);
+            setTermYearMap(
+              new Map()
+            );
+          }
+        }
+      };
+
+    loadAcademicStructure();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const list = getArray(exams);
+
+    const missing = list.filter(
+      (item) => {
+        const id = normalizeId(item);
+
+        if (
+          !id ||
+          examDetailsMap.has(id)
+        ) {
+          return false;
+        }
+
+        const subject =
+          getSubjectData(item);
+
+        const hasSubject =
+          Boolean(
+            subject?.subjectName ||
+              subject?.name
+          );
+
+        const hasTerm =
+          Boolean(getTermId(item));
+
+        return !(
+          hasSubject && hasTerm
+        );
+      }
     );
-  }, [exams]);
+
+    if (missing.length === 0) {
+      return undefined;
+    }
+
+    const loadDetails = async () => {
+      const pairs =
+        await Promise.all(
+          missing.map(async (item) => {
+            const id =
+              normalizeId(item);
+
+            const response =
+              await fetchSingleExam(id);
+
+            if (
+              response?.status === false ||
+              typeof response ===
+                "string"
+            ) {
+              return null;
+            }
+
+            const detail =
+              getResponseData(response);
+
+            return detail &&
+              typeof detail === "object"
+              ? [id, detail]
+              : null;
+          })
+        );
+
+      if (!active) {
+        return;
+      }
+
+      const validPairs =
+        pairs.filter(Boolean);
+
+      if (validPairs.length === 0) {
+        return;
+      }
+
+      setExamDetailsMap(
+        (previous) => {
+          const next =
+            new Map(previous);
+
+          validPairs.forEach(
+            ([id, detail]) =>
+              next.set(id, detail)
+          );
+
+          return next;
+        }
+      );
+    };
+
+    loadDetails();
+
+    return () => {
+      active = false;
+    };
+  }, [exams, examDetailsMap]);
+
+  useEffect(() => {
+    setItems(
+      mapExams(
+        exams,
+        examDetailsMap,
+        termYearMap,
+        academicYearMap
+      )
+    );
+  }, [
+    exams,
+    examDetailsMap,
+    termYearMap,
+    academicYearMap,
+  ]);
 
   useEffect(() => {
     if (pagination) {
@@ -355,6 +837,36 @@ const List = () => {
         };
       }
     );
+
+  const classOptions =
+    useMemo(() => {
+      const map = new Map();
+
+      items.forEach((item) => {
+        getArray(
+          item.classOptions
+        ).forEach((classItem) => {
+          if (
+            classItem.id &&
+            !map.has(classItem.id)
+          ) {
+            map.set(
+              classItem.id,
+              {
+                value: classItem.id,
+                label:
+                  classItem.label ||
+                  classItem.id,
+              }
+            );
+          }
+        });
+      });
+
+      return Array.from(
+        map.values()
+      );
+    }, [items]);
 
   const csvData = useMemo(
     () =>
@@ -920,24 +1432,21 @@ const List = () => {
               label="السنة الدراسية"
               icon={SchoolIcon}
               allLabel="جميع السنين"
-              options={Years.map(
+              options={academicYears.map(
                 (year) => ({
-                  value: year,
-                  label: year,
+                  value: year.id,
+                  label: year.name,
                 })
               )}
             />
 
-            <ClassFilter
-              classId={
-                classFilter
-              }
-              setClassId={
-                setClassFilter
-              }
-              academicYear={
-                academicYear
-              }
+            <SelectFilter
+              value={classFilter}
+              onChange={setClassFilter}
+              label="الفصل"
+              icon={SchoolIcon}
+              allLabel="جميع الفصول"
+              options={classOptions}
             />
 
             <SelectFilter

@@ -42,7 +42,269 @@ import Loading from "@/components/Loading";
 
 import { useGradesCriteria } from "@/utils/hooks/apis/useGradesCriteria";
 import { deleteGradesCriteria } from "@/APIs/school/gradesCriteria";
+import { fetchAcademicYears } from "@/APIs/school/academicYears";
+import { api } from "@/APIs/Axios";
 import usePermissions from "@/utils/hooks/usePermissions";
+
+const normalizeId = (value) => {
+  if (value && typeof value === "object") {
+    return String(
+      value?._id ||
+      value?.id ||
+      ""
+    ).trim();
+  }
+
+  return String(value || "").trim();
+};
+
+const unwrapData = (response) =>
+  response?.data?.data ??
+  response?.data ??
+  response;
+
+const findFirstArray = (
+  value,
+  depth = 0
+) => {
+  if (depth > 8) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (
+    !value ||
+    typeof value !== "object"
+  ) {
+    return [];
+  }
+
+  const priorityKeys = [
+    "data",
+    "subjects",
+    "academicYears",
+    "years",
+    "docs",
+    "items",
+    "results",
+    "rows",
+    "records",
+    "list",
+  ];
+
+  for (const key of priorityKeys) {
+    if (!(key in value)) {
+      continue;
+    }
+
+    const found =
+      findFirstArray(
+        value[key],
+        depth + 1
+      );
+
+    if (found.length) {
+      return found;
+    }
+  }
+
+  for (const nested of Object.values(
+    value
+  )) {
+    const found =
+      findFirstArray(
+        nested,
+        depth + 1
+      );
+
+    if (found.length) {
+      return found;
+    }
+  }
+
+  return [];
+};
+
+const getSubjectObject = (criteria) => {
+  const candidates = [
+    criteria?.subject,
+    criteria?.subjectId,
+    criteria?.subjectOffering
+      ?.subjectId,
+    criteria?.subjectOffering
+      ?.subject,
+    (
+      criteria?.subjectOfferingId &&
+      typeof criteria
+        .subjectOfferingId ===
+        "object"
+        ? criteria
+            .subjectOfferingId
+            ?.subjectId
+        : null
+    ),
+  ];
+
+  return (
+    candidates.find(
+      (value) =>
+        value &&
+        typeof value ===
+          "object"
+    ) || null
+  );
+};
+
+const getSubjectId = (criteria) =>
+  normalizeId(
+    criteria?.subjectId ||
+    criteria?.subject ||
+    criteria?.subjectOffering
+      ?.subjectId ||
+    criteria?.subjectOffering
+      ?.subject ||
+    (
+      criteria?.subjectOfferingId &&
+      typeof criteria
+        .subjectOfferingId ===
+        "object"
+        ? criteria
+            .subjectOfferingId
+            ?.subjectId
+        : ""
+    )
+  );
+
+const formatSubject = (subject) => {
+  if (!subject) {
+    return "";
+  }
+
+  if (
+    typeof subject === "string"
+  ) {
+    return subject;
+  }
+
+  const name =
+    subject?.subjectName ||
+    subject?.name ||
+    subject?.title ||
+    subject?.label ||
+    "";
+
+  const code =
+    subject?.subjectCode ||
+    subject?.code ||
+    "";
+
+  return [name, code]
+    .filter(Boolean)
+    .join(" - ");
+};
+
+const getAcademicYearObject = (
+  criteria
+) => {
+  const candidates = [
+    criteria?.academicYearId,
+    criteria?.academicYear,
+    criteria?.subjectOffering
+      ?.academicYearId,
+    (
+      criteria?.subjectOfferingId &&
+      typeof criteria
+        .subjectOfferingId ===
+        "object"
+        ? criteria
+            .subjectOfferingId
+            ?.academicYearId
+        : null
+    ),
+  ];
+
+  return (
+    candidates.find(
+      (value) =>
+        value &&
+        typeof value ===
+          "object"
+    ) || null
+  );
+};
+
+const getAcademicYearId = (
+  criteria
+) =>
+  normalizeId(
+    criteria?.academicYearId ||
+    (
+      criteria?.academicYear &&
+      typeof criteria
+        .academicYear ===
+        "object"
+        ? criteria
+            .academicYear
+        : ""
+    ) ||
+    criteria?.subjectOffering
+      ?.academicYearId ||
+    (
+      criteria?.subjectOfferingId &&
+      typeof criteria
+        .subjectOfferingId ===
+        "object"
+        ? criteria
+            .subjectOfferingId
+            ?.academicYearId
+        : ""
+    )
+  );
+
+const formatAcademicYear = (
+  value
+) => {
+  if (!value) {
+    return "";
+  }
+
+  if (
+    typeof value === "string"
+  ) {
+    return value;
+  }
+
+  return (
+    value?.name ||
+    value?.academicYear ||
+    value?.label ||
+    value?.title ||
+    ""
+  );
+};
+
+const getTermId = (criteria) =>
+  normalizeId(
+    criteria?.termId ||
+    criteria?.term ||
+    criteria?.subjectOffering
+      ?.termId ||
+    criteria?.subjectOffering
+      ?.term ||
+    (
+      criteria?.subjectOfferingId &&
+      typeof criteria
+        .subjectOfferingId ===
+        "object"
+        ? criteria
+            .subjectOfferingId
+            ?.termId
+        : ""
+    )
+  );
 
 const DetailCard = ({
   icon,
@@ -143,6 +405,16 @@ const Profile = () => {
   const [item, setItem] =
     useState(null);
 
+  const [
+    subjectLabel,
+    setSubjectLabel,
+  ] = useState("");
+
+  const [
+    academicYearLabel,
+    setAcademicYearLabel,
+  ] = useState("");
+
   const [open, setOpen] =
     useState(false);
 
@@ -158,6 +430,246 @@ const Profile = () => {
       );
     }
   }, [gradesCriteria]);
+
+  /*
+   * Grades Criteria موجودة في المشروع بأكثر من shape:
+   *
+   * New:
+   *   subjectId + academicYearId
+   *
+   * Legacy:
+   *   subjectOfferingId + subjectOffering.subjectId + termId
+   *
+   * لذلك صفحة التفاصيل تحل اسم المادة والسنة من الشكلين
+   * بدل الاعتماد على item.subject / item.academicYear فقط.
+   */
+  useEffect(() => {
+    if (!item) {
+      setSubjectLabel("");
+      setAcademicYearLabel("");
+      return;
+    }
+
+    let active = true;
+
+    const resolveRelations =
+      async () => {
+        const inlineSubject =
+          getSubjectObject(item);
+
+        const inlineSubjectLabel =
+          formatSubject(
+            inlineSubject
+          );
+
+        if (inlineSubjectLabel) {
+          setSubjectLabel(
+            inlineSubjectLabel
+          );
+        } else {
+          setSubjectLabel("");
+        }
+
+        const inlineYear =
+          getAcademicYearObject(
+            item
+          );
+
+        const inlineYearLabel =
+          formatAcademicYear(
+            inlineYear
+          );
+
+        if (inlineYearLabel) {
+          setAcademicYearLabel(
+            inlineYearLabel
+          );
+        } else if (
+          typeof item?.academicYear ===
+            "string" &&
+          item.academicYear.trim()
+        ) {
+          setAcademicYearLabel(
+            item.academicYear.trim()
+          );
+        } else {
+          setAcademicYearLabel("");
+        }
+
+        let years = [];
+
+        try {
+          const yearsResponse =
+            await fetchAcademicYears();
+
+          years =
+            findFirstArray(
+              yearsResponse
+            );
+        } catch {
+          years = [];
+        }
+
+        if (!active) {
+          return;
+        }
+
+        // Resolve subject if API returned only an ID.
+        if (!inlineSubjectLabel) {
+          const subjectId =
+            getSubjectId(item);
+
+          if (subjectId) {
+            try {
+              const responses =
+                await Promise.allSettled([
+                  api.get(
+                    "/subjects/list"
+                  ),
+                  api.get(
+                    "/subjects",
+                    {
+                      params: {
+                        page: 1,
+                        limit: 1000,
+                      },
+                    }
+                  ),
+                ]);
+
+              if (!active) {
+                return;
+              }
+
+              const subjects =
+                responses.flatMap(
+                  (result) =>
+                    result.status ===
+                    "fulfilled"
+                      ? findFirstArray(
+                          result.value
+                        )
+                      : []
+                );
+
+              const subject =
+                subjects.find(
+                  (candidate) =>
+                    normalizeId(
+                      candidate
+                    ) === subjectId
+                );
+
+              const label =
+                formatSubject(
+                  subject
+                );
+
+              if (label) {
+                setSubjectLabel(
+                  label
+                );
+              }
+            } catch {
+              // Keep the inline fallback.
+            }
+          }
+        }
+
+        let yearId =
+          getAcademicYearId(item);
+
+        // Legacy criteria may know only the term through subjectOffering.
+        if (!yearId) {
+          const termId =
+            getTermId(item);
+
+          if (termId) {
+            try {
+              const termResponse =
+                await api.get(
+                  `/terms/${termId}`
+                );
+
+              if (!active) {
+                return;
+              }
+
+              const term =
+                unwrapData(
+                  termResponse
+                );
+
+              yearId =
+                normalizeId(
+                  term?.academicYearId ||
+                  term?.academicYear
+                );
+
+              const populatedYear =
+                term?.academicYearId &&
+                typeof term
+                  .academicYearId ===
+                  "object"
+                  ? term
+                      .academicYearId
+                  : term?.academicYear &&
+                    typeof term
+                      .academicYear ===
+                      "object"
+                  ? term
+                      .academicYear
+                  : null;
+
+              const populatedLabel =
+                formatAcademicYear(
+                  populatedYear
+                );
+
+              if (
+                populatedLabel
+              ) {
+                setAcademicYearLabel(
+                  populatedLabel
+                );
+              }
+            } catch {
+              // The page still shows all grade values even if relation lookup fails.
+            }
+          }
+        }
+
+        if (
+          yearId &&
+          active
+        ) {
+          const year =
+            years.find(
+              (candidate) =>
+                normalizeId(
+                  candidate
+                ) === yearId
+            );
+
+          const label =
+            formatAcademicYear(
+              year
+            );
+
+          if (label) {
+            setAcademicYearLabel(
+              label
+            );
+          }
+        }
+      };
+
+    resolveRelations();
+
+    return () => {
+      active = false;
+    };
+  }, [item]);
 
   const handleDelete =
     async () => {
@@ -207,14 +719,8 @@ const Profile = () => {
     return [
       {
         label: "المادة",
-        value: [
-          item?.subject
-            ?.subjectName,
-          item?.subject
-            ?.subjectCode,
-        ]
-          .filter(Boolean)
-          .join(" - ") || "—",
+        value:
+          subjectLabel || "—",
         icon:
           <MenuBookRounded />,
       },
@@ -222,7 +728,7 @@ const Profile = () => {
         label:
           "السنة الدراسية",
         value:
-          item?.academicYear ||
+          academicYearLabel ||
           "—",
         icon:
           <SchoolRounded />,
@@ -307,7 +813,11 @@ const Profile = () => {
           <NumbersRounded />,
       },
     ];
-  }, [item]);
+  }, [
+    item,
+    subjectLabel,
+    academicYearLabel,
+  ]);
 
   const totalGrades =
     useMemo(
@@ -362,9 +872,8 @@ const Profile = () => {
   }
 
   const title = [
-    item?.academicYear,
-    item?.subject
-      ?.subjectName,
+    academicYearLabel,
+    subjectLabel,
   ]
     .filter(Boolean)
     .join(" - ");

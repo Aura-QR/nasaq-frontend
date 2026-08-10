@@ -900,6 +900,7 @@ const Add = () => {
       termId: "",
       gradeLevelId: "",
       subjectId: "",
+      subjectOfferingId: "",
       examType: "",
       startDate: "",
       endDate: "",
@@ -1203,6 +1204,11 @@ const Add = () => {
         formData.subjectId
       );
 
+    const normalizedSubjectOfferingId =
+      normalizeId(
+        formData.subjectOfferingId
+      );
+
     const normalizedGradeLevelId =
       normalizeId(
         formData.gradeLevelId
@@ -1242,6 +1248,13 @@ const Add = () => {
       return;
     }
 
+    if (!normalizedSubjectOfferingId) {
+      toast.error(
+        "المادة المحددة ليس لها عرض مادة مرتبط بنفس الصف والترم"
+      );
+      return;
+    }
+
     if (
       normalizedClassIds.length === 0
     ) {
@@ -1264,13 +1277,13 @@ const Add = () => {
     setLoading(true);
 
     try {
+      /*
+       * الباك الحالي لـ CreateExamDto لا يقبل subjectId / academicYearId / termId.
+       * الربط الأكاديمي يتم بالكامل من خلال SubjectOffering.
+       */
       const payload = {
-        subjectId:
-          normalizedSubjectId,
-        academicYearId:
-          normalizedYearId,
-        termId:
-          normalizedTermId,
+        subjectOfferingId:
+          normalizedSubjectOfferingId,
         classIds:
           normalizedClassIds,
         examType:
@@ -1643,6 +1656,11 @@ const DataInputs = ({
       watch("subjectId")
     );
 
+  const subjectOfferingId =
+    normalizeId(
+      watch("subjectOfferingId")
+    );
+
   const selectedClassIds =
     getArray(
       watch("classIds")
@@ -1841,6 +1859,7 @@ const DataInputs = ({
       async () => {
         setTerms([]);
         setOfferings([]);
+        setValue("subjectOfferingId", "");
 
         if (!academicYearId) {
           return;
@@ -1911,6 +1930,7 @@ const DataInputs = ({
     const loadOfferings =
       async () => {
         setOfferings([]);
+        setValue("subjectOfferingId", "");
 
         if (
           !termId ||
@@ -2100,34 +2120,95 @@ const DataInputs = ({
         }
       );
 
-      const offeringSubjects =
-        Array.from(
-          map.values()
+      return Array.from(
+        map.values()
+      );
+    }, [offerings]);
+
+  const usingCatalogFallback = false;
+
+  /*
+   * الـSelect ما زال يعرض subjectId للمستخدم، لكن CreateExamDto الحالي
+   * يحتاج subjectOfferingId. لذلك نربط الاختيار بالعرض المطابق
+   * لنفس المادة + الصف + الترم ونخزنه في hidden field.
+   */
+  useEffect(() => {
+    if (
+      !subjectId ||
+      !termId ||
+      !gradeLevelId
+    ) {
+      if (subjectOfferingId) {
+        setValue(
+          "subjectOfferingId",
+          "",
+          {
+            shouldDirty: true,
+            shouldValidate: true,
+          }
         );
-
-      if (
-        offeringSubjects.length > 0
-      ) {
-        return offeringSubjects;
       }
+      return;
+    }
 
-      /*
-       * CreateExamDto يحتاج subjectId وليس subjectOfferingId.
-       * لذلك لو الترم لا يرجع عروض مواد، نظهر كتالوج مواد
-       * المدرسة بدل ما يكون الحقل مقفول تمامًا.
-       */
-      return catalogSubjects;
-    }, [
-      offerings,
-      catalogSubjects,
-    ]);
+    const matchingOffering =
+      offerings.find(
+        (offering) => {
+          const offeringSubjectId =
+            mapSubjectFromOffering(
+              offering
+            ).id;
 
-  const usingCatalogFallback =
-    termId &&
-    gradeLevelId &&
-    !loadingOfferings &&
-    offerings.length === 0 &&
-    subjectOptions.length > 0;
+          const offeringGradeLevelId =
+            getOfferingGradeLevelId(
+              offering
+            );
+
+          const offeringTermId =
+            normalizeId(
+              offering?.termId ||
+              offering?.term
+            );
+
+          return (
+            offeringSubjectId ===
+              subjectId &&
+            (!offeringGradeLevelId ||
+              offeringGradeLevelId ===
+                gradeLevelId) &&
+            (!offeringTermId ||
+              offeringTermId ===
+                termId)
+          );
+        }
+      );
+
+    const nextOfferingId =
+      normalizeId(
+        matchingOffering
+      );
+
+    if (
+      nextOfferingId !==
+      subjectOfferingId
+    ) {
+      setValue(
+        "subjectOfferingId",
+        nextOfferingId,
+        {
+          shouldDirty: true,
+          shouldValidate: true,
+        }
+      );
+    }
+  }, [
+    offerings,
+    subjectId,
+    termId,
+    gradeLevelId,
+    subjectOfferingId,
+    setValue,
+  ]);
 
   const classOptions =
     useMemo(
@@ -2208,6 +2289,11 @@ const DataInputs = ({
 
   return (
     <>
+      <input
+        type="hidden"
+        {...register("subjectOfferingId")}
+      />
+
       {setupError && (
         <Alert
           severity="warning"
@@ -2273,6 +2359,10 @@ const DataInputs = ({
                 ""
               );
               updateValue(
+                "subjectOfferingId",
+                ""
+              );
+              updateValue(
                 "classIds",
                 []
               );
@@ -2314,6 +2404,10 @@ const DataInputs = ({
               );
               updateValue(
                 "subjectId",
+                ""
+              );
+              updateValue(
+                "subjectOfferingId",
                 ""
               );
               updateValue(
@@ -2364,6 +2458,10 @@ const DataInputs = ({
                 ""
               );
               updateValue(
+                "subjectOfferingId",
+                ""
+              );
+              updateValue(
                 "classIds",
                 []
               );
@@ -2391,7 +2489,6 @@ const DataInputs = ({
             required
             disabled={
               loadingOfferings ||
-              loadingCatalogSubjects ||
               !termId ||
               !gradeLevelId ||
               subjectOptions.length === 0
@@ -2403,9 +2500,23 @@ const DataInputs = ({
               const nextValue =
                 normalizeId(value);
 
+              const matchingOffering =
+                offerings.find(
+                  (offering) =>
+                    mapSubjectFromOffering(
+                      offering
+                    ).id === nextValue
+                );
+
               updateValue(
                 "subjectId",
                 nextValue
+              );
+              updateValue(
+                "subjectOfferingId",
+                normalizeId(
+                  matchingOffering
+                )
               );
               updateValue(
                 "classIds",
@@ -2420,7 +2531,10 @@ const DataInputs = ({
               px: 0.35,
               minHeight: 16,
               color:
-                usingCatalogFallback
+                subjectOptions.length === 0 &&
+                termId &&
+                gradeLevelId &&
+                !loadingOfferings
                   ? "#a06a13"
                   : "var(--color-muted)",
               fontSize: "9.5px",

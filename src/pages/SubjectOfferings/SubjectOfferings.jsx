@@ -193,48 +193,6 @@ const fetchWithFallback = async (requests, fallbackMessage) => {
   throw new Error(getMessage(lastError, fallbackMessage));
 };
 
-
-const fetchTermsForYear = async (yearId) => {
-  if (!yearId) return [];
-
-  const response = await fetchWithFallback(
-    [
-      () => api.get(`/terms/by-year/${yearId}`),
-      () =>
-        api.get("/terms", {
-          params: {
-            academicYearId: yearId,
-          },
-        }),
-    ],
-    "تعذر تحميل ترمات السنة"
-  );
-
-  return normalizeCollection(
-    extractList(response?.data),
-    labelOfTerm
-  ).sort(
-    (a, b) =>
-      Number(a?.order || 0) -
-      Number(b?.order || 0)
-  );
-};
-
-const yearTime = (year) => {
-  const value =
-    year?.startDate ||
-    year?.createdAt ||
-    "";
-
-  const time = value
-    ? new Date(value).getTime()
-    : Number.NaN;
-
-  return Number.isFinite(time)
-    ? time
-    : Number.NaN;
-};
-
 const StatCard = ({ icon, label, value, helper, tone = "blue" }) => {
   const toneMap = {
     blue: { color: COLORS.navy2, bg: "#edf3f8" },
@@ -534,24 +492,28 @@ const SubjectOfferings = () => {
       return [];
     }
 
-    const normalized =
-      await fetchTermsForYear(yearId);
+    const response = await fetchWithFallback(
+      [
+        () => api.get(`/terms/by-year/${yearId}`),
+        () => api.get("/terms", { params: { academicYearId: yearId } }),
+      ],
+      "تعذر تحميل الترمات"
+    );
+
+    const normalized = normalizeCollection(
+      extractList(response?.data),
+      labelOfTerm
+    ).sort((a, b) => Number(a?.order || 0) - Number(b?.order || 0));
 
     setTerms(normalized);
 
     const activeTerm =
-      normalized.find(
-        (item) =>
-          item?.status === "active"
-      ) ||
+      normalized.find((item) => item?.status === "active") ||
       normalized[0] ||
       null;
 
     setSelectedTermId((current) =>
-      normalized.some(
-        (item) =>
-          item._id === current
-      )
+      normalized.some((item) => item._id === current)
         ? current
         : activeTerm?._id || ""
     );
@@ -732,76 +694,6 @@ const SubjectOfferings = () => {
     [normalizedOfferings]
   );
 
-  const previousYear =
-    useMemo(() => {
-      if (
-        !selectedYearId ||
-        academicYears.length < 2
-      ) {
-        return null;
-      }
-
-      const target =
-        academicYears.find(
-          (item) =>
-            item._id ===
-            selectedYearId
-        ) || null;
-
-      const others =
-        academicYears.filter(
-          (item) =>
-            item._id !==
-            selectedYearId
-        );
-
-      const targetTime =
-        yearTime(target);
-
-      if (
-        Number.isFinite(targetTime)
-      ) {
-        const older =
-          others
-            .filter((item) => {
-              const time =
-                yearTime(item);
-
-              return (
-                Number.isFinite(time) &&
-                time < targetTime
-              );
-            })
-            .sort(
-              (a, b) =>
-                yearTime(b) -
-                yearTime(a)
-            );
-
-        if (older.length) {
-          return older[0];
-        }
-      }
-
-      const currentIndex =
-        academicYears.findIndex(
-          (item) =>
-            item._id ===
-            selectedYearId
-        );
-
-      return (
-        academicYears[
-          currentIndex + 1
-        ] ||
-        others[0] ||
-        null
-      );
-    }, [
-      academicYears,
-      selectedYearId,
-    ]);
-
   const changeYear = async (yearId) => {
     setSelectedYearId(yearId);
     const selected = academicYears.find((item) => item._id === yearId) || null;
@@ -819,6 +711,26 @@ const SubjectOfferings = () => {
   };
 
   const createOffering = async (form) => {
+    const moveListToOffering = async () => {
+      const filtersChanged =
+        form.termId !== selectedTermId ||
+        form.gradeLevelId !== selectedGradeId;
+
+      setDialogOpen(false);
+      setSearch("");
+      setSelectedTermId(form.termId);
+      setSelectedGradeId(form.gradeLevelId);
+
+      /*
+       * لو الفلاتر اتغيرت، useEffect الخاص بـ loadOfferings
+       * هيعمل fetch جديد بعد تحديث الـstate.
+       * لو هي نفس الفلاتر، نعمل refresh يدوي فورًا.
+       */
+      if (!filtersChanged) {
+        await loadOfferings();
+      }
+    };
+
     const duplicate = normalizedOfferings.some(
       (item) =>
         item.subjectId === form.subjectId &&
@@ -827,29 +739,63 @@ const SubjectOfferings = () => {
     );
 
     if (duplicate) {
-      toast.info("هذا العرض موجود بالفعل لنفس المادة والصف والترم");
+      toast.info("هذا العرض موجود بالفعل؛ تم فتح مكانه في القائمة");
+      await moveListToOffering();
       return;
     }
 
     setSaving(true);
-    const result = await addSubjectOffering(form);
-    setSaving(false);
 
-    if (result?.status === false) {
-      toast.error(result?.message || "تعذر إنشاء عرض المادة");
-      return;
+    try {
+      const result = await addSubjectOffering(form);
+
+      if (result?.status === false) {
+        const message =
+          result?.message ||
+          "تعذر إنشاء عرض المادة";
+
+        const isDuplicate =
+          /already exists|duplicate|موجود بالفعل/i.test(
+            String(message)
+          );
+
+        if (isDuplicate) {
+          toast.info(
+            "عرض المادة موجود بالفعل؛ تم فتح الترم والصف الخاصين به"
+          );
+          await moveListToOffering();
+          return;
+        }
+
+        toast.error(message);
+        return;
+      }
+
+      toast.success("تم إنشاء عرض المادة بنجاح");
+      await moveListToOffering();
+    } catch (requestError) {
+      const message = getMessage(
+        requestError,
+        "تعذر إنشاء عرض المادة"
+      );
+
+      const isDuplicate =
+        /already exists|duplicate|موجود بالفعل/i.test(
+          String(message)
+        );
+
+      if (isDuplicate) {
+        toast.info(
+          "عرض المادة موجود بالفعل؛ تم فتح الترم والصف الخاصين به"
+        );
+        await moveListToOffering();
+        return;
+      }
+
+      toast.error(message);
+    } finally {
+      setSaving(false);
     }
-
-    toast.success("تم إنشاء عرض المادة بنجاح");
-    setDialogOpen(false);
-
-    if (form.termId !== selectedTermId) {
-      setSelectedTermId(form.termId);
-      setSelectedGradeId(form.gradeLevelId);
-      return;
-    }
-
-    await loadOfferings();
   };
 
   const removeOffering = async (item) => {
@@ -874,242 +820,45 @@ const SubjectOfferings = () => {
     );
   };
 
-  const copyFromPreviousYear =
-    async () => {
-      if (
-        !selectedYearId ||
-        academicYears.length < 2
-      ) {
-        toast.info(
-          "لا توجد سنة سابقة متاحة للنسخ"
-        );
-        return;
-      }
+  const copyFromPreviousYear = async () => {
+    if (!selectedYearId || academicYears.length < 2) {
+      toast.info("لا توجد سنة سابقة متاحة للنسخ");
+      return;
+    }
 
-      const source =
-        previousYear;
+    const currentIndex = academicYears.findIndex(
+      (item) => item._id === selectedYearId
+    );
+    const source =
+      academicYears[currentIndex + 1] ||
+      academicYears.find((item) => item._id !== selectedYearId);
 
-      if (!source?._id) {
-        toast.info(
-          "لا توجد سنة سابقة متاحة للنسخ"
-        );
-        return;
-      }
+    if (!source?._id) {
+      toast.info("لا توجد سنة سابقة متاحة للنسخ");
+      return;
+    }
 
-      setSaving(true);
-      setError("");
+    const confirmed = window.confirm(
+      `نسخ عروض المواد من ${source.label} إلى ${activeYear?.label || "السنة الحالية"}؟`
+    );
 
-      try {
-        const [
-          targetTerms,
-          sourceTerms,
-        ] = await Promise.all([
-          fetchTermsForYear(
-            selectedYearId
-          ),
-          fetchTermsForYear(
-            source._id
-          ),
-        ]);
+    if (!confirmed) return;
 
-        /*
-         * لا يمكن نسخ عروض المواد إذا كانت
-         * السنة المصدر نفسها بلا ترمات.
-         */
-        if (
-          sourceTerms.length === 0
-        ) {
-          const message =
-            `السنة السابقة ${source.label} لا تحتوي على ترمات. ` +
-            "جهّز ترمات السنة السابقة أولًا ثم أعد المحاولة.";
+    setSaving(true);
+    const result = await copySubjectOfferingsFromYear(
+      selectedYearId,
+      source._id
+    );
+    setSaving(false);
 
-          setError(message);
-          toast.error(message);
-          return;
-        }
+    if (result?.status === false) {
+      toast.error(result?.message || "تعذر نسخ عروض المواد");
+      return;
+    }
 
-        /*
-         * لو السنة المستهدفة بلا ترمات:
-         * جهّزها أولًا من نفس السنة المصدر،
-         * ثم أكمل نسخ عروض المواد تلقائيًا.
-         */
-        if (
-          targetTerms.length === 0
-        ) {
-          const confirmedTerms =
-            window.confirm(
-              `السنة ${activeYear?.label || "الحالية"} لا تحتوي على ترمات.\n\n` +
-              `هل تريد نسخ الترمات أولًا من ${source.label} ثم نسخ عروض المواد تلقائيًا؟`
-            );
-
-          if (!confirmedTerms) {
-            const message =
-              "يجب إعداد ترمات السنة الحالية أولًا قبل نسخ عروض المواد.";
-
-            setError(message);
-            toast.info(message);
-            return;
-          }
-
-          const termsResponse =
-            await api.post(
-              `/terms/copy-from/${selectedYearId}/${source._id}`,
-              {}
-            );
-
-          const termsPayload =
-            termsResponse?.data;
-
-          if (
-            termsPayload?.status ===
-            false
-          ) {
-            throw new Error(
-              termsPayload?.message ||
-                "تعذر نسخ ترمات السنة"
-            );
-          }
-
-          const loadedTerms =
-            await loadTerms(
-              selectedYearId
-            );
-
-          if (
-            !loadedTerms.length
-          ) {
-            throw new Error(
-              "تم طلب نسخ الترمات لكن لم تظهر ترمات في السنة الحالية"
-            );
-          }
-
-          toast.success(
-            "تم تجهيز ترمات السنة الحالية"
-          );
-        } else {
-          const confirmed =
-            window.confirm(
-              `نسخ عروض المواد من ${source.label} إلى ${activeYear?.label || "السنة الحالية"}؟`
-            );
-
-          if (!confirmed) {
-            return;
-          }
-        }
-
-        const result =
-          await copySubjectOfferingsFromYear(
-            selectedYearId,
-            source._id
-          );
-
-        if (
-          result?.status === false
-        ) {
-          const backendMessage =
-            String(
-              result?.message || ""
-            );
-
-          if (
-            /no terms configured/i.test(
-              backendMessage
-            )
-          ) {
-            throw new Error(
-              "تعذر النسخ لأن السنة الحالية أو السنة السابقة لا تحتوي على ترمات مهيأة."
-            );
-          }
-
-          throw new Error(
-            result?.message ||
-              "تعذر نسخ عروض المواد"
-          );
-        }
-
-        toast.success(
-          "تم نسخ عروض المواد بنجاح"
-        );
-
-        /*
-         * loadTerms مهم هنا لأن الـterm ids
-         * المستهدفة تختلف عن السنة المصدر.
-         */
-        const refreshedTerms =
-          await loadTerms(
-            selectedYearId
-          );
-
-        if (
-          refreshedTerms.length
-        ) {
-          const nextTermId =
-            refreshedTerms.some(
-              (item) =>
-                item._id ===
-                selectedTermId
-            )
-              ? selectedTermId
-              : refreshedTerms[0]
-                  ?._id || "";
-
-          if (nextTermId) {
-            setSelectedTermId(
-              nextTermId
-            );
-
-            /*
-             * نحمّل عروض الترم الجديد مباشرة
-             * بدل الاعتماد على state لم تتحدث بعد.
-             */
-            const refreshedOfferings =
-              await fetchSubjectOfferings({
-                termId:
-                  nextTermId,
-                gradeLevelId:
-                  selectedGradeId ||
-                  undefined,
-              });
-
-            if (
-              refreshedOfferings
-                ?.status === false
-            ) {
-              throw new Error(
-                refreshedOfferings
-                  ?.message ||
-                  "تم النسخ لكن تعذر تحديث قائمة عروض المواد"
-              );
-            }
-
-            setOfferings(
-              extractList(
-                refreshedOfferings
-                  ?.data
-              )
-            );
-          }
-        }
-      } catch (requestError) {
-        const rawMessage =
-          getMessage(
-            requestError,
-            "تعذر نسخ عروض المواد"
-          );
-
-        const message =
-          /Source or target academic year has no terms configured/i.test(
-            String(rawMessage)
-          )
-            ? "تعذر النسخ لأن السنة الحالية أو السنة السابقة لا تحتوي على ترمات مهيأة."
-            : rawMessage;
-
-        setError(message);
-        toast.error(message);
-      } finally {
-        setSaving(false);
-      }
-    };
+    toast.success("تم نسخ عروض المواد بنجاح");
+    await loadOfferings();
+  };
 
   const dialogDefaults = useMemo(
     () => ({
@@ -1127,7 +876,9 @@ const SubjectOfferings = () => {
         sx={{
           width: "100%",
           minHeight: "100%",
-          bgcolor: "transparent",
+          bgcolor: COLORS.page,
+          py: { xs: 1.5, md: 2.5 },
+          px: { xs: 1.2, md: 2.2 },
         }}
       >
       <Box sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}>
@@ -1183,16 +934,7 @@ const SubjectOfferings = () => {
             <Stack direction="row" gap={1} flexWrap="wrap">
               <Button
                 variant="outlined"
-                startIcon={
-                  saving ? (
-                    <CircularProgress
-                      size={15}
-                      color="inherit"
-                    />
-                  ) : (
-                    <ContentCopyRounded />
-                  )
-                }
+                startIcon={<ContentCopyRounded />}
                 onClick={copyFromPreviousYear}
                 disabled={saving || academicYears.length < 2}
                 sx={{
@@ -1245,69 +987,6 @@ const SubjectOfferings = () => {
             sx={{ borderRadius: "13px", mb: 1.5 }}
           >
             {error}
-          </Alert>
-        ) : null}
-
-        {!loadingInitial &&
-        selectedYearId &&
-        terms.length === 0 ? (
-          <Alert
-            severity="info"
-            sx={{
-              borderRadius: "13px",
-              mb: 1.5,
-              alignItems: "center",
-              "& .MuiAlert-message": {
-                width: "100%",
-              },
-            }}
-            action={
-              previousYear ? (
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={
-                    copyFromPreviousYear
-                  }
-                  disabled={saving}
-                  startIcon={
-                    saving ? (
-                      <CircularProgress
-                        size={15}
-                        color="inherit"
-                      />
-                    ) : (
-                      <ContentCopyRounded />
-                    )
-                  }
-                  sx={{
-                    fontWeight: 900,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  تجهيز من السنة السابقة
-                </Button>
-              ) : null
-            }
-          >
-            <Typography
-              sx={{
-                fontWeight: 900,
-                color: COLORS.navy,
-                fontSize: 12,
-              }}
-            >
-              السنة الدراسية المحددة لا تحتوي على ترمات
-            </Typography>
-            <Typography
-              sx={{
-                mt: 0.25,
-                color: COLORS.muted,
-                fontSize: 10.5,
-              }}
-            >
-              يجب إعداد الترمات أولًا قبل إضافة أو نسخ عروض المواد. عند استخدام زر التجهيز سيتم نسخ الترمات من السنة السابقة ثم استكمال نسخ عروض المواد تلقائيًا.
-            </Typography>
           </Alert>
         ) : null}
 
