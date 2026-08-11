@@ -4,6 +4,7 @@
   SaveRounded,
 } from "@mui/icons-material";
 import {
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -12,7 +13,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -23,22 +24,47 @@ import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
 import Select from "@/components/Select/Select";
 import { formFieldsSx, pageCardSx } from "@/components/financial/FinancialShell";
-import Years from "@/utils/constants/Years";
+import { useFeeConfigOptions } from "@/utils/hooks/apis/financials/useFeeConfigOptions";
 
 const FeeConfigsAddPage = () => {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      academicYearId: "",
+      gradeLevelId: "",
+      tuitionFee: "",
+      expatriateSurchargePercentage: 15,
+    },
+  });
 
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const {
+    academicYearOptions,
+    gradeLevelOptions,
+    activeAcademicYearId,
+    loadingOptions,
+    optionsError,
+  } = useFeeConfigOptions();
+
+  useEffect(() => {
+    if (activeAcademicYearId) {
+      setValue("academicYearId", activeAcademicYearId);
+    }
+  }, [activeAcademicYearId, setValue]);
 
   const onSubmit = async (formValues) => {
     const payload = {
-      academicYear: formValues.academicYear,
+      academicYearId: formValues.academicYearId,
+      gradeLevelId: formValues.gradeLevelId,
       tuitionFee: Number(formValues.tuitionFee),
+      expatriateSurchargePercentage: Number(
+        formValues.expatriateSurchargePercentage,
+      ),
     };
 
     setLoading(true);
@@ -85,7 +111,7 @@ const FeeConfigsAddPage = () => {
           >
             <Back title="إضافة إعداد رسوم" />
             <Typography sx={{ color: "var(--color-muted)", fontSize: 10 }}>
-              اختر السنة الدراسية وأدخل قيمة الرسوم السنوية.
+              حدّد السنة والصف والرسوم السنوية ونسبة الزيادة لغير الجنسيات المحلية.
             </Typography>
           </Stack>
         </Paper>
@@ -124,27 +150,55 @@ const FeeConfigsAddPage = () => {
             </Box>
             <Box>
               <Typography
-                sx={{ color: "var(--color-navy-deep)", fontSize: 16, fontWeight: 800 }}
+                sx={{
+                  color: "var(--color-navy-deep)",
+                  fontSize: 16,
+                  fontWeight: 800,
+                }}
               >
                 تفاصيل إعداد الرسوم
               </Typography>
-              <Typography sx={{ mt: 0.2, color: "var(--color-muted)", fontSize: 10 }}>
-                يجب إنشاء إعداد واحد فقط لكل سنة دراسية.
+              <Typography
+                sx={{ mt: 0.2, color: "var(--color-muted)", fontSize: 10 }}
+              >
+                يجب إنشاء إعداد واحد فقط لكل سنة دراسية وصف دراسي.
               </Typography>
             </Box>
           </Stack>
+
+          {optionsError && (
+            <Alert severity="warning" sx={{ mb: 1.5, borderRadius: "12px" }}>
+              {optionsError}
+            </Alert>
+          )}
 
           <Grid container spacing={1.5}>
             <Grid item xs={12} sm={6}>
               <Select
                 register={register}
-                registerName="academicYear"
-                data={Years}
-                error={errors.academicYear?.message}
+                registerName="academicYearId"
+                data={academicYearOptions}
+                name="name"
+                error={errors.academicYearId?.message}
                 label="السنة الدراسية"
                 required
+                disabled={loadingOptions}
               />
             </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <Select
+                register={register}
+                registerName="gradeLevelId"
+                data={gradeLevelOptions}
+                name="name"
+                error={errors.gradeLevelId?.message}
+                label="الصف الدراسي"
+                required
+                disabled={loadingOptions}
+              />
+            </Grid>
+
             <Grid item xs={12} sm={6}>
               <Input
                 register={register}
@@ -154,6 +208,21 @@ const FeeConfigsAddPage = () => {
                 required
                 type="number"
                 valueAsNumber
+                inputProps={{ min: 0, step: "0.01" }}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <Input
+                register={register}
+                registerName="expatriateSurchargePercentage"
+                error={errors.expatriateSurchargePercentage?.message}
+                label="نسبة زيادة غير المحليين (%)"
+                required
+                type="number"
+                valueAsNumber
+                defaultValue={15}
+                inputProps={{ min: 0, max: 100, step: "0.01" }}
               />
             </Grid>
           </Grid>
@@ -166,10 +235,14 @@ const FeeConfigsAddPage = () => {
           <Stack direction={{ xs: "column-reverse", sm: "row" }} gap={1}>
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || loadingOptions}
               variant="contained"
               startIcon={
-                loading ? <CircularProgress size={16} color="inherit" /> : <SaveRounded />
+                loading ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <SaveRounded />
+                )
               }
               sx={{
                 width: { xs: "100%", sm: 190 },

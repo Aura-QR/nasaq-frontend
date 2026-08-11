@@ -12,8 +12,10 @@ import {
   CircularProgress,
   FormControlLabel,
   Grid,
+  MenuItem,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import { useMemo, useState } from "react";
@@ -26,6 +28,7 @@ import Back from "@/components/Back/Back";
 import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
 import { formFieldsSx, pageCardSx } from "@/components/financial/FinancialShell";
+import { useDiscounts } from "@/utils/hooks/apis/financials/useDiscounts";
 
 const InstallmentPlansAddPage = () => {
   const {
@@ -34,10 +37,31 @@ const InstallmentPlansAddPage = () => {
     watch,
     setValue,
     formState: { errors },
-  } = useForm({ defaultValues: { isDefault: false, dueDates: [] } });
+  } = useForm({
+    defaultValues: {
+      isDefault: false,
+      dueDates: [],
+      linkedDiscountId: "",
+    },
+  });
 
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { discounts, loading: discountsLoading } = useDiscounts();
+
+  const discountOptions = useMemo(
+    () =>
+      (discounts || []).map((discount) => ({
+        ...discount,
+        id: discount?._id || discount?.id || "",
+        displayName: `${discount?.name || "خصم"}${
+          discount?.percentage !== undefined && discount?.percentage !== null
+            ? ` (${discount.percentage}%)`
+            : ""
+        }${discount?.isActive === false ? " - غير نشط" : ""}`,
+      })).filter((discount) => Boolean(discount.id)),
+    [discounts],
+  );
 
   const numberOfInstallments = Number(watch("numberOfInstallments") || 0);
   const safeInstallmentsCount = useMemo(
@@ -62,6 +86,7 @@ const InstallmentPlansAddPage = () => {
       numberOfInstallments: Number(formValues.numberOfInstallments),
       dueDates,
       isDefault: Boolean(formValues.isDefault),
+      linkedDiscountId: formValues.linkedDiscountId || undefined,
     };
 
     setLoading(true);
@@ -161,12 +186,35 @@ const InstallmentPlansAddPage = () => {
                 rows={3}
               />
             </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                select
+                fullWidth
+                label="الخصم المرتبط"
+                disabled={discountsLoading}
+                helperText={
+                  discountsLoading
+                    ? "جاري تحميل الخصومات..."
+                    : "اختياري — يطبّق الخصم المرتبط بهذه الخطة تلقائيًا حسب منطق الباك."
+                }
+                {...register("linkedDiscountId")}
+              >
+                <MenuItem value="">بدون خصم مرتبط</MenuItem>
+                {discountOptions.map((discount) => (
+                  <MenuItem key={discount.id} value={discount.id}>
+                    {discount.displayName}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6}>
               <FormControlLabel
                 sx={{
                   m: 0,
                   px: 1.25,
                   py: 0.55,
+                  width: "100%",
+                  minHeight: 48,
                   border: "1px solid rgba(36,74,112,.08)",
                   borderRadius: "12px",
                   bgcolor: "var(--color-white)",

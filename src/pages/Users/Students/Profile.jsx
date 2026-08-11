@@ -1,11 +1,21 @@
 import {
+  Alert,
   Avatar,
   Box,
   Button,
   Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
   Grid,
   IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Skeleton,
   Stack,
   Tooltip,
@@ -21,6 +31,7 @@ import {
   HomeOutlined,
   LocalPhoneOutlined,
   PersonOutlineRounded,
+  PersonAddAlt1Rounded,
   SchoolOutlined,
   ToggleOnRounded,
 } from "@mui/icons-material";
@@ -47,6 +58,13 @@ import {
   toggleActiveStudent,
 } from "@/APIs/users/students";
 
+import {
+  createStudentEnrollment,
+  fetchStudentEnrollments,
+} from "@/APIs/school/enrollments";
+import { fetchAcademicYears } from "@/APIs/school/academicYears";
+import { getSchoolClasses } from "@/APIs/school/classes";
+
 import { api } from "@/APIs/Axios";
 
 import { formatDate } from "@/utils/helpers/dateUtils";
@@ -58,6 +76,14 @@ import {
   getStudentClassLabel,
   mergeStudentEnrollment,
 } from "@/utils/helpers/studentAcademic";
+import {
+  extractApiList,
+  getClassDisplayName,
+  getClassGradeLevelName,
+  getClassId,
+  getClassRoomNumber,
+  getEntityId,
+} from "@/utils/school/classData";
 
 
 const fetchStudentEnrollmentHistory =
@@ -243,6 +269,181 @@ const Profile = () => {
   const [toggleLoading, setToggleLoading] =
     useState(false);
 
+  const [enrollDialogOpen, setEnrollDialogOpen] =
+    useState(false);
+  const [enrollOptionsLoading, setEnrollOptionsLoading] =
+    useState(false);
+  const [enrollSubmitting, setEnrollSubmitting] =
+    useState(false);
+  const [academicYears, setAcademicYears] =
+    useState([]);
+  const [availableClasses, setAvailableClasses] =
+    useState([]);
+  const [selectedAcademicYearId, setSelectedAcademicYearId] =
+    useState("");
+  const [selectedClassId, setSelectedClassId] =
+    useState("");
+  const [enrollError, setEnrollError] =
+    useState("");
+
+  const refreshEnrollment = async () => {
+    const response =
+      await fetchStudentEnrollments(id);
+
+    if (response?.status === false) {
+      setCurrentEnrollment(null);
+      return null;
+    }
+
+    const enrollment =
+      getCurrentEnrollment(response);
+    setCurrentEnrollment(enrollment);
+    return enrollment;
+  };
+
+  const openEnrollmentDialog = async () => {
+    setEnrollDialogOpen(true);
+    setEnrollOptionsLoading(true);
+    setEnrollError("");
+    setSelectedAcademicYearId("");
+    setSelectedClassId("");
+    setAvailableClasses([]);
+
+    try {
+      const response =
+        await fetchAcademicYears({
+          force: true,
+        });
+
+      if (response?.status === false) {
+        setAcademicYears([]);
+        setEnrollError(
+          response?.message ||
+            "تعذر تحميل السنوات الدراسية"
+        );
+        return;
+      }
+
+      const years = extractApiList(
+        response,
+        ["academicYears", "years"]
+      );
+
+      setAcademicYears(years);
+
+      const activeYear = years.find(
+        (year) =>
+          String(year?.status || "").toLowerCase() ===
+          "active"
+      );
+
+      if (activeYear) {
+        setSelectedAcademicYearId(
+          getEntityId(activeYear)
+        );
+      }
+    } finally {
+      setEnrollOptionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (
+      !enrollDialogOpen ||
+      !selectedAcademicYearId
+    ) {
+      setAvailableClasses([]);
+      setSelectedClassId("");
+      return;
+    }
+
+    let active = true;
+
+    const loadClasses = async () => {
+      setEnrollOptionsLoading(true);
+      setEnrollError("");
+      setSelectedClassId("");
+
+      const response =
+        await getSchoolClasses(
+          {
+            page: 1,
+            limit: 1000,
+            academicYearId:
+              selectedAcademicYearId,
+          },
+          { force: true }
+        );
+
+      if (!active) return;
+
+      if (response?.status === false) {
+        setAvailableClasses([]);
+        setEnrollError(
+          response?.message ||
+            "تعذر تحميل الفصول"
+        );
+      } else {
+        setAvailableClasses(
+          extractApiList(response, ["classes"])
+        );
+      }
+
+      setEnrollOptionsLoading(false);
+    };
+
+    loadClasses();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    enrollDialogOpen,
+    selectedAcademicYearId,
+  ]);
+
+  const handleRetryEnrollment = async () => {
+    if (
+      !selectedAcademicYearId ||
+      !selectedClassId
+    ) {
+      setEnrollError(
+        "اختر السنة الدراسية والفصل أولًا"
+      );
+      return;
+    }
+
+    setEnrollSubmitting(true);
+    setEnrollError("");
+
+    const response =
+      await createStudentEnrollment({
+        studentId: id,
+        classId: selectedClassId,
+        academicYearId:
+          selectedAcademicYearId,
+      });
+
+    if (response?.status === false) {
+      const message =
+        response?.message ||
+        "تعذر تسجيل الطالب في الفصل";
+
+      setEnrollError(message);
+      toast.error(message);
+      setEnrollSubmitting(false);
+      return;
+    }
+
+    await refreshEnrollment();
+
+    toast.success(
+      "تم تسجيل الطالب في الفصل بنجاح"
+    );
+    setEnrollSubmitting(false);
+    setEnrollDialogOpen(false);
+  };
+
   const handleDelete = async () => {
     try {
       const response = await deleteStudent(id);
@@ -384,6 +585,13 @@ const Profile = () => {
           onDelete={() => setDeleteOpen(true)}
         />
 
+        {!currentEnrollment &&
+          permissions.edit && (
+            <EnrollmentRetryCard
+              onRetry={openEnrollmentDialog}
+            />
+          )}
+
         <StudentDetails
           student={displayStudent}
         />
@@ -396,9 +604,316 @@ const Profile = () => {
         type="delete"
         fn={handleDelete}
       />
+
+      <EnrollmentRetryDialog
+        open={enrollDialogOpen}
+        onClose={() => {
+          if (!enrollSubmitting) {
+            setEnrollDialogOpen(false);
+          }
+        }}
+        years={academicYears}
+        classes={availableClasses}
+        academicYearId={
+          selectedAcademicYearId
+        }
+        classId={selectedClassId}
+        onAcademicYearChange={(value) =>
+          setSelectedAcademicYearId(value)
+        }
+        onClassChange={setSelectedClassId}
+        loading={enrollOptionsLoading}
+        submitting={enrollSubmitting}
+        error={enrollError}
+        onSubmit={handleRetryEnrollment}
+      />
     </Container>
   );
 };
+
+const EnrollmentRetryCard = ({ onRetry }) => (
+  <Paper
+    elevation={0}
+    sx={{
+      p: {
+        xs: 1.6,
+        md: 1.9,
+      },
+      display: "flex",
+      flexDirection: {
+        xs: "column",
+        sm: "row",
+      },
+      alignItems: {
+        xs: "stretch",
+        sm: "center",
+      },
+      justifyContent: "space-between",
+      gap: 1.5,
+      border:
+        "1px solid rgba(211, 164, 79, 0.22)",
+      borderRadius: "18px",
+      background:
+        "linear-gradient(135deg, rgba(251,240,216,0.72), rgba(255,255,255,0.96))",
+    }}
+  >
+    <Box>
+      <Typography
+        sx={{
+          color: "var(--color-navy-deep)",
+          fontSize: "14px",
+          fontWeight: 800,
+        }}
+      >
+        الطالب غير مسجل في فصل
+      </Typography>
+      <Typography
+        sx={{
+          mt: 0.35,
+          color: "var(--color-muted)",
+          fontSize: "10.5px",
+          lineHeight: 1.7,
+        }}
+      >
+        إذا فشل التسجيل سابقًا بسبب إعداد رسوم ناقص، أنشئ إعداد الرسوم ثم أعد محاولة تسجيل الطالب من هنا.
+      </Typography>
+    </Box>
+
+    <Button
+      type="button"
+      onClick={onRetry}
+      startIcon={<PersonAddAlt1Rounded />}
+      variant="contained"
+      sx={{
+        minHeight: 42,
+        px: 2,
+        flexShrink: 0,
+        borderRadius: "12px",
+        color: "var(--color-white)",
+        background:
+          "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
+        fontSize: "11px",
+        fontWeight: 800,
+        textTransform: "none",
+        "& .MuiButton-startIcon": {
+          marginLeft: "6px",
+          marginRight: 0,
+        },
+      }}
+    >
+      تسجيل الطالب في فصل
+    </Button>
+  </Paper>
+);
+
+const EnrollmentRetryDialog = ({
+  open,
+  onClose,
+  years,
+  classes,
+  academicYearId,
+  classId,
+  onAcademicYearChange,
+  onClassChange,
+  loading,
+  submitting,
+  error,
+  onSubmit,
+}) => (
+  <Dialog
+    open={open}
+    onClose={onClose}
+    fullWidth
+    maxWidth="sm"
+    PaperProps={{
+      sx: {
+        borderRadius: "18px",
+        backgroundColor:
+          "var(--color-cream)",
+      },
+    }}
+  >
+    <DialogTitle
+      sx={{
+        color: "var(--color-navy-deep)",
+        fontSize: "18px",
+        fontWeight: 800,
+      }}
+    >
+      تسجيل الطالب في فصل
+    </DialogTitle>
+
+    <DialogContent>
+      <Typography
+        sx={{
+          mb: 2,
+          color: "var(--color-muted)",
+          fontSize: "11px",
+          lineHeight: 1.8,
+        }}
+      >
+        اختر السنة والفصل. عند نجاح التسجيل سيُنشئ النظام السجل المالي للطالب تلقائيًا حسب إعداد الرسوم الموجود للصف.
+      </Typography>
+
+      {error && (
+        <Alert
+          severity="error"
+          sx={{ mb: 1.5 }}
+        >
+          {error}
+        </Alert>
+      )}
+
+      <Stack spacing={1.5}>
+        <FormControl fullWidth size="small">
+          <InputLabel id="retry-enrollment-year-label">
+            السنة الدراسية
+          </InputLabel>
+          <Select
+            labelId="retry-enrollment-year-label"
+            value={academicYearId}
+            label="السنة الدراسية"
+            disabled={loading || submitting}
+            onChange={(event) =>
+              onAcademicYearChange(
+                event.target.value
+              )
+            }
+          >
+            {years.map((year) => {
+              const yearId = getEntityId(year);
+              return (
+                <MenuItem
+                  key={yearId}
+                  value={yearId}
+                >
+                  {year?.name || yearId}
+                  {String(
+                    year?.status || ""
+                  ).toLowerCase() === "active"
+                    ? " — نشطة"
+                    : ""}
+                </MenuItem>
+              );
+            })}
+          </Select>
+        </FormControl>
+
+        <FormControl
+          fullWidth
+          size="small"
+          disabled={
+            !academicYearId ||
+            loading ||
+            submitting
+          }
+        >
+          <InputLabel id="retry-enrollment-class-label">
+            الفصل
+          </InputLabel>
+          <Select
+            labelId="retry-enrollment-class-label"
+            value={classId}
+            label="الفصل"
+            onChange={(event) =>
+              onClassChange(
+                event.target.value
+              )
+            }
+          >
+            {classes.map((item) => {
+              const itemId = getClassId(item);
+              const details = [
+                getClassGradeLevelName(item),
+                getClassRoomNumber(item),
+              ]
+                .filter(
+                  (value) =>
+                    value && value !== "—"
+                )
+                .join(" • ");
+
+              return (
+                <MenuItem
+                  key={itemId}
+                  value={itemId}
+                >
+                  {getClassDisplayName(item)}
+                  {details
+                    ? ` — ${details}`
+                    : ""}
+                </MenuItem>
+              );
+            })}
+          </Select>
+        </FormControl>
+
+        {loading && (
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+          >
+            <CircularProgress size={17} />
+            <Typography
+              sx={{
+                color: "var(--color-muted)",
+                fontSize: "10.5px",
+              }}
+            >
+              جاري تحميل الخيارات...
+            </Typography>
+          </Stack>
+        )}
+
+        {!loading &&
+          academicYearId &&
+          classes.length === 0 && (
+            <Alert severity="info">
+              لا توجد فصول متاحة لهذه السنة الدراسية.
+            </Alert>
+          )}
+      </Stack>
+    </DialogContent>
+
+    <DialogActions sx={{ px: 3, pb: 2.5 }}>
+      <Button
+        type="button"
+        onClick={onClose}
+        disabled={submitting}
+        sx={{
+          color: "var(--color-navy)",
+          fontWeight: 800,
+        }}
+      >
+        إلغاء
+      </Button>
+      <Button
+        type="button"
+        onClick={onSubmit}
+        disabled={
+          loading ||
+          submitting ||
+          !academicYearId ||
+          !classId
+        }
+        variant="contained"
+        sx={{
+          minWidth: 150,
+          borderRadius: "11px",
+          background:
+            "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
+          fontWeight: 800,
+          textTransform: "none",
+        }}
+      >
+        {submitting
+          ? "جاري التسجيل..."
+          : "تسجيل الطالب"}
+      </Button>
+    </DialogActions>
+  </Dialog>
+);
 
 const StudentHeader = ({
   student,

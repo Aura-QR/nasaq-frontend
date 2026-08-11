@@ -307,6 +307,8 @@ const Add = () => {
         .toISOString()
         .split("T")[0],
       isActive: 1,
+      nationality: "",
+      nationalityCode: "",
     },
   });
 
@@ -321,6 +323,9 @@ const Add = () => {
     try {
       setLoading(true);
 
+      const selectedClassId =
+        formData.classId || "";
+
       const payload = {
         ...formData,
         isActive:
@@ -331,20 +336,20 @@ const Add = () => {
       };
 
       /*
-       * الحقول القديمة لا نرسلها للباك.
-       * classId يظل موجودًا لأنه يستخدم
-       * في التسجيل التلقائي داخل الفصل.
+       * إنشاء الطالب والتسجيل في الفصل عمليتان منفصلتان.
+       * لا نرسل classId داخل POST /students حتى لا يفشل
+       * إنشاء الطالب بالكامل إذا لم يوجد Fee Config للفصل.
+       * بعد نجاح إنشاء الطالب نحاول POST /enrollments
+       * باستخدام selectedClassId، وبذلك يمكن إعادة المحاولة
+       * لاحقًا من ملف الطالب إذا فشل التسجيل.
        */
       delete payload.academicYear;
       delete payload.installmentPlanId;
       delete payload.class;
+      delete payload.classId;
       delete payload.currentEnrollment;
       delete payload.enrollment;
       delete payload.enrollments;
-
-      if (!payload.classId) {
-        delete payload.classId;
-      }
 
       if (!payload.password) {
         delete payload.password;
@@ -388,8 +393,7 @@ const Add = () => {
         await ensureStudentEnrollment({
           studentId,
           classId:
-            payload.classId ||
-            "",
+            selectedClassId,
         });
 
       if (
@@ -399,7 +403,7 @@ const Add = () => {
           enrollmentResult.message
         );
       } else if (
-        payload.classId
+        selectedClassId
       ) {
         toast.success(
           "تمت إضافة الطالب وربطه بالفصل بنجاح"

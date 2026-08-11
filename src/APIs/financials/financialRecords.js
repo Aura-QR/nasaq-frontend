@@ -7,4 +7,5 @@ export const fetchMyFinancialRecord=async()=>{try{return(await api.get(`${E}/me`
 export const fetchFinancialSummary=async(id)=>{try{return(await api.get(id?`${E}/${id}/summary`:`${E}/me/summary`)).data}catch(e){return apiError(e,"تعذر تحميل الملخص المالي")}};
 export const fetchMyTripsOverview=async()=>{try{return(await api.get(`${E}/me/trips`)).data}catch(e){return apiError(e,"تعذر تحميل ملخص الرحلات")}};
 export const payTuitionInstallment=async(id,data)=>{try{return(await api.post(`${E}/${id}/tuition/pay`,data)).data}catch(e){return apiError(e,"تعذر تسجيل دفعة المصروفات")}};
-export default {fetchFinancialRecords,fetchSingleFinancialRecord,fetchMyFinancialRecord,fetchFinancialSummary,fetchMyTripsOverview,payTuitionInstallment};
+export const switchTuitionInstallmentPlan=async(id,installmentPlanId)=>{try{return(await api.patch(`${E}/${id}/tuition/switch-plan`,{installmentPlanId})).data}catch(e){return apiError(e,"تعذر تغيير خطة التقسيط")}};
+export default {fetchFinancialRecords,fetchSingleFinancialRecord,fetchMyFinancialRecord,fetchFinancialSummary,fetchMyTripsOverview,payTuitionInstallment,switchTuitionInstallmentPlan};

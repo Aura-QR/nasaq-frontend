@@ -14,18 +14,14 @@
   Paper,
   Select,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 
 import {
-  AccountBalanceWalletRounded,
   DirectionsBusRounded,
-  EventNoteRounded,
-  HistoryRounded,
   LocalActivityRounded,
-  PaymentsRounded,
   ReceiptLongRounded,
-  SchoolRounded,
 } from "@mui/icons-material";
 
 import {
@@ -48,6 +44,7 @@ import { toast } from "react-toastify";
 
 import {
   payTuitionInstallment,
+  switchTuitionInstallmentPlan,
 } from "@/APIs/financials/financialRecords";
 
 import {
@@ -58,6 +55,10 @@ import {
   applyDiscountToTuition,
   removeDiscountFromTuition,
 } from "@/APIs/financials/discounts";
+
+import {
+  payAdditionalFee,
+} from "@/APIs/financials/additionalFees";
 
 import Back from "@/components/Back/Back";
 import Container from "@/components/Container/Container";
@@ -84,6 +85,7 @@ import {
 } from "@/utils/hooks/apis/financials/useFinancialRecord";
 
 import { useFinancialAcademicYears } from "@/utils/hooks/apis/financials/useFinancialAcademicYears";
+import { useInstallmentPlans } from "@/utils/hooks/apis/financials/useInstallmentPlans";
 
 import usePermissions from "@/utils/hooks/usePermissions";
 
@@ -566,11 +568,47 @@ const FinancialRecordProfilePage =
       setDiscountLoading,
     ] = useState(false);
 
+    const [
+      switchPlanOpen,
+      setSwitchPlanOpen,
+    ] = useState(false);
+
+    const [
+      selectedPlanId,
+      setSelectedPlanId,
+    ] = useState("");
+
+    const [
+      switchPlanLoading,
+      setSwitchPlanLoading,
+    ] = useState(false);
+
+    const [
+      additionalPayOpen,
+      setAdditionalPayOpen,
+    ] = useState(false);
+
+    const [
+      selectedAdditionalFee,
+      setSelectedAdditionalFee,
+    ] = useState(null);
+
+    const [
+      additionalPayLoading,
+      setAdditionalPayLoading,
+    ] = useState(false);
+
     const {
       discounts,
       loading:
         discountsLoading,
     } = useDiscounts();
+
+    const {
+      installmentPlans,
+      loading:
+        installmentPlansLoading,
+    } = useInstallmentPlans();
 
     const student =
       financialRecord
@@ -664,16 +702,20 @@ const FinancialRecordProfilePage =
         : cls?.name ||
           "—";
 
-    const planName =
+    const currentPlan =
       financialRecord
-        ?.installmentPlanId
-        ?.name ||
+        ?.installmentPlanId ||
       financialRecord
-        ?.installmentPlan
-        ?.name ||
+        ?.installmentPlan ||
       tuition
-        ?.installmentPlanId
-        ?.name ||
+        ?.installmentPlanId ||
+      null;
+
+    const currentPlanId =
+      idOf(currentPlan);
+
+    const planName =
+      currentPlan?.name ||
       "—";
 
     const paymentHistory =
@@ -726,6 +768,58 @@ const FinancialRecordProfilePage =
           ?.additionalFeeAssignments ||
         financialRecord
           ?.studentAdditionalFees
+      );
+
+    const additionalFeeRows =
+      additionalFees.map(
+        (item) => {
+          const source =
+            item?.additionalFeeId ||
+            item?.additionalFee ||
+            item?.feeId ||
+            {};
+
+          const amount =
+            numberOf(
+              item?.netFee,
+              item?.fee,
+              item?.amount,
+              source?.amount
+            );
+
+          const paid =
+            numberOf(
+              item?.totalPaid,
+              item?.paidAmount
+            );
+
+          return {
+            raw: item,
+            feeId:
+              idOf(source) ||
+              idOf(item?.feeId) ||
+              idOf(item),
+            name:
+              item?.name ||
+              source?.name ||
+              "رسم إضافي",
+            amount,
+            paid,
+            remaining:
+              Math.max(
+                amount - paid,
+                0
+              ),
+            status:
+              item?.status ||
+              (amount > 0 &&
+              paid >= amount
+                ? "paid"
+                : paid > 0
+                  ? "partial"
+                  : "unpaid"),
+          };
+        }
       );
 
     const additionalRemaining =
@@ -828,6 +922,22 @@ const FinancialRecordProfilePage =
           item?.isActive
       );
 
+    const availableInstallmentPlans =
+      asArray(
+        installmentPlans
+      ).filter(
+        (item) =>
+          item?.isActive !== false &&
+          idOf(item) !== currentPlanId
+      );
+
+    const selectedPlan =
+      availableInstallmentPlans.find(
+        (item) =>
+          idOf(item) ===
+          selectedPlanId
+      ) || null;
+
     const handleOpenPay =
       (installment) => {
         setSelectedInstallment(
@@ -844,6 +954,73 @@ const FinancialRecordProfilePage =
         setRefundOpen(
           true
         );
+      };
+
+    const handleOpenSwitchPlan =
+      () => {
+        if (totalPaid > 0) {
+          toast.error(
+            "لا يمكن تغيير خطة التقسيط بعد تسجيل دفعات"
+          );
+          return;
+        }
+
+        setSelectedPlanId("");
+        setSwitchPlanOpen(true);
+      };
+
+    const handleSwitchPlan =
+      async () => {
+        if (
+          !studentId ||
+          !selectedPlanId
+        ) {
+          toast.error(
+            "اختر خطة تقسيط أولًا"
+          );
+          return;
+        }
+
+        if (!permissions?.edit) {
+          toast.error(
+            "ليس لديك صلاحية تغيير خطة التقسيط"
+          );
+          return;
+        }
+
+        if (totalPaid > 0) {
+          toast.error(
+            "لا يمكن تغيير خطة التقسيط بعد تسجيل دفعات"
+          );
+          return;
+        }
+
+        setSwitchPlanLoading(true);
+
+        const response =
+          await switchTuitionInstallmentPlan(
+            studentId,
+            selectedPlanId
+          );
+
+        if (response?.status) {
+          toast.success(
+            response?.message ||
+              "تم تغيير خطة التقسيط بنجاح"
+          );
+          setSwitchPlanOpen(false);
+          setSelectedPlanId("");
+          await refetch();
+        } else {
+          toast.error(
+            getErrorMessage(
+              response,
+              "تعذر تغيير خطة التقسيط"
+            )
+          );
+        }
+
+        setSwitchPlanLoading(false);
       };
 
     const closeDialogs =
@@ -1097,6 +1274,93 @@ const FinancialRecordProfilePage =
         }
 
         setActionLoading(
+          false
+        );
+      };
+
+    const handleAdditionalFeePayment =
+      async (formData) => {
+        if (
+          !studentId ||
+          !selectedAdditionalFee
+        ) {
+          return;
+        }
+
+        if (!permissions?.edit) {
+          toast.error(
+            "ليس لديك صلاحية تسجيل سداد الرسوم الإضافية"
+          );
+          return;
+        }
+
+        const amount =
+          Number(formData.amount);
+
+        const expectedAmount =
+          Number(
+            selectedAdditionalFee.remaining
+          );
+
+        if (
+          !Number.isFinite(amount) ||
+          amount <= 0
+        ) {
+          toast.error(
+            "أدخل مبلغ سداد صحيح"
+          );
+          return;
+        }
+
+        if (
+          Math.abs(
+            amount - expectedAmount
+          ) > 0.000001
+        ) {
+          toast.error(
+            `يجب سداد المبلغ المستحق كاملًا: ${formatMoney(
+              expectedAmount
+            )}`
+          );
+          return;
+        }
+
+        setAdditionalPayLoading(
+          true
+        );
+
+        const response =
+          await payAdditionalFee(
+            studentId,
+            selectedAdditionalFee.feeId,
+            {
+              amount,
+              paidAt:
+                formData.paidAt,
+              notes:
+                formData.notes ||
+                undefined,
+            }
+          );
+
+        if (response?.status) {
+          toast.success(
+            response?.message ||
+              "تم تسجيل سداد الرسم الإضافي بنجاح"
+          );
+          setAdditionalPayOpen(false);
+          setSelectedAdditionalFee(null);
+          await refetch();
+        } else {
+          toast.error(
+            getErrorMessage(
+              response,
+              "تعذر تسجيل سداد الرسم الإضافي"
+            )
+          );
+        }
+
+        setAdditionalPayLoading(
           false
         );
       };
@@ -1449,6 +1713,121 @@ const FinancialRecordProfilePage =
             </Box>
           </Paper>
 
+          {additionalFeeRows.length > 0 && (
+            <Paper
+              elevation={0}
+              sx={{
+                mt: 1.25,
+                p: { xs: 1.5, md: 2 },
+                border: "1px solid rgba(36,74,112,.09)",
+                borderRadius: "18px",
+                bgcolor: "var(--color-cream)",
+              }}
+            >
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                justifyContent="space-between"
+                alignItems={{ xs: "stretch", sm: "center" }}
+                gap={1}
+                mb={1.25}
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: "14px",
+                      fontWeight: 800,
+                      color: "var(--color-navy-deep)",
+                    }}
+                  >
+                    الرسوم الإضافية المستحقة
+                  </Typography>
+                  <Typography
+                    sx={{ mt: 0.25, fontSize: "10px", color: "var(--color-muted)" }}
+                  >
+                    يتم سداد الرسم الإضافي بالقيمة المستحقة كاملة دون رقم قسط.
+                  </Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  label={`${additionalFeeRows.length} رسوم`}
+                />
+              </Stack>
+
+              <Box sx={{ overflowX: "auto" }}>
+                <Box
+                  component="table"
+                  sx={{
+                    width: "100%",
+                    minWidth: 720,
+                    borderCollapse: "separate",
+                    borderSpacing: "0 8px",
+                    "& th": {
+                      p: 1,
+                      bgcolor: "rgba(36,74,112,.045)",
+                      fontSize: "10px",
+                      textAlign: "right",
+                    },
+                    "& td": {
+                      p: 1,
+                      bgcolor: "white",
+                      borderTop: "1px solid rgba(36,74,112,.08)",
+                      borderBottom: "1px solid rgba(36,74,112,.08)",
+                      fontSize: "11px",
+                    },
+                  }}
+                >
+                  <thead>
+                    <tr>
+                      <th>الرسم</th>
+                      <th>القيمة</th>
+                      <th>المدفوع</th>
+                      <th>المتبقي</th>
+                      <th>الحالة</th>
+                      <th>الإجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {additionalFeeRows.map((item, index) => (
+                      <tr key={`${item.feeId}-${index}`}>
+                        <td>{item.name}</td>
+                        <td>{formatMoney(item.amount)}</td>
+                        <td>{formatMoney(item.paid)}</td>
+                        <td>{formatMoney(item.remaining)}</td>
+                        <td>
+                          <Chip
+                            size="small"
+                            label={mapFeeStatus(item.status)}
+                          />
+                        </td>
+                        <td>
+                          {permissions?.edit && item.remaining > 0 ? (
+                            <Button
+                              variant="contained"
+                              onClick={() => {
+                                setSelectedAdditionalFee(item);
+                                setAdditionalPayOpen(true);
+                              }}
+                              sx={{
+                                minHeight: 34,
+                                borderRadius: "9px",
+                                fontSize: "9.5px",
+                                fontWeight: 800,
+                              }}
+                            >
+                              تسجيل سداد
+                            </Button>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Box>
+              </Box>
+            </Paper>
+          )}
+
           <Paper
             elevation={0}
             sx={{
@@ -1514,21 +1893,67 @@ const FinancialRecordProfilePage =
                 </Typography>
               </Box>
 
-              <Typography
-                sx={{
-                  fontSize:
-                    "10px",
-                  fontWeight:
-                    800,
-                  color:
-                    "var(--color-muted)",
+              <Stack
+                direction={{
+                  xs: "column",
+                  sm: "row",
                 }}
+                alignItems={{
+                  xs: "stretch",
+                  sm: "center",
+                }}
+                gap={1}
               >
-                المتبقي الكلي:{" "}
-                {formatMoney(
-                  remaining
+                <Typography
+                  sx={{
+                    fontSize:
+                      "10px",
+                    fontWeight:
+                      800,
+                    color:
+                      "var(--color-muted)",
+                  }}
+                >
+                  المتبقي الكلي:{" "}
+                  {formatMoney(
+                    remaining
+                  )}
+                </Typography>
+
+                {permissions?.edit && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={
+                      handleOpenSwitchPlan
+                    }
+                    disabled={
+                      totalPaid > 0 ||
+                      installmentPlansLoading ||
+                      availableInstallmentPlans.length === 0
+                    }
+                    title={
+                      totalPaid > 0
+                        ? "لا يمكن تغيير الخطة بعد تسجيل دفعات"
+                        : "تغيير خطة التقسيط"
+                    }
+                    sx={{
+                      borderRadius:
+                        "10px",
+                      fontWeight:
+                        800,
+                      fontSize:
+                        "10px",
+                      textTransform:
+                        "none",
+                      whiteSpace:
+                        "nowrap",
+                    }}
+                  >
+                    تغيير خطة التقسيط
+                  </Button>
                 )}
-              </Typography>
+              </Stack>
             </Stack>
 
             {installments.length ===
@@ -2440,6 +2865,155 @@ const FinancialRecordProfilePage =
             </Stack>
           </Paper>
 
+          <Dialog
+            open={switchPlanOpen}
+            onClose={() => {
+              if (!switchPlanLoading) {
+                setSwitchPlanOpen(false);
+                setSelectedPlanId("");
+              }
+            }}
+            fullWidth
+            maxWidth="sm"
+            PaperProps={{
+              sx: {
+                borderRadius: "18px",
+                bgcolor: "var(--color-cream)",
+              },
+            }}
+          >
+            <DialogTitle
+              sx={{
+                fontWeight: 800,
+                color: "var(--color-navy-deep)",
+              }}
+            >
+              تغيير خطة التقسيط
+            </DialogTitle>
+
+            <DialogContent>
+              <Typography
+                sx={{
+                  mb: 1.5,
+                  fontSize: "10.5px",
+                  color: "var(--color-muted)",
+                }}
+              >
+                الخطة الحالية: {planName}. عند اختيار خطة مرتبطة بخصم، يقوم النظام بإعادة حساب الرسوم تلقائيًا.
+              </Typography>
+
+              <FormControl
+                size="small"
+                fullWidth
+              >
+                <InputLabel>
+                  الخطة الجديدة
+                </InputLabel>
+                <Select
+                  value={selectedPlanId}
+                  label="الخطة الجديدة"
+                  onChange={(event) =>
+                    setSelectedPlanId(
+                      event.target.value
+                    )
+                  }
+                  disabled={
+                    installmentPlansLoading ||
+                    switchPlanLoading
+                  }
+                >
+                  {availableInstallmentPlans.map(
+                    (item) => {
+                      const linkedDiscount =
+                        item?.linkedDiscountId;
+                      const percentage =
+                        linkedDiscount &&
+                        typeof linkedDiscount === "object"
+                          ? linkedDiscount?.percentage
+                          : null;
+
+                      return (
+                        <MenuItem
+                          key={idOf(item)}
+                          value={idOf(item)}
+                        >
+                          {item?.name || "خطة"}
+                          {` · ${numberOf(
+                            item?.numberOfInstallments
+                          )} قسط`}
+                          {percentage
+                            ? ` · خصم ${percentage}%`
+                            : ""}
+                        </MenuItem>
+                      );
+                    }
+                  )}
+                </Select>
+              </FormControl>
+
+              {selectedPlan?.linkedDiscountId &&
+                typeof selectedPlan.linkedDiscountId === "object" && (
+                  <Typography
+                    sx={{
+                      mt: 1,
+                      fontSize: "10px",
+                      color: "var(--color-muted)",
+                    }}
+                  >
+                    الخصم المرتبط: {selectedPlan.linkedDiscountId?.name || "خصم"}
+                    {selectedPlan.linkedDiscountId?.percentage
+                      ? ` (${selectedPlan.linkedDiscountId.percentage}%)`
+                      : ""}
+                  </Typography>
+                )}
+            </DialogContent>
+
+            <DialogActions
+              sx={{ p: 2, pt: 0 }}
+            >
+              <Button
+                onClick={() => {
+                  setSwitchPlanOpen(false);
+                  setSelectedPlanId("");
+                }}
+                disabled={switchPlanLoading}
+                sx={{ textTransform: "none" }}
+              >
+                إلغاء
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleSwitchPlan}
+                disabled={
+                  !selectedPlanId ||
+                  switchPlanLoading
+                }
+                sx={{
+                  borderRadius: "10px",
+                  fontWeight: 800,
+                  textTransform: "none",
+                }}
+              >
+                {switchPlanLoading
+                  ? "جاري التغيير..."
+                  : "تأكيد تغيير الخطة"}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          <AdditionalFeePayDialog
+            open={additionalPayOpen}
+            onClose={() => {
+              if (!additionalPayLoading) {
+                setAdditionalPayOpen(false);
+                setSelectedAdditionalFee(null);
+              }
+            }}
+            item={selectedAdditionalFee}
+            loading={additionalPayLoading}
+            onSubmit={handleAdditionalFeePayment}
+          />
+
           <PayDialog
             open={
               payOpen
@@ -2482,6 +3056,143 @@ const FinancialRecordProfilePage =
       </Container>
     );
   };
+
+const AdditionalFeePayDialog = ({
+  open,
+  onClose,
+  item,
+  loading,
+  onSubmit,
+}) => {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm();
+
+  useEffect(() => {
+    if (item) {
+      reset({
+        amount: item.remaining,
+        paidAt: new Date()
+          .toISOString()
+          .slice(0, 10),
+        notes: "",
+      });
+    }
+  }, [item, reset]);
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      PaperProps={{
+        sx: {
+          borderRadius: "18px",
+          bgcolor: "var(--color-cream)",
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          fontWeight: 800,
+          color: "var(--color-navy-deep)",
+        }}
+      >
+        تسجيل سداد رسم إضافي
+      </DialogTitle>
+      <DialogContent>
+        <Typography
+          sx={{
+            mb: 1.5,
+            fontSize: "10.5px",
+            color: "var(--color-muted)",
+          }}
+        >
+          {item
+            ? `${item.name} — المستحق ${formatMoney(item.remaining)}`
+            : ""}
+        </Typography>
+
+        <Box
+          component="form"
+          id="additional-fee-payment-form"
+          onSubmit={handleSubmit(onSubmit)}
+        >
+          <Stack spacing={1.5}>
+            <TextField
+              fullWidth
+              type="number"
+              label="المبلغ"
+              error={Boolean(errors.amount)}
+              helperText={
+                errors.amount?.message ||
+                "يجب سداد القيمة المستحقة كاملة"
+              }
+              inputProps={{
+                min: item?.remaining || 0,
+                max: item?.remaining || undefined,
+                step: "any",
+              }}
+              {...register("amount", {
+                required: "أدخل مبلغ السداد",
+                valueAsNumber: true,
+                validate: (value) =>
+                  Math.abs(
+                    Number(value) -
+                      Number(item?.remaining || 0)
+                  ) < 0.000001 ||
+                  `المبلغ المطلوب هو ${formatMoney(
+                    item?.remaining || 0
+                  )}`,
+              })}
+            />
+            <Input
+              register={register}
+              registerName="paidAt"
+              error={errors.paidAt?.message}
+              label="تاريخ الدفع"
+              required
+              type="date"
+            />
+            <Input
+              register={register}
+              registerName="notes"
+              label="ملاحظات"
+              multiline
+              rows={3}
+            />
+          </Stack>
+        </Box>
+      </DialogContent>
+      <DialogActions sx={{ p: 2, pt: 0 }}>
+        <Button
+          onClick={onClose}
+          disabled={loading}
+        >
+          إلغاء
+        </Button>
+        <Button
+          type="submit"
+          form="additional-fee-payment-form"
+          variant="contained"
+          disabled={loading}
+          sx={{
+            borderRadius: "10px",
+            fontWeight: 800,
+          }}
+        >
+          {loading
+            ? "جاري التسجيل..."
+            : "تسجيل السداد"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 
 const PayDialog = ({
   open,

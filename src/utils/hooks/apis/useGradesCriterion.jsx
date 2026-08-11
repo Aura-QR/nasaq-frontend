@@ -18,7 +18,7 @@ export const useGrdaesCriterion = (filters = {}) => {
         setGradesCriterion(res.data);
         setPagination(res.pagination);
       } else {
-        toast.error(res || "حدث خطأ ما أثناء جلب توزيعات الدرجات !");
+        toast.error(res?.message || "حدث خطأ ما أثناء جلب توزيعات الدرجات !");
         setGradesCriterion([]);
         setPagination(null);
       }

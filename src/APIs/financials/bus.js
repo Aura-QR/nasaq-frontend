@@ -1,11 +1,88 @@
 import { api } from "../Axios";
 import { apiError } from "./_helpers";
-const E="/financial/bus";
-export const fetchBusList=async(filters={})=>{try{return(await api.get(E,{params:filters})).data}catch(e){return apiError(e,"تعذر تحميل بيانات الباص")}};
-export const fetchBusCandidates=async(filters={})=>{try{return(await api.get(`${E}/candidates`,{params:filters})).data}catch(e){return apiError(e,"تعذر تحميل الطلاب المتاحين للباص")}};
-export const fetchBusRecord=async(id)=>{try{return(await api.get(`${E}/${id}`)).data}catch(e){return apiError(e,"تعذر تحميل ملف الباص")}};
-export const fetchMyBusRecord=async()=>{try{return(await api.get(`${E}/me`)).data}catch(e){return apiError(e,"تعذر تحميل ملف الباص")}};
-export const enrollBus=async(id,data)=>{try{return(await api.post(`${E}/${id}/enroll`,data)).data}catch(e){return apiError(e,"تعذر تسجيل الطالب في الباص")}};
-export const payBusInstallment=async(id,data)=>{try{return(await api.post(`${E}/${id}/pay`,data)).data}catch(e){return apiError(e,"تعذر تسجيل دفعة الباص")}};
-export const unenrollBus=async(id)=>{try{return(await api.delete(`${E}/${id}/unenroll`)).data}catch(e){return apiError(e,"تعذر إلغاء تسجيل الطالب من الباص")}};
-export default {fetchBusList,fetchBusCandidates,fetchBusRecord,fetchMyBusRecord,enrollBus,payBusInstallment,unenrollBus};
+
+const E = "/financial/bus";
+
+export const fetchBusList = async (filters = {}) => {
+  try {
+    return (await api.get(E, { params: filters })).data;
+  } catch (e) {
+    return apiError(e, "تعذر تحميل بيانات الباص");
+  }
+};
+
+export const fetchBusCandidates = async (filters = {}) => {
+  try {
+    return (await api.get(`${E}/candidates`, { params: filters })).data;
+  } catch (e) {
+    return apiError(e, "تعذر تحميل الطلاب المتاحين للباص");
+  }
+};
+
+export const fetchBusRecord = async (id) => {
+  try {
+    return (await api.get(`${E}/${id}`)).data;
+  } catch (e) {
+    return apiError(e, "تعذر تحميل ملف الباص");
+  }
+};
+
+export const fetchMyBusRecord = async () => {
+  try {
+    return (await api.get(`${E}/me`)).data;
+  } catch (e) {
+    return apiError(e, "تعذر تحميل ملف الباص");
+  }
+};
+
+export const enrollBus = async (id, data) => {
+  try {
+    return (await api.post(`${E}/${id}/enroll`, data)).data;
+  } catch (e) {
+    return apiError(e, "تعذر تسجيل الطالب في الباص");
+  }
+};
+
+export const payBusInstallment = async (id, data) => {
+  try {
+    return (await api.post(`${E}/${id}/pay`, data)).data;
+  } catch (e) {
+    return apiError(e, "تعذر تسجيل دفعة الباص");
+  }
+};
+
+export const refundBusInstallment = async (
+  studentId,
+  installmentNumber,
+  data
+) => {
+  try {
+    return (
+      await api.post(
+        `/financial/records/${studentId}/bus/installments/${installmentNumber}/refund`,
+        data
+      )
+    ).data;
+  } catch (e) {
+    return apiError(e, "تعذر تسجيل استرداد دفعة الباص");
+  }
+};
+
+export const unenrollBus = async (id) => {
+  try {
+    return (await api.delete(`${E}/${id}/unenroll`)).data;
+  } catch (e) {
+    return apiError(e, "تعذر إلغاء تسجيل الطالب من الباص");
+  }
+};
+
+export default {
+  fetchBusList,
+  fetchBusCandidates,
+  fetchBusRecord,
+  fetchMyBusRecord,
+  enrollBus,
+  payBusInstallment,
+  refundBusInstallment,
+  unenrollBus,
+};

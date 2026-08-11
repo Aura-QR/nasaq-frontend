@@ -2,14 +2,13 @@ import {
   Box,
   Button,
   Chip,
-  Grid,
   Paper,
+  Skeleton,
   Stack,
   Typography,
 } from "@mui/material";
 
 import {
-  AddCircleOutlineRounded,
   CalendarMonthRounded,
   FileDownloadOutlined,
   GroupsRounded,
@@ -31,47 +30,165 @@ import Container from "@/components/Container/Container";
 import SearchFilter from "@/components/Filters/SearchFilter";
 import ClassFilter from "@/components/Filters/ClassFilter";
 import DateRangeFilter from "@/components/Filters/DateRangeFilter";
-import ListCard from "@/components/Cards/ListCard";
 import PaginationControls from "@/components/Pagination";
 
 import Add from "./Add";
+import Edit from "./Edit";
+import Delete from "./Delete";
 
 import useDebounce from "@/utils/hooks/useDebounce";
 import { useAttendances } from "@/utils/hooks/apis/useAttendances";
 import usePermissions from "@/utils/hooks/usePermissions";
+import { fetchClasses } from "@/APIs/school/classes";
+import { fetchAcademicYears } from "@/APIs/school/academicYears";
 
 const getArray = (value) =>
   Array.isArray(value) ? value : [];
 
-const getStudentName = (item) =>
-  item?.student?.name ||
-  item?.studentName ||
-  item?.name ||
-  "—";
+const getEmbeddedObject = (value) =>
+  value && typeof value === "object"
+    ? value
+    : null;
 
-const getClassId = (item) =>
-  item?.class?._id ||
-  item?.class?.id ||
-  item?.classId ||
-  "";
+const getStudentData = (item) =>
+  item?.student ||
+  getEmbeddedObject(item?.studentId) ||
+  {};
 
-const getStudentId = (item) =>
-  item?.student?._id ||
-  item?.student?.id ||
-  item?.studentId ||
-  "";
+const getClassData = (item, classLookup = {}) => {
+  const embedded =
+    item?.class ||
+    getEmbeddedObject(item?.classId);
 
-const getClassLabel = (item) => {
-  const classData =
-    item?.class || {};
+  const classId =
+    embedded?._id ||
+    embedded?.id ||
+    (typeof item?.classId === "string"
+      ? item.classId
+      : "");
+
+  return (
+    (classId && classLookup[classId]) ||
+    embedded ||
+    {}
+  );
+};
+
+const getStudentName = (item) => {
+  const student = getStudentData(item);
+
+  return (
+    student?.name ||
+    [
+      student?.firstName,
+      student?.fatherName,
+      student?.familyName,
+    ]
+      .filter(Boolean)
+      .join(" ") ||
+    item?.studentName ||
+    item?.name ||
+    "—"
+  );
+};
+
+const getClassId = (item, classLookup = {}) => {
+  const classData = getClassData(item, classLookup);
+
+  return (
+    classData?._id ||
+    classData?.id ||
+    (typeof item?.classId === "string"
+      ? item.classId
+      : "")
+  );
+};
+
+const getStudentId = (item) => {
+  const student = getStudentData(item);
+
+  return (
+    student?._id ||
+    student?.id ||
+    (typeof item?.studentId === "string"
+      ? item.studentId
+      : "")
+  );
+};
+
+const getStudentMeta = (item) => {
+  const student = getStudentData(item);
+  const studentId = getStudentId(item);
+
+  return (
+    student?.schoolEmail ||
+    student?.email ||
+    student?.phoneNumber ||
+    (studentId
+      ? `رقم الطالب: ${String(studentId).slice(-6)}`
+      : "—")
+  );
+};
+
+const getAcademicYearLabel = (
+  item,
+  classLookup = {},
+  academicYearLookup = {}
+) => {
+  const classData = getClassData(
+    item,
+    classLookup
+  );
+
+  const value =
+    item?.academicYear ||
+    item?.academicYearId ||
+    classData?.academicYear ||
+    classData?.academicYearId;
+
+  if (typeof value === "string") {
+    return (
+      academicYearLookup[value]?.name ||
+      academicYearLookup[value]?.label ||
+      value ||
+      "—"
+    );
+  }
+
+  return (
+    value?.name ||
+    value?.label ||
+    "—"
+  );
+};
+
+const getClassLabel = (item, classLookup = {}) => {
+  const classData = getClassData(item, classLookup);
+  const gradeLevel =
+    classData?.gradeLevelId ||
+    classData?.gradeLevel;
+
+  const className =
+    classData?.name ||
+    item?.className ||
+    "";
+
+  const roomNumber =
+    classData?.roomNumber ||
+    "";
+
+  const gradeName =
+    typeof gradeLevel === "object"
+      ? gradeLevel?.name
+      : "";
 
   const parts = [
-    classData?.academicYear,
-    classData?.roomNumber,
+    className || gradeName,
+    roomNumber,
   ].filter(Boolean);
 
   return parts.length > 0
-    ? parts.join(" - ")
+    ? [...new Set(parts)].join(" - ")
     : "—";
 };
 
@@ -94,6 +211,373 @@ const formatDate = (value) => {
     "ar-EG"
   );
 };
+
+const AttendanceTable = ({
+  items,
+  loading,
+  permissions,
+  page,
+  limit,
+  setItems,
+  setLocalPagination,
+  classLookup,
+  academicYearLookup,
+}) => (
+  <Box
+    sx={{
+      width: "100%",
+      overflowX: "auto",
+    }}
+  >
+    <Box
+      component="table"
+      sx={{
+        width: "100%",
+        minWidth: 900,
+        borderCollapse: "collapse",
+
+        "& th": {
+          px: 1.55,
+          py: 1.35,
+          color: "#7e8791",
+          backgroundColor:
+            "rgba(36,74,112,0.035)",
+          borderBottom:
+            "1px solid #ded8cd",
+          fontSize: "8.7px",
+          fontWeight: 800,
+          textAlign: "right",
+          whiteSpace: "nowrap",
+        },
+
+        "& td": {
+          px: 1.55,
+          py: 1.25,
+          color: "#193754",
+          borderBottom:
+            "1px solid rgba(222,216,205,0.7)",
+          fontSize: "9.5px",
+          verticalAlign: "middle",
+        },
+
+        "& tbody tr": {
+          transition:
+            "background-color 0.2s ease",
+        },
+
+        "& tbody tr:hover": {
+          backgroundColor:
+            "rgba(36,74,112,0.022)",
+        },
+
+        "& tbody tr:last-of-type td": {
+          borderBottom: 0,
+        },
+      }}
+    >
+      <Box component="thead">
+        <Box component="tr">
+          <Box
+            component="th"
+            sx={{ width: 58 }}
+          >
+            #
+          </Box>
+
+          <Box component="th">
+            الطالب
+          </Box>
+
+          <Box component="th">
+            السنة الدراسية
+          </Box>
+
+          <Box component="th">
+            الفصل
+          </Box>
+
+          <Box component="th">
+            تاريخ الغياب
+          </Box>
+
+          <Box
+            component="th"
+            sx={{ width: 110 }}
+          >
+            الحالة
+          </Box>
+
+          <Box
+            component="th"
+            sx={{
+              width: 145,
+              textAlign:
+                "center !important",
+            }}
+          >
+            الإجراءات
+          </Box>
+        </Box>
+      </Box>
+
+      <Box component="tbody">
+        {loading
+          ? Array.from({
+              length: 5,
+            }).map(
+              (_, rowIndex) => (
+                <Box
+                  component="tr"
+                  key={rowIndex}
+                >
+                  {Array.from({
+                    length: 7,
+                  }).map(
+                    (
+                      __,
+                      cellIndex
+                    ) => (
+                      <Box
+                        component="td"
+                        key={cellIndex}
+                      >
+                        <Skeleton />
+                      </Box>
+                    )
+                  )}
+                </Box>
+              )
+            )
+          : items.map(
+              (item, index) => {
+                const recordId =
+                  item?._id ||
+                  item?.id ||
+                  "";
+
+                const studentName =
+                  getStudentName(item);
+
+                const initial =
+                  studentName !== "—"
+                    ? studentName
+                        .trim()
+                        .charAt(0)
+                    : "ط";
+
+                return (
+                  <Box
+                    component="tr"
+                    key={
+                      recordId ||
+                      index
+                    }
+                  >
+                    <Box component="td">
+                      <Typography
+                        sx={{
+                          color:
+                            "var(--color-muted)",
+                          fontSize: "9px",
+                          fontWeight: 800,
+                        }}
+                      >
+                        {(page - 1) *
+                          limit +
+                          index +
+                          1}
+                      </Typography>
+                    </Box>
+
+                    <Box component="td">
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={0.9}
+                      >
+                        <Box
+                          sx={{
+                            width: 36,
+                            height: 36,
+                            flexShrink: 0,
+                            display: "grid",
+                            placeItems:
+                              "center",
+                            borderRadius:
+                              "11px",
+                            color: "#ffffff",
+                            backgroundColor:
+                              "#244a70",
+                            fontSize: "11px",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {initial}
+                        </Box>
+
+                        <Box
+                          sx={{
+                            minWidth: 0,
+                            maxWidth: 250,
+                          }}
+                        >
+                          <Typography
+                            noWrap
+                            sx={{
+                              color:
+                                "#122f4d",
+                              fontSize:
+                                "10px",
+                              fontWeight:
+                                800,
+                            }}
+                          >
+                            {studentName}
+                          </Typography>
+
+                          <Typography
+                            noWrap
+                            sx={{
+                              mt: 0.15,
+                              color:
+                                "#7e8791",
+                              fontSize:
+                                "7.5px",
+                              direction: "ltr",
+                              textAlign: "right",
+                            }}
+                          >
+                            {getStudentMeta(
+                              item
+                            )}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </Box>
+
+                    <Box component="td">
+                      <Typography
+                        noWrap
+                        sx={{
+                          fontSize: "9px",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {getAcademicYearLabel(
+                          item,
+                          classLookup,
+                          academicYearLookup
+                        )}
+                      </Typography>
+                    </Box>
+
+                    <Box component="td">
+                      <Typography
+                        noWrap
+                        sx={{
+                          maxWidth: 220,
+                          fontSize: "9px",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {getClassLabel(
+                          item,
+                          classLookup
+                        )}
+                      </Typography>
+                    </Box>
+
+                    <Box component="td">
+                      <Typography
+                        noWrap
+                        sx={{
+                          fontSize: "9px",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {formatDate(
+                          item?.date
+                        )}
+                      </Typography>
+                    </Box>
+
+                    <Box component="td">
+                      <Chip
+                        icon={
+                          <PersonOffRounded />
+                        }
+                        label="غائب"
+                        size="small"
+                        sx={{
+                          height: 27,
+                          color: "#A93434",
+                          backgroundColor:
+                            "rgba(196,69,69,.10)",
+                          border:
+                            "1px solid rgba(196,69,69,.12)",
+                          fontSize: "8.5px",
+                          fontWeight: 900,
+
+                          "& .MuiChip-icon": {
+                            color: "inherit",
+                            fontSize: 15,
+                          },
+                        }}
+                      />
+                    </Box>
+
+                    <Box component="td">
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="center"
+                        spacing={0.7}
+                      >
+                        {permissions.edit && (
+                          <Edit
+                            item={item}
+                            setItems={
+                              setItems
+                            }
+                          />
+                        )}
+
+                        {permissions.delete &&
+                          recordId && (
+                            <Delete
+                              id={recordId}
+                              setItems={
+                                setItems
+                              }
+                              setLocalPagination={
+                                setLocalPagination
+                              }
+                            />
+                          )}
+
+                        {!permissions.edit &&
+                          !permissions.delete && (
+                            <Typography
+                              sx={{
+                                color:
+                                  "var(--color-muted)",
+                                fontSize:
+                                  "9px",
+                              }}
+                            >
+                              —
+                            </Typography>
+                          )}
+                      </Stack>
+                    </Box>
+                  </Box>
+                );
+              }
+            )}
+      </Box>
+    </Box>
+  </Box>
+);
 
 const List = () => {
   const [items, setItems] =
@@ -123,6 +607,14 @@ const List = () => {
     localPagination,
     setLocalPagination,
   ] = useState(null);
+
+  const [classLookup, setClassLookup] =
+    useState({});
+
+  const [
+    academicYearLookup,
+    setAcademicYearLookup,
+  ] = useState({});
 
   const debouncedStudentName =
     useDebounce(
@@ -159,6 +651,73 @@ const List = () => {
     loading,
     pagination,
   } = useAttendances(filters);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadReferenceData = async () => {
+      const [classesResponse, yearsResponse] =
+        await Promise.all([
+          fetchClasses({
+            page: 1,
+            limit: 1000,
+          }),
+          fetchAcademicYears(),
+        ]);
+
+      if (!mounted) {
+        return;
+      }
+
+      const classes = Array.isArray(
+        classesResponse?.data
+      )
+        ? classesResponse.data
+        : [];
+
+      const years = Array.isArray(
+        yearsResponse?.data
+      )
+        ? yearsResponse.data
+        : [];
+
+      setClassLookup(
+        Object.fromEntries(
+          classes
+            .map((classItem) => [
+              String(
+                classItem?._id ||
+                  classItem?.id ||
+                  ""
+              ),
+              classItem,
+            ])
+            .filter(([id]) => id)
+        )
+      );
+
+      setAcademicYearLookup(
+        Object.fromEntries(
+          years
+            .map((year) => [
+              String(
+                year?._id ||
+                  year?.id ||
+                  ""
+              ),
+              year,
+            ])
+            .filter(([id]) => id)
+        )
+      );
+    };
+
+    loadReferenceData();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const permissions =
     usePermissions("attendance");
@@ -216,13 +775,19 @@ const List = () => {
 
       classes: new Set(
         items
-          .map(getClassId)
+          .map((item) =>
+            getClassId(
+              item,
+              classLookup
+            )
+          )
           .filter(Boolean)
       ).size,
     }),
     [
       items,
       currentPagination,
+      classLookup,
     ]
   );
 
@@ -231,12 +796,25 @@ const List = () => {
       items.map((item) => ({
         الطالب:
           getStudentName(item),
+        "السنة الدراسية":
+          getAcademicYearLabel(
+            item,
+            classLookup,
+            academicYearLookup
+          ),
         الفصل:
-          getClassLabel(item),
+          getClassLabel(
+            item,
+            classLookup
+          ),
         "تاريخ الغياب":
           formatDate(item?.date),
       })),
-    [items]
+    [
+      items,
+      classLookup,
+      academicYearLookup,
+    ]
   );
 
   const resetFilters = () => {
@@ -750,32 +1328,66 @@ const List = () => {
                 md: 1.9,
               },
               py: 1.25,
+              display: "flex",
+              alignItems: {
+                xs: "flex-start",
+                sm: "center",
+              },
+              justifyContent:
+                "space-between",
+              flexDirection: {
+                xs: "column",
+                sm: "row",
+              },
+              gap: 0.8,
               borderBottom:
                 "1px solid rgba(36,74,112,0.07)",
             }}
           >
-            <Typography
-              sx={{
-                color:
-                  "var(--color-navy-deep)",
-                fontSize: "16px",
-                fontWeight: 800,
-              }}
-            >
-              سجل الغياب
-            </Typography>
+            <Box>
+              <Typography
+                sx={{
+                  color:
+                    "var(--color-navy-deep)",
+                  fontSize: "16px",
+                  fontWeight: 800,
+                }}
+              >
+                سجل الغياب
+              </Typography>
 
-            <Typography
-              sx={{
-                mt: 0.25,
-                color:
-                  "var(--color-muted)",
-                fontSize: "9.5px",
-              }}
-            >
-              راجع غياب الطلاب وعدّل
-              السجلات حسب صلاحياتك.
-            </Typography>
+              <Typography
+                sx={{
+                  mt: 0.25,
+                  color:
+                    "var(--color-muted)",
+                  fontSize: "9.5px",
+                }}
+              >
+                عرض منظم لسجلات الغياب مع
+                إمكانية التعديل والحذف حسب
+                الصلاحيات.
+              </Typography>
+            </Box>
+
+            {!loading &&
+              items.length > 0 && (
+                <Chip
+                  label={`${items.length} سجل في الصفحة`}
+                  size="small"
+                  sx={{
+                    height: 27,
+                    color:
+                      "var(--color-navy)",
+                    backgroundColor:
+                      "rgba(36,74,112,0.06)",
+                    border:
+                      "1px solid rgba(36,74,112,0.08)",
+                    fontSize: "8.5px",
+                    fontWeight: 800,
+                  }}
+                />
+              )}
           </Box>
 
           {showEmptyState ? (
@@ -852,9 +1464,7 @@ const List = () => {
                 {hasFilters ? (
                   <Button
                     type="button"
-                    onClick={
-                      resetFilters
-                    }
+                    onClick={resetFilters}
                     variant="outlined"
                     startIcon={
                       <RestartAltRounded />
@@ -889,83 +1499,67 @@ const List = () => {
                 )}
               </Stack>
             </Box>
-          ) : (
-            <Box
-              sx={{
-                p: {
-                  xs: 1,
-                  md: 1.25,
-                },
-              }}
-            >
-              {loading ? (
-                <Box
-                  sx={{
-                    minHeight: 260,
-                    display: "grid",
-                    placeItems:
-                      "center",
-                    color:
-                      "var(--color-muted)",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                  }}
-                >
-                  جاري تحميل الغيابات...
-                </Box>
-              ) : (
-                <Grid
-                  container
-                  spacing={1.25}
-                >
-                  {items.map(
-                    (item, index) =>
-                      permissions.read && (
-                        <Grid
-                          item
-                          xs={12}
-                          sm={6}
-                          lg={4}
-                          xl={3}
-                          key={
-                            item?._id ||
-                            item?.id ||
-                            index
-                          }
-                        >
-                          <ListCard
-                            item={item}
-                            setItems={
-                              setItems
-                            }
-                            type="attendance"
-                            setLocalPagination={
-                              setLocalPagination
-                            }
-                          />
-                        </Grid>
-                      )
-                  )}
-                </Grid>
-              )}
+          ) : permissions.read ? (
+            <>
+              <AttendanceTable
+                items={items}
+                loading={loading}
+                permissions={permissions}
+                page={page}
+                limit={limit}
+                setItems={setItems}
+                setLocalPagination={
+                  setLocalPagination
+                }
+                classLookup={classLookup}
+                academicYearLookup={
+                  academicYearLookup
+                }
+              />
 
               {currentPagination &&
                 items.length > 0 && (
-                  <PaginationControls
-                    pagination={
-                      currentPagination
-                    }
-                    page={page}
-                    onPageChange={
-                      setPage
-                    }
-                    limit={limit}
-                    onLimitChange={
-                      setLimit
-                    }
-                    label="عدد الغيابات"
-                  />
+                  <Box
+                    sx={{
+                      px: {
+                        xs: 1,
+                        md: 1.25,
+                      },
+                      py: 1.15,
+                      borderTop:
+                        "1px solid rgba(36,74,112,0.07)",
+                    }}
+                  >
+                    <PaginationControls
+                      pagination={
+                        currentPagination
+                      }
+                      page={page}
+                      onPageChange={
+                        setPage
+                      }
+                      limit={limit}
+                      onLimitChange={
+                        setLimit
+                      }
+                      label="عدد الغيابات"
+                    />
+                  </Box>
                 )}
+            </>
+          ) : (
+            <Box
+              sx={{
+                minHeight: 180,
+                display: "grid",
+                placeItems: "center",
+                color:
+                  "var(--color-muted)",
+                fontSize: "11px",
+                fontWeight: 700,
+              }}
+            >
+              لا تملك صلاحية عرض سجل الغياب
             </Box>
           )}
         </Paper>

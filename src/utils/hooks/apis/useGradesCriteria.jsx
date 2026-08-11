@@ -19,7 +19,7 @@ export const useGradesCriteria = (gradesCriteriaId) => {
       if (res.status) {
         setGradesCriteria(res.data);
       } else {
-        toast.error(res || "حدث خطأ ما أثناء جلب توزع الدرجات");
+        toast.error(res?.message || "حدث خطأ ما أثناء جلب توزع الدرجات");
         setGradesCriteria(null);
       }
       setLoading(false);

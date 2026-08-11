@@ -35,33 +35,70 @@ import { editAttendance } from "@/APIs/school/attendance";
 
 const normalizeItem = (
   item
-) => ({
-  ...item,
-  _id:
-    item?._id ||
-    item?.id,
-  id:
-    item?._id ||
-    item?.id,
-  date:
-    item?.date
-      ? String(
-          item.date
-        ).split("T")[0]
-      : "",
-  academicYear:
-    item?.class
-      ?.academicYear ||
-    "",
-  classId:
-    item?.classId ||
-    item?.class?._id ||
-    "",
-  studentId:
-    item?.studentId ||
-    item?.student?._id ||
-    "",
-});
+) => {
+  const student =
+    item?.student ||
+    (item?.studentId &&
+    typeof item.studentId ===
+      "object"
+      ? item.studentId
+      : null);
+
+  const classData =
+    item?.class ||
+    (item?.classId &&
+    typeof item.classId ===
+      "object"
+      ? item.classId
+      : null);
+
+  const academicYearValue =
+    item?.academicYear ||
+    item?.academicYearId ||
+    classData?.academicYear ||
+    classData?.academicYearId;
+
+  const academicYear =
+    typeof academicYearValue ===
+    "string"
+      ? academicYearValue
+      : academicYearValue?.name ||
+        academicYearValue?.label ||
+        "";
+
+  return {
+    ...item,
+    _id:
+      item?._id ||
+      item?.id,
+    id:
+      item?._id ||
+      item?.id,
+    date:
+      item?.date
+        ? String(
+            item.date
+          ).split("T")[0]
+        : "",
+    academicYear,
+    class: classData,
+    student,
+    classId:
+      classData?._id ||
+      classData?.id ||
+      (typeof item?.classId ===
+      "string"
+        ? item.classId
+        : ""),
+    studentId:
+      student?._id ||
+      student?.id ||
+      (typeof item?.studentId ===
+      "string"
+        ? item.studentId
+        : ""),
+  };
+};
 
 const Edit = ({
   setItems,

@@ -6,6 +6,7 @@ const ENDPOINT = "/schools/me/settings";
 export const fetchSchoolSettings = async () => {
   try {
     const response = await api.get(ENDPOINT);
+
     return response.data;
   } catch (error) {
     return getApiError(
@@ -17,7 +18,21 @@ export const fetchSchoolSettings = async () => {
 
 export const updateSchoolSettings = async (data) => {
   try {
-    const response = await api.patch(ENDPOINT, data);
+    const payload = {
+      timezone: data.timezone,
+      language: data.language,
+      termsPerYear: data.termsPerYear,
+      defaultPassingGrade: data.defaultPassingGrade,
+
+      // الـ Backend مستني الاسم ده
+      localNationalityCodes:
+        data.localNationalityCodes ??
+        data.localNationalities ??
+        [],
+    };
+
+    const response = await api.patch(ENDPOINT, payload);
+
     return response.data;
   } catch (error) {
     return getApiError(
@@ -25,4 +40,9 @@ export const updateSchoolSettings = async (data) => {
       "تعذر حفظ إعدادات المدرسة"
     );
   }
+};
+
+export default {
+  fetchSchoolSettings,
+  updateSchoolSettings,
 };

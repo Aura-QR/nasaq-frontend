@@ -35,31 +35,61 @@ const getToday = () =>
 
 const mapAttendanceItem = (
   item
-) => ({
-  ...item,
-  id:
-    item?._id ||
-    item?.id,
-  _id:
-    item?._id ||
-    item?.id,
-  name:
-    item?.student?.name ||
-    item?.name ||
-    "",
-  student:
-    item?.student,
-  studentId:
-    item?.studentId ||
-    item?.student?._id,
-  class:
-    item?.class,
-  classId:
-    item?.classId ||
-    item?.class?._id,
-  date:
-    item?.date,
-});
+) => {
+  const student =
+    item?.student ||
+    (item?.studentId &&
+    typeof item.studentId ===
+      "object"
+      ? item.studentId
+      : null);
+
+  const classData =
+    item?.class ||
+    (item?.classId &&
+    typeof item.classId ===
+      "object"
+      ? item.classId
+      : null);
+
+  return {
+    ...item,
+    id:
+      item?._id ||
+      item?.id,
+    _id:
+      item?._id ||
+      item?.id,
+    name:
+      student?.name ||
+      [
+        student?.firstName,
+        student?.fatherName,
+        student?.familyName,
+      ]
+        .filter(Boolean)
+        .join(" ") ||
+      item?.name ||
+      "",
+    student,
+    studentId:
+      student?._id ||
+      student?.id ||
+      (typeof item?.studentId ===
+      "string"
+        ? item.studentId
+        : ""),
+    class: classData,
+    classId:
+      classData?._id ||
+      classData?.id ||
+      (typeof item?.classId ===
+      "string"
+        ? item.classId
+        : ""),
+    date: item?.date,
+  };
+};
 
 const Add = ({
   setItems,
@@ -327,7 +357,7 @@ const Add = ({
                       "9.5px",
                   }}
                 >
-                  حدّد الفصل والطالب وتاريخ الغياب.
+                  حدّد السنة الدراسية والفصل والطالب وتاريخ الغياب.
                 </Typography>
               </Box>
             </Stack>

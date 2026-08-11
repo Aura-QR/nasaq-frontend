@@ -1,5 +1,6 @@
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -8,12 +9,14 @@ import {
   Paper,
   Slider,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 
 import {
   CheckCircleRounded,
   FactCheckRounded,
+  FlagRounded,
   InfoOutlined,
   RestartAltRounded,
   SaveRounded,
@@ -40,6 +43,10 @@ import {
   fetchSchoolSettings,
   updateSchoolSettings,
 } from "@/APIs/school/schoolSettings";
+
+import {
+  fetchNationalities,
+} from "@/APIs/school/nationalities";
 
 const DEFAULT_PASSING_GRADE = 50;
 const QUICK_VALUES = [40, 50, 60, 70];
@@ -80,6 +87,15 @@ const getErrorMessage = (
   error?.message ||
   fallback;
 
+const getResponseError = (
+  response,
+  fallback
+) =>
+  response?.message ||
+  response?.error ||
+  response?.data?.message ||
+  fallback;
+
 const getLoadErrorMessage = (error) => {
   const status = error?.response?.status;
   const message = getErrorMessage(
@@ -92,10 +108,209 @@ const getLoadErrorMessage = (error) => {
     String(message)
       .toLowerCase()
       .includes("cannot get")
-  ) 
+  ) {
+    return "إعدادات المدرسة غير مفعلة في نسخة الباك الحالية. يتم عرض القيمة الافتراضية 50 مؤقتًا لحين إضافة الـ Endpoint.";
+  }
 
   return message;
 };
+
+const findArray = (source) => {
+  const candidates = [
+    source,
+    source?.data,
+    source?.data?.data,
+    source?.nationalities,
+    source?.items,
+    source?.results,
+    source?.data?.nationalities,
+    source?.data?.items,
+    source?.data?.results,
+    source?.data?.data?.nationalities,
+    source?.data?.data?.items,
+    source?.data?.data?.results,
+  ];
+
+  return (
+    candidates.find(Array.isArray) || []
+  );
+};
+
+const normalizeNationalityCode = (value) => {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+  if (
+    typeof value === "object"
+  ) {
+    return normalizeNationalityCode(
+      value?.code ??
+        value?.nationalityCode ??
+        value?.countryCode ??
+        value?.alpha2 ??
+        value?.iso2 ??
+        value?.value ??
+        value?.id
+    );
+  }
+
+  return String(value)
+    .trim()
+    .toUpperCase();
+};
+
+const normalizeNationalityOption = (
+  item
+) => {
+  if (
+    item === null ||
+    item === undefined
+  ) {
+    return null;
+  }
+
+  if (
+    typeof item === "string"
+  ) {
+    const code =
+      normalizeNationalityCode(item);
+
+    return code
+      ? {
+          code,
+          label: code,
+        }
+      : null;
+  }
+
+  const code =
+    normalizeNationalityCode(item);
+
+  if (!code) {
+    return null;
+  }
+
+  const label =
+    item?.nameAr ??
+    item?.name_ar ??
+    item?.arabicName ??
+    item?.labelAr ??
+    item?.label_ar ??
+    item?.nationalityAr ??
+    item?.nationality_ar ??
+    item?.name ??
+    item?.label ??
+    item?.englishName ??
+    item?.nationality ??
+    code;
+
+  return {
+    code,
+    label: String(label || code).trim(),
+  };
+};
+
+const extractNationalityOptions = (
+  response
+) => {
+  let items = findArray(response);
+
+  if (!items.length) {
+    const payload =
+      unwrapResponse(response);
+
+    if (
+      payload &&
+      typeof payload === "object" &&
+      !Array.isArray(payload)
+    ) {
+      const mappingCandidate =
+        payload?.nationalities &&
+        typeof payload.nationalities ===
+          "object" &&
+        !Array.isArray(
+          payload.nationalities
+        )
+          ? payload.nationalities
+          : null;
+
+      if (mappingCandidate) {
+        items = Object.entries(
+          mappingCandidate
+        ).map(([code, label]) => ({
+          code,
+          label,
+        }));
+      }
+    }
+  }
+
+  const map = new Map();
+
+  items.forEach((item) => {
+    const option =
+      normalizeNationalityOption(item);
+
+    if (
+      option?.code &&
+      !map.has(option.code)
+    ) {
+      map.set(option.code, option);
+    }
+  });
+
+  return Array.from(map.values()).sort(
+    (a, b) =>
+      a.label.localeCompare(
+        b.label,
+        "ar"
+      )
+  );
+};
+
+const normalizeNationalityCodes = (
+  values
+) => {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      values
+        .map(normalizeNationalityCode)
+        .filter(Boolean)
+    )
+  ).sort();
+};
+
+const sameStringArray = (a, b) => {
+  const first =
+    normalizeNationalityCodes(a);
+  const second =
+    normalizeNationalityCodes(b);
+
+  return (
+    first.length === second.length &&
+    first.every(
+      (value, index) =>
+        value === second[index]
+    )
+  );
+};
+
+const getLocalNationalities = (
+  settings
+) =>
+  normalizeNationalityCodes(
+    settings?.localNationalities ??
+      settings?.localNationalityCodes ??
+      []
+  );
 
 const pageCardSx = {
   border:
@@ -119,6 +334,7 @@ const SchoolSettings = () => {
     defaultValues: {
       defaultPassingGrade:
         DEFAULT_PASSING_GRADE,
+      localNationalities: [],
     },
   });
 
@@ -126,8 +342,31 @@ const SchoolSettings = () => {
     useState(true);
   const [saving, setSaving] =
     useState(false);
-  const [savedValue, setSavedValue] =
-    useState(DEFAULT_PASSING_GRADE);
+
+  const [
+    nationalityOptions,
+    setNationalityOptions,
+  ] = useState([]);
+
+  const [
+    nationalitiesLoading,
+    setNationalitiesLoading,
+  ] = useState(false);
+
+  const [
+    nationalitiesError,
+    setNationalitiesError,
+  ] = useState("");
+
+  const [
+    savedSettings,
+    setSavedSettings,
+  ] = useState({
+    defaultPassingGrade:
+      DEFAULT_PASSING_GRADE,
+    localNationalities: [],
+  });
+
   const [loadError, setLoadError] =
     useState("");
 
@@ -136,64 +375,210 @@ const SchoolSettings = () => {
       watch("defaultPassingGrade")
     );
 
+  const currentLocalNationalities =
+    normalizeNationalityCodes(
+      watch("localNationalities") || []
+    );
+
+  const selectedNationalityOptions =
+    useMemo(
+      () =>
+        currentLocalNationalities.map(
+          (code) =>
+            nationalityOptions.find(
+              (option) =>
+                option.code === code
+            ) || {
+              code,
+              label: code,
+            }
+        ),
+      [
+        currentLocalNationalities,
+        nationalityOptions,
+      ]
+    );
+
   const hasChanges = useMemo(
-    () => currentValue !== savedValue,
-    [currentValue, savedValue]
+    () =>
+      currentValue !==
+        savedSettings.defaultPassingGrade ||
+      !sameStringArray(
+        currentLocalNationalities,
+        savedSettings.localNationalities
+      ),
+    [
+      currentValue,
+      currentLocalNationalities,
+      savedSettings,
+    ]
   );
 
   useEffect(() => {
     let active = true;
 
-    const loadSettings = async () => {
+    const loadPage = async () => {
       setLoading(true);
+      setNationalitiesLoading(true);
       setLoadError("");
+      setNationalitiesError("");
 
-      try {
+      const [
+        settingsResult,
+        nationalitiesResult,
+      ] = await Promise.allSettled([
+        fetchSchoolSettings(),
+        fetchNationalities(),
+      ]);
+
+      if (!active) return;
+
+      let nextPassingGrade =
+        DEFAULT_PASSING_GRADE;
+      let nextLocalNationalities = [];
+
+      if (
+        settingsResult.status ===
+        "fulfilled"
+      ) {
         const response =
-          await fetchSchoolSettings();
+          settingsResult.value;
 
-        if (!active) return;
+        if (response?.status === false) {
+          const message =
+            getResponseError(
+              response,
+              "تعذر تحميل إعدادات المدرسة"
+            );
 
-      
-
-        const settings =    
-          extractSettings(response);
-
-        const defaultPassingGrade =
-          normalizePassingGrade(
-            settings?.defaultPassingGrade ??
-              DEFAULT_PASSING_GRADE
-          );
-
-        reset({ defaultPassingGrade });
-        setSavedValue(defaultPassingGrade);
-      } catch (error) {
-        if (active) {
           setLoadError(
-            getLoadErrorMessage(error)
+            String(message)
+              .toLowerCase()
+              .includes("cannot get")
+              ? "إعدادات المدرسة غير مفعلة في نسخة الباك الحالية. يتم عرض القيم الافتراضية مؤقتًا لحين إضافة الـ Endpoint."
+              : message
+          );
+        } else {
+          const settings =
+            extractSettings(response);
+
+          nextPassingGrade =
+            normalizePassingGrade(
+              settings?.defaultPassingGrade ??
+                DEFAULT_PASSING_GRADE
+            );
+
+          nextLocalNationalities =
+            getLocalNationalities(
+              settings
+            );
+        }
+      } else {
+        setLoadError(
+          getLoadErrorMessage(
+            settingsResult.reason
+          )
+        );
+      }
+
+      if (
+        nationalitiesResult.status ===
+        "fulfilled"
+      ) {
+        const response =
+          nationalitiesResult.value;
+
+        if (response?.status === false) {
+          setNationalitiesError(
+            getResponseError(
+              response,
+              "تعذر تحميل قائمة الجنسيات"
+            )
+          );
+        } else {
+          const options =
+            extractNationalityOptions(
+              response
+            );
+
+          setNationalityOptions(
+            options
           );
 
-          reset({
-            defaultPassingGrade:
-              DEFAULT_PASSING_GRADE,
-          });
-          setSavedValue(
-            DEFAULT_PASSING_GRADE
-          );
+          if (!options.length) {
+            setNationalitiesError(
+              "تم استدعاء /nationalities لكن الاستجابة لا تحتوي قائمة جنسيات قابلة للعرض."
+            );
+          }
         }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+      } else {
+        setNationalitiesError(
+          getErrorMessage(
+            nationalitiesResult.reason,
+            "تعذر تحميل قائمة الجنسيات"
+          )
+        );
       }
+
+      const normalizedSettings = {
+        defaultPassingGrade:
+          nextPassingGrade,
+        localNationalities:
+          nextLocalNationalities,
+      };
+
+      reset(normalizedSettings);
+      setSavedSettings(
+        normalizedSettings
+      );
+
+      setNationalitiesLoading(false);
+      setLoading(false);
     };
 
-    loadSettings();
+    loadPage();
 
     return () => {
       active = false;
     };
   }, [reset]);
+
+  useEffect(() => {
+    if (
+      !savedSettings.localNationalities
+        .length
+    ) {
+      return;
+    }
+
+    setNationalityOptions(
+      (currentOptions) => {
+        const map = new Map(
+          currentOptions.map(
+            (option) => [
+              option.code,
+              option,
+            ]
+          )
+        );
+
+        savedSettings.localNationalities.forEach(
+          (code) => {
+            if (!map.has(code)) {
+              map.set(code, {
+                code,
+                label: code,
+              });
+            }
+          }
+        );
+
+        return Array.from(
+          map.values()
+        );
+      }
+    );
+  }, [savedSettings.localNationalities]);
 
   const updateGradeValue = (value) => {
     setValue(
@@ -206,10 +591,35 @@ const SchoolSettings = () => {
     );
   };
 
+  const updateLocalNationalities = (
+    options
+  ) => {
+    const codes =
+      normalizeNationalityCodes(
+        options.map(
+          (option) => option?.code
+        )
+      );
+
+    setValue(
+      "localNationalities",
+      codes,
+      {
+        shouldDirty: true,
+        shouldValidate: true,
+      }
+    );
+  };
+
   const onSubmit = async (formData) => {
     const defaultPassingGrade =
       normalizePassingGrade(
         formData.defaultPassingGrade
+      );
+
+    const localNationalities =
+      normalizeNationalityCodes(
+        formData.localNationalities
       );
 
     if (
@@ -224,8 +634,38 @@ const SchoolSettings = () => {
     }
 
     if (
-      defaultPassingGrade === savedValue
+      localNationalities.length === 0
     ) {
+      toast.error(
+        "اختر جنسية محلية واحدة على الأقل"
+      );
+      return;
+    }
+
+    const availableCodes =
+      new Set(
+        nationalityOptions.map(
+          (option) => option.code
+        )
+      );
+
+    const invalidCodes =
+      localNationalities.filter(
+        (code) =>
+          availableCodes.size > 0 &&
+          !availableCodes.has(code)
+      );
+
+    if (invalidCodes.length) {
+      toast.error(
+        `يوجد كود جنسية غير صالح: ${invalidCodes.join(
+          ", "
+        )}`
+      );
+      return;
+    }
+
+    if (!hasChanges) {
       toast.info(
         "لا توجد تغييرات جديدة للحفظ"
       );
@@ -238,12 +678,15 @@ const SchoolSettings = () => {
       const response =
         await updateSchoolSettings({
           defaultPassingGrade,
+          localNationalities,
         });
 
       if (response?.status === false) {
         toast.error(
-          response?.message ||
+          getResponseError(
+            response,
             "تعذر حفظ إعدادات المدرسة"
+          )
         );
         return;
       }
@@ -251,22 +694,31 @@ const SchoolSettings = () => {
       const updatedSettings =
         extractSettings(response);
 
-      const updatedValue =
-        normalizePassingGrade(
-          updatedSettings
-            ?.defaultPassingGrade ??
-            defaultPassingGrade
-        );
-
-      reset({
+      const nextSettings = {
         defaultPassingGrade:
-          updatedValue,
-      });
-      setSavedValue(updatedValue);
+          normalizePassingGrade(
+            updatedSettings
+              ?.defaultPassingGrade ??
+              defaultPassingGrade
+          ),
+        localNationalities:
+          normalizeNationalityCodes(
+            updatedSettings
+              ?.localNationalities ??
+              updatedSettings
+                ?.localNationalityCodes ??
+              localNationalities
+          ),
+      };
+
+      reset(nextSettings);
+      setSavedSettings(
+        nextSettings
+      );
       setLoadError("");
 
       toast.success(
-        "تم حفظ درجة النجاح الافتراضية بنجاح"
+        "تم حفظ إعدادات المدرسة بنجاح"
       );
     } catch (error) {
       toast.error(
@@ -281,9 +733,7 @@ const SchoolSettings = () => {
   };
 
   const handleReset = () => {
-    reset({
-      defaultPassingGrade: savedValue,
-    });
+    reset(savedSettings);
   };
 
   if (loading) {
@@ -331,7 +781,7 @@ const SchoolSettings = () => {
 
             <Chip
               icon={<SettingsRounded />}
-              label="النجاح والترحيل"
+              label="النجاح والجنسيات"
               sx={{
                 alignSelf: {
                   xs: "flex-start",
@@ -532,7 +982,7 @@ const SchoolSettings = () => {
                         fontWeight: 800,
                       }}
                     >
-                      حرّك المؤشر أو اكتب الدرجة
+                      حرّكي المؤشر أو اكتبي الدرجة
                     </Typography>
 
                     <Typography
@@ -779,7 +1229,11 @@ const SchoolSettings = () => {
                       fontSize: "9.5px",
                     }}
                   >
-                    المحفوظ حاليًا: {savedValue}
+                    المحفوظ حاليًا:{" "}
+                    {
+                      savedSettings
+                        .defaultPassingGrade
+                    }
                   </Typography>
 
                   <Chip
@@ -804,6 +1258,202 @@ const SchoolSettings = () => {
                 </Stack>
               </Box>
             </Paper>
+          </Box>
+
+          <Divider
+            sx={{
+              borderColor:
+                "rgba(36,74,112,0.07)",
+            }}
+          />
+
+          <Box
+            sx={{
+              px: { xs: 1.4, md: 1.8 },
+              py: 1.25,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              background:
+                "linear-gradient(135deg, rgba(211,164,79,0.05), rgba(255,255,255,0.9))",
+            }}
+          >
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+                color:
+                  "var(--color-navy)",
+                backgroundColor:
+                  "rgba(36,74,112,0.06)",
+                borderRadius: "12px",
+              }}
+            >
+              <FlagRounded />
+            </Box>
+
+            <Box sx={{ minWidth: 0 }}>
+              <Typography
+                sx={{
+                  color:
+                    "var(--color-navy-deep)",
+                  fontSize: {
+                    xs: "15px",
+                    md: "17px",
+                  },
+                  fontWeight: 900,
+                }}
+              >
+                الجنسيات المحلية
+              </Typography>
+
+          
+            </Box>
+          </Box>
+
+          <Box
+            sx={{
+              p: { xs: 1.35, md: 1.8 },
+            }}
+          >
+            {nationalitiesError ? (
+              <Alert
+                severity="warning"
+                sx={{
+                  mb: 1.1,
+                  py: 0.25,
+                  borderRadius: "12px",
+                  fontSize: "10px",
+                }}
+              >
+                {nationalitiesError}
+              </Alert>
+            ) : null}
+
+            <Autocomplete
+              multiple
+              disableCloseOnSelect
+              loading={
+                nationalitiesLoading
+              }
+              disabled={
+                saving ||
+                (Boolean(
+                  nationalitiesError
+                ) &&
+                  nationalityOptions.length ===
+                    0)
+              }
+              options={nationalityOptions}
+              value={
+                selectedNationalityOptions
+              }
+              onChange={(_, value) =>
+                updateLocalNationalities(
+                  value
+                )
+              }
+              isOptionEqualToValue={(
+                option,
+                value
+              ) =>
+                option.code === value.code
+              }
+              getOptionLabel={(option) =>
+                `${option.label} (${option.code})`
+              }
+              noOptionsText="لا توجد جنسيات متاحة"
+              loadingText="جاري تحميل الجنسيات..."
+              renderTags={(
+                value,
+                getTagProps
+              ) =>
+                value.map(
+                  (option, index) => (
+                    <Chip
+                      {...getTagProps({
+                        index,
+                      })}
+                      key={option.code}
+                      label={`${option.label} - ${option.code}`}
+                      size="small"
+                      sx={{
+                        height: 27,
+                        color:
+                          "var(--color-navy-deep)",
+                        backgroundColor:
+                          "var(--color-gold-soft)",
+                        border:
+                          "1px solid rgba(211,164,79,0.2)",
+                        fontSize: "9.5px",
+                        fontWeight: 800,
+                      }}
+                    />
+                  )
+                )
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="اختر الجنسيات المحلية"
+                  placeholder={
+                    currentLocalNationalities.length
+                      ? ""
+                      : "مثال: السعودية (SA)"
+                  }
+                  error={
+                    currentLocalNationalities.length ===
+                    0
+                  }
+                  helperText={
+                    currentLocalNationalities.length ===
+                    0
+                      ? "اختر جنسية محلية واحدة على الأقل"
+                      : `المحدد: ${currentLocalNationalities.join(
+                          ", "
+                        )}`
+                  }
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {nationalitiesLoading ? (
+                          <CircularProgress
+                            size={16}
+                          />
+                        ) : null}
+                        {
+                          params.InputProps
+                            .endAdornment
+                        }
+                      </>
+                    ),
+                  }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      minHeight: 52,
+                      borderRadius: "13px",
+                      backgroundColor:
+                        "var(--color-white)",
+                    },
+                    "& .MuiInputLabel-root": {
+                      fontSize: "12px",
+                      fontWeight: 700,
+                    },
+                    "& .MuiFormHelperText-root": {
+                      textAlign: "right",
+                      mx: 0.5,
+                      fontSize: "9.5px",
+                    },
+                  }}
+                />
+              )}
+            />
+
+       
           </Box>
 
           <Divider
@@ -865,7 +1515,7 @@ const SchoolSettings = () => {
             >
               {saving
                 ? "جاري الحفظ..."
-                : "حفظ درجة النجاح"}
+                : "حفظ الإعدادات"}
             </Button>
 
             <Button

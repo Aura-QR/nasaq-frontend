@@ -7,7 +7,7 @@ export const addDiscount=async(data)=>{try{return(await api.post(E,data)).data}c
 export const editDiscount=async(data,id)=>{try{return(await api.patch(`${E}/${id}`,data)).data}catch(e){return apiError(e,"تعذر تعديل الخصم")}};
 export const deleteDiscount=async(id)=>{try{return(await api.delete(`${E}/${id}`)).data}catch(e){return apiError(e,"تعذر حذف الخصم")}};
 export const applyDiscountToTuition=async(id,data)=>{try{return(await api.post(`${E}/apply/tuition/${id}`,data)).data}catch(e){return apiError(e,"تعذر تطبيق الخصم على المصروفات")}};
-export const removeDiscountFromTuition=async(id)=>{try{return(await api.delete(`${E}/apply/tuition/${id}`)).data}catch(e){return apiError(e,"تعذر إزالة خصم المصروفات")}};
+export const removeDiscountFromTuition=async(id,params)=>{try{return(await api.delete(`${E}/apply/tuition/${id}`,{params})).data}catch(e){return apiError(e,"تعذر إزالة خصم المصروفات")}};
 export const applyDiscountToBus=async(id,data)=>{try{return(await api.post(`${E}/apply/bus/${id}`,data)).data}catch(e){return apiError(e,"تعذر تطبيق خصم الباص")}};
 export const removeDiscountFromBus=async(id)=>{try{return(await api.delete(`${E}/apply/bus/${id}`)).data}catch(e){return apiError(e,"تعذر إزالة خصم الباص")}};
 export const applyDiscountToTrip=async(studentId,tripId,data)=>{try{return(await api.post(`${E}/apply/trips/${studentId}/${tripId}`,data)).data}catch(e){return apiError(e,"تعذر تطبيق خصم الرحلة")}};

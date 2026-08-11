@@ -20,21 +20,39 @@ import {
   StatsGrid,
 } from "@/components/financial/FinancialShell";
 import { formatMoney } from "@/utils/financial/financialUtils";
+import { useFeeConfigOptions } from "@/utils/hooks/apis/financials/useFeeConfigOptions";
 import { useFeeConfigs } from "@/utils/hooks/apis/financials/useFeeConfigs";
 import usePermissions from "@/utils/hooks/usePermissions";
 
-const HEADERS = ["السنة الدراسية", "الرسوم السنوية"];
-const BODY = ["academicYear", "tuitionFee"];
+const HEADERS = [
+  "السنة الدراسية",
+  "الصف الدراسي",
+  "الرسوم السنوية",
+  "زيادة غير المحليين",
+];
+const BODY = [
+  "academicYear",
+  "gradeLevel",
+  "tuitionFee",
+  "expatriateSurchargePercentage",
+];
 
 const FeeConfigsListPage = () => {
   const { feeConfigs = [], loading, setFeeConfigs } = useFeeConfigs();
+  const { getAcademicYearLabel, getGradeLevelLabel } = useFeeConfigOptions();
   const permissions = usePermissions("financial");
 
   const mappedFeeConfigs = feeConfigs.map((item) => ({
     id: item?._id || item?.id,
-    academicYear: item?.academicYear || "—",
+    academicYear: getAcademicYearLabel(
+      item?.academicYearId ?? item?.academicYear,
+    ),
+    gradeLevel: getGradeLevelLabel(item?.gradeLevelId ?? item?.gradeLevel),
     tuitionFee: formatMoney(item?.tuitionFee),
     tuitionFeeRaw: Number(item?.tuitionFee || 0),
+    expatriateSurchargePercentage: `${Number(
+      item?.expatriateSurchargePercentage || 0,
+    )}%`,
   }));
 
   const totalFees = mappedFeeConfigs.reduce(
@@ -63,7 +81,9 @@ const FeeConfigsListPage = () => {
       return;
     }
 
-    toast.error(response?.message || response || "حدث خطأ أثناء حذف إعداد الرسوم");
+    toast.error(
+      response?.message || response || "حدث خطأ أثناء حذف إعداد الرسوم",
+    );
   };
 
   const addAction = permissions?.add ? (
@@ -94,7 +114,7 @@ const FeeConfigsListPage = () => {
       <Box dir="rtl" sx={{ width: "100%", minWidth: 0, pb: 4 }}>
         <FinancialHeader
           title="إعدادات الرسوم الدراسية"
-          description="حدّد الرسوم السنوية لكل سنة دراسية من مكان واحد."
+          description="حدّد الرسوم السنوية ونسبة زيادة غير المحليين لكل سنة وصف دراسي."
           count={feeConfigs.length}
           actions={addAction}
         />
@@ -124,13 +144,13 @@ const FeeConfigsListPage = () => {
 
         <SectionCard
           title="قائمة إعدادات الرسوم"
-          description="عدّل قيمة الرسوم أو احذف الإعداد حسب صلاحياتك."
+          description="كل إعداد مرتبط بسنة دراسية وصف محدد، مع نسبة زيادة الطلاب غير المحليين."
         >
           {!loading && mappedFeeConfigs.length === 0 ? (
             <EmptyState
               icon={<AccountBalanceWalletRounded />}
               title="لا توجد إعدادات رسوم حتى الآن"
-              description="أضف أول إعداد رسوم لربط السنة الدراسية بقيمة المصروفات السنوية."
+              description="أضف إعداد رسوم للسنة والصف قبل إلحاق الطلاب بالفصول."
             />
           ) : (
             <Box sx={{ p: { xs: 0.7, md: 1 } }}>

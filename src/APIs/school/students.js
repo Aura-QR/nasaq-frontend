@@ -10,6 +10,7 @@ const STUDENT_FIELDS = [
   "birthDate",
   "gender",
   "nationality",
+  "nationalityCode",
   "phoneNumber",
   "email",
   "address",

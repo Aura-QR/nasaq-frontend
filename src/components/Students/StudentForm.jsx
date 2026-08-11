@@ -24,6 +24,7 @@ import ClassSelector from "@/components/Selector/ClassSelector";
 
 import Status from "@/utils/constants/Status";
 import Countries from "@/utils/constants/Countries";
+import { fetchNationalities } from "@/APIs/school/nationalities";
 
 const sectionSx = {
   position: "relative",
@@ -252,31 +253,242 @@ const FormSection = ({
   );
 };
 
+const FALLBACK_NATIONALITY_CODES = new Set([
+  "SA",
+  "EG",
+  "SY",
+  "AE",
+  "KW",
+  "QA",
+  "BH",
+  "OM",
+  "JO",
+  "LB",
+  "IQ",
+  "YE",
+  "SD",
+  "LY",
+  "TN",
+  "DZ",
+  "MA",
+  "PS",
+  "US",
+  "GB",
+  "CA",
+  "AU",
+  "IN",
+  "PK",
+  "BD",
+  "PH",
+  "ID",
+  "MY",
+  "TR",
+  "FR",
+  "DE",
+  "IT",
+  "ES",
+]);
+
+const normalizeNationalityCode = (value) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "object") {
+    return normalizeNationalityCode(
+      value?.code ??
+        value?.nationalityCode ??
+        value?.countryCode ??
+        value?.alpha2 ??
+        value?.iso2 ??
+        value?.value ??
+        value?.id
+    );
+  }
+
+  return String(value).trim().toUpperCase();
+};
+
+const getNationalityArray = (response) => {
+  const candidates = [
+    response,
+    response?.data,
+    response?.data?.data,
+    response?.nationalities,
+    response?.items,
+    response?.results,
+    response?.data?.nationalities,
+    response?.data?.items,
+    response?.data?.results,
+    response?.data?.data?.nationalities,
+    response?.data?.data?.items,
+    response?.data?.data?.results,
+  ];
+
+  return candidates.find(Array.isArray) || [];
+};
+
+const normalizeNationalityOption = (item) => {
+  if (item === null || item === undefined) {
+    return null;
+  }
+
+  if (typeof item === "string") {
+    const code = normalizeNationalityCode(item);
+    const country = Countries.find(
+      (candidate) => candidate.id === code
+    );
+
+    return code
+      ? {
+          id: code,
+          name: country?.name || code,
+        }
+      : null;
+  }
+
+  const code = normalizeNationalityCode(item);
+
+  if (!code) {
+    return null;
+  }
+
+  const country = Countries.find(
+    (candidate) => candidate.id === code
+  );
+
+  const label =
+    item?.nameAr ??
+    item?.name_ar ??
+    item?.arabicName ??
+    item?.labelAr ??
+    item?.label_ar ??
+    item?.nationalityAr ??
+    item?.nationality_ar ??
+    item?.name ??
+    item?.label ??
+    item?.englishName ??
+    item?.nationality ??
+    country?.name ??
+    code;
+
+  return {
+    id: code,
+    name: String(label || code).trim(),
+  };
+};
+
+const extractNationalityOptions = (response) => {
+  let items = getNationalityArray(response);
+
+  if (!items.length) {
+    const payload =
+      response?.data?.data ?? response?.data ?? response;
+
+    const mapping =
+      payload?.nationalities &&
+      typeof payload.nationalities === "object" &&
+      !Array.isArray(payload.nationalities)
+        ? payload.nationalities
+        : null;
+
+    if (mapping) {
+      items = Object.entries(mapping).map(([code, name]) => ({
+        code,
+        name,
+      }));
+    }
+  }
+
+  const uniqueOptions = new Map();
+
+  items.forEach((item) => {
+    const option = normalizeNationalityOption(item);
+
+    if (option?.id && !uniqueOptions.has(option.id)) {
+      uniqueOptions.set(option.id, option);
+    }
+  });
+
+  return Array.from(uniqueOptions.values());
+};
+
+const getFallbackNationalityOptions = () =>
+  Countries.filter((country) =>
+    FALLBACK_NATIONALITY_CODES.has(country.id)
+  );
+
 const NationalitySelect = ({
   register,
   setValue,
+  errors,
   defaultValues,
 }) => {
+  const [options, setOptions] = useState([]);
+  const [optionsLoading, setOptionsLoading] = useState(true);
   const [nationality, setNationality] = useState(null);
   const [nationalityInput, setNationalityInput] = useState("");
 
   useEffect(() => {
+    let active = true;
+
+    const loadNationalities = async () => {
+      setOptionsLoading(true);
+
+      const response = await fetchNationalities();
+
+      if (!active) return;
+
+      const apiOptions =
+        response?.status === false
+          ? []
+          : extractNationalityOptions(response);
+
+      setOptions(
+        apiOptions.length
+          ? apiOptions
+          : getFallbackNationalityOptions()
+      );
+      setOptionsLoading(false);
+    };
+
+    loadNationalities();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const nationalityCode = normalizeNationalityCode(
+      defaultValues?.nationalityCode
+    );
     const nationalityName = defaultValues?.nationality;
 
-    if (!nationalityName) {
+    if (!nationalityCode && !nationalityName) {
       setNationality(null);
       setNationalityInput("");
       return;
     }
 
     const selectedCountry =
-      Countries.find(
+      options.find(
+        (country) => country.id === nationalityCode
+      ) ||
+      options.find(
         (country) => country.name === nationalityName
-      ) || null;
+      ) ||
+      null;
 
     setNationality(selectedCountry);
-    setNationalityInput(nationalityName);
-  }, [defaultValues?.nationality]);
+    setNationalityInput(
+      selectedCountry?.name || nationalityName || ""
+    );
+  }, [
+    defaultValues?.nationality,
+    defaultValues?.nationalityCode,
+    options,
+  ]);
 
   return (
     <Box
@@ -285,14 +497,22 @@ const NationalitySelect = ({
         zIndex: 40,
       }}
     >
-      {/* تسجيل القيمة داخل react-hook-form */}
       <input
         type="hidden"
         {...register("nationality")}
       />
 
+      <input
+        type="hidden"
+        {...register("nationalityCode", {
+          required: "الجنسية مطلوبة",
+        })}
+      />
+
       <Autocomplete
-        options={Countries}
+        options={options}
+        loading={optionsLoading}
+        loadingText="جاري تحميل الجنسيات..."
         value={nationality}
         inputValue={nationalityInput}
         autoHighlight
@@ -301,14 +521,26 @@ const NationalitySelect = ({
         noOptionsText="لا توجد نتائج"
         getOptionLabel={(option) => option?.name || ""}
         isOptionEqualToValue={(option, selectedValue) =>
-          option?.name === selectedValue?.name
+          option?.id === selectedValue?.id
         }
         onChange={(_, newValue) => {
+          const code = normalizeNationalityCode(newValue?.id);
+
           setNationality(newValue);
+          setNationalityInput(newValue?.name || "");
 
           setValue(
             "nationality",
             newValue ? newValue.name : "",
+            {
+              shouldDirty: true,
+              shouldValidate: true,
+            }
+          );
+
+          setValue(
+            "nationalityCode",
+            code,
             {
               shouldDirty: true,
               shouldValidate: true,
@@ -319,8 +551,14 @@ const NationalitySelect = ({
           setNationalityInput(newInputValue);
 
           if (reason === "clear") {
+            setNationality(null);
             setValue("nationality", "", {
               shouldDirty: true,
+            });
+
+            setValue("nationalityCode", "", {
+              shouldDirty: true,
+              shouldValidate: true,
             });
           }
         }}
@@ -420,6 +658,8 @@ const NationalitySelect = ({
               {...params}
               placeholder="ابحث عن الجنسية..."
               required
+              error={Boolean(errors?.nationalityCode)}
+              helperText={errors?.nationalityCode?.message}
               autoComplete="off"
               inputProps={{
                 ...params.inputProps,
@@ -504,6 +744,7 @@ const StudentForm = ({
           <NationalitySelect
             register={register}
             setValue={setValue}
+            errors={errors}
             defaultValues={defaultValues}
           />
         </Grid>
