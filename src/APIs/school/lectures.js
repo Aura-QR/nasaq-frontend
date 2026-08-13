@@ -22,6 +22,7 @@ const normalizeSuccess = (response) => {
       status: false,
       message: payload?.message || "فشلت العملية",
       data: payload?.data,
+      pagination: payload?.pagination ?? null,
     };
   }
 
@@ -29,6 +30,7 @@ const normalizeSuccess = (response) => {
     status: true,
     message: payload?.message || "Success",
     data: payload?.data ?? payload,
+    pagination: payload?.pagination ?? null,
   };
 };
 
@@ -119,7 +121,6 @@ export const fetchLecturesList = async (
     "تعذر تحميل قائمة الحصص",
     options
   );
-
 
 export const fetchTeacherMyClasses = async (
   filters = {},
@@ -216,9 +217,7 @@ export const normalizeLecturePayload = (
       data.subjectOfferingId
     ),
     termId: normalizeId(data.termId),
-    dayOfWeek: String(
-      data.dayOfWeek || ""
-    )
+    dayOfWeek: String(data.dayOfWeek || "")
       .trim()
       .toLowerCase(),
     slot: Number(data.slot),

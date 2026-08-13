@@ -2,22 +2,24 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Grid,
+  MenuItem,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 
 import {
-  AddCircleOutlineRounded,
   FileDownloadOutlined,
   LibraryBooksRounded,
+  LinkRounded,
   MenuBookRounded,
-  RestartAltRounded,
-  SchoolRounded,
-  SearchOffRounded,
-  VisibilityRounded,
   OpenInNewRounded,
+  RestartAltRounded,
+  SearchRounded,
+  VisibilityRounded,
 } from "@mui/icons-material";
 
 import {
@@ -29,28 +31,29 @@ import {
 import { CSVLink } from "react-csv";
 
 import Container from "@/components/Container/Container";
-import SearchFilter from "@/components/Filters/SearchFilter";
-import SelectFilter from "@/components/Filters/SelectFilter";
+
 import PaginationControls from "@/components/Pagination";
 
 import Add from "./Add";
 import Edit from "./Edit";
 import Delete from "./Delete";
 
-import useDebounce from "@/utils/hooks/useDebounce";
-import { useSubjects } from "@/utils/hooks/apis/useSubjects";
-import { useLibraries } from "@/utils/hooks/apis/useLibraries";
-import usePermissions from "@/utils/hooks/usePermissions";
 import {
-  fetchLibraryAcademicYears,
-} from "@/APIs/school/library";
+  useLibraries,
+} from "@/utils/hooks/apis/useLibraries";
 
-const getArray = (value) =>
-  Array.isArray(value) ? value : [];
+import usePermissions from "@/utils/hooks/usePermissions";
 
 const normalizeId = (value) => {
-  if (value && typeof value === "object") {
-    return String(value._id || value.id || "").trim();
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    return String(
+      value._id ||
+        value.id ||
+        ""
+    ).trim();
   }
 
   return String(value || "").trim();
@@ -59,28 +62,106 @@ const normalizeId = (value) => {
 const getItemId = (item) =>
   normalizeId(item);
 
-const getSubjectData = (item) => {
-  if (item?.subject && typeof item.subject === "object") {
-    return item.subject;
+const getOfferingObject = (
+  item
+) => {
+  if (
+    item?.subjectOffering &&
+    typeof item.subjectOffering ===
+      "object"
+  ) {
+    return item.subjectOffering;
   }
 
   if (
-    item?.subjectId &&
-    typeof item.subjectId === "object"
+    item?.subjectOfferingId &&
+    typeof item
+      .subjectOfferingId ===
+      "object"
   ) {
-    return item.subjectId;
+    return item.subjectOfferingId;
   }
 
   return null;
 };
 
-const getSubjectId = (item) =>
+const getOfferingId = (
+  item
+) =>
   normalizeId(
-    item?.subjectId || item?.subject
+    item?.subjectOfferingId ||
+      item?.subjectOffering
   );
 
-const getSubjectName = (item) => {
-  const subject = getSubjectData(item) || {};
+const getSubjectObject = (
+  item
+) => {
+  const offering =
+    getOfferingObject(item);
+
+  const subject =
+    offering?.subjectId ||
+    offering?.subject ||
+    item?.subjectId ||
+    item?.subject;
+
+  if (
+    subject &&
+    typeof subject === "object"
+  ) {
+    return subject;
+  }
+
+  return null;
+};
+
+const getGradeObject = (
+  item
+) => {
+  const offering =
+    getOfferingObject(item);
+
+  const grade =
+    offering?.gradeLevelId ||
+    offering?.gradeLevel;
+
+  if (
+    grade &&
+    typeof grade === "object"
+  ) {
+    return grade;
+  }
+
+  return null;
+};
+
+const getTermObject = (
+  item
+) => {
+  const offering =
+    getOfferingObject(item);
+
+  const term =
+    item?.termId ||
+    item?.term ||
+    offering?.termId ||
+    offering?.term;
+
+  if (
+    term &&
+    typeof term === "object"
+  ) {
+    return term;
+  }
+
+  return null;
+};
+
+const getSubjectName = (
+  item
+) => {
+  const subject =
+    getSubjectObject(item);
 
   const name =
     subject?.subjectName ||
@@ -95,7 +176,11 @@ const getSubjectName = (item) => {
     "";
 
   if (!name) {
-    return "غير محددة";
+    return getOfferingId(
+      item
+    )
+      ? "مادة غير محددة"
+      : "مصدر عام";
   }
 
   return code
@@ -103,336 +188,66 @@ const getSubjectName = (item) => {
     : name;
 };
 
-const getAcademicYearId = (item) =>
-  normalizeId(
-    item?.academicYearId ||
-      (typeof item?.academicYear === "object"
-        ? item.academicYear
-        : "")
-  );
-
-const getAcademicYearData = (item) => {
-  if (
-    item?.academicYearId &&
-    typeof item.academicYearId === "object"
-  ) {
-    return item.academicYearId;
-  }
-
-  if (
-    item?.academicYear &&
-    typeof item.academicYear === "object"
-  ) {
-    return item.academicYear;
-  }
-
-  return null;
-};
-
-const getAcademicYearName = (
-  item,
-  academicYearMap = new Map()
+const getGradeName = (
+  item
 ) => {
-  const direct = getAcademicYearData(item);
-  const id = getAcademicYearId(item);
-  const mapped = id
-    ? academicYearMap.get(id)
-    : null;
+  const grade =
+    getGradeObject(item);
 
   return (
-    direct?.name ||
-    direct?.label ||
-    mapped?.name ||
-    mapped?.label ||
-    (typeof item?.academicYear === "string"
-      ? item.academicYear
-      : "") ||
-    "غير محددة"
+    grade?.name ||
+    grade?.label ||
+    ""
   );
 };
 
-const getResponseList = (response) => {
-  const payload =
-    response?.data?.data ??
-    response?.data ??
-    response;
-
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.docs)) return payload.docs;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload?.results)) return payload.results;
-  return [];
-};
-
-const enrichLibraryItem = (
-  item,
-  subjectMap,
-  academicYearMap
+const getTermName = (
+  item
 ) => {
-  const subjectId = getSubjectId(item);
-  const directSubject = getSubjectData(item);
-  const subjectData =
-    directSubject ||
-    (subjectId
-      ? subjectMap.get(subjectId)
-      : null);
-
-  const academicYearId =
-    getAcademicYearId(item);
-
-  return {
-    ...item,
-    _id: getItemId(item),
-    id: getItemId(item),
-    subjectId,
-    subject: subjectData || item?.subject,
-    subjectName:
-      subjectData?.subjectName ||
-      subjectData?.name ||
-      item?.subjectName ||
-      "",
-    subjectCode:
-      subjectData?.subjectCode ||
-      subjectData?.code ||
-      item?.subjectCode ||
-      "",
-    academicYearId,
-    academicYear: getAcademicYearName(
-      item,
-      academicYearMap
-    ),
-  };
-};
-
-const CompactLibraryCard = ({
-  item,
-  setItems,
-  setLocalPagination,
-  permissions,
-  academicYearMap,
-}) => {
-  const itemId = getItemId(item);
-  const title = item?.title || "بدون عنوان";
-  const link = String(item?.link || "").trim();
-  const subjectName = getSubjectName(item);
-  const academicYearName = getAcademicYearName(
-    item,
-    academicYearMap
-  );
+  const term =
+    getTermObject(item);
 
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        height: "100%",
-        minHeight: 238,
-        p: 1.45,
-        display: "flex",
-        flexDirection: "column",
-        border:
-          "1px solid rgba(36,74,112,0.14)",
-        borderRadius: "16px",
-        background:
-          "linear-gradient(180deg, rgba(255,252,247,.98), rgba(255,255,255,.94))",
-        boxShadow:
-          "0 8px 20px rgba(18,47,77,0.055)",
-        transition:
-          "transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease",
-
-        "&:hover": {
-          transform: "translateY(-2px)",
-          borderColor:
-            "rgba(36,74,112,0.24)",
-          boxShadow:
-            "0 14px 28px rgba(18,47,77,0.09)",
-        },
-      }}
-    >
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        gap={1}
-      >
-        <Stack direction="row" gap={0.7}>
-          {permissions.edit && (
-            <Edit
-              item={item}
-              setItems={setItems}
-            />
-          )}
-
-          {permissions.delete && (
-            <Delete
-              id={itemId}
-              setItems={setItems}
-              setLocalPagination={
-                setLocalPagination
-              }
-            />
-          )}
-        </Stack>
-
-        <Box
-          sx={{
-            width: 46,
-            height: 46,
-            display: "grid",
-            placeItems: "center",
-            flexShrink: 0,
-            color:
-              "var(--color-navy-deep)",
-            backgroundColor:
-              "var(--color-gold-soft)",
-            border:
-              "1px solid rgba(211,164,79,.20)",
-            borderRadius: "13px",
-
-            "& svg": {
-              fontSize: 23,
-            },
-          }}
-        >
-          <LibraryBooksRounded />
-        </Box>
-      </Stack>
-
-      <Box sx={{ mt: 1.25, minWidth: 0 }}>
-        <Typography
-          title={title}
-          sx={{
-            color:
-              "var(--color-navy-deep)",
-            fontSize: "15px",
-            fontWeight: 800,
-            lineHeight: 1.45,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {title}
-        </Typography>
-
-        <Stack spacing={0.65} sx={{ mt: 1.05 }}>
-          <Stack
-            direction="row"
-            alignItems="center"
-            gap={0.7}
-          >
-            <MenuBookRounded
-              sx={{
-                color:
-                  "var(--color-gold-dark)",
-                fontSize: 17,
-              }}
-            />
-
-            <Typography
-              title={subjectName}
-              sx={{
-                minWidth: 0,
-                color:
-                  "var(--color-text)",
-                fontSize: "11px",
-                fontWeight: 700,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {subjectName}
-            </Typography>
-          </Stack>
-
-          <Stack
-            direction="row"
-            alignItems="center"
-            gap={0.7}
-          >
-            <SchoolRounded
-              sx={{
-                color:
-                  "var(--color-gold-dark)",
-                fontSize: 17,
-              }}
-            />
-
-            <Typography
-              sx={{
-                color:
-                  "var(--color-muted)",
-                fontSize: "10.5px",
-                fontWeight: 700,
-              }}
-            >
-              {academicYearName}
-            </Typography>
-          </Stack>
-        </Stack>
-      </Box>
-
-      <Box sx={{ flexGrow: 1 }} />
-
-      <Button
-        component="a"
-        href={link || undefined}
-        target="_blank"
-        rel="noopener noreferrer"
-        disabled={!link}
-        variant="contained"
-        startIcon={<OpenInNewRounded />}
-        sx={{
-          mt: 1.35,
-          minHeight: 40,
-          borderRadius: "11px",
-          color:
-            "var(--color-white)",
-          background:
-            "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-          boxShadow:
-            "0 7px 16px rgba(18,47,77,.14)",
-          fontSize: "11px",
-          fontWeight: 800,
-          textTransform: "none",
-
-          "& .MuiButton-startIcon": {
-            marginLeft: "6px",
-            marginRight: 0,
-          },
-
-          "&:hover": {
-            background:
-              "linear-gradient(135deg, var(--color-navy), var(--color-navy-deep))",
-          },
-        }}
-      >
-        فتح المصدر
-      </Button>
-    </Paper>
+    term?.name ||
+    item?.termName ||
+    ""
   );
+};
+
+const getOfferingLabel = (
+  item
+) => {
+  const subject =
+    getSubjectName(item);
+
+  const grade =
+    getGradeName(item);
+
+  return [
+    subject,
+    grade,
+  ]
+    .filter(Boolean)
+    .join(" — ");
 };
 
 const List = () => {
   const [items, setItems] =
     useState([]);
 
-  const [itemName, setItemName] =
-    useState("");
-
-  const [subject, setSubject] =
-    useState("");
-
+  /*
+   * البحث هنا داخل العناصر المحملة في الصفحة.
+   * لأن Backend المكتبة الحالي لم نثبت أنه يدعم title filter.
+   */
   const [
-    academicYearId,
-    setAcademicYearId,
+    searchText,
+    setSearchText,
   ] = useState("");
 
-  const [academicYears, setAcademicYears] =
-    useState([]);
-
-  const [loadingAcademicYears, setLoadingAcademicYears] =
-    useState(false);
+  const [
+    subjectOfferingId,
+    setSubjectOfferingId,
+  ] = useState("");
 
   const [page, setPage] =
     useState(1);
@@ -445,118 +260,28 @@ const List = () => {
     setLocalPagination,
   ] = useState(null);
 
-  const debouncedItemName =
-    useDebounce(
-      itemName,
-      700
-    );
-
-  const {
-    subjects = [],
-    loading: loadingSubjects,
-  } = useSubjects({
-    page: 1,
-    limit: 1000,
-  });
-
-  const subjectMap = useMemo(
-    () =>
-      new Map(
-        getArray(subjects)
-          .map((item) => [
-            normalizeId(item),
-            item,
-          ])
-          .filter(([id]) => Boolean(id))
-      ),
-    [subjects]
-  );
-
-  const mappedSubjects = useMemo(
-    () =>
-      getArray(subjects).map(
-        (item) => ({
-          id: normalizeId(item),
-          label: item?.subjectCode
-            ? `${item.subjectName} - ${item.subjectCode}`
-            : item?.subjectName ||
-              item?.name ||
-              "مادة",
-        })
-      ),
-    [subjects]
-  );
-
-  useEffect(() => {
-    let active = true;
-
-    const loadAcademicYears = async () => {
-      setLoadingAcademicYears(true);
-
-      const response =
-        await fetchLibraryAcademicYears();
-
-      if (!active) {
-        return;
-      }
-
-      if (response?.status === false) {
-        setAcademicYears([]);
-      } else {
-        setAcademicYears(
-          getResponseList(response).map(
-            (item) => ({
-              id: normalizeId(item),
-              name:
-                item?.name ||
-                item?.label ||
-                item?.title ||
-                "سنة دراسية",
-            })
-          )
-        );
-      }
-
-      setLoadingAcademicYears(false);
-    };
-
-    loadAcademicYears();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const academicYearMap = useMemo(
-    () =>
-      new Map(
-        academicYears.map((item) => [
-          item.id,
-          item,
-        ])
-      ),
-    [academicYears]
-  );
+  /*
+   * نخزن عروض المواد التي ظهرت
+   * حتى لا يختفي option بعد تطبيق الفلتر.
+   */
+  const [
+    offeringOptions,
+    setOfferingOptions,
+  ] = useState([]);
 
   const filters = useMemo(
     () => ({
       page,
       limit,
-      title:
-        debouncedItemName ||
-        undefined,
-      subjectId:
-        subject || undefined,
-      academicYearId:
-        academicYearId ||
+
+      subjectOfferingId:
+        subjectOfferingId ||
         undefined,
     }),
     [
       page,
       limit,
-      debouncedItemName,
-      subject,
-      academicYearId,
+      subjectOfferingId,
     ]
   );
 
@@ -571,20 +296,11 @@ const List = () => {
 
   useEffect(() => {
     setItems(
-      getArray(libraries).map(
-        (item) =>
-          enrichLibraryItem(
-            item,
-            subjectMap,
-            academicYearMap
-          )
-      )
+      Array.isArray(libraries)
+        ? libraries
+        : []
     );
-  }, [
-    libraries,
-    subjectMap,
-    academicYearMap,
-  ]);
+  }, [libraries]);
 
   useEffect(() => {
     if (pagination) {
@@ -594,83 +310,194 @@ const List = () => {
     }
   }, [pagination]);
 
+  /*
+   * Collect subject offering options
+   */
+  useEffect(() => {
+    if (
+      !Array.isArray(items) ||
+      items.length === 0
+    ) {
+      return;
+    }
+
+    setOfferingOptions(
+      (previous) => {
+        const map = new Map(
+          previous.map(
+            (option) => [
+              option.id,
+              option,
+            ]
+          )
+        );
+
+        items.forEach(
+          (item) => {
+            const id =
+              getOfferingId(
+                item
+              );
+
+            if (!id) {
+              return;
+            }
+
+            map.set(id, {
+              id,
+
+              label:
+                getOfferingLabel(
+                  item
+                ),
+            });
+          }
+        );
+
+        return Array.from(
+          map.values()
+        );
+      }
+    );
+  }, [items]);
+
   useEffect(() => {
     setPage(1);
   }, [
     limit,
-    debouncedItemName,
-    subject,
-    academicYearId,
+    subjectOfferingId,
   ]);
+
+  const displayedItems =
+    useMemo(() => {
+      const query =
+        searchText
+          .trim()
+          .toLowerCase();
+
+      if (!query) {
+        return items;
+      }
+
+      return items.filter(
+        (item) => {
+          const title =
+            String(
+              item?.title || ""
+            ).toLowerCase();
+
+          const subject =
+            getSubjectName(
+              item
+            ).toLowerCase();
+
+          const grade =
+            getGradeName(
+              item
+            ).toLowerCase();
+
+          return (
+            title.includes(
+              query
+            ) ||
+            subject.includes(
+              query
+            ) ||
+            grade.includes(
+              query
+            )
+          );
+        }
+      );
+    }, [
+      items,
+      searchText,
+    ]);
 
   const currentPagination =
     localPagination ||
     pagination;
 
-  const activeFiltersCount = [
-    itemName,
-    subject,
-    academicYearId,
-  ].filter(Boolean).length;
+  const linkedCount =
+    displayedItems.filter(
+      (item) =>
+        Boolean(
+          getOfferingId(
+            item
+          )
+        )
+    ).length;
 
-  const stats = useMemo(
-    () => ({
-      total:
-        currentPagination
-          ?.totalDocs ??
-        items.length,
+  const generalCount =
+    displayedItems.filter(
+      (item) =>
+        !getOfferingId(
+          item
+        )
+    ).length;
 
-      visible: items.length,
+  const stats = {
+    total:
+      currentPagination
+        ?.totalDocs ??
+      items.length,
 
-      subjects: new Set(
-        items
-          .map(getSubjectId)
-          .filter(Boolean)
-      ).size,
+    visible:
+      displayedItems.length,
 
-      years: new Set(
-        items
-          .map(getAcademicYearId)
-          .filter(Boolean)
-      ).size,
-    }),
-    [
-      items,
-      currentPagination,
-    ]
-  );
+    linked:
+      linkedCount,
 
-  const csvData = useMemo(
-    () =>
-      items.map((item) => ({
-        العنوان:
-          item?.title || "—",
-        الرابط:
-          item?.link || "—",
-        المادة:
-          getSubjectName(item),
-        "السنة الدراسية":
-          getAcademicYearName(
-            item,
-            academicYearMap
-          ),
-      })),
-    [items, academicYearMap]
-  );
-
-  const resetFilters = () => {
-    setItemName("");
-    setSubject("");
-    setAcademicYearId("");
-    setPage(1);
+    general:
+      generalCount,
   };
 
-  const showEmptyState =
-    !loading &&
-    items.length === 0;
+  const csvData =
+    useMemo(
+      () =>
+        displayedItems.map(
+          (item) => ({
+            العنوان:
+              item?.title ||
+              "—",
 
-  const hasFilters =
-    activeFiltersCount > 0;
+            الرابط:
+              item?.link ||
+              "—",
+
+            المادة:
+              getSubjectName(
+                item
+              ),
+
+            الصف:
+              getGradeName(
+                item
+              ) ||
+              "—",
+
+            الترم:
+              getTermName(
+                item
+              ) ||
+              "—",
+          })
+        ),
+      [displayedItems]
+    );
+
+  const activeFiltersCount = [
+    searchText,
+    subjectOfferingId,
+  ].filter(Boolean).length;
+
+  const resetFilters = () => {
+    setSearchText("");
+
+    setSubjectOfferingId("");
+
+    setPage(1);
+  };
 
   return (
     <Container>
@@ -678,32 +505,31 @@ const List = () => {
         dir="rtl"
         sx={{
           width: "100%",
-          maxWidth: "100%",
           minWidth: 0,
           pb: 4,
-          overflowX: "hidden",
           color:
             "var(--color-text)",
         }}
       >
+        {/* Header */}
         <Paper
           elevation={0}
           sx={{
             mb: 1.25,
             px: {
               xs: 1.5,
-              sm: 2,
               md: 2.4,
             },
-            py: {
-              xs: 1.4,
-              md: 1.6,
-            },
+            py: 1.6,
+
             border:
               "1px solid rgba(36,74,112,0.08)",
+
             borderRadius: "18px",
+
             background:
               "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.42))",
+
             boxShadow:
               "0 10px 24px rgba(18,47,77,0.06)",
           }}
@@ -720,7 +546,7 @@ const List = () => {
             justifyContent="space-between"
             gap={1.5}
           >
-            <Box sx={{ minWidth: 0 }}>
+            <Box>
               <Stack
                 direction="row"
                 alignItems="center"
@@ -731,12 +557,13 @@ const List = () => {
                   sx={{
                     color:
                       "var(--color-navy-deep)",
+
                     fontSize: {
                       xs: "21px",
                       md: "25px",
                     },
+
                     fontWeight: 800,
-                    lineHeight: 1.3,
                   }}
                 >
                   إدارة المكتبة
@@ -744,20 +571,16 @@ const List = () => {
 
                 <Chip
                   label={
-                    currentPagination
-                      ?.totalDocs ??
-                    items.length
+                    stats.total
                   }
                   size="small"
                   sx={{
-                    height: 26,
                     color:
                       "var(--color-gold-dark)",
+
                     backgroundColor:
                       "var(--color-gold-soft)",
-                    border:
-                      "1px solid rgba(211,164,79,0.24)",
-                    fontSize: "10px",
+
                     fontWeight: 800,
                   }}
                 />
@@ -766,13 +589,14 @@ const List = () => {
               <Typography
                 sx={{
                   mt: 0.45,
+
                   color:
                     "var(--color-muted)",
+
                   fontSize: "11px",
-                  lineHeight: 1.6,
                 }}
               >
-                أضف الروابط والمصادر التعليمية ونظّمها حسب المادة والسنة الدراسية.
+                أضف المصادر التعليمية واربطها بعروض المواد الدراسية.
               </Typography>
             </Box>
 
@@ -781,70 +605,42 @@ const List = () => {
                 xs: "column",
                 sm: "row",
               }}
-              alignItems="center"
-              gap={1.25}
-              sx={{
-                width: {
-                  xs: "100%",
-                  sm: "auto",
-                },
-                flexShrink: 0,
-              }}
+              gap={1}
             >
               <Box
                 component={CSVLink}
                 data={csvData}
                 filename="library.csv"
                 sx={{
-                  width: {
-                    xs: "100%",
-                    sm: "auto",
-                  },
-                  display:
-                    "inline-flex",
-                  textDecoration: "none",
+                  textDecoration:
+                    "none",
                 }}
               >
                 <Button
-                  disabled={
-                    items.length === 0
-                  }
                   variant="outlined"
+                  disabled={
+                    displayedItems.length ===
+                    0
+                  }
                   startIcon={
                     <FileDownloadOutlined />
                   }
                   sx={{
-                    width: {
-                      xs: "100%",
-                      sm: 112,
-                    },
                     minHeight: 42,
-                    borderRadius: "12px",
-                    color:
-                      "var(--color-navy)",
-                    backgroundColor:
-                      "rgba(255,252,247,0.84)",
-                    borderColor:
-                      "rgba(36,74,112,0.16)",
-                    fontSize: "12px",
+                    borderRadius:
+                      "12px",
                     fontWeight: 800,
-                    textTransform: "none",
-
-                    "& .MuiButton-startIcon":
-                      {
-                        marginLeft:
-                          "7px",
-                        marginRight: 0,
-                      },
                   }}
                 >
                   تصدير
                 </Button>
               </Box>
 
-              {permissions.add && (
+              {permissions?.add && (
                 <Add
-                  setItems={setItems}
+                  setItems={
+                    setItems
+                  }
                   setLocalPagination={
                     setLocalPagination
                   }
@@ -854,16 +650,21 @@ const List = () => {
           </Stack>
         </Paper>
 
+        {/* Stats */}
         <Box
           sx={{
             mb: 1.25,
+
             display: "grid",
+
             gridTemplateColumns: {
               xs:
                 "repeat(2, minmax(0, 1fr))",
+
               lg:
                 "repeat(4, minmax(0, 1fr))",
             },
+
             gap: 1,
           }}
         >
@@ -875,6 +676,7 @@ const List = () => {
               icon:
                 <LibraryBooksRounded />,
             },
+
             {
               label:
                 "الظاهر في الصفحة",
@@ -883,21 +685,23 @@ const List = () => {
               icon:
                 <VisibilityRounded />,
             },
+
             {
               label:
-                "المواد في الصفحة",
+                "مرتبطة بمواد",
               value:
-                stats.subjects,
+                stats.linked,
               icon:
                 <MenuBookRounded />,
             },
+
             {
               label:
-                "السنوات في الصفحة",
+                "مصادر عامة",
               value:
-                stats.years,
+                stats.general,
               icon:
-                <SchoolRounded />,
+                <LinkRounded />,
             },
           ].map((card) => (
             <Paper
@@ -905,27 +709,23 @@ const List = () => {
               elevation={0}
               sx={{
                 p: 1.3,
+
                 display: "flex",
-                alignItems: "center",
+
+                alignItems:
+                  "center",
+
                 justifyContent:
                   "space-between",
-                gap: 1.5,
+
                 border:
                   "1px solid rgba(36,74,112,0.08)",
-                borderRadius: "18px",
+
+                borderRadius:
+                  "18px",
+
                 backgroundColor:
                   "var(--color-cream)",
-                boxShadow:
-                  "0 10px 24px rgba(18,47,77,0.055)",
-                transition:
-                  "transform 200ms ease, box-shadow 200ms ease",
-
-                "&:hover": {
-                  transform:
-                    "translateY(-3px)",
-                  boxShadow:
-                    "0 17px 32px rgba(18,47,77,0.10)",
-                },
               }}
             >
               <Box>
@@ -933,8 +733,12 @@ const List = () => {
                   sx={{
                     color:
                       "var(--color-muted)",
-                    fontSize: "11px",
-                    fontWeight: 700,
+
+                    fontSize:
+                      "11px",
+
+                    fontWeight:
+                      700,
                   }}
                 >
                   {card.label}
@@ -943,10 +747,15 @@ const List = () => {
                 <Typography
                   sx={{
                     mt: 0.4,
+
                     color:
                       "var(--color-navy-deep)",
-                    fontSize: "21px",
-                    fontWeight: 800,
+
+                    fontSize:
+                      "21px",
+
+                    fontWeight:
+                      800,
                   }}
                 >
                   {card.value}
@@ -957,19 +766,20 @@ const List = () => {
                 sx={{
                   width: 40,
                   height: 40,
+
                   display: "grid",
-                  placeItems: "center",
+
+                  placeItems:
+                    "center",
+
                   color:
                     "var(--color-gold-dark)",
+
                   backgroundColor:
                     "var(--color-gold-soft)",
-                  border:
-                    "1px solid rgba(211,164,79,0.22)",
-                  borderRadius: "12px",
 
-                  "& svg": {
-                    fontSize: 21,
-                  },
+                  borderRadius:
+                    "12px",
                 }}
               >
                 {card.icon}
@@ -978,47 +788,20 @@ const List = () => {
           ))}
         </Box>
 
+        {/* Filters */}
         <Paper
           elevation={0}
           sx={{
             mb: 1.25,
-            px: {
-              xs: 1.5,
-              md: 1.9,
-            },
-            py: 1.45,
+            p: 1.6,
+
             border:
               "1px solid rgba(36,74,112,0.08)",
+
             borderRadius: "18px",
+
             backgroundColor:
               "var(--color-cream)",
-            boxShadow:
-              "0 9px 22px rgba(18,47,77,0.05)",
-
-            "& .MuiFormControl-root":
-              {
-                width: "100%",
-                minWidth: 0,
-                margin: 0,
-              },
-
-            "& .MuiInputBase-root, & .MuiOutlinedInput-root":
-              {
-                minHeight: 50,
-                height: 50,
-                backgroundColor:
-                  "var(--color-white)",
-                borderRadius: "12px",
-              },
-
-            "& .MuiInputLabel-root":
-              {
-                px: 0.65,
-                backgroundColor:
-                  "var(--color-cream)",
-                fontSize: "10.5px",
-                fontWeight: 700,
-              },
           }}
         >
           <Stack
@@ -1026,21 +809,21 @@ const List = () => {
               xs: "column",
               sm: "row",
             }}
-            alignItems={{
-              xs: "stretch",
-              sm: "flex-start",
-            }}
             justifyContent="space-between"
             gap={1}
-            sx={{ mb: 1.35 }}
+            sx={{ mb: 1.5 }}
           >
             <Box>
               <Typography
                 sx={{
                   color:
                     "var(--color-navy-deep)",
-                  fontSize: "15px",
-                  fontWeight: 800,
+
+                  fontSize:
+                    "15px",
+
+                  fontWeight:
+                    800,
                 }}
               >
                 البحث والتصفية
@@ -1049,354 +832,459 @@ const List = () => {
               <Typography
                 sx={{
                   mt: 0.2,
+
                   color:
                     "var(--color-muted)",
-                  fontSize: "9.5px",
+
+                  fontSize:
+                    "9.5px",
                 }}
               >
-                ابحث بعنوان العنصر أو حدّد المادة والسنة الدراسية.
+                البحث بالعنوان داخل الصفحة، والفلترة بالمادة من الـBackend.
               </Typography>
             </Box>
 
             <Button
               type="button"
               disabled={
-                activeFiltersCount ===
-                0
+                !activeFiltersCount
               }
-              onClick={resetFilters}
-              variant="text"
+              onClick={
+                resetFilters
+              }
               startIcon={
                 <RestartAltRounded />
               }
               sx={{
-                minHeight: 36,
-                px: 1.2,
-                color:
-                  "var(--color-navy)",
-                backgroundColor:
-                  "rgba(36,74,112,0.055)",
-                border:
-                  "1px solid rgba(36,74,112,0.075)",
-                borderRadius: "11px",
-                fontSize: "10px",
                 fontWeight: 800,
-                textTransform: "none",
-
-                "& .MuiButton-startIcon":
-                  {
-                    marginLeft:
-                      "5px",
-                    marginRight: 0,
-                  },
               }}
             >
               مسح الفلاتر
             </Button>
           </Stack>
 
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm:
-                  "repeat(2, minmax(0, 1fr))",
-                lg:
-                  "1.35fr 1fr 1fr",
-              },
-              gap: 1.5,
-              minWidth: 0,
-
-              "& > *": {
-                minWidth: 0,
-              },
-            }}
+          <Grid
+            container
+            spacing={1.5}
           >
-            <SearchFilter
-              value={itemName}
-              onChange={
-                setItemName
-              }
-              placeholder="ابحث بعنوان العنصر..."
-            />
+            <Grid
+              item
+              xs={12}
+              md={6}
+            >
+              <TextField
+                fullWidth
+                value={searchText}
+                onChange={(
+                  event
+                ) =>
+                  setSearchText(
+                    event.target
+                      .value
+                  )
+                }
+                label="بحث داخل الصفحة"
+                placeholder="ابحث بالعنوان أو المادة..."
+                InputProps={{
+                  startAdornment: (
+                    <SearchRounded
+                      sx={{
+                        ml: 1,
+                        color:
+                          "var(--color-muted)",
+                      }}
+                    />
+                  ),
+                }}
+              />
+            </Grid>
 
-            <SelectFilter
-              value={subject}
-              onChange={setSubject}
-              label="المادة"
-              icon={MenuBookRounded}
-              allLabel="جميع المواد"
-              disabled={
-                loadingSubjects
-              }
-              options={mappedSubjects.map(
-                (item) => ({
-                  value: item.id,
-                  label: item.label,
-                })
-              )}
-            />
+            <Grid
+              item
+              xs={12}
+              md={6}
+            >
+              <TextField
+                select
+                fullWidth
+                label="فلترة بعرض المادة"
+                value={
+                  subjectOfferingId
+                }
+                onChange={(
+                  event
+                ) =>
+                  setSubjectOfferingId(
+                    event.target
+                      .value
+                  )
+                }
+              >
+                <MenuItem value="">
+                  كل المواد
+                </MenuItem>
 
-            <SelectFilter
-              value={academicYearId}
-              onChange={
-                setAcademicYearId
-              }
-              label="السنة الدراسية"
-              icon={SchoolRounded}
-              allLabel="جميع السنوات"
-              disabled={loadingAcademicYears}
-              options={academicYears.map(
-                (year) => ({
-                  value: year.id,
-                  label: year.name,
-                })
-              )}
-            />
-          </Box>
+                {offeringOptions.map(
+                  (option) => (
+                    <MenuItem
+                      key={
+                        option.id
+                      }
+                      value={
+                        option.id
+                      }
+                    >
+                      {
+                        option.label
+                      }
+                    </MenuItem>
+                  )
+                )}
+              </TextField>
+            </Grid>
+          </Grid>
         </Paper>
 
+        {/* List */}
         <Paper
           elevation={0}
           sx={{
-            overflow: "hidden",
+            p: {
+              xs: 1.2,
+              md: 1.6,
+            },
+
             border:
               "1px solid rgba(36,74,112,0.08)",
+
             borderRadius: "18px",
+
             backgroundColor:
               "var(--color-cream)",
-            boxShadow:
-              "0 14px 32px rgba(18,47,77,0.065)",
           }}
         >
-          <Box
-            sx={{
-              px: {
-                xs: 1.5,
-                md: 1.9,
-              },
-              py: 1.25,
-              borderBottom:
-                "1px solid rgba(36,74,112,0.07)",
-            }}
-          >
-            <Typography
+          {loading ? (
+            <Stack
+              alignItems="center"
+              justifyContent="center"
               sx={{
-                color:
-                  "var(--color-navy-deep)",
-                fontSize: "16px",
-                fontWeight: 800,
+                minHeight: 260,
               }}
             >
-              عناصر المكتبة
-            </Typography>
+              <CircularProgress />
+            </Stack>
+          ) : displayedItems.length ===
+            0 ? (
+            <Stack
+              alignItems="center"
+              justifyContent="center"
+              sx={{
+                minHeight: 260,
+              }}
+            >
+              <LibraryBooksRounded
+                sx={{
+                  fontSize: 48,
 
-            <Typography
-              sx={{
-                mt: 0.25,
-                color:
-                  "var(--color-muted)",
-                fontSize: "9.5px",
-              }}
-            >
-              افتح الروابط وعدّل العناصر حسب صلاحياتك.
-            </Typography>
-          </Box>
+                  color:
+                    "var(--color-muted)",
+                }}
+              />
 
-          {showEmptyState ? (
-            <Box
-              sx={{
-                minHeight: {
-                  xs: 250,
-                  md: 290,
-                },
-                px: 2,
-                py: 3,
-                display: "grid",
-                placeItems: "center",
-                textAlign: "center",
-              }}
-            >
-              <Stack
-                alignItems="center"
-                spacing={1}
+              <Typography
+                sx={{
+                  mt: 1,
+
+                  color:
+                    "var(--color-navy-deep)",
+
+                  fontWeight:
+                    800,
+                }}
               >
-                <Box
-                  sx={{
-                    width: 64,
-                    height: 64,
-                    display: "grid",
-                    placeItems: "center",
-                    color:
-                      "var(--color-gold-dark)",
-                    backgroundColor:
-                      "var(--color-gold-soft)",
-                    border:
-                      "1px solid rgba(211,164,79,0.22)",
-                    borderRadius: "18px",
+                لا توجد عناصر
+              </Typography>
 
-                    "& svg": {
-                      fontSize: 30,
-                    },
-                  }}
-                >
-                  {hasFilters ? (
-                    <SearchOffRounded />
-                  ) : (
-                    <LibraryBooksRounded />
-                  )}
-                </Box>
+              <Typography
+                sx={{
+                  mt: 0.4,
 
-                <Typography
-                  sx={{
-                    color:
-                      "var(--color-navy-deep)",
-                    fontSize: "16px",
-                    fontWeight: 800,
-                  }}
-                >
-                  {hasFilters
-                    ? "لا توجد عناصر مطابقة للفلاتر"
-                    : "لا توجد عناصر في المكتبة حتى الآن"}
-                </Typography>
+                  color:
+                    "var(--color-muted)",
 
-                <Typography
-                  sx={{
-                    maxWidth: 390,
-                    color:
-                      "var(--color-muted)",
-                    fontSize: "10px",
-                    lineHeight: 1.7,
-                  }}
-                >
-                  {hasFilters
-                    ? "غيّر الفلاتر أو امسحها لعرض نتائج أخرى."
-                    : "أضف أول رابط أو مصدر تعليمي إلى المكتبة."}
-                </Typography>
-
-                {hasFilters ? (
-                  <Button
-                    type="button"
-                    onClick={
-                      resetFilters
-                    }
-                    variant="outlined"
-                    startIcon={
-                      <RestartAltRounded />
-                    }
-                    sx={{
-                      mt: 0.5,
-                      minHeight: 42,
-                      px: 2,
-                      borderRadius:
-                        "12px",
-                      color:
-                        "var(--color-navy)",
-                      borderColor:
-                        "rgba(36,74,112,0.18)",
-                      fontWeight: 800,
-                      textTransform:
-                        "none",
-                    }}
-                  >
-                    مسح الفلاتر
-                  </Button>
-                ) : (
-                  permissions.add && (
-                    <Add
-                      setItems={setItems}
-                      setLocalPagination={
-                        setLocalPagination
-                      }
-                      compact
-                    />
-                  )
-                )}
-              </Stack>
-            </Box>
+                  fontSize:
+                    "11px",
+                }}
+              >
+                جرّب تغيير الفلاتر أو إضافة مصدر جديد.
+              </Typography>
+            </Stack>
           ) : (
-            <Box
-              sx={{
-                p: {
-                  xs: 1,
-                  md: 1.25,
-                },
-              }}
+            <Grid
+              container
+              spacing={1.5}
             >
-              {loading ? (
-                <Box
-                  sx={{
-                    minHeight: 260,
-                    display: "grid",
-                    placeItems:
-                      "center",
-                    color:
-                      "var(--color-muted)",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                  }}
-                >
-                  جاري تحميل عناصر المكتبة...
-                </Box>
-              ) : (
-                <Grid
-                  container
-                  spacing={1.25}
-                >
-                  {items.map(
-                    (item, index) =>
-                      permissions.read && (
-                        <Grid
-                          item
-                          xs={12}
-                          sm={6}
-                          md={6}
-                          lg={4}
-                          xl={3}
-                          key={
-                            getItemId(
-                              item
-                            ) ||
-                            index
-                          }
-                        >
-                          <CompactLibraryCard
-                            item={item}
-                            setItems={setItems}
-                            setLocalPagination={
-                              setLocalPagination
-                            }
-                            permissions={permissions}
-                            academicYearMap={
-                              academicYearMap
-                            }
-                          />
-                        </Grid>
-                      )
-                  )}
-                </Grid>
-              )}
+              {displayedItems.map(
+                (item) => {
+                  const id =
+                    getItemId(
+                      item
+                    );
 
-              {currentPagination &&
-                items.length > 0 && (
-                  <PaginationControls
-                    pagination={
-                      currentPagination
-                    }
-                    page={page}
-                    onPageChange={
-                      setPage
-                    }
-                    limit={limit}
-                    onLimitChange={
-                      setLimit
-                    }
-                    label="عدد عناصر المكتبة"
-                  />
-                )}
-            </Box>
+                  const title =
+                    item?.title ||
+                    "مصدر تعليمي";
+
+                  const subject =
+                    getSubjectName(
+                      item
+                    );
+
+                  const grade =
+                    getGradeName(
+                      item
+                    );
+
+                  const term =
+                    getTermName(
+                      item
+                    );
+
+                  return (
+                    <Grid
+                      item
+                      xs={12}
+                      md={6}
+                      xl={4}
+                      key={id}
+                    >
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          height:
+                            "100%",
+
+                          p: 1.5,
+
+                          display:
+                            "flex",
+
+                          flexDirection:
+                            "column",
+
+                          border:
+                            "1px solid rgba(36,74,112,0.09)",
+
+                          borderRadius:
+                            "16px",
+
+                          backgroundColor:
+                            "var(--color-white)",
+
+                          transition:
+                            "200ms ease",
+
+                          "&:hover": {
+                            transform:
+                              "translateY(-3px)",
+
+                            boxShadow:
+                              "0 14px 26px rgba(18,47,77,0.08)",
+                          },
+                        }}
+                      >
+                        <Stack
+                          direction="row"
+                          alignItems="flex-start"
+                          justifyContent="space-between"
+                          gap={1}
+                        >
+                          <Box
+                            sx={{
+                              minWidth:
+                                0,
+                            }}
+                          >
+                            <Typography
+                              sx={{
+                                color:
+                                  "var(--color-navy-deep)",
+
+                                fontSize:
+                                  "14px",
+
+                                fontWeight:
+                                  800,
+
+                                wordBreak:
+                                  "break-word",
+                              }}
+                            >
+                              {title}
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                mt: 0.7,
+
+                                color:
+                                  "var(--color-muted)",
+
+                                fontSize:
+                                  "10px",
+                              }}
+                            >
+                              {subject}
+                            </Typography>
+                          </Box>
+
+                          <Chip
+                            size="small"
+                            label={
+                              getOfferingId(
+                                item
+                              )
+                                ? "مرتبط بمادة"
+                                : "مصدر عام"
+                            }
+                            sx={{
+                              fontSize:
+                                "9px",
+
+                              fontWeight:
+                                800,
+                            }}
+                          />
+                        </Stack>
+
+                        {(grade ||
+                          term) && (
+                          <Stack
+                            direction="row"
+                            spacing={0.8}
+                            sx={{
+                              mt: 1.2,
+                              flexWrap:
+                                "wrap",
+                              gap: 0.7,
+                            }}
+                          >
+                            {grade && (
+                              <Chip
+                                size="small"
+                                label={
+                                  grade
+                                }
+                              />
+                            )}
+
+                            {term && (
+                              <Chip
+                                size="small"
+                                label={
+                                  term
+                                }
+                              />
+                            )}
+                          </Stack>
+                        )}
+
+                        <Box
+                          sx={{
+                            flex: 1,
+                          }}
+                        />
+
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          justifyContent="space-between"
+                          sx={{
+                            mt: 2,
+                          }}
+                        >
+                          <Button
+                            component="a"
+                            href={
+                              item?.link
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            size="small"
+                            endIcon={
+                              <OpenInNewRounded />
+                            }
+                            disabled={
+                              !item?.link
+                            }
+                            sx={{
+                              fontSize:
+                                "10px",
+
+                              fontWeight:
+                                800,
+                            }}
+                          >
+                            فتح المصدر
+                          </Button>
+
+                          <Stack
+                            direction="row"
+                            spacing={0.6}
+                          >
+                            {permissions?.edit && (
+                              <Edit
+                                item={
+                                  item
+                                }
+                                setItems={
+                                  setItems
+                                }
+                              />
+                            )}
+
+                            {permissions?.delete && (
+                              <Delete
+                                id={id}
+                                setItems={
+                                  setItems
+                                }
+                                setLocalPagination={
+                                  setLocalPagination
+                                }
+                              />
+                            )}
+                          </Stack>
+                        </Stack>
+                      </Paper>
+                    </Grid>
+                  );
+                }
+              )}
+            </Grid>
           )}
+
+          {currentPagination &&
+            items.length > 0 && (
+              <Box
+                sx={{ mt: 2 }}
+              >
+                <PaginationControls
+                  pagination={
+                    currentPagination
+                  }
+                  page={page}
+                  onPageChange={
+                    setPage
+                  }
+                  limit={limit}
+                  onLimitChange={
+                    setLimit
+                  }
+                  label="عدد عناصر المكتبة"
+                />
+              </Box>
+            )}
         </Paper>
       </Box>
     </Container>

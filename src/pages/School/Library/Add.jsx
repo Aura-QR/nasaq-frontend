@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -7,7 +8,9 @@ import {
   DialogTitle,
   Grid,
   IconButton,
+  MenuItem,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 
@@ -23,164 +26,476 @@ import {
   useMemo,
   useState,
 } from "react";
+
+import {
+  Controller,
+  useForm,
+} from "react-hook-form";
+
 import { toast } from "react-toastify";
-import { useForm } from "react-hook-form";
-
-import Input from "@/components/Input/Input";
-import Select from "@/components/Select/Select";
-import SubjectSelector from "@/components/Selector/SubjectSelector";
-
 
 import {
   addLibrary,
-  fetchLibraryAcademicYears,
 } from "@/APIs/school/library";
-import { fetchSingleSubject } from "@/APIs/school/subjects";
+
+import {
+  fetchAcademicYears,
+} from "@/APIs/school/academicYears";
+
+import {
+  fetchTermsByAcademicYear,
+} from "@/APIs/school/lectures";
+
+import {
+  fetchSubjectOfferings,
+} from "@/APIs/school/subjectOfferings";
 
 const normalizeId = (value) => {
-  if (value && typeof value === "object") {
-    return String(value._id || value.id || "").trim();
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    return String(
+      value._id ||
+        value.id ||
+        ""
+    ).trim();
   }
 
   return String(value || "").trim();
 };
 
-const getArray = (value) => {
-  if (Array.isArray(value)) {
-    return value;
+const extractList = (response) => {
+  if (Array.isArray(response)) {
+    return response;
   }
 
-  if (Array.isArray(value?.docs)) {
-    return value.docs;
+  if (
+    Array.isArray(response?.data)
+  ) {
+    return response.data;
   }
 
-  if (Array.isArray(value?.items)) {
-    return value.items;
+  if (
+    Array.isArray(
+      response?.data?.data
+    )
+  ) {
+    return response.data.data;
   }
 
-  if (Array.isArray(value?.results)) {
-    return value.results;
+  if (
+    Array.isArray(
+      response?.items
+    )
+  ) {
+    return response.items;
+  }
+
+  if (
+    Array.isArray(
+      response?.docs
+    )
+  ) {
+    return response.docs;
   }
 
   return [];
 };
 
-const mapAcademicYear = (item) => ({
-  id: normalizeId(item),
-  name:
-    item?.name ||
-    item?.label ||
-    item?.title ||
-    "سنة دراسية",
-});
+const getResponseData = (
+  response
+) =>
+  response?.data?.data ||
+  response?.data ||
+  null;
 
-const getResponseData = (response) => {
-  const payload =
-    response?.data?.data ??
-    response?.data ??
-    null;
+const getSubjectData = (
+  offering
+) => {
+  const subject =
+    offering?.subjectId ||
+    offering?.subject;
 
   return (
-    payload?.library ||
-    payload?.item ||
-    payload?.subject ||
-    payload
+    subject &&
+    typeof subject === "object"
+      ? subject
+      : null
   );
 };
 
-const getErrorMessage = (
-  response,
-  fallback
-) =>
-  response?.message ||
-  response?.data?.message ||
-  (typeof response === "string"
-    ? response
-    : fallback);
+const getGradeData = (
+  offering
+) => {
+  const grade =
+    offering?.gradeLevelId ||
+    offering?.gradeLevel;
+
+  return (
+    grade &&
+    typeof grade === "object"
+      ? grade
+      : null
+  );
+};
+
+const getOfferingLabel = (
+  offering
+) => {
+  const subject =
+    getSubjectData(offering);
+
+  const grade =
+    getGradeData(offering);
+
+  const subjectName =
+    subject?.subjectName ||
+    subject?.name ||
+    offering?.subjectName ||
+    "مادة غير محددة";
+
+  const subjectCode =
+    subject?.subjectCode ||
+    subject?.code ||
+    "";
+
+  const gradeName =
+    grade?.name ||
+    grade?.label ||
+    "";
+
+  const subjectLabel =
+    subjectCode
+      ? `${subjectName} - ${subjectCode}`
+      : subjectName;
+
+  return [
+    subjectLabel,
+    gradeName,
+  ]
+    .filter(Boolean)
+    .join(" — ");
+};
+
+const validateUrl = (value) => {
+  try {
+    const url = new URL(
+      String(value || "").trim()
+    );
+
+    if (
+      url.protocol !== "http:" &&
+      url.protocol !== "https:"
+    ) {
+      return "الرابط يجب أن يبدأ بـ http أو https";
+    }
+
+    return true;
+  } catch {
+    return "أدخل رابطًا صحيحًا";
+  }
+};
 
 const Add = ({
   setItems,
   setLocalPagination,
   compact = false,
 }) => {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-    setValue,
-  } = useForm({
-    defaultValues: {
-      title: "",
-      link: "",
-      subjectId: "",
-      academicYearId: "",
-    },
-  });
-
   const [open, setOpen] =
     useState(false);
 
   const [loading, setLoading] =
     useState(false);
 
-  const [academicYears, setAcademicYears] =
+  const [
+    academicYears,
+    setAcademicYears,
+  ] = useState([]);
+
+  const [terms, setTerms] =
     useState([]);
 
-  const [loadingYears, setLoadingYears] =
-    useState(false);
+  const [
+    offerings,
+    setOfferings,
+  ] = useState([]);
 
+  const [
+    loadingYears,
+    setLoadingYears,
+  ] = useState(false);
+
+  const [
+    loadingTerms,
+    setLoadingTerms,
+  ] = useState(false);
+
+  const [
+    loadingOfferings,
+    setLoadingOfferings,
+  ] = useState(false);
+
+  const [setupError, setSetupError] =
+    useState("");
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+  } = useForm({
+    defaultValues: {
+      title: "",
+      link: "",
+      academicYearId: "",
+      termId: "",
+      subjectOfferingId: "",
+    },
+  });
+
+  const academicYearId =
+    normalizeId(
+      watch("academicYearId")
+    );
+
+  const termId =
+    normalizeId(
+      watch("termId")
+    );
+
+  /*
+   * Load academic years
+   */
   useEffect(() => {
     if (!open) {
-      return undefined;
+      return;
     }
 
     let active = true;
 
-    const loadAcademicYears = async () => {
+    const load = async () => {
       setLoadingYears(true);
+      setSetupError("");
 
-      const response =
-        await fetchLibraryAcademicYears();
+      try {
+        const response =
+          await fetchAcademicYears();
 
-      if (!active) {
-        return;
-      }
+        if (!active) {
+          return;
+        }
 
-      if (response?.status === false) {
-        toast.error(
-          response?.message ||
+        if (
+          response?.status === false
+        ) {
+          setAcademicYears([]);
+
+          setSetupError(
+            response?.message ||
+              "تعذر تحميل السنوات الدراسية"
+          );
+
+          return;
+        }
+
+        setAcademicYears(
+          extractList(response)
+        );
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        setAcademicYears([]);
+
+        setSetupError(
+          error?.response?.data
+            ?.message ||
             "تعذر تحميل السنوات الدراسية"
         );
-        setAcademicYears([]);
-      } else {
-        setAcademicYears(
-          getArray(response?.data).map(
-            mapAcademicYear
-          )
-        );
+      } finally {
+        if (active) {
+          setLoadingYears(false);
+        }
       }
-
-      setLoadingYears(false);
     };
 
-    loadAcademicYears();
+    load();
 
     return () => {
       active = false;
     };
   }, [open]);
 
-  const academicYearMap = useMemo(
-    () =>
-      new Map(
-        academicYears.map((item) => [
-          item.id,
-          item,
-        ])
-      ),
-    [academicYears]
-  );
+  /*
+   * Load terms
+   */
+  useEffect(() => {
+    let active = true;
+
+    setTerms([]);
+    setOfferings([]);
+
+    if (!academicYearId) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const load = async () => {
+      setLoadingTerms(true);
+      setSetupError("");
+
+      try {
+        const response =
+          await fetchTermsByAcademicYear(
+            academicYearId,
+            {
+              force: true,
+            }
+          );
+
+        if (!active) {
+          return;
+        }
+
+        if (
+          response?.status === false
+        ) {
+          setTerms([]);
+
+          setSetupError(
+            response?.message ||
+              "تعذر تحميل الترمات"
+          );
+
+          return;
+        }
+
+        setTerms(
+          extractList(response).sort(
+            (a, b) =>
+              Number(a?.order || 0) -
+              Number(b?.order || 0)
+          )
+        );
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        setTerms([]);
+
+        setSetupError(
+          error?.response?.data
+            ?.message ||
+            "تعذر تحميل الترمات"
+        );
+      } finally {
+        if (active) {
+          setLoadingTerms(false);
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, [academicYearId]);
+
+  /*
+   * Load Subject Offerings
+   */
+  useEffect(() => {
+    let active = true;
+
+    setOfferings([]);
+
+    if (!termId) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const load = async () => {
+      setLoadingOfferings(true);
+      setSetupError("");
+
+      try {
+        const response =
+          await fetchSubjectOfferings({
+            termId,
+          });
+
+        if (!active) {
+          return;
+        }
+
+        if (
+          response?.status === false
+        ) {
+          setOfferings([]);
+
+          setSetupError(
+            response?.message ||
+              "تعذر تحميل المواد المفعلة"
+          );
+
+          return;
+        }
+
+        setOfferings(
+          extractList(response)
+        );
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        setOfferings([]);
+
+        setSetupError(
+          error?.response?.data
+            ?.message ||
+            "تعذر تحميل المواد المفعلة"
+        );
+      } finally {
+        if (active) {
+          setLoadingOfferings(false);
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, [termId]);
+
+  const offeringOptions =
+    useMemo(
+      () =>
+        offerings
+          .map((offering) => ({
+            id: normalizeId(
+              offering
+            ),
+            label:
+              getOfferingLabel(
+                offering
+              ),
+            raw: offering,
+          }))
+          .filter(
+            (item) => item.id
+          ),
+      [offerings]
+    );
 
   const handleClose = (
     event,
@@ -204,46 +519,40 @@ const Add = ({
   };
 
   const onSubmit = async (
-    formValues
+    values
   ) => {
-    const submissionData = {
+    const payload = {
       title: String(
-        formValues?.title || ""
+        values.title || ""
       ).trim(),
+
       link: String(
-        formValues?.link || ""
+        values.link || ""
       ).trim(),
-      subjectId: normalizeId(
-        formValues?.subjectId
-      ),
-      academicYearId: normalizeId(
-        formValues?.academicYearId
-      ),
     };
 
-    if (!submissionData.subjectId) {
-      delete submissionData.subjectId;
-    }
+    const subjectOfferingId =
+      normalizeId(
+        values.subjectOfferingId
+      );
 
-    if (!submissionData.academicYearId) {
-      delete submissionData.academicYearId;
+    if (subjectOfferingId) {
+      payload.subjectOfferingId =
+        subjectOfferingId;
     }
 
     setLoading(true);
 
     try {
       const response =
-        await addLibrary(
-          submissionData
-        );
+        await addLibrary(payload);
 
       if (!response?.status) {
         toast.error(
-          getErrorMessage(
-            response,
+          response?.message ||
             "حدث خطأ أثناء إضافة عنصر المكتبة"
-          )
         );
+
         return;
       }
 
@@ -252,67 +561,37 @@ const Add = ({
       );
 
       const createdItem =
-        getResponseData(response);
+        getResponseData(
+          response
+        );
 
       if (createdItem) {
-        const subjectId = normalizeId(
-          createdItem?.subjectId ||
-            submissionData.subjectId
-        );
+        const selectedOffering =
+          offerings.find(
+            (offering) =>
+              normalizeId(
+                offering
+              ) ===
+              subjectOfferingId
+          );
 
-        let subjectData =
-          createdItem?.subject ||
-          (createdItem?.subjectId &&
-          typeof createdItem.subjectId === "object"
-            ? createdItem.subjectId
-            : null);
-
-        if (subjectId && !subjectData) {
-          const subjectResponse =
-            await fetchSingleSubject(
-              subjectId,
-              { force: true }
-            );
-
-          if (subjectResponse?.status !== false) {
-            subjectData =
-              getResponseData(
-                subjectResponse
-              );
-          }
-        }
-
-        const academicYearId = normalizeId(
-          createdItem?.academicYearId ||
-            submissionData.academicYearId
-        );
-
-        const academicYearData =
-          (createdItem?.academicYearId &&
-          typeof createdItem.academicYearId ===
-            "object"
-            ? createdItem.academicYearId
-            : null) ||
-          academicYearMap.get(academicYearId) ||
-          null;
-
-        const normalizedItem = {
+        const enrichedItem = {
           ...createdItem,
-          subjectId,
-          subject:
-            subjectData ||
-            createdItem?.subject,
-          academicYearId,
-          academicYear:
-            academicYearData?.name ||
-            createdItem?.academicYear ||
-            "",
+
+          ...(selectedOffering &&
+          !createdItem
+            ?.subjectOffering
+            ? {
+                subjectOffering:
+                  selectedOffering,
+              }
+            : {}),
         };
 
         setItems?.(
-          (previousItems) => [
-            normalizedItem,
-            ...previousItems,
+          (previous = []) => [
+            enrichedItem,
+            ...previous,
           ]
         );
       }
@@ -329,7 +608,7 @@ const Add = ({
                 0
             ) + 1;
 
-          const currentLimit =
+          const limit =
             Number(
               previous.limit ||
                 10
@@ -339,15 +618,22 @@ const Add = ({
             ...previous,
             totalDocs,
             totalPages:
-              Math.ceil(
-                totalDocs /
-                  currentLimit
+              Math.max(
+                1,
+                Math.ceil(
+                  totalDocs /
+                    limit
+                )
               ),
           };
         }
       );
 
       reset();
+
+      setTerms([]);
+      setOfferings([]);
+
       setOpen(false);
     } catch (error) {
       toast.error(
@@ -374,10 +660,9 @@ const Add = ({
         sx={{
           width: {
             xs: "100%",
-            sm:
-              compact
-                ? 180
-                : 185,
+            sm: compact
+              ? 180
+              : 185,
           },
           minHeight: 42,
           px: 2,
@@ -409,13 +694,10 @@ const Add = ({
         maxWidth="md"
         PaperProps={{
           sx: {
-            overflow:
-              "hidden",
+            overflow: "hidden",
             borderRadius: "20px",
             backgroundColor:
               "var(--color-cream)",
-            boxShadow:
-              "0 26px 65px rgba(18,47,77,0.22)",
           },
         }}
       >
@@ -427,7 +709,6 @@ const Add = ({
             direction="row"
             alignItems="center"
             justifyContent="space-between"
-            gap={1}
             sx={{
               px: 2,
               py: 1.5,
@@ -463,10 +744,8 @@ const Add = ({
               <Box>
                 <Typography
                   sx={{
-                    fontSize:
-                      "16px",
-                    fontWeight:
-                      800,
+                    fontSize: "16px",
+                    fontWeight: 800,
                   }}
                 >
                   إضافة عنصر جديد
@@ -481,13 +760,12 @@ const Add = ({
                       "9.5px",
                   }}
                 >
-                  أضف رابطًا أو مصدرًا تعليميًا إلى المكتبة.
+                  يمكنك إضافة مصدر عام أو ربطه بمادة مفعلة.
                 </Typography>
               </Box>
             </Stack>
 
             <IconButton
-              type="button"
               disabled={loading}
               onClick={() =>
                 setOpen(false)
@@ -495,10 +773,6 @@ const Add = ({
               sx={{
                 color:
                   "var(--color-white)",
-                backgroundColor:
-                  "rgba(255,255,255,0.10)",
-                borderRadius:
-                  "10px",
               }}
             >
               <CloseRounded />
@@ -512,32 +786,6 @@ const Add = ({
               xs: 1.5,
               sm: 2,
             },
-
-            "& .MuiFormControl-root":
-              {
-                width: "100%",
-                margin: 0,
-              },
-
-            "& .MuiInputBase-root, & .MuiOutlinedInput-root":
-              {
-                minHeight: 48,
-                backgroundColor:
-                  "var(--color-white)",
-                borderRadius:
-                  "12px",
-              },
-
-            "& .MuiInputLabel-root":
-              {
-                px: 0.65,
-                backgroundColor:
-                  "var(--color-cream)",
-                fontSize:
-                  "10.5px",
-                fontWeight:
-                  700,
-              },
           }}
         >
           <Box
@@ -546,8 +794,17 @@ const Add = ({
               onSubmit
             )}
             noValidate
-            sx={{ pt: 0.8 }}
+            sx={{ pt: 1 }}
           >
+            {setupError && (
+              <Alert
+                severity="info"
+                sx={{ mb: 2 }}
+              >
+                {setupError}
+              </Alert>
+            )}
+
             <Grid
               container
               spacing={1.5}
@@ -557,93 +814,290 @@ const Add = ({
                 xs={12}
                 sm={6}
               >
-                <Input
-                  register={register}
-                  registerName="title"
-                  error={
-                    errors.title
-                      ?.message
-                  }
-                  label="عنوان العنصر"
-                  required
-                  type="text"
-                />
-              </Grid>
-
-              <Grid
-                item
-                xs={12}
-                sm={6}
-              >
-                <Input
-                  register={register}
-                  registerName="link"
-                  error={
-                    errors.link
-                      ?.message
-                  }
-                  label="رابط العنصر"
-                  required
-                  type="text"
-                />
-              </Grid>
-
-              <Grid
-                item
-                xs={12}
-                sm={6}
-              >
-                <SubjectSelector
-                  register={register}
-                  errors={errors}
-                  setValue={setValue}
-                  label="المادة المرتبط بها العنصر"
-                />
-              </Grid>
-
-              <Grid
-                item
-                xs={12}
-                sm={6}
-              >
-                <Select
-                  register={register}
-                  registerName="academicYearId"
-                  data={academicYears}
-                  name="name"
-                  error={
-                    errors.academicYearId
-                      ?.message
-                  }
-                  label="السنة الدراسية"
-                  disabled={loadingYears}
-                  onChange={(value) => {
-                    setValue(
-                      "academicYearId",
-                      value || "",
-                      {
-                        shouldDirty: true,
-                        shouldValidate: true,
-                      }
-                    );
+                <Controller
+                  name="title"
+                  control={control}
+                  rules={{
+                    required:
+                      "عنوان العنصر مطلوب",
+                    minLength: {
+                      value: 2,
+                      message:
+                        "العنوان قصير جدًا",
+                    },
                   }}
+                  render={({
+                    field,
+                    fieldState,
+                  }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="عنوان العنصر"
+                      error={
+                        !!fieldState.error
+                      }
+                      helperText={
+                        fieldState.error
+                          ?.message
+                      }
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid
+                item
+                xs={12}
+                sm={6}
+              >
+                <Controller
+                  name="link"
+                  control={control}
+                  rules={{
+                    required:
+                      "رابط العنصر مطلوب",
+                    validate:
+                      validateUrl,
+                  }}
+                  render={({
+                    field,
+                    fieldState,
+                  }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="رابط العنصر"
+                      placeholder="https://..."
+                      error={
+                        !!fieldState.error
+                      }
+                      helperText={
+                        fieldState.error
+                          ?.message
+                      }
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid
+                item
+                xs={12}
+                md={4}
+              >
+                <Controller
+                  name="academicYearId"
+                  control={control}
+                  render={({
+                    field,
+                  }) => (
+                    <TextField
+                      {...field}
+                      select
+                      fullWidth
+                      label="السنة الدراسية"
+                      disabled={
+                        loadingYears
+                      }
+                      onChange={(
+                        event
+                      ) => {
+                        field.onChange(
+                          event
+                        );
+
+                        setValue(
+                          "termId",
+                          ""
+                        );
+
+                        setValue(
+                          "subjectOfferingId",
+                          ""
+                        );
+                      }}
+                    >
+                      <MenuItem value="">
+                        بدون تحديد
+                      </MenuItem>
+
+                      {academicYears.map(
+                        (year) => (
+                          <MenuItem
+                            key={
+                              normalizeId(
+                                year
+                              )
+                            }
+                            value={
+                              normalizeId(
+                                year
+                              )
+                            }
+                          >
+                            {year?.name ||
+                              year?.title ||
+                              "سنة دراسية"}
+                          </MenuItem>
+                        )
+                      )}
+                    </TextField>
+                  )}
+                />
+              </Grid>
+
+              <Grid
+                item
+                xs={12}
+                md={4}
+              >
+                <Controller
+                  name="termId"
+                  control={control}
+                  render={({
+                    field,
+                  }) => (
+                    <TextField
+                      {...field}
+                      select
+                      fullWidth
+                      label="الترم"
+                      disabled={
+                        !academicYearId ||
+                        loadingTerms
+                      }
+                      onChange={(
+                        event
+                      ) => {
+                        field.onChange(
+                          event
+                        );
+
+                        setValue(
+                          "subjectOfferingId",
+                          ""
+                        );
+                      }}
+                    >
+                      <MenuItem value="">
+                        بدون تحديد
+                      </MenuItem>
+
+                      {terms.map(
+                        (term) => (
+                          <MenuItem
+                            key={
+                              normalizeId(
+                                term
+                              )
+                            }
+                            value={
+                              normalizeId(
+                                term
+                              )
+                            }
+                          >
+                            {term?.name ||
+                              `الترم ${term?.order || ""}`}
+                          </MenuItem>
+                        )
+                      )}
+                    </TextField>
+                  )}
+                />
+              </Grid>
+
+              <Grid
+                item
+                xs={12}
+                md={4}
+              >
+                <Controller
+                  name="subjectOfferingId"
+                  control={control}
+                  render={({
+                    field,
+                  }) => (
+                    <TextField
+                      {...field}
+                      select
+                      fullWidth
+                      label="المادة"
+                      disabled={
+                        !termId ||
+                        loadingOfferings
+                      }
+                      helperText="اختياري — اتركها فارغة لمصدر عام"
+                    >
+                      <MenuItem value="">
+                        مصدر عام
+                      </MenuItem>
+
+                      {offeringOptions.map(
+                        (option) => (
+                          <MenuItem
+                            key={
+                              option.id
+                            }
+                            value={
+                              option.id
+                            }
+                          >
+                            {
+                              option.label
+                            }
+                          </MenuItem>
+                        )
+                      )}
+                    </TextField>
+                  )}
                 />
               </Grid>
             </Grid>
 
+            {(loadingYears ||
+              loadingTerms ||
+              loadingOfferings) && (
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={1}
+                sx={{ mt: 2 }}
+              >
+                <CircularProgress
+                  size={18}
+                />
+
+                <Typography
+                  sx={{
+                    fontSize:
+                      "11px",
+                    color:
+                      "var(--color-muted)",
+                  }}
+                >
+                  جاري تحميل بيانات المواد...
+                </Typography>
+              </Stack>
+            )}
+
             <Stack
-              direction={{
-                xs: "column-reverse",
-                sm: "row",
-              }}
-              gap={1}
-              sx={{
-                mt: 2,
-                pt: 1.5,
-                borderTop:
-                  "1px solid rgba(36,74,112,0.08)",
-              }}
+              direction="row"
+              justifyContent="flex-end"
+              spacing={1}
+              sx={{ mt: 2.5 }}
             >
+              <Button
+                type="button"
+                disabled={loading}
+                onClick={() =>
+                  setOpen(false)
+                }
+              >
+                إلغاء
+              </Button>
+
               <Button
                 type="submit"
                 disabled={loading}
@@ -651,7 +1105,7 @@ const Add = ({
                 startIcon={
                   loading ? (
                     <CircularProgress
-                      size={16}
+                      size={17}
                       color="inherit"
                     />
                   ) : (
@@ -659,77 +1113,13 @@ const Add = ({
                   )
                 }
                 sx={{
-                  width: {
-                    xs: "100%",
-                    sm: 175,
-                  },
-                  minHeight: 43,
+                  minWidth: 130,
                   borderRadius:
-                    "12px",
-                  color:
-                    "var(--color-white)",
-                  background:
-                    "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-                  fontSize:
                     "11px",
-                  fontWeight:
-                    800,
-                  textTransform:
-                    "none",
-
-                  "& .MuiButton-startIcon":
-                    {
-                      marginLeft:
-                        "7px",
-                      marginRight:
-                        0,
-                    },
+                  fontWeight: 800,
                 }}
               >
-                {loading
-                  ? "جاري الحفظ..."
-                  : "حفظ العنصر"}
-              </Button>
-
-              <Button
-                type="button"
-                disabled={loading}
-                onClick={() =>
-                  setOpen(false)
-                }
-                variant="outlined"
-                startIcon={
-                  <CloseRounded />
-                }
-                sx={{
-                  width: {
-                    xs: "100%",
-                    sm: 125,
-                  },
-                  minHeight: 43,
-                  borderRadius:
-                    "12px",
-                  color:
-                    "var(--color-navy)",
-                  borderColor:
-                    "rgba(36,74,112,0.18)",
-                  fontSize:
-                    "11px",
-                  fontWeight:
-                    800,
-                  textTransform:
-                    "none",
-
-                  "& .MuiButton-startIcon":
-                    {
-                      marginLeft:
-                        "7px",
-                      marginRight:
-                        0,
-                    },
-                }}
-              >
-                إلغاء
+                حفظ
               </Button>
             </Stack>
           </Box>

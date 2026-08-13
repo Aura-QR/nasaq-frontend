@@ -26,6 +26,8 @@ import Container from "@/components/Container/Container";
 import Back from "@/components/Back/Back";
 import Input from "@/components/Input/Input";
 import { api } from "@/APIs/Axios";
+import { fetchSubjectOfferings } from "@/APIs/school/subjectOfferings";
+import { fetchTermsByAcademicYear } from "@/APIs/school/terms";
 import {
   addGradesCriteria,
   fetchGradesCriteria,
@@ -82,36 +84,113 @@ const getErrorMessage = (response, fallback) =>
   response?.message || response?.data?.message || (typeof response === "string" ? response : fallback);
 
 const loadOfferingCatalog = async () => {
-  const [offeringsRes, subjectsRes, gradesRes, termsRes, yearsRes] = await Promise.all([
-    api.get("/subject-offerings", { params: { page: 1, limit: 1000 } }),
-    api.get("/subjects/list").catch(() => api.get("/subjects", { params: { page: 1, limit: 1000 } })),
+  /*
+   * The deployed backend does NOT expose GET /subject-offerings.
+   * Offerings are listed by term through:
+   *   GET /subject-offerings/by-term/:termId
+   *
+   * Build the catalog from academic years -> terms -> offerings so the
+   * grading criteria screen only uses endpoints that actually exist.
+   */
+  const [subjectsRes, gradesRes, yearsRes] = await Promise.all([
+    api
+      .get("/subjects/list")
+      .catch(() => api.get("/subjects", { params: { page: 1, limit: 1000 } })),
     api.get("/grade-levels", { params: { page: 1, limit: 1000 } }),
-    api.get("/terms", { params: { page: 1, limit: 1000 } }),
     api.get("/academic-years"),
   ]);
 
   const subjects = extractList(subjectsRes);
   const grades = extractList(gradesRes);
-  const terms = extractList(termsRes);
   const years = extractList(yearsRes);
+
   const subjectMap = mapById(subjects);
   const gradeMap = mapById(grades);
-  const termMap = mapById(terms);
   const yearMap = mapById(years);
 
-  return extractList(offeringsRes)
+  const termGroups = await Promise.all(
+    years.map(async (year) => {
+      const yearId = idOf(year);
+      if (!yearId) return [];
+
+      const response = await fetchTermsByAcademicYear(yearId);
+      if (response?.status === false) return [];
+
+      return extractList(response).map((term) => ({
+        ...term,
+        __academicYearId: yearId,
+      }));
+    })
+  );
+
+  const terms = termGroups.flat();
+  const termMap = mapById(terms);
+
+  const offeringGroups = await Promise.all(
+    terms.map(async (term) => {
+      const termId = idOf(term);
+      if (!termId) return [];
+
+      const response = await fetchSubjectOfferings({ termId });
+      if (response?.status === false) return [];
+
+      return extractList(response).map((offering) => ({
+        ...offering,
+        __termId: termId,
+      }));
+    })
+  );
+
+  const seen = new Set();
+  const rawOfferings = offeringGroups
+    .flat()
+    .filter((offering) => {
+      const offeringId = idOf(offering);
+      if (!offeringId || seen.has(offeringId)) return false;
+      seen.add(offeringId);
+      return true;
+    });
+
+  return rawOfferings
     .map((offering) => {
       const id = idOf(offering);
       const subjectValue = offering?.subjectId || offering?.subject;
       const gradeValue = offering?.gradeLevelId || offering?.gradeLevel;
-      const termValue = offering?.termId || offering?.term;
-      const subject = (subjectValue && typeof subjectValue === "object" ? subjectValue : null) || subjectMap.get(idOf(subjectValue));
-      const grade = (gradeValue && typeof gradeValue === "object" ? gradeValue : null) || gradeMap.get(idOf(gradeValue));
-      const term = (termValue && typeof termValue === "object" ? termValue : null) || termMap.get(idOf(termValue));
-      const yearValue = term?.academicYearId || offering?.academicYearId;
-      const year = (yearValue && typeof yearValue === "object" ? yearValue : null) || yearMap.get(idOf(yearValue));
-      const parts = [labelOfSubject(subject || {}), labelOfGrade(grade || {}), labelOfTerm(term || {}), labelOfYear(year || {})].filter(Boolean);
-      return { id, label: parts.join(" • "), raw: offering };
+      const termValue = offering?.termId || offering?.term || offering?.__termId;
+
+      const subject =
+        (subjectValue && typeof subjectValue === "object" ? subjectValue : null) ||
+        subjectMap.get(idOf(subjectValue));
+
+      const grade =
+        (gradeValue && typeof gradeValue === "object" ? gradeValue : null) ||
+        gradeMap.get(idOf(gradeValue));
+
+      const term =
+        (termValue && typeof termValue === "object" ? termValue : null) ||
+        termMap.get(idOf(termValue));
+
+      const yearValue =
+        term?.academicYearId ||
+        term?.__academicYearId ||
+        offering?.academicYearId;
+
+      const year =
+        (yearValue && typeof yearValue === "object" ? yearValue : null) ||
+        yearMap.get(idOf(yearValue));
+
+      const parts = [
+        labelOfSubject(subject || {}),
+        labelOfGrade(grade || {}),
+        labelOfTerm(term || {}),
+        labelOfYear(year || {}),
+      ].filter(Boolean);
+
+      return {
+        id,
+        label: parts.join(" • "),
+        raw: offering,
+      };
     })
     .filter((item) => item.id);
 };

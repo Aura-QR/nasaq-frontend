@@ -3,9 +3,17 @@
 const ENDPOINT = "/library";
 const ACADEMIC_YEARS_ENDPOINT = "/academic-years";
 
+/* =========================================================
+   Helpers
+========================================================= */
+
 const normalizeId = (value) => {
   if (value && typeof value === "object") {
-    return String(value._id || value.id || "").trim();
+    return String(
+      value._id ||
+        value.id ||
+        ""
+    ).trim();
   }
 
   return String(value || "").trim();
@@ -13,7 +21,7 @@ const normalizeId = (value) => {
 
 const cleanParams = (params = {}) =>
   Object.fromEntries(
-    Object.entries(params || {}).filter(
+    Object.entries(params).filter(
       ([, value]) =>
         value !== undefined &&
         value !== null &&
@@ -27,96 +35,180 @@ const normalizeSuccess = (response) => {
   if (payload?.status === false) {
     return {
       status: false,
-      message: payload?.message || "فشلت العملية",
-      data: payload?.data,
-      pagination: payload?.pagination || null,
+      message:
+        payload?.message ||
+        "فشلت العملية",
+
+      data:
+        payload?.data,
+
+      pagination:
+        payload?.pagination ||
+        null,
+
+      statusCode:
+        payload?.statusCode,
     };
   }
 
   return {
     status: true,
-    message: payload?.message || "Success",
-    data: payload?.data ?? payload,
+
+    message:
+      payload?.message ||
+      "Success",
+
+    data:
+      payload?.data ??
+      payload,
+
     pagination:
       payload?.pagination ||
       payload?.data?.pagination ||
       null,
+
+    statusCode:
+      payload?.statusCode,
   };
 };
 
 const normalizeFailure = (
   error,
   fallback = "حدث خطأ ما"
-) => ({
-  status: false,
-  message:
-    error?.response?.data?.message ||
-    error?.message ||
-    fallback,
-  data: error?.response?.data?.data,
-});
+) => {
+  return {
+    status: false,
 
-/**
- * الـ Backend يقبل فقط الحقول الموجودة في CreateLibraryDto.
- * مهم: academicYear غير مقبول، والصحيح academicYearId.
- */
+    message:
+      error?.response?.data
+        ?.message ||
+      error?.message ||
+      fallback,
+
+    data:
+      error?.response?.data
+        ?.data,
+
+    statusCode:
+      error?.response?.status ||
+      error?.response?.data
+        ?.statusCode,
+  };
+};
+
+/* =========================================================
+   Library Payload
+
+   Backend:
+   {
+     title,
+     link,
+     subjectOfferingId?
+   }
+========================================================= */
+
 export const normalizeLibraryPayload = (
   data = {}
 ) => {
   const payload = {};
 
-  const title = String(data?.title || "").trim();
-  const link = String(data?.link || "").trim();
-  const subjectId = normalizeId(
-    data?.subjectId || data?.subject
-  );
-  const academicYearId = normalizeId(
-    data?.academicYearId ||
-      (typeof data?.academicYear === "object"
-        ? data.academicYear
-        : "")
-  );
-  const termId = normalizeId(
-    data?.termId || data?.term
-  );
-
-  if (title) payload.title = title;
-  if (link) payload.link = link;
-  if (subjectId) payload.subjectId = subjectId;
-  if (academicYearId) {
-    payload.academicYearId = academicYearId;
+  /*
+   * TITLE
+   */
+  if (
+    Object.prototype.hasOwnProperty.call(
+      data,
+      "title"
+    )
+  ) {
+    payload.title = String(
+      data?.title || ""
+    ).trim();
   }
-  if (termId) payload.termId = termId;
+
+  /*
+   * LINK
+   */
+  if (
+    Object.prototype.hasOwnProperty.call(
+      data,
+      "link"
+    )
+  ) {
+    payload.link = String(
+      data?.link || ""
+    ).trim();
+  }
+
+  /*
+   * SUBJECT OFFERING
+   */
+  if (
+    Object.prototype.hasOwnProperty.call(
+      data,
+      "subjectOfferingId"
+    ) ||
+    Object.prototype.hasOwnProperty.call(
+      data,
+      "subjectOffering"
+    )
+  ) {
+    const subjectOfferingId =
+      normalizeId(
+        data?.subjectOfferingId ||
+          data?.subjectOffering
+      );
+
+    /*
+     * null مهم في PATCH
+     * لو عايزين نحول المصدر
+     * من مادة إلى مصدر عام.
+     */
+    payload.subjectOfferingId =
+      subjectOfferingId || null;
+  }
 
   return payload;
 };
 
-const normalizeLibraryFilters = (
-  filters = {}
-) => {
-  const normalized = {
-    page: filters?.page,
-    limit: filters?.limit,
-    title: filters?.title,
-    subjectId: normalizeId(filters?.subjectId),
-    academicYearId: normalizeId(
-      filters?.academicYearId
-    ),
-    termId: normalizeId(filters?.termId),
-  };
-
-  return cleanParams(normalized);
-};
+/* =========================================================
+   GET /library
+========================================================= */
 
 export const fetchLibraries = async (
-  filters = {}
+  filters = {},
+  options = {}
 ) => {
   try {
-    const response = await api.get(ENDPOINT, {
-      params: normalizeLibraryFilters(filters),
+    const params = cleanParams({
+      page:
+        filters?.page,
+
+      limit:
+        filters?.limit,
+
+      subjectOfferingId:
+        normalizeId(
+          filters?.subjectOfferingId
+        ),
     });
 
-    return normalizeSuccess(response);
+    /*
+     * force موجود للتوافق مع
+     * باقي API layer لو استخدمناه لاحقًا.
+     */
+    void options;
+
+    const response = await api.get(
+      ENDPOINT,
+      {
+        params,
+      }
+    );
+
+    return normalizeSuccess(
+      response
+    );
   } catch (error) {
     return normalizeFailure(
       error,
@@ -125,52 +217,112 @@ export const fetchLibraries = async (
   }
 };
 
-export const fetchSingleLibrary = async (id) => {
-  const libraryId = normalizeId(id);
+/* =========================================================
+   GET /library/list
 
-  if (!libraryId) {
+   Simplified list for dropdowns
+========================================================= */
+
+export const fetchLibraryList =
+  async () => {
+    try {
+      const response = await api.get(
+        `${ENDPOINT}/list`
+      );
+
+      return normalizeSuccess(
+        response
+      );
+    } catch (error) {
+      return normalizeFailure(
+        error,
+        "تعذر تحميل قائمة المكتبة"
+      );
+    }
+  };
+
+/* =========================================================
+   GET /library/:id
+========================================================= */
+
+export const fetchSingleLibrary =
+  async (id) => {
+    const libraryId =
+      normalizeId(id);
+
+    if (!libraryId) {
+      return {
+        status: false,
+        message:
+          "معرّف عنصر المكتبة غير موجود",
+      };
+    }
+
+    try {
+      const response = await api.get(
+        `${ENDPOINT}/${libraryId}`
+      );
+
+      return normalizeSuccess(
+        response
+      );
+    } catch (error) {
+      return normalizeFailure(
+        error,
+        "تعذر تحميل عنصر المكتبة"
+      );
+    }
+  };
+
+/* =========================================================
+   Academic Years
+
+   موجودة للتوافق مع TeacherLibrary.jsx
+========================================================= */
+
+export const fetchLibraryAcademicYears =
+  async () => {
+    try {
+      const response = await api.get(
+        ACADEMIC_YEARS_ENDPOINT
+      );
+
+      return normalizeSuccess(
+        response
+      );
+    } catch (error) {
+      return normalizeFailure(
+        error,
+        "تعذر تحميل السنوات الدراسية"
+      );
+    }
+  };
+
+/* =========================================================
+   POST /library
+========================================================= */
+
+export const addLibrary = async (
+  data
+) => {
+  const payload =
+    normalizeLibraryPayload(
+      data
+    );
+
+  if (!payload.title) {
     return {
       status: false,
-      message: "معرّف عنصر المكتبة غير موجود",
+      message:
+        "عنوان عنصر المكتبة مطلوب",
     };
   }
 
-  try {
-    const response = await api.get(
-      `${ENDPOINT}/${libraryId}`
-    );
-
-    return normalizeSuccess(response);
-  } catch (error) {
-    return normalizeFailure(
-      error,
-      "تعذر تحميل عنصر المكتبة"
-    );
-  }
-};
-
-export const fetchLibraryAcademicYears = async () => {
-  try {
-    const response = await api.get(
-      ACADEMIC_YEARS_ENDPOINT
-    );
-
-    return normalizeSuccess(response);
-  } catch (error) {
-    return normalizeFailure(
-      error,
-      "تعذر تحميل السنوات الدراسية"
-    );
-  }
-};
-
-export const addLibrary = async (data) => {
-  const payload = normalizeLibraryPayload(data);
-
-  if (!payload.title || !payload.link) {
+  if (!payload.link) {
     return {
       status: false,
-      message: "عنوان العنصر والرابط مطلوبان",
+      message:
+        "رابط عنصر المكتبة مطلوب",
     };
   }
 
@@ -180,7 +332,9 @@ export const addLibrary = async (data) => {
       payload
     );
 
-    return normalizeSuccess(response);
+    return normalizeSuccess(
+      response
+    );
   } catch (error) {
     return normalizeFailure(
       error,
@@ -189,32 +343,51 @@ export const addLibrary = async (data) => {
   }
 };
 
-export const editLibrary = async (data, id) => {
-  const libraryId = normalizeId(id);
+/* =========================================================
+   PATCH /library/:id
+========================================================= */
+
+export const editLibrary = async (
+  data,
+  id
+) => {
+  const libraryId =
+    normalizeId(id);
 
   if (!libraryId) {
     return {
       status: false,
-      message: "معرّف عنصر المكتبة غير موجود",
+      message:
+        "معرّف عنصر المكتبة غير موجود",
     };
   }
 
-  const payload = normalizeLibraryPayload(data);
+  const payload =
+    normalizeLibraryPayload(
+      data
+    );
 
-  if (Object.keys(payload).length === 0) {
+  if (
+    Object.keys(payload).length ===
+    0
+  ) {
     return {
       status: false,
-      message: "لا توجد بيانات صالحة للتعديل",
+      message:
+        "لا توجد بيانات صالحة للتعديل",
     };
   }
 
   try {
-    const response = await api.patch(
-      `${ENDPOINT}/${libraryId}`,
-      payload
-    );
+    const response =
+      await api.patch(
+        `${ENDPOINT}/${libraryId}`,
+        payload
+      );
 
-    return normalizeSuccess(response);
+    return normalizeSuccess(
+      response
+    );
   } catch (error) {
     return normalizeFailure(
       error,
@@ -223,22 +396,33 @@ export const editLibrary = async (data, id) => {
   }
 };
 
-export const deleteLibrary = async (id) => {
-  const libraryId = normalizeId(id);
+/* =========================================================
+   DELETE /library/:id
+========================================================= */
+
+export const deleteLibrary = async (
+  id
+) => {
+  const libraryId =
+    normalizeId(id);
 
   if (!libraryId) {
     return {
       status: false,
-      message: "معرّف عنصر المكتبة غير موجود",
+      message:
+        "معرّف عنصر المكتبة غير موجود",
     };
   }
 
   try {
-    const response = await api.delete(
-      `${ENDPOINT}/${libraryId}`
-    );
+    const response =
+      await api.delete(
+        `${ENDPOINT}/${libraryId}`
+      );
 
-    return normalizeSuccess(response);
+    return normalizeSuccess(
+      response
+    );
   } catch (error) {
     return normalizeFailure(
       error,
@@ -247,24 +431,53 @@ export const deleteLibrary = async (id) => {
   }
 };
 
-/* Aliases للتوافق مع الملفات القديمة. */
-export const fetchLibrary = fetchSingleLibrary;
-export const getLibrary = fetchSingleLibrary;
-export const createLibrary = addLibrary;
-export const updateLibrary = editLibrary;
-export const removeLibrary = deleteLibrary;
+/* =========================================================
+   Aliases
+========================================================= */
+
+export const fetchLibrary =
+  fetchSingleLibrary;
+
+export const getLibrary =
+  fetchSingleLibrary;
+
+export const createLibrary =
+  addLibrary;
+
+export const updateLibrary =
+  editLibrary;
+
+export const removeLibrary =
+  deleteLibrary;
+
+/* =========================================================
+   Default Export
+========================================================= */
 
 export default {
   fetchLibraries,
+
+  fetchLibraryList,
+
   fetchSingleLibrary,
-  fetchLibrary,
-  getLibrary,
+
   fetchLibraryAcademicYears,
+
+  fetchLibrary,
+
+  getLibrary,
+
   addLibrary,
+
   createLibrary,
+
   editLibrary,
+
   updateLibrary,
+
   deleteLibrary,
+
   removeLibrary,
+
   normalizeLibraryPayload,
 };

@@ -11,7 +11,6 @@ import {
   LinkRounded,
   MenuBookRounded,
   RefreshRounded,
-  SchoolRounded,
   SearchRounded,
 } from "@mui/icons-material";
 import {
@@ -46,6 +45,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
+import { api } from "@/APIs/Axios";
 import nasaqLogo from "@/images/wadq-logo.png";
 import {
   addLibrary,
@@ -53,8 +53,11 @@ import {
   fetchLibraryAcademicYears,
 } from "@/APIs/school/library";
 import {
-  fetchMyTeacherSubjects,
-} from "@/APIs/school/subjects";
+  fetchTermsByAcademicYear,
+} from "@/APIs/school/lectures";
+import {
+  fetchSubjectOfferings,
+} from "@/APIs/school/subjectOfferings";
 import { TEACHER_UI } from "@/shared/ui/teacherUi";
 
 const COLORS = {
@@ -182,6 +185,81 @@ const mapYearOption = (year, index) => ({
   raw: year,
 });
 
+const mapTermOption = (term, index) => ({
+  id: normalizeId(term),
+  name:
+    term?.name ||
+    term?.title ||
+    `الترم ${term?.order || index + 1}`,
+  order: Number(term?.order || index + 1),
+  status: String(term?.status || "").toLowerCase(),
+  raw: term,
+});
+
+const getOfferingObject = (item) => {
+  if (item?.subjectOffering && typeof item.subjectOffering === "object") {
+    return item.subjectOffering;
+  }
+
+  if (
+    item?.subjectOfferingId &&
+    typeof item.subjectOfferingId === "object"
+  ) {
+    return item.subjectOfferingId;
+  }
+
+  return null;
+};
+
+const getOfferingSubject = (offering) => {
+  const subject = offering?.subjectId || offering?.subject;
+
+  if (subject && typeof subject === "object") return subject;
+
+  return null;
+};
+
+const getOfferingGrade = (offering) => {
+  const grade = offering?.gradeLevelId || offering?.gradeLevel;
+
+  if (grade && typeof grade === "object") return grade;
+
+  return null;
+};
+
+const mapOfferingOption = (offering, index) => {
+  const subject = getOfferingSubject(offering);
+  const grade = getOfferingGrade(offering);
+
+  const subjectId = normalizeId(
+    offering?.subjectId || offering?.subject
+  );
+
+  const subjectName =
+    subject?.subjectName ||
+    subject?.name ||
+    offering?.subjectName ||
+    `مادة ${index + 1}`;
+
+  const code = subjectCode(subject);
+  const gradeName = entityName(grade);
+
+  return {
+    id: normalizeId(offering),
+    subjectId,
+    name: subjectName,
+    code,
+    gradeName,
+    label: [
+      [subjectName, code].filter(Boolean).join(" - "),
+      gradeName,
+    ]
+      .filter(Boolean)
+      .join(" — "),
+    raw: offering,
+  };
+};
+
 const StatCard = ({ title, value, helper, icon, tone = "blue" }) => {
   const tones = {
     blue: { color: COLORS.navy, bg: COLORS.navySoft },
@@ -253,12 +331,19 @@ const TeacherLibrary = () => {
   const [items, setItems] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [years, setYears] = useState([]);
+  const [terms, setTerms] = useState([]);
+  const [offerings, setOfferings] = useState([]);
+  const [assignedOfferings, setAssignedOfferings] = useState([]);
+  const [knownOfferings, setKnownOfferings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadingTerms, setLoadingTerms] = useState(false);
+  const [loadingOfferings, setLoadingOfferings] = useState(false);
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
+  // قيمة الفلتر هنا هي subjectOfferingId وليس subjectId.
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
 
@@ -266,8 +351,9 @@ const TeacherLibrary = () => {
   const [form, setForm] = useState({
     title: "",
     link: "",
-    subjectId: "",
     academicYearId: "",
+    termId: "",
+    subjectOfferingId: "",
   });
 
   const subjectMap = useMemo(
@@ -280,15 +366,29 @@ const TeacherLibrary = () => {
     [years]
   );
 
+  const assignedOfferingIds = useMemo(
+    () =>
+      new Set(
+        assignedOfferings
+          .map((offering) => offering.id)
+          .filter(Boolean)
+      ),
+    [assignedOfferings]
+  );
+
   const normalizeItem = useCallback(
     (item) => {
+      const offering = getOfferingObject(item);
+
       const rawSubject =
         item?.subject ||
         (item?.subjectId && typeof item.subjectId === "object"
           ? item.subjectId
           : null) ||
+        getOfferingSubject(offering) ||
         item?.subjectDetails ||
         null;
+
       const rawYear =
         item?.academicYear ||
         (item?.academicYearId && typeof item.academicYearId === "object"
@@ -297,38 +397,60 @@ const TeacherLibrary = () => {
         item?.year ||
         null;
 
-      const subjectId = normalizeId(item?.subjectId || item?.subject);
+      const subjectOfferingId = normalizeId(
+        item?.subjectOfferingId || item?.subjectOffering
+      );
+
+      const subjectId = normalizeId(
+        item?.subjectId ||
+          item?.subject ||
+          offering?.subjectId ||
+          offering?.subject
+      );
+
       const yearId = normalizeId(
         item?.academicYearId || item?.academicYear || item?.yearId || item?.year
       );
-      const resolvedSubject = rawSubject || subjectMap.get(subjectId)?.raw || null;
+
+      const resolvedSubject =
+        rawSubject || subjectMap.get(subjectId)?.raw || null;
+
       const resolvedYear = rawYear || yearMap.get(yearId)?.raw || null;
+
+      const grade = getOfferingGrade(offering);
 
       const title = String(
         item?.title || item?.name || item?.label || "مصدر تعليمي"
       ).trim();
+
       const link = normalizeUrl(item?.link || item?.url || item?.resourceUrl);
+
       const subjectName =
         entityName(resolvedSubject) ||
         subjectMap.get(subjectId)?.name ||
-        "مصدر عام";
+        (subjectOfferingId ? "مادة غير محددة" : "مصدر عام");
+
       const code =
         subjectCode(resolvedSubject) || subjectMap.get(subjectId)?.code || "";
+
       const yearName =
         entityName(resolvedYear) || yearMap.get(yearId)?.name || "كل السنوات";
+
+      const termSource = item?.termId || item?.term || offering?.termId || offering?.term;
 
       return {
         id: normalizeId(item),
         title,
         link,
+        subjectOfferingId,
         subjectId,
         subjectName,
         subjectCode: code,
+        gradeName: entityName(grade),
         yearId,
         yearName,
         termName:
-          entityName(item?.termId || item?.term) ||
-          String(item?.termName || "").trim(),
+          entityName(termSource) || String(item?.termName || "").trim(),
         createdAt: item?.createdAt || item?.updatedAt || "",
         raw: item,
       };
@@ -342,11 +464,40 @@ const TeacherLibrary = () => {
       setError("");
 
       try {
-        const [libraryResponse, subjectsResponse, yearsResponse] =
+        /*
+         * مصدر الصلاحية الحقيقي هنا هو Teacher Assignment:
+         * teacher -> subjectOfferingId
+         *
+         * /subjects/teacher/me قد يرجع [] حتى مع وجود Assignment،
+         * لذلك لا نعتمد عليه في صلاحية عرض المكتبة.
+         */
+        const profileResponse = await api.get("/teachers/me");
+        const teacherProfile = unwrap(profileResponse);
+        const teacherId = normalizeId(teacherProfile);
+
+        if (!teacherId) {
+          throw new Error("تعذر تحديد حساب المعلم الحالي");
+        }
+
+        const libraryFilters = {
+          page: 1,
+          limit: 500,
+          ...(subjectFilter !== "all"
+            ? { subjectOfferingId: subjectFilter }
+            : {}),
+        };
+
+        const [libraryResponse, yearsResponse, assignmentsResponse] =
           await Promise.all([
-            fetchLibraries({ page: 1, limit: 500 }),
-            fetchMyTeacherSubjects(),
+            fetchLibraries(libraryFilters),
             fetchLibraryAcademicYears(),
+            api.get("/teacher-assignments", {
+              params: {
+                teacherId,
+                page: 1,
+                limit: 500,
+              },
+            }),
           ]);
 
         if (isFailedResponse(libraryResponse)) {
@@ -355,36 +506,138 @@ const TeacherLibrary = () => {
           );
         }
 
-        const subjectOptions = isFailedResponse(subjectsResponse)
-          ? []
-          : extractCollection(subjectsResponse, ["teacherSubjects"])
-              .map(mapSubjectOption)
-              .filter((subject) => subject.id);
-
         const yearOptions = isFailedResponse(yearsResponse)
           ? []
           : extractCollection(yearsResponse, ["academicYears"])
               .map(mapYearOption)
               .filter((year) => year.id);
 
-        setSubjects(
-          Array.from(new Map(subjectOptions.map((item) => [item.id, item])).values())
+        let assignments = extractCollection(assignmentsResponse, [
+          "assignments",
+          "teacherAssignments",
+        ]);
+
+        /*
+         * حماية إضافية لو الباك رجع Records لأكثر من معلم.
+         */
+        assignments = assignments.filter((assignment) => {
+          const assignedTeacherId = normalizeId(
+            assignment?.teacherId || assignment?.teacher
+          );
+
+          return !assignedTeacherId || assignedTeacherId === teacherId;
+        });
+
+        /*
+         * الـlegacy assignments التي subjectOfferingId = null
+         * يتم تجاهلها. الـAssignment الصحيح يجب أن يشير إلى Offering.
+         */
+        const hydratedOfferings = [];
+        const offeringIdsToHydrate = [];
+
+        assignments.forEach((assignment) => {
+          const candidate =
+            assignment?.subjectOfferingId ||
+            assignment?.subjectOffering;
+
+          if (!candidate) return;
+
+          if (typeof candidate === "object") {
+            const id = normalizeId(candidate);
+            if (id) hydratedOfferings.push(candidate);
+            return;
+          }
+
+          const id = normalizeId(candidate);
+          if (id) offeringIdsToHydrate.push(id);
+        });
+
+        /*
+         * لو الباك رجع subjectOfferingId كـ string بدل populated object،
+         * نجيب بيانات الـOffering حتى نعرض اسم المادة/الصف بشكل صحيح.
+         */
+        const uniqueOfferingIdsToHydrate = [
+          ...new Set(offeringIdsToHydrate),
+        ].filter(
+          (id) =>
+            !hydratedOfferings.some(
+              (offering) => normalizeId(offering) === id
+            )
         );
+
+        if (uniqueOfferingIdsToHydrate.length > 0) {
+          const offeringResponses = await Promise.allSettled(
+            uniqueOfferingIdsToHydrate.map((id) =>
+              api.get(`/subject-offerings/${id}`)
+            )
+          );
+
+          offeringResponses.forEach((result) => {
+            if (result.status !== "fulfilled") return;
+
+            const offering = unwrap(result.value);
+            if (offering && normalizeId(offering)) {
+              hydratedOfferings.push(offering);
+            }
+          });
+        }
+
+        const assignmentOfferingOptions = Array.from(
+          new Map(
+            hydratedOfferings
+              .map(mapOfferingOption)
+              .filter((offering) => offering.id)
+              .map((offering) => [offering.id, offering])
+          ).values()
+        );
+
+        /*
+         * نبني قائمة مواد المعلم من الـAssignments نفسها
+         * بدل /subjects/teacher/me.
+         */
+        const subjectOptions = Array.from(
+          new Map(
+            assignmentOfferingOptions
+              .filter((offering) => offering.subjectId)
+              .map((offering) => [
+                offering.subjectId,
+                {
+                  id: offering.subjectId,
+                  name: offering.name,
+                  code: offering.code,
+                  raw: getOfferingSubject(offering.raw),
+                },
+              ])
+          ).values()
+        );
+
+        setAssignedOfferings(assignmentOfferingOptions);
+        setSubjects(subjectOptions);
+
         setYears(
-          Array.from(new Map(yearOptions.map((item) => [item.id, item])).values())
+          Array.from(
+            new Map(yearOptions.map((item) => [item.id, item])).values()
+          )
         );
+
         setItems(extractCollection(libraryResponse, ["libraries", "library"]));
       } catch (requestError) {
         const message = requestError?.message || "تعذر تحميل المكتبة";
+
         setItems([]);
+        setSubjects([]);
+        setAssignedOfferings([]);
         setError(message);
-        toast.error(message, { toastId: "teacher-library-load-error" });
+
+        toast.error(message, {
+          toastId: "teacher-library-load-error",
+        });
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    []
+    [subjectFilter]
   );
 
   useEffect(() => {
@@ -405,25 +658,195 @@ const TeacherLibrary = () => {
     }
   }, [dialogOpen, form.academicYearId, years]);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadTerms = async () => {
+      setTerms([]);
+      setOfferings([]);
+
+      if (!dialogOpen || !form.academicYearId) return;
+
+      setLoadingTerms(true);
+
+      try {
+        const response = await fetchTermsByAcademicYear(form.academicYearId, {
+          force: true,
+        });
+
+        if (!active) return;
+
+        if (isFailedResponse(response)) {
+          setTerms([]);
+          return;
+        }
+
+        const termOptions = extractCollection(response, ["terms"])
+          .map(mapTermOption)
+          .filter((term) => term.id)
+          .sort((a, b) => a.order - b.order);
+
+        setTerms(termOptions);
+
+        setForm((current) => {
+          if (current.termId && termOptions.some((term) => term.id === current.termId)) {
+            return current;
+          }
+
+          const nextTerm =
+            termOptions.find((term) => term.status === "active") ||
+            termOptions.find((term) => term.status === "upcoming") ||
+            termOptions[0];
+
+          return {
+            ...current,
+            termId: nextTerm?.id || "",
+            subjectOfferingId: "",
+          };
+        });
+      } catch {
+        if (active) setTerms([]);
+      } finally {
+        if (active) setLoadingTerms(false);
+      }
+    };
+
+    loadTerms();
+
+    return () => {
+      active = false;
+    };
+  }, [dialogOpen, form.academicYearId]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadOfferings = async () => {
+      setOfferings([]);
+
+      if (!dialogOpen || !form.termId) return;
+
+      setLoadingOfferings(true);
+
+      try {
+        let response = await fetchSubjectOfferings({
+          termId: form.termId,
+        });
+
+        if (!active) return;
+
+        let list = isFailedResponse(response)
+          ? []
+          : extractCollection(response, ["subjectOfferings", "offerings"]);
+
+        if (list.length === 0) {
+          const fallbackResponse = await fetchSubjectOfferings(
+            { termId: form.termId },
+            { forceListEndpoint: true }
+          );
+
+          if (!active) return;
+
+          if (!isFailedResponse(fallbackResponse)) {
+            const fallbackList = extractCollection(fallbackResponse, [
+              "subjectOfferings",
+              "offerings",
+            ]);
+
+            if (fallbackList.length > 0) list = fallbackList;
+          }
+        }
+
+        const options = list
+          .map(mapOfferingOption)
+          .filter((offering) => offering.id)
+          /*
+           * المعلم يقدر يربط المصدر فقط بعرض مادة مسند له بالفعل.
+           * لا يوجد fallback يسمح بكل عروض المواد.
+           */
+          .filter((offering) => {
+            if (!offering.subjectId) return false;
+            return assignedOfferingIds.has(offering.id);
+          });
+
+        setOfferings(options);
+      } catch {
+        if (active) setOfferings([]);
+      } finally {
+        if (active) setLoadingOfferings(false);
+      }
+    };
+
+    loadOfferings();
+
+    return () => {
+      active = false;
+    };
+  }, [dialogOpen, form.termId, assignedOfferingIds]);
+
   const normalizedItems = useMemo(
-    () => items.map(normalizeItem).filter((item) => item.id || item.link),
-    [items, normalizeItem]
+    () =>
+      items
+        .map(normalizeItem)
+        .filter((item) => item.id || item.link)
+        /*
+         * Teacher Library:
+         * - المصدر العام يظهر لكل المعلمين.
+         * - المصدر المرتبط يظهر فقط لو الـsubjectOfferingId مسند للمعلم.
+         */
+        .filter(
+          (item) =>
+            !item.subjectOfferingId ||
+            assignedOfferingIds.has(item.subjectOfferingId)
+        ),
+    [items, normalizeItem, assignedOfferingIds]
   );
 
-  const availableSubjects = useMemo(() => {
-    const map = new Map(subjects.map((subject) => [subject.id, subject]));
+  useEffect(() => {
+    const map = new Map();
 
     normalizedItems.forEach((item) => {
-      if (!item.subjectId || map.has(item.subjectId)) return;
-      map.set(item.subjectId, {
-        id: item.subjectId,
+      if (!item.subjectOfferingId) return;
+
+      map.set(item.subjectOfferingId, {
+        id: item.subjectOfferingId,
         name: item.subjectName,
         code: item.subjectCode,
+        gradeName: item.gradeName,
+        label: [
+          [item.subjectName, item.subjectCode].filter(Boolean).join(" - "),
+          item.gradeName,
+        ]
+          .filter(Boolean)
+          .join(" — "),
+      });
+    });
+
+    setKnownOfferings(Array.from(map.values()));
+  }, [normalizedItems]);
+
+  const availableSubjects = useMemo(() => {
+    const map = new Map(knownOfferings.map((offering) => [offering.id, offering]));
+
+    normalizedItems.forEach((item) => {
+      if (!item.subjectOfferingId || map.has(item.subjectOfferingId)) return;
+
+      map.set(item.subjectOfferingId, {
+        id: item.subjectOfferingId,
+        name: item.subjectName,
+        code: item.subjectCode,
+        gradeName: item.gradeName,
+        label: [
+          [item.subjectName, item.subjectCode].filter(Boolean).join(" - "),
+          item.gradeName,
+        ]
+          .filter(Boolean)
+          .join(" — "),
       });
     });
 
     return Array.from(map.values());
-  }, [normalizedItems, subjects]);
+  }, [knownOfferings, normalizedItems]);
 
   const availableYears = useMemo(() => {
     const map = new Map(years.map((year) => [year.id, year]));
@@ -447,6 +870,7 @@ const TeacherLibrary = () => {
         item.title,
         item.subjectName,
         item.subjectCode,
+        item.gradeName,
         item.yearName,
         item.termName,
         item.link,
@@ -456,7 +880,8 @@ const TeacherLibrary = () => {
 
       return (
         (!query || haystack.includes(query)) &&
-        (subjectFilter === "all" || item.subjectId === subjectFilter) &&
+        (subjectFilter === "all" ||
+          item.subjectOfferingId === subjectFilter) &&
         (yearFilter === "all" || item.yearId === yearFilter)
       );
     });
@@ -465,6 +890,7 @@ const TeacherLibrary = () => {
   const subjectCount = new Set(
     normalizedItems.map((item) => item.subjectId).filter(Boolean)
   ).size;
+
   const yearCount = new Set(
     normalizedItems.map((item) => item.yearId).filter(Boolean)
   ).size;
@@ -473,9 +899,12 @@ const TeacherLibrary = () => {
     setForm({
       title: "",
       link: "",
-      subjectId: "",
       academicYearId: "",
+      termId: "",
+      subjectOfferingId: "",
     });
+    setTerms([]);
+    setOfferings([]);
   };
 
   const closeDialog = () => {
@@ -501,12 +930,16 @@ const TeacherLibrary = () => {
     setSaving(true);
 
     try {
-      const response = await addLibrary({
+      const payload = {
         title,
         link,
-        subjectId: form.subjectId || undefined,
-        academicYearId: form.academicYearId || undefined,
-      });
+      };
+
+      if (form.subjectOfferingId) {
+        payload.subjectOfferingId = form.subjectOfferingId;
+      }
+
+      const response = await addLibrary(payload);
 
       if (isFailedResponse(response)) {
         throw new Error(getMessage(response, "تعذر مشاركة المصدر"));
@@ -757,7 +1190,10 @@ const TeacherLibrary = () => {
                   <MenuItem value="all">كل المواد</MenuItem>
                   {availableSubjects.map((subject) => (
                     <MenuItem key={subject.id} value={subject.id}>
-                      {[subject.name, subject.code].filter(Boolean).join(" - ")}
+                      {subject.label ||
+                        [subject.name, subject.code]
+                          .filter(Boolean)
+                          .join(" - ")}
                     </MenuItem>
                   ))}
                 </Select>
@@ -1081,29 +1517,6 @@ const TeacherLibrary = () => {
             <Grid container spacing={1.2}>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
-                  <InputLabel>المادة</InputLabel>
-                  <Select
-                    label="المادة"
-                    value={form.subjectId}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        subjectId: event.target.value,
-                      }))
-                    }
-                  >
-                    <MenuItem value="">مصدر عام</MenuItem>
-                    {subjects.map((subject) => (
-                      <MenuItem key={subject.id} value={subject.id}>
-                        {[subject.name, subject.code].filter(Boolean).join(" - ")}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
                   <InputLabel>السنة الدراسية</InputLabel>
                   <Select
                     label="السنة الدراسية"
@@ -1112,10 +1525,12 @@ const TeacherLibrary = () => {
                       setForm((current) => ({
                         ...current,
                         academicYearId: event.target.value,
+                        termId: "",
+                        subjectOfferingId: "",
                       }))
                     }
                   >
-                    <MenuItem value="">كل السنوات</MenuItem>
+                    <MenuItem value="">بدون تحديد</MenuItem>
                     {years.map((year) => (
                       <MenuItem key={year.id} value={year.id}>
                         {year.name}
@@ -1123,6 +1538,59 @@ const TeacherLibrary = () => {
                     ))}
                   </Select>
                 </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth disabled={!form.academicYearId || loadingTerms}>
+                  <InputLabel>الترم</InputLabel>
+                  <Select
+                    label="الترم"
+                    value={form.termId}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        termId: event.target.value,
+                        subjectOfferingId: "",
+                      }))
+                    }
+                  >
+                    <MenuItem value="">بدون تحديد</MenuItem>
+                    {terms.map((term) => (
+                      <MenuItem key={term.id} value={term.id}>
+                        {term.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControl fullWidth disabled={!form.termId || loadingOfferings}>
+                  <InputLabel>المادة</InputLabel>
+                  <Select
+                    label="المادة"
+                    value={form.subjectOfferingId}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        subjectOfferingId: event.target.value,
+                      }))
+                    }
+                  >
+                    <MenuItem value="">مصدر عام</MenuItem>
+                    {offerings.map((offering) => (
+                      <MenuItem key={offering.id} value={offering.id}>
+                        {offering.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                {form.termId && !loadingOfferings && offerings.length === 0 && (
+                  <Typography sx={{ color: COLORS.muted, fontSize: 9, mt: 0.6 }}>
+                    لا توجد مواد مفعلة صالحة للربط في هذا الترم. يمكنك مشاركة المصدر كمصدر عام.
+                  </Typography>
+                )}
               </Grid>
             </Grid>
           </Stack>

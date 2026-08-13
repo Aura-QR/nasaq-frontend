@@ -30,7 +30,11 @@ import SelectFilter from "@/components/Filters/SelectFilter";
 import ClassFilter from "@/components/Filters/ClassFilter";
 import PaginationControls from "@/components/Pagination";
 
-import { deleteLecture } from "@/APIs/school/lectures";
+import {
+  deleteLecture,
+  fetchTermsByAcademicYear,
+} from "@/APIs/school/lectures";
+import { fetchClassesList } from "@/APIs/school/classes";
 import { useLectures } from "@/utils/hooks/apis/useLectures";
 import { useTeachers } from "@/utils/hooks/apis/useTeachers";
 import { useSubjects } from "@/utils/hooks/apis/useSubjects";
@@ -112,6 +116,43 @@ const getEntityName = (value) => {
     ""
   );
 };
+
+const unwrapData = (response) =>
+  response?.data?.data ??
+  response?.data ??
+  response;
+
+const extractList = (response) => {
+  const payload = unwrapData(response);
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return (
+    [
+      payload?.docs,
+      payload?.items,
+      payload?.results,
+      payload?.records,
+      payload?.classes,
+      payload?.terms,
+      payload?.data,
+    ].find(Array.isArray) || []
+  );
+};
+
+const getAcademicYear = (item) =>
+  item?.academicYearId || item?.academicYear || null;
+
+const mapTermOption = (item) => ({
+  value: getId(item),
+  label:
+    item?.name ||
+    `الترم ${item?.order || ""}`,
+  order: Number(item?.order) || 0,
+  status: item?.status || "",
+});
 
 const getLectureClass = (item) =>
   item?.class ||
@@ -266,6 +307,14 @@ const List = () => {
     useState("");
   const [dayOfWeek, setDayOfWeek] =
     useState("");
+  const [termId, setTermId] =
+    useState("");
+  const [defaultTermId, setDefaultTermId] =
+    useState("");
+  const [termOptions, setTermOptions] =
+    useState([]);
+  const [termsLoading, setTermsLoading] =
+    useState(true);
   const [page, setPage] =
     useState(1);
   const [limit, setLimit] =
@@ -287,10 +336,104 @@ const List = () => {
       limit: 1000,
     });
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTerms = async () => {
+      setTermsLoading(true);
+
+      const classesResponse = await fetchClassesList();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (classesResponse?.status === false) {
+        setTermOptions([]);
+        setDefaultTermId("");
+        setTermId("");
+        setTermsLoading(false);
+        return;
+      }
+
+      const classes = extractList(classesResponse);
+      const yearValues = classes
+        .map(getAcademicYear)
+        .filter(Boolean);
+
+      const activeYear =
+        yearValues.find(
+          (year) =>
+            year &&
+            typeof year === "object" &&
+            year.status === "active"
+        ) || yearValues[0];
+
+      const academicYearId = getId(activeYear);
+
+      if (!academicYearId) {
+        setTermOptions([]);
+        setDefaultTermId("");
+        setTermId("");
+        setTermsLoading(false);
+        return;
+      }
+
+      const termsResponse =
+        await fetchTermsByAcademicYear(
+          academicYearId
+        );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (termsResponse?.status === false) {
+        setTermOptions([]);
+        setDefaultTermId("");
+        setTermId("");
+        setTermsLoading(false);
+        return;
+      }
+
+      const options = extractList(termsResponse)
+        .map(mapTermOption)
+        .filter((item) => item.value)
+        .sort((a, b) => a.order - b.order);
+
+      setTermOptions(options);
+
+      const defaultTerm =
+        options.find(
+          (item) => item.status === "active"
+        ) ||
+        options.find(
+          (item) => item.status === "upcoming"
+        ) ||
+        options[0];
+
+      const nextDefaultTermId =
+        defaultTerm?.value || "";
+
+      setDefaultTermId(nextDefaultTermId);
+      setTermId((current) =>
+        current || nextDefaultTermId
+      );
+      setTermsLoading(false);
+    };
+
+    loadTerms();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const filters = useMemo(
     () => ({
       page: subject ? 1 : page,
       limit: subject ? 1000 : limit,
+      termId: termId || undefined,
       teacherId:
         teacher || undefined,
       classId:
@@ -302,6 +445,7 @@ const List = () => {
     [
       page,
       limit,
+      termId,
       teacher,
       classFilter,
       dayOfWeek,
@@ -314,7 +458,9 @@ const List = () => {
     lectures,
     loading,
     pagination,
-  } = useLectures(filters);
+  } = useLectures(filters, {
+    enabled: !termsLoading,
+  });
 
   const permissions =
     usePermissions("lectures");
@@ -323,15 +469,21 @@ const List = () => {
     const mappedLectures =
       mapLectures(lectures);
 
-    const filteredLectures = subject
+    const termScopedLectures = termId
       ? mappedLectures.filter(
-          (item) =>
-            item.subjectId === subject
+          (item) => item.termId === termId
         )
       : mappedLectures;
 
+    const filteredLectures = subject
+      ? termScopedLectures.filter(
+          (item) =>
+            item.subjectId === subject
+        )
+      : termScopedLectures;
+
     setItems(filteredLectures);
-  }, [lectures, subject]);
+  }, [lectures, subject, termId]);
 
   useEffect(() => {
     if (pagination) {
@@ -350,6 +502,7 @@ const List = () => {
     subject,
     teacher,
     classFilter,
+    termId,
   ]);
 
   const currentPagination =
@@ -362,6 +515,9 @@ const List = () => {
     subject,
     slot,
     dayOfWeek,
+    termId && termId !== defaultTermId
+      ? termId
+      : "",
   ].filter(Boolean).length;
 
   const stats = useMemo(
@@ -449,6 +605,7 @@ const List = () => {
     setSubject("");
     setSlot("");
     setDayOfWeek("");
+    setTermId(defaultTermId);
     setPage(1);
   };
 
@@ -1022,7 +1179,7 @@ const List = () => {
                 lg:
                   "repeat(3, minmax(0, 1fr))",
                 xl:
-                  "repeat(5, minmax(0, 1fr))",
+                  "repeat(6, minmax(0, 1fr))",
               },
               gap: {
                 xs: 1.25,
@@ -1035,6 +1192,16 @@ const List = () => {
               },
             }}
           >
+            <SelectFilter
+              value={termId}
+              onChange={setTermId}
+              label="الترم"
+              icon={CalendarMonthIcon}
+              allLabel="جميع الترمات"
+              options={termOptions}
+              disabled={termsLoading}
+            />
+
             <SelectFilter
               value={teacher}
               onChange={setTeacher}

@@ -299,7 +299,7 @@ const SectionHeading = () => (
           fontSize: "10px",
         }}
       >
-        اختر الفصل والترم، ثم المادة المفعلة والمعلم المسند إليها.
+        اختر الفصل والترم، ثم المادة المفعلة، ويمكن اختيار المعلم إن كان مسندًا إليها.
       </Typography>
     </Box>
   </Stack>
@@ -732,7 +732,7 @@ const Add = () => {
 
       if (mappedTeachers.length === 0) {
         setMessage(
-          "لا يوجد معلم مسند لهذه المادة في الترم المختار"
+          "لا يوجد معلم مسند لهذه المادة حاليًا، ويمكن حفظ الحصة بدون معلم"
         );
       }
     };
@@ -1020,8 +1020,7 @@ const Add = () => {
                 error={
                   errors.teacherId?.message
                 }
-                label="المعلم"
-                required
+                label="المعلم (اختياري)"
                 data={teacherOptions}
                 name="name"
                 defaultValue={
