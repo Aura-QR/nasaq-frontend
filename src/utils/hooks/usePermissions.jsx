@@ -1,16 +1,10 @@
 const OPERATION_MAP = {
   read: "read",
-  view: "read",
-
   add: "create",
   create: "create",
-
   edit: "update",
   update: "update",
-
   delete: "delete",
-  remove: "delete",
-
   manage: "manage",
 };
 
@@ -21,281 +15,212 @@ const EMPTY_MODULE_PERMISSIONS = {
   delete: false,
 };
 
-const FULL_SCHOOL_ACCESS_ROLES = [
+/*
+ * Business Rule:
+ *
+ * OWNER / SUPERVISOR / MANAGER
+ * يشاهدون فقط:
+ * - التحضير
+ * - الامتحانات / الواجبات / الأنشطة / الكويز
+ * - توزيع الدرجات
+ * - المشاريع
+ *
+ * ولا يحق لهم:
+ * Create / Update / Delete
+ */
+const ADMIN_READ_ONLY_ROLES = new Set([
   "OWNER",
   "SUPERVISOR",
-];
+  "MANAGER",
+]);
 
-const ROLE_BLOCKED_MODULES = {
-  SUPERVISOR: [
-    "managers",
-  ],
+const ACADEMIC_READ_ONLY_MODULES = new Set([
+  "exams",
+  "projects",
+  "gradesCriteria",
+  "preparation",
+]);
 
-  MANAGER: [
-    "managers",
-    "financial",
-    "expenses",
-  ],
-};
-
-const safeJsonParse = (
-  value,
-  fallback
-) => {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-};
-
-const getStoredRole = () => {
-  const storedRole =
-    localStorage.getItem(
-      "role"
-    );
-
-  if (storedRole) {
-    return String(storedRole)
-      .trim()
-      .toUpperCase();
-  }
-
-  const storedUser =
-    safeJsonParse(
-      localStorage.getItem(
-        "user"
-      ),
-      null
-    );
-
-  return String(
-    storedUser?.role || ""
-  )
+const normalizeRole = (value) =>
+  String(value || "")
     .trim()
     .toUpperCase();
-};
 
-const getStoredPermissions =
-  () => {
-    const raw =
-      localStorage.getItem(
-        "permissions"
-      );
+const getCurrentRole = () => {
+  try {
+    const storedRole = localStorage.getItem("role");
 
-    if (!raw) {
-      return [];
+    if (storedRole) {
+      return normalizeRole(storedRole);
     }
 
-    const parsed =
-      safeJsonParse(
-        raw,
-        []
+    const storedUser = localStorage.getItem("user");
+
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+
+      return normalizeRole(
+        user?.role ||
+          user?.user?.role
       );
-
-    return parsed || [];
-  };
-
-const getModuleKey = (
-  module
-) => {
-  const normalized =
-    String(module || "")
-      .replace(/^school\./, "");
-
-  return normalized.split(".")[0];
-};
-
-const isRoleBlocked = (
-  role,
-  module
-) => {
-  const moduleKey =
-    getModuleKey(module);
-
-  return (
-    ROLE_BLOCKED_MODULES[
-      role
-    ] || []
-  ).includes(moduleKey);
-};
-
-const hasWildcardAccess = (
-  permissions,
-  role,
-  module
-) => {
-  if (
-    isRoleBlocked(
-      role,
-      module
-    )
-  ) {
-    return false;
+    }
+  } catch (error) {
+    console.warn(
+      "Unable to read current user role:",
+      error
+    );
   }
 
-  if (
-    FULL_SCHOOL_ACCESS_ROLES.includes(
-      role
-    )
-  ) {
-    return true;
-  }
-
-  return (
-    permissions === "*" ||
-    permissions?.includes?.(
-      "*"
-    ) ||
-    permissions?.includes?.(
-      "school.*"
-    )
-  );
+  return "";
 };
 
-const createFullModuleAccess =
-  () => ({
+const getReadOnlyPermissions = (
+  operation
+) => {
+  if (operation) {
+    const normalizedOperation =
+      OPERATION_MAP[operation] ||
+      operation;
+
+    return (
+      normalizedOperation === "read"
+    );
+  }
+
+  return {
     read: true,
-    add: true,
-    edit: true,
-    delete: true,
-  });
-
-const createEmptyModuleAccess =
-  () => ({
-    ...EMPTY_MODULE_PERMISSIONS,
-  });
-
-const normalizeOperation = (
-  operation
-) =>
-  OPERATION_MAP[operation] ||
-  operation;
-
-const buildPermissionName = (
-  module,
-  operation
-) => {
-  if (
-    module?.startsWith?.(
-      "school."
-    )
-  ) {
-    if (
-      module.split(".")
-        .length >= 3
-    ) {
-      return module;
-    }
-
-    return `${module}.${operation}`;
-  }
-
-  return `school.${module}.${operation}`;
+    add: false,
+    edit: false,
+    delete: false,
+  };
 };
 
+/**
+ * Supports both permission formats:
+ *
+ * Old:
+ * {
+ *   students: {
+ *     read: true,
+ *     add: true,
+ *     edit: true,
+ *     delete: true
+ *   }
+ * }
+ *
+ * New:
+ * [
+ *   "school.students.read",
+ *   "school.students.create",
+ *   "school.students.update",
+ *   "school.students.delete"
+ * ]
+ */
 const usePermissions = (
   module,
   operation
 ) => {
-  const role =
-    getStoredRole();
+  const role = getCurrentRole();
 
-  const permissions =
-    getStoredPermissions();
-
+  /*
+   * IMPORTANT:
+   * هذا الشرط يسبق wildcard "*".
+   *
+   * حتى لو OWNER أو SUPERVISOR عنده "*"
+   * لن يحصل على صلاحيات تعديل في
+   * الأكاديميات المحددة أعلاه.
+   */
   if (
-    isRoleBlocked(
-      role,
+    ADMIN_READ_ONLY_ROLES.has(role) &&
+    ACADEMIC_READ_ONLY_MODULES.has(
       module
     )
   ) {
-    return operation ||
-      module?.split?.(".")
-        .length >= 3
-      ? false
-      : createEmptyModuleAccess();
+    return getReadOnlyPermissions(
+      operation
+    );
   }
 
-  if (
-    hasWildcardAccess(
-      permissions,
-      role,
-      module
-    )
-  ) {
-    return operation ||
-      module?.split?.(".")
-        .length >= 3
-      ? true
-      : createFullModuleAccess();
+  const raw =
+    localStorage.getItem(
+      "permissions"
+    );
+
+  if (!raw) {
+    return operation
+      ? false
+      : {
+          ...EMPTY_MODULE_PERMISSIONS,
+        };
+  }
+
+  let permissions;
+
+  try {
+    permissions = JSON.parse(raw);
+  } catch {
+    return operation
+      ? false
+      : {
+          ...EMPTY_MODULE_PERMISSIONS,
+        };
   }
 
   if (!permissions) {
     return operation
       ? false
-      : createEmptyModuleAccess();
+      : {
+          ...EMPTY_MODULE_PERMISSIONS,
+        };
   }
 
+  // Full-access shortcut
   if (
-    Array.isArray(
-      permissions
+    permissions === "*" ||
+    permissions?.includes?.("*") ||
+    permissions?.includes?.(
+      "school.*"
     )
   ) {
+    if (operation) {
+      return true;
+    }
+
+    return {
+      read: true,
+      add: true,
+      edit: true,
+      delete: true,
+    };
+  }
+
+  // New permissions array format
+  if (Array.isArray(permissions)) {
     if (!module) {
       return permissions;
     }
 
-    const isFullPermissionString =
-      module.startsWith?.(
-        "school."
-      ) &&
-      module.split(".")
-        .length >= 3;
+    const prefix =
+      `school.${module}.`;
 
-    if (
-      isFullPermissionString &&
-      !operation
-    ) {
-      return (
-        permissions.includes(
-          module
-        ) ||
-        permissions.includes(
-          `${module
-            .split(".")
-            .slice(0, 2)
-            .join(".")}.manage`
-        )
+    const hasManage =
+      permissions.includes(
+        `${prefix}manage`
       );
-    }
 
     const hasOperation = (
       requestedOperation
     ) => {
       const normalizedOperation =
-        normalizeOperation(
+        OPERATION_MAP[
           requestedOperation
-        );
-
-      const requestedPermission =
-        buildPermissionName(
-          module,
-          normalizedOperation
-        );
-
-      const managePermission =
-        buildPermissionName(
-          module,
-          "manage"
-        );
+        ] ||
+        requestedOperation;
 
       return (
+        hasManage ||
         permissions.includes(
-          requestedPermission
-        ) ||
-        permissions.includes(
-          managePermission
+          `${prefix}${normalizedOperation}`
         )
       );
     };
@@ -308,93 +233,48 @@ const usePermissions = (
 
     return {
       read:
-        hasOperation(
-          "read"
-        ),
-
+        hasOperation("read"),
       add:
-        hasOperation(
-          "add"
-        ),
-
+        hasOperation("add"),
       edit:
-        hasOperation(
-          "edit"
-        ),
-
+        hasOperation("edit"),
       delete:
-        hasOperation(
-          "delete"
-        ),
+        hasOperation("delete"),
     };
   }
 
+  // Old nested-object format
   if (
     typeof permissions ===
       "object" &&
-    module
+    module &&
+    module in permissions
   ) {
-    const normalizedModule =
-      getModuleKey(module);
-
     const modulePermissions =
-      permissions[
-        normalizedModule
-      ] ||
-      permissions?.school?.[
-        normalizedModule
-      ] ||
-      {};
-
-    if (
-      modulePermissions ===
-      true
-    ) {
-      return operation
-        ? true
-        : createFullModuleAccess();
-    }
+      permissions[module] || {};
 
     if (operation) {
-      const normalizedOperation =
-        normalizeOperation(
-          operation
-        );
-
-      const operationValue =
-        modulePermissions[
-          operation
-        ] ??
-        modulePermissions[
-          normalizedOperation
-        ];
-
       return Boolean(
-        modulePermissions.manage ||
-        operationValue
+        modulePermissions[
+          operation
+        ]
       );
     }
 
     return {
       read: Boolean(
-        modulePermissions.manage ||
         modulePermissions.read
       ),
 
       add: Boolean(
-        modulePermissions.manage ||
-        modulePermissions.add ||
-        modulePermissions.create
+        modulePermissions.add
       ),
 
       edit: Boolean(
-        modulePermissions.manage ||
-        modulePermissions.edit ||
-        modulePermissions.update
+        modulePermissions.edit
       ),
 
       delete: Boolean(
-        modulePermissions.manage ||
         modulePermissions.delete
       ),
 
@@ -408,7 +288,9 @@ const usePermissions = (
 
   return operation
     ? false
-    : createEmptyModuleAccess();
+    : {
+        ...EMPTY_MODULE_PERMISSIONS,
+      };
 };
 
 export default usePermissions;
