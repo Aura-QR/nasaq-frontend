@@ -14,12 +14,11 @@ import Select from "@/components/Select/Select";
 import FinancialFormShell from "@/components/financial/FinancialFormShell";
 
 import { getChangedValues } from "@/utils/helpers/getChangedValues";
-import Years from "@/utils/constants/Years";
 import { getCurrencyFieldLabel } from "@/utils/financial/financialUtils";
 import { useExpense } from "@/utils/hooks/apis/expenses/useExpense";
 import { useExpenseCategories } from "@/utils/hooks/apis/expenses/useExpenseCategories";
+import { useAcademicYears } from "@/utils/hooks/apis/useAcademicYears";
 import usePermissions from "@/utils/hooks/usePermissions";
-
 
 const getCategoryItems = (value, depth = 0) => {
   if (!value || depth > 5) {
@@ -41,10 +40,7 @@ const getCategoryItems = (value, depth = 0) => {
     "categories",
     "data",
   ]) {
-    const items = getCategoryItems(
-      value?.[key],
-      depth + 1
-    );
+    const items = getCategoryItems(value?.[key], depth + 1);
 
     if (items.length > 0) {
       return items;
@@ -57,17 +53,8 @@ const getCategoryItems = (value, depth = 0) => {
 const normalizeCategoryOptions = (value) =>
   getCategoryItems(value)
     .map((item) => {
-      const id =
-        item?._id ||
-        item?.id ||
-        item?.value ||
-        "";
-
-      const label =
-        item?.name ||
-        item?.label ||
-        item?.title ||
-        "";
+      const id = item?._id || item?.id || item?.value || "";
+      const label = item?.name || item?.label || item?.title || "";
 
       if (!id || !label) {
         return null;
@@ -84,6 +71,21 @@ const normalizeCategoryOptions = (value) =>
     })
     .filter(Boolean);
 
+const normalizeExpenseAcademicYear = (value) => {
+  if (!value) return "";
+
+  if (typeof value === "object") {
+    return String(
+      value?.name ||
+        value?.label ||
+        value?.title ||
+        ""
+    ).trim();
+  }
+
+  return String(value).trim();
+};
+
 const ExpensesEditPage = () => {
   const {
     register,
@@ -94,17 +96,34 @@ const ExpensesEditPage = () => {
 
   const [loading, setLoading] = useState(false);
   const [defaultValues, setDefaultValues] = useState(null);
+
   const navigate = useNavigate();
   const { id } = useParams();
 
   const { expense, loading: expenseLoading } = useExpense(id);
   const { categories = [] } = useExpenseCategories();
-  const permissions =
-    usePermissions("expenses");
+  const {
+    academicYears = [],
+    loadingAcademicYears,
+  } = useAcademicYears();
+
+  const permissions = usePermissions("expenses");
 
   const categoryOptions = useMemo(
     () => normalizeCategoryOptions(categories),
     [categories]
+  );
+
+  const academicYearOptions = useMemo(
+    () =>
+      academicYears.map((year) => ({
+        id: year.name,
+        name:
+          year.status === "active"
+            ? `${year.name} - الحالية`
+            : year.name,
+      })),
+    [academicYears]
   );
 
   useEffect(() => {
@@ -115,8 +134,14 @@ const ExpensesEditPage = () => {
       amount: Number(expense.amount || 0),
       date: expense.date ? expense.date.slice(0, 10) : "",
       notes: expense.notes || "",
-      categoryId: expense.categoryId?._id || expense.categoryId || "",
-      academicYear: expense.academicYear || "",
+      categoryId:
+        expense.categoryId?._id ||
+        expense.categoryId?.id ||
+        expense.categoryId ||
+        "",
+      academicYear: normalizeExpenseAcademicYear(
+        expense.academicYear
+      ),
     };
 
     reset(normalized);
@@ -125,9 +150,7 @@ const ExpensesEditPage = () => {
 
   const onSubmit = async (formValues) => {
     if (!permissions?.edit) {
-      toast.error(
-        "ليس لديك صلاحية تعديل المصروفات"
-      );
+      toast.error("ليس لديك صلاحية تعديل المصروفات");
       return;
     }
 
@@ -140,7 +163,10 @@ const ExpensesEditPage = () => {
       notes: formValues.notes || undefined,
     };
 
-    const changedData = getChangedValues(payload, defaultValues || {});
+    const changedData = getChangedValues(
+      payload,
+      defaultValues || {}
+    );
 
     if (Object.keys(changedData).length === 0) {
       toast.info("لم تحدث أي بيانات للتعديل");
@@ -247,13 +273,19 @@ const ExpensesEditPage = () => {
 
               <Grid item xs={12} sm={6}>
                 <Select
+                  key={`expense-year-${defaultValues.academicYear}-${academicYearOptions.length}`}
                   register={register}
                   registerName="academicYear"
-                  data={Years}
+                  data={academicYearOptions}
+                  name="name"
                   error={errors.academicYear?.message}
                   label="السنة الدراسية"
                   defaultValue={defaultValues.academicYear}
                   defaultSelect="غير محدد"
+                  disabled={
+                    loadingAcademicYears ||
+                    academicYearOptions.length === 0
+                  }
                 />
               </Grid>
 

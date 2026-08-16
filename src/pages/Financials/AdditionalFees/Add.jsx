@@ -42,11 +42,11 @@ import {
 import { useStudents } from "@/utils/hooks/apis/useStudents";
 import { useClasses } from "@/utils/hooks/apis/useClasses";
 import usePermissions from "@/utils/hooks/usePermissions";
-import Years from "@/utils/constants/Years";
+import { useAcademicYears } from "@/utils/hooks/apis/useAcademicYears";
 
 const TARGET_TYPES = [
   {
-    value: "school",
+    value: "all",
     label: "كل الطلاب",
   },
   {
@@ -115,7 +115,7 @@ const AdditionalFeesAddPage = () => {
     formState: { errors },
   } = useForm({
     defaultValues: {
-      targetType: "school",
+      targetType: "all",
       targetId: "",
       targetAcademicYear: "",
     },
@@ -141,6 +141,11 @@ const AdditionalFeesAddPage = () => {
     page: 1,
     limit: 200,
   });
+
+  const {
+    academicYears = [],
+    loadingAcademicYears,
+  } = useAcademicYears();
 
   const studentOptions =
     useMemo(
@@ -182,6 +187,23 @@ const AdditionalFeesAddPage = () => {
               item.label
           ),
       [classes]
+    );
+
+  /*
+   * Additional Fees API expects targetAcademicYear as a string,
+   * so we show the academic years from the backend but submit year.name.
+   */
+  const academicYearOptions =
+    useMemo(
+      () =>
+        academicYears.map((year) => ({
+          value: year.name,
+          label:
+            year.status === "active"
+              ? `${year.name} - الحالية`
+              : year.name,
+        })),
+      [academicYears]
     );
 
   const onSubmit = async (
@@ -593,33 +615,18 @@ const AdditionalFeesAddPage = () => {
                       <Select
                         {...field}
                         label="السنة الدراسية"
+                        disabled={
+                          loadingAcademicYears ||
+                          academicYearOptions.length === 0
+                        }
                       >
-                        {Years.map(
+                        {academicYearOptions.map(
                           (year) => (
                             <MenuItem
-                              key={
-                                typeof year ===
-                                "string"
-                                  ? year
-                                  : year?.value ||
-                                    year?.id ||
-                                    year?.name
-                              }
-                              value={
-                                typeof year ===
-                                "string"
-                                  ? year
-                                  : year?.value ||
-                                    year?.name ||
-                                    year?.label
-                              }
+                              key={year.value}
+                              value={year.value}
                             >
-                              {typeof year ===
-                              "string"
-                                ? year
-                                : year?.label ||
-                                  year?.name ||
-                                  year?.value}
+                              {year.label}
                             </MenuItem>
                           )
                         )}

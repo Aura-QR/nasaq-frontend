@@ -32,12 +32,53 @@ import ClassFilter from "@/components/Filters/ClassFilter";
 import PaginationControls from "@/components/Pagination";
 
 import { deleteStudent } from "@/APIs/users/students";
+import { fetchStudentEnrollments } from "@/APIs/school/enrollments";
 import { useStudents } from "@/utils/hooks/apis/useStudents";
 import useDebounce from "@/utils/hooks/useDebounce";
 import usePermissions from "@/utils/hooks/usePermissions";
 
 import Status from "@/utils/constants/Status";
-import Years from "@/utils/constants/Years";
+import { useAcademicYears } from "@/utils/hooks/apis/useAcademicYears";
+
+const getReferenceId = (value) => {
+  if (!value) return "";
+
+  if (typeof value === "object") {
+    return String(
+      value?._id || value?.id || ""
+    ).trim();
+  }
+
+  return String(value).trim();
+};
+
+const extractEnrollmentItems = (response) => {
+  const candidates = [
+    response,
+    response?.data,
+    response?.data?.data,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+
+    if (candidate && typeof candidate === "object") {
+      const list = [
+        candidate.docs,
+        candidate.items,
+        candidate.results,
+        candidate.enrollments,
+        candidate.data,
+      ].find(Array.isArray);
+
+      if (list) return list;
+    }
+  }
+
+  return [];
+};
 
 const getCurrentEnrollment = (student) => {
   const direct =
@@ -84,15 +125,15 @@ const getStudentClass = (student) => {
     );
 
   const candidates = [
-    student?.class,
-    typeof student?.classId ===
-      "object"
-      ? student.classId
-      : null,
     enrollment?.class,
     typeof enrollment?.classId ===
       "object"
       ? enrollment.classId
+      : null,
+    student?.class,
+    typeof student?.classId ===
+      "object"
+      ? student.classId
       : null,
   ].filter(Boolean);
 
@@ -111,12 +152,12 @@ const getStudentAcademicYearLabel = (
     getStudentClass(student);
 
   const candidates = [
-    student?.academicYear,
-    student?.academicYearId,
     enrollment?.academicYear,
     enrollment?.academicYearId,
     classData?.academicYear,
     classData?.academicYearId,
+    student?.academicYear,
+    student?.academicYearId,
   ];
 
   for (const candidate of candidates) {
@@ -270,6 +311,8 @@ const List = () => {
   const [status, setStatus] = useState("");
   const [academicYear, setAcademicYear] = useState("");
   const [limit, setLimit] = useState(10);
+  const [enrollmentsByStudentId, setEnrollmentsByStudentId] = useState({});
+  const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
 
   const debouncedSearch = useDebounce(search, 700);
 
@@ -303,9 +346,117 @@ const List = () => {
 
   const permissions = usePermissions("students");
 
+  const {
+    academicYears = [],
+    loadingAcademicYears,
+  } = useAcademicYears();
+
+  const academicYearOptions = useMemo(
+    () =>
+      academicYears.map((year) => ({
+        value: year.id,
+        label:
+          year.status === "active"
+            ? `${year.name} - الحالية`
+            : year.name,
+      })),
+    [academicYears]
+  );
+
   useEffect(() => {
-    setItems(mapStudents(students));
+    let cancelled = false;
+
+    const loadEnrollments = async () => {
+      const studentList = Array.isArray(students)
+        ? students
+        : [];
+
+      if (!studentList.length) {
+        setEnrollmentsByStudentId({});
+        setEnrollmentsLoading(false);
+        return;
+      }
+
+      setEnrollmentsLoading(true);
+
+      try {
+        const entries = await Promise.all(
+          studentList.map(async (student) => {
+            const studentId = getReferenceId(
+              student?._id || student?.id
+            );
+
+            if (!studentId) {
+              return ["", []];
+            }
+
+            const response = await fetchStudentEnrollments(
+              studentId
+            );
+
+            if (response?.status === false) {
+              return [studentId, []];
+            }
+
+            return [
+              studentId,
+              extractEnrollmentItems(response),
+            ];
+          })
+        );
+
+        if (cancelled) return;
+
+        setEnrollmentsByStudentId(
+          Object.fromEntries(
+            entries.filter(([studentId]) => studentId)
+          )
+        );
+      } catch (error) {
+        if (!cancelled) {
+          console.error(
+            "Failed to load student enrollments",
+            error
+          );
+          setEnrollmentsByStudentId({});
+        }
+      } finally {
+        if (!cancelled) {
+          setEnrollmentsLoading(false);
+        }
+      }
+    };
+
+    loadEnrollments();
+
+    return () => {
+      cancelled = true;
+    };
   }, [students]);
+
+  useEffect(() => {
+    const enrichedStudents = (Array.isArray(students)
+      ? students
+      : []
+    ).map((student) => {
+      const studentId = getReferenceId(
+        student?._id || student?.id
+      );
+
+      const loadedEnrollments =
+        enrollmentsByStudentId[studentId];
+
+      return {
+        ...student,
+        enrollments:
+          loadedEnrollments ??
+          student?.enrollments ??
+          [],
+      };
+    });
+
+    setItems(mapStudents(enrichedStudents));
+  }, [students, enrollmentsByStudentId]);
 
   useEffect(() => {
     setStudentClass("");
@@ -997,10 +1148,8 @@ const List = () => {
                 label="السنة الدراسية"
                 icon={SchoolRounded}
                 allLabel="جميع السنوات"
-                options={Years.map((year) => ({
-                  value: year,
-                  label: year,
-                }))}
+                disabled={loadingAcademicYears}
+                options={academicYearOptions}
               />
             </Grid>
 
@@ -1071,7 +1220,7 @@ const List = () => {
             <Table
               headers={TABLE_HEADERS}
               data={items}
-              loading={loading}
+              loading={loading || enrollmentsLoading}
               edit={permissions.edit}
               profile
               body={TABLE_BODY}

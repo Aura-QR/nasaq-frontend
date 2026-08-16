@@ -32,7 +32,7 @@ import { useSubjects } from "@/utils/hooks/apis/useSubjects";
 import { useProjects } from "@/utils/hooks/apis/useProjects";
 import usePermissions from "@/utils/hooks/usePermissions";
 import { deleteProject } from "@/APIs/school/projects";
-import Years from "@/utils/constants/Years";
+import { useAcademicYears } from "@/utils/hooks/apis/useAcademicYears";
 import { translateGender } from "@/utils/helpers/translateGender";
 import SchoolIcon from "@mui/icons-material/School";
 import SubjectIcon from "@mui/icons-material/Subject";
@@ -123,15 +123,28 @@ const List = () => {
   const [limit, setLimit] = useState(10);
   const [localPagination, setLocalPagination] = useState(null);
 
+  const {
+    academicYears = [],
+    loadingAcademicYears,
+  } = useAcademicYears();
+
+  const selectedAcademicYearName = useMemo(
+    () =>
+      academicYears.find(
+        (year) => year.id === academicYear
+      )?.name || "",
+    [academicYears, academicYear]
+  );
+
   const filters = useMemo(
     () => ({
       page,
       limit,
-      academicYear: academicYear || undefined,
+      academicYear: selectedAcademicYearName || undefined,
       subjectId: subject || undefined,
       classIds: classFilter || undefined,
     }),
-    [page, limit, academicYear, subject, classFilter]
+    [page, limit, selectedAcademicYearName, subject, classFilter]
   );
 
   const { projects, loading, pagination } = useProjects(filters);
@@ -140,6 +153,18 @@ const List = () => {
     limit: 1000,
   });
   const permissions = usePermissions("projects");
+
+  const academicYearOptions = useMemo(
+    () =>
+      academicYears.map((year) => ({
+        value: year.id,
+        label:
+          year.status === "active"
+            ? `${year.name} - الحالية`
+            : year.name,
+      })),
+    [academicYears]
+  );
 
   useEffect(() => {
     setItems(mapProjects(projects));
@@ -520,10 +545,8 @@ const List = () => {
               label="السنة الدراسية"
               icon={SchoolIcon}
               allLabel="جميع السنين"
-              options={Years.map((year) => ({
-                value: year,
-                label: year,
-              }))}
+              disabled={loadingAcademicYears}
+              options={academicYearOptions}
             />
             <ClassFilter
               classId={classFilter}

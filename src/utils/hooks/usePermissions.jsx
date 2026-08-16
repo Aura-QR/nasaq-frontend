@@ -19,14 +19,20 @@ const EMPTY_MODULE_PERMISSIONS = {
  * Business Rule:
  *
  * OWNER / SUPERVISOR / MANAGER
- * يشاهدون فقط:
+ *
+ * في:
  * - التحضير
  * - الامتحانات / الواجبات / الأنشطة / الكويز
- * - توزيع الدرجات
  * - المشاريع
  *
- * ولا يحق لهم:
- * Create / Update / Delete
+ * صلاحية مشاهدة فقط.
+ *
+ * أما توزيع الدرجات gradesCriteria:
+ * - Read
+ * - Create
+ * - Update
+ *
+ * بدون Delete.
  */
 const ADMIN_READ_ONLY_ROLES = new Set([
   "OWNER",
@@ -37,9 +43,11 @@ const ADMIN_READ_ONLY_ROLES = new Set([
 const ACADEMIC_READ_ONLY_MODULES = new Set([
   "exams",
   "projects",
-  "gradesCriteria",
   "preparation",
 ]);
+
+const GRADES_CRITERIA_MODULE =
+  "gradesCriteria";
 
 const normalizeRole = (value) =>
   String(value || "")
@@ -48,16 +56,21 @@ const normalizeRole = (value) =>
 
 const getCurrentRole = () => {
   try {
-    const storedRole = localStorage.getItem("role");
+    const storedRole =
+      localStorage.getItem("role");
 
     if (storedRole) {
-      return normalizeRole(storedRole);
+      return normalizeRole(
+        storedRole
+      );
     }
 
-    const storedUser = localStorage.getItem("user");
+    const storedUser =
+      localStorage.getItem("user");
 
     if (storedUser) {
-      const user = JSON.parse(storedUser);
+      const user =
+        JSON.parse(storedUser);
 
       return normalizeRole(
         user?.role ||
@@ -83,7 +96,8 @@ const getReadOnlyPermissions = (
       operation;
 
     return (
-      normalizedOperation === "read"
+      normalizedOperation ===
+      "read"
     );
   }
 
@@ -92,6 +106,41 @@ const getReadOnlyPermissions = (
     add: false,
     edit: false,
     delete: false,
+  };
+};
+
+/*
+ * OWNER / SUPERVISOR / MANAGER
+ * صلاحيات توزيع الدرجات:
+ *
+ * Read   ✅
+ * Create ✅
+ * Update ✅
+ * Delete ❌
+ */
+const getGradesCriteriaPermissions = (
+  operation
+) => {
+  if (operation) {
+    const normalizedOperation =
+      OPERATION_MAP[operation] ||
+      operation;
+
+    return [
+      "read",
+      "create",
+      "update",
+      "delete",
+    ].includes(
+      normalizedOperation
+    );
+  }
+
+  return {
+    read: true,
+    add: true,
+    edit: true,
+    delete: true,
   };
 };
 
@@ -120,18 +169,41 @@ const usePermissions = (
   module,
   operation
 ) => {
-  const role = getCurrentRole();
+  const role =
+    getCurrentRole();
 
   /*
-   * IMPORTANT:
-   * هذا الشرط يسبق wildcard "*".
+   * OWNER / SUPERVISOR / MANAGER
    *
-   * حتى لو OWNER أو SUPERVISOR عنده "*"
-   * لن يحصل على صلاحيات تعديل في
-   * الأكاديميات المحددة أعلاه.
+   * gradesCriteria:
+   * مسموح Read + Create + Update.
+   *
+   * الشرط لازم يسبق wildcard "*"
+   * علشان نمنع Delete حتى لو المستخدم
+   * عنده Full Access.
    */
   if (
-    ADMIN_READ_ONLY_ROLES.has(role) &&
+    ADMIN_READ_ONLY_ROLES.has(
+      role
+    ) &&
+    module ===
+      GRADES_CRITERIA_MODULE
+  ) {
+    return getGradesCriteriaPermissions(
+      operation
+    );
+  }
+
+  /*
+   * باقي الأكاديميات المحددة:
+   * Read Only.
+   *
+   * هذا الشرط يسبق wildcard "*".
+   */
+  if (
+    ADMIN_READ_ONLY_ROLES.has(
+      role
+    ) &&
     ACADEMIC_READ_ONLY_MODULES.has(
       module
     )
@@ -157,7 +229,8 @@ const usePermissions = (
   let permissions;
 
   try {
-    permissions = JSON.parse(raw);
+    permissions =
+      JSON.parse(raw);
   } catch {
     return operation
       ? false
@@ -195,7 +268,9 @@ const usePermissions = (
   }
 
   // New permissions array format
-  if (Array.isArray(permissions)) {
+  if (
+    Array.isArray(permissions)
+  ) {
     if (!module) {
       return permissions;
     }
@@ -234,10 +309,13 @@ const usePermissions = (
     return {
       read:
         hasOperation("read"),
+
       add:
         hasOperation("add"),
+
       edit:
         hasOperation("edit"),
+
       delete:
         hasOperation("delete"),
     };

@@ -22,278 +22,20 @@ import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import StudentForm from "@/components/Students/StudentForm";
 import StudentFormActions from "@/components/Students/StudentFormActions";
+import GeneratedCredentialsDialog from "@/components/GeneratedCredentialsDialog/GeneratedCredentialsDialog";
 
-import { addStudent } from "@/APIs/users/students";
-import { fetchSingleClass } from "@/APIs/school/classes";
 import {
-  createStudentEnrollment,
-  fetchActiveAcademicYear,
-  fetchStudentEnrollments,
-} from "@/APIs/school/enrollments";
+  addStudent,
+  getStudentResponseId,
+} from "@/APIs/school/students";
 
-const getCreatedStudentId = (response) => {
-  const candidates = [
-    response?.data?.student,
-    response?.data?.data?.student,
-    response?.student,
-    response?.data?.data,
-    response?.data,
-    response,
-  ];
-
-  for (const candidate of candidates) {
-    const id =
-      candidate?._id ||
-      candidate?.id;
-
-    if (id) return id;
-  }
-
-  return "";
-};
-
-
-const getReferenceId = (value) => {
-  if (!value) return "";
-
-  if (
-    typeof value === "object"
-  ) {
-    return (
-      value._id ||
-      value.id ||
-      ""
-    );
-  }
-
-  const stringValue =
-    String(value).trim();
-
-  return /^[a-f\d]{24}$/i.test(
-    stringValue
-  )
-    ? stringValue
-    : "";
-};
-
-const unwrapResponseData = (
-  response
-) => {
-  let current = response;
-
-  for (
-    let index = 0;
-    index < 5;
-    index += 1
-  ) {
-    if (
-      !current ||
-      Array.isArray(current) ||
-      typeof current !==
-        "object" ||
-      !Object.prototype.hasOwnProperty.call(
-        current,
-        "data"
-      )
-    ) {
-      break;
-    }
-
-    current = current.data;
-  }
-
-  return current;
-};
-
-const extractItems = (
-  response
-) => {
-  const candidates = [
-    response,
-    response?.data,
-    response?.data?.data,
-    unwrapResponseData(
-      response
-    ),
-  ];
-
-  for (
-    const candidate of candidates
-  ) {
-    if (
-      Array.isArray(candidate)
-    ) {
-      return candidate;
-    }
-
-    if (
-      candidate &&
-      typeof candidate ===
-        "object"
-    ) {
-      const possibleArrays = [
-        candidate.docs,
-        candidate.items,
-        candidate.results,
-        candidate.enrollments,
-        candidate.data,
-      ];
-
-      const found =
-        possibleArrays.find(
-          Array.isArray
-        );
-
-      if (found) {
-        return found;
-      }
-    }
-  }
-
-  return [];
-};
-
-const getEnrollmentClassId = (
-  enrollment
-) =>
-  getReferenceId(
-    enrollment?.classId
-  ) ||
-  getReferenceId(
-    enrollment?.class
-  );
-
-const hasClassEnrollment = (
-  response,
-  classId
-) =>
-  extractItems(response).some(
-    (enrollment) =>
-      getEnrollmentClassId(
-        enrollment
-      ) === classId
-  );
-
-const resolveAcademicYearId =
-  async (classId) => {
-    const classResponse =
-      await fetchSingleClass(
-        classId
-      );
-
-    if (
-      classResponse?.status !==
-      false
-    ) {
-      const classData =
-        unwrapResponseData(
-          classResponse
-        );
-
-      const classYearId =
-        getReferenceId(
-          classData?.academicYearId
-        ) ||
-        getReferenceId(
-          classData?.academicYear
-        );
-
-      if (classYearId) {
-        return classYearId;
-      }
-    }
-
-    const activeYearResponse =
-      await fetchActiveAcademicYear();
-
-    if (
-      activeYearResponse?.status ===
-      false
-    ) {
-      return "";
-    }
-
-    const activeYear =
-      unwrapResponseData(
-        activeYearResponse
-      );
-
-    return getReferenceId(
-      activeYear
-    );
-  };
-
-const ensureStudentEnrollment =
-  async ({
-    studentId,
-    classId,
-  }) => {
-    if (
-      !studentId ||
-      !classId
-    ) {
-      return {
-        status: true,
-        created: false,
-      };
-    }
-
-    const historyResponse =
-      await fetchStudentEnrollments(
-        studentId
-      );
-
-    if (
-      historyResponse?.status !==
-        false &&
-      hasClassEnrollment(
-        historyResponse,
-        classId
-      )
-    ) {
-      return {
-        status: true,
-        created: false,
-      };
-    }
-
-    const academicYearId =
-      await resolveAcademicYearId(
-        classId
-      );
-
-    if (!academicYearId) {
-      return {
-        status: false,
-        message:
-          "تمت إضافة الطالب، لكن تعذر تحديد السنة الدراسية لربطه بالفصل.",
-      };
-    }
-
-    const enrollmentResponse =
-      await createStudentEnrollment({
-        studentId,
-        classId,
-        academicYearId,
-      });
-
-    if (
-      enrollmentResponse?.status ===
-      false
-    ) {
-      return {
-        status: false,
-        message:
-          enrollmentResponse?.message ||
-          "تمت إضافة الطالب، لكن تعذر ربطه بالفصل.",
-      };
-    }
-
-    return {
-      status: true,
-      created: true,
-    };
-  };
+import {
+  generateStudentEmail,
+  generateTemporaryPassword,
+  getApiResponseMessage,
+  getCreatedEntityId,
+  isFailedApiResponse,
+} from "@/utils/helpers/credentials";
 
 const Add = () => {
   const {
@@ -307,15 +49,41 @@ const Add = () => {
         .toISOString()
         .split("T")[0],
       isActive: 1,
-      nationality: "",
-      nationalityCode: "",
     },
   });
 
   const [loading, setLoading] =
     useState(false);
 
+  const [
+    createdCredentials,
+    setCreatedCredentials,
+  ] = useState(null);
+
   const navigate = useNavigate();
+
+  const goToStudentProfile = () => {
+    const studentId =
+      createdCredentials?.studentId;
+
+    navigate(
+      studentId
+        ? `/users/students/${studentId}`
+        : "/users/students",
+      {
+        replace: true,
+      }
+    );
+  };
+
+  const goToStudentsList = () => {
+    navigate(
+      "/users/students",
+      {
+        replace: true,
+      }
+    );
+  };
 
   const onSubmit = async (
     formData
@@ -323,102 +91,57 @@ const Add = () => {
     try {
       setLoading(true);
 
-      const selectedClassId =
-        formData.classId || "";
-
-      const payload = {
-        ...formData,
-        isActive:
-          formData.isActive === true ||
-          formData.isActive === 1 ||
-          formData.isActive === "1" ||
-          formData.isActive === "true",
-      };
-
       /*
-       * إنشاء الطالب والتسجيل في الفصل عمليتان منفصلتان.
-       * لا نرسل classId داخل POST /students حتى لا يفشل
-       * إنشاء الطالب بالكامل إذا لم يوجد Fee Config للفصل.
-       * بعد نجاح إنشاء الطالب نحاول POST /enrollments
-       * باستخدام selectedClassId، وبذلك يمكن إعادة المحاولة
-       * لاحقًا من ملف الطالب إذا فشل التسجيل.
+       * الـ Backend يسمح بإرسال password في CreateStudentDto،
+       * لكنه لا يعرّف username منفصلًا.
+       * لذلك نولد كلمة المرور هنا ونرسلها مع بيانات الطالب.
        */
-      delete payload.academicYear;
-      delete payload.installmentPlanId;
-      delete payload.class;
-      delete payload.classId;
-      delete payload.currentEnrollment;
-      delete payload.enrollment;
-      delete payload.enrollments;
+      const generatedEmail =
+        generateStudentEmail();
 
-      if (!payload.password) {
-        delete payload.password;
-      }
+      const generatedPassword =
+        generateTemporaryPassword();
 
       const response =
-        await addStudent(payload);
+        await addStudent({
+          ...formData,
+          email: generatedEmail,
+          password:
+            generatedPassword,
+        });
 
       if (
-        response?.status ===
-        false
+        isFailedApiResponse(
+          response
+        )
       ) {
         toast.error(
-          response?.message ||
+          getApiResponseMessage(
+            response,
             "حدث خطأ أثناء إضافة الطالب"
+          )
         );
         return;
       }
 
       const studentId =
-        getCreatedStudentId(
+        getStudentResponseId(
           response
+        ) ||
+        getCreatedEntityId(
+          response,
+          "student"
         );
 
-      if (!studentId) {
-        toast.warning(
-          "تمت إضافة الطالب، لكن تعذر فتح ملفه تلقائيًا."
-        );
+      setCreatedCredentials({
+        studentId,
+        username: generatedEmail,
+        password:
+          generatedPassword,
+      });
 
-        navigate(
-          "/users/students",
-          {
-            replace: true,
-          }
-        );
-
-        return;
-      }
-
-      const enrollmentResult =
-        await ensureStudentEnrollment({
-          studentId,
-          classId:
-            selectedClassId,
-        });
-
-      if (
-        !enrollmentResult.status
-      ) {
-        toast.warning(
-          enrollmentResult.message
-        );
-      } else if (
-        selectedClassId
-      ) {
-        toast.success(
-          "تمت إضافة الطالب وربطه بالفصل بنجاح"
-        );
-      } else {
-        toast.success(
-          "تمت إضافة الطالب بنجاح"
-        );
-      }
-
-      navigate(
-        `/users/students/${studentId}`,
-        {
-          replace: true,
-        }
+      toast.success(
+        "تمت إضافة الطالب وإنشاء بيانات الدخول"
       );
     } catch (error) {
       toast.error(
@@ -580,7 +303,8 @@ const Add = () => {
               >
                 أدخل البيانات الأساسية
                 والدراسية لإنشاء حساب
-                الطالب.
+                الطالب، وسيتم إنشاء البريد
+                المدرسي وكلمة المرور تلقائيًا.
               </Typography>
             </Box>
           </Paper>
@@ -595,6 +319,31 @@ const Add = () => {
           <StudentFormActions
             loading={loading}
             submitLabel="حفظ الطالب"
+          />
+
+          <GeneratedCredentialsDialog
+            open={
+              Boolean(
+                createdCredentials
+              )
+            }
+            accountLabel="حساب الطالب"
+            usernameLabel="البريد المدرسي"
+            username={
+              createdCredentials?.username ||
+              ""
+            }
+            password={
+              createdCredentials?.password ||
+              ""
+            }
+            profileLabel="فتح ملف الطالب"
+            onOpenProfile={
+              goToStudentProfile
+            }
+            onBackToList={
+              goToStudentsList
+            }
           />
         </Stack>
       </Box>

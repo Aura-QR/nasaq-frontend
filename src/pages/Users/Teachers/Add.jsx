@@ -22,8 +22,17 @@ import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import TeacherForm from "@/components/Teachers/TeacherForm";
 import TeacherFormActions from "@/components/Teachers/TeacherFormActions";
+import GeneratedCredentialsDialog from "@/components/GeneratedCredentialsDialog/GeneratedCredentialsDialog";
 
 import { addTeacher } from "@/APIs/users/teachers";
+
+import {
+  extractLoginIdentifier,
+  generateTemporaryPassword,
+  getApiResponseMessage,
+  getCreatedEntityId,
+  isFailedApiResponse,
+} from "@/utils/helpers/credentials";
 
 const Add = () => {
   const {
@@ -45,7 +54,35 @@ const Add = () => {
   const [loading, setLoading] =
     useState(false);
 
+  const [
+    createdCredentials,
+    setCreatedCredentials,
+  ] = useState(null);
+
   const navigate = useNavigate();
+
+  const goToTeacherProfile = () => {
+    const teacherId =
+      createdCredentials?.teacherId;
+
+    navigate(
+      teacherId
+        ? `/users/teachers/${teacherId}`
+        : "/users/teachers",
+      {
+        replace: true,
+      }
+    );
+  };
+
+  const goToTeachersList = () => {
+    navigate(
+      "/users/teachers",
+      {
+        replace: true,
+      }
+    );
+  };
 
   const onSubmit = async (formData) => {
     if (selectedSubjects.length === 0) {
@@ -58,37 +95,62 @@ const Add = () => {
     try {
       setLoading(true);
 
+      /*
+       * CreateTeacherDto يقبل password،
+       * ولا يعرّف username منفصلًا.
+       */
+      const generatedPassword =
+        generateTemporaryPassword();
+
       const payload = {
         ...formData,
-        isActive: formData.isActive == 1,
-        subjectIds: selectedSubjects,
+        password:
+          generatedPassword,
+        isActive:
+          formData.isActive == 1,
+        subjectIds:
+          selectedSubjects,
       };
 
       const response =
         await addTeacher(payload);
 
-      if (!response?.status) {
+      if (
+        isFailedApiResponse(
+          response
+        )
+      ) {
         toast.error(
-          response?.message ||
-            response ||
+          getApiResponseMessage(
+            response,
             "حدث خطأ أثناء إضافة المعلم"
+          )
         );
         return;
       }
 
-      toast.success(
-        "تمت إضافة المعلم بنجاح"
-      );
-
       const teacherId =
-        response?.data?.teacher?._id ||
-        response?.data?._id;
+        getCreatedEntityId(
+          response,
+          "teacher"
+        );
 
-      navigate(
-        `/users/teachers/${teacherId}`,
-        {
-          replace: true,
-        }
+      const username =
+        extractLoginIdentifier(
+          response,
+          formData?.email,
+          "teacher"
+        );
+
+      setCreatedCredentials({
+        teacherId,
+        username,
+        password:
+          generatedPassword,
+      });
+
+      toast.success(
+        "تمت إضافة المعلم وإنشاء بيانات الدخول"
       );
     } catch (error) {
       toast.error(
@@ -274,6 +336,30 @@ const Add = () => {
           <TeacherFormActions
             loading={loading}
             submitLabel="حفظ المعلم"
+          />
+
+          <GeneratedCredentialsDialog
+            open={
+              Boolean(
+                createdCredentials
+              )
+            }
+            accountLabel="حساب المعلم"
+            username={
+              createdCredentials?.username ||
+              ""
+            }
+            password={
+              createdCredentials?.password ||
+              ""
+            }
+            profileLabel="فتح ملف المعلم"
+            onOpenProfile={
+              goToTeacherProfile
+            }
+            onBackToList={
+              goToTeachersList
+            }
           />
         </Stack>
       </Box>

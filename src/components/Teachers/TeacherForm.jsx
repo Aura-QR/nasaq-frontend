@@ -229,9 +229,9 @@ const TeacherForm = ({
       <FormSection
         icon={<PersonOutlineRounded />}
         title="البيانات الأساسية"
-        description="اسم المعلم وبيانات التواصل والدخول."
+        description="اسم المعلم وبيانات التواصل، وسيتم إنشاء كلمة مرور تلقائيًا بعد الحفظ."
       >
-        <Grid item xs={12} sm={6} lg={3}>
+        <Grid item xs={12} sm={6} lg={4}>
           <Input
             register={register}
             registerName="name"
@@ -242,7 +242,7 @@ const TeacherForm = ({
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} lg={3}>
+        <Grid item xs={12} sm={6} lg={4}>
           <Input
             register={register}
             registerName="email"
@@ -254,26 +254,7 @@ const TeacherForm = ({
           />
         </Grid>
 
-        {!isEdit && (
-          <Grid item xs={12} sm={6} lg={3}>
-            <Input
-              register={register}
-              registerName="password"
-              error={errors.password?.message}
-              label="كلمة المرور"
-              required
-              type="password"
-              autoComplete="new-password"
-            />
-          </Grid>
-        )}
-
-        <Grid
-          item
-          xs={12}
-          sm={6}
-          lg={isEdit ? 6 : 3}
-        >
+        <Grid item xs={12} sm={6} lg={4}>
           <Input
             register={register}
             registerName="phoneNumber"

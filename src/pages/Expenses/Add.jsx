@@ -12,11 +12,10 @@ import Input from "@/components/Input/Input";
 import Select from "@/components/Select/Select";
 import FinancialFormShell from "@/components/financial/FinancialFormShell";
 
-import Years from "@/utils/constants/Years";
 import { getCurrencyFieldLabel } from "@/utils/financial/financialUtils";
 import { useExpenseCategories } from "@/utils/hooks/apis/expenses/useExpenseCategories";
+import { useAcademicYears } from "@/utils/hooks/apis/useAcademicYears";
 import usePermissions from "@/utils/hooks/usePermissions";
-
 
 const getCategoryItems = (value, depth = 0) => {
   if (!value || depth > 5) {
@@ -38,10 +37,7 @@ const getCategoryItems = (value, depth = 0) => {
     "categories",
     "data",
   ]) {
-    const items = getCategoryItems(
-      value?.[key],
-      depth + 1
-    );
+    const items = getCategoryItems(value?.[key], depth + 1);
 
     if (items.length > 0) {
       return items;
@@ -54,17 +50,8 @@ const getCategoryItems = (value, depth = 0) => {
 const normalizeCategoryOptions = (value) =>
   getCategoryItems(value)
     .map((item) => {
-      const id =
-        item?._id ||
-        item?.id ||
-        item?.value ||
-        "";
-
-      const label =
-        item?.name ||
-        item?.label ||
-        item?.title ||
-        "";
+      const id = item?._id || item?.id || item?.value || "";
+      const label = item?.name || item?.label || item?.title || "";
 
       if (!id || !label) {
         return null;
@@ -93,25 +80,47 @@ const ExpensesAddPage = () => {
     handleSubmit,
     formState: { errors },
   } = useForm({
-    defaultValues: { date: today },
+    defaultValues: {
+      date: today,
+      academicYear: "",
+    },
   });
 
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
   const { categories = [] } = useExpenseCategories();
-  const permissions =
-    usePermissions("expenses");
+  const {
+    academicYears = [],
+    loadingAcademicYears,
+  } = useAcademicYears();
+
+  const permissions = usePermissions("expenses");
 
   const categoryOptions = useMemo(
     () => normalizeCategoryOptions(categories),
     [categories]
   );
 
+  /*
+   * Expenses API currently expects academicYear as a string,
+   * so the option id/value is the academic year name, not Mongo _id.
+   */
+  const academicYearOptions = useMemo(
+    () =>
+      academicYears.map((year) => ({
+        id: year.name,
+        name:
+          year.status === "active"
+            ? `${year.name} - الحالية`
+            : year.name,
+      })),
+    [academicYears]
+  );
+
   const onSubmit = async (formValues) => {
     if (!permissions?.add) {
-      toast.error(
-        "ليس لديك صلاحية إضافة المصروفات"
-      );
+      toast.error("ليس لديك صلاحية إضافة المصروفات");
       return;
     }
 
@@ -221,10 +230,15 @@ const ExpensesAddPage = () => {
               <Select
                 register={register}
                 registerName="academicYear"
-                data={Years}
+                data={academicYearOptions}
+                name="name"
                 error={errors.academicYear?.message}
                 label="السنة الدراسية"
                 defaultSelect="غير محدد"
+                disabled={
+                  loadingAcademicYears ||
+                  academicYearOptions.length === 0
+                }
               />
             </Grid>
 

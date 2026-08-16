@@ -33,9 +33,9 @@ import FinancialPageHeader from "@/components/financial/FinancialPageHeader";
 import FinancialStatCard from "@/components/financial/FinancialStatCard";
 import FinancialEmptyState from "@/components/financial/FinancialEmptyState";
 
-import Years from "@/utils/constants/Years";
 import { useExpenses } from "@/utils/hooks/apis/expenses/useExpenses";
 import { useExpenseCategories } from "@/utils/hooks/apis/expenses/useExpenseCategories";
+import { useAcademicYears } from "@/utils/hooks/apis/useAcademicYears";
 import useDebounce from "@/utils/hooks/useDebounce";
 import usePermissions from "@/utils/hooks/usePermissions";
 import {
@@ -61,8 +61,6 @@ const BODY = [
   "notes",
 ];
 
-
-
 const getCategoryItems = (value, depth = 0) => {
   if (!value || depth > 5) {
     return [];
@@ -83,10 +81,7 @@ const getCategoryItems = (value, depth = 0) => {
     "categories",
     "data",
   ]) {
-    const items = getCategoryItems(
-      value?.[key],
-      depth + 1
-    );
+    const items = getCategoryItems(value?.[key], depth + 1);
 
     if (items.length > 0) {
       return items;
@@ -99,17 +94,8 @@ const getCategoryItems = (value, depth = 0) => {
 const normalizeCategoryOptions = (value) =>
   getCategoryItems(value)
     .map((item) => {
-      const id =
-        item?._id ||
-        item?.id ||
-        item?.value ||
-        "";
-
-      const label =
-        item?.name ||
-        item?.label ||
-        item?.title ||
-        "";
+      const id = item?._id || item?.id || item?.value || "";
+      const label = item?.name || item?.label || item?.title || "";
 
       if (!id || !label) {
         return null;
@@ -126,6 +112,21 @@ const normalizeCategoryOptions = (value) =>
     })
     .filter(Boolean);
 
+const getExpenseAcademicYearName = (value) => {
+  if (!value) return "—";
+
+  if (typeof value === "object") {
+    return (
+      value?.name ||
+      value?.label ||
+      value?.title ||
+      "—"
+    );
+  }
+
+  return String(value);
+};
+
 const ExpensesListPage = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -136,11 +137,29 @@ const ExpensesListPage = () => {
 
   const debouncedName = useDebounce(name, 500);
   const permissions = usePermissions("expenses");
+
   const { categories = [] } = useExpenseCategories();
+  const { academicYears = [] } = useAcademicYears();
 
   const categoryOptions = useMemo(
     () => normalizeCategoryOptions(categories),
     [categories]
+  );
+
+  /*
+   * Expense filtering currently uses academicYear string,
+   * therefore value is year.name rather than year.id.
+   */
+  const academicYearOptions = useMemo(
+    () =>
+      academicYears.map((year) => ({
+        value: year.name,
+        label:
+          year.status === "active"
+            ? `${year.name} - الحالية`
+            : year.name,
+      })),
+    [academicYears]
   );
 
   const filters = useMemo(
@@ -176,11 +195,16 @@ const ExpensesListPage = () => {
       expenses.map((item) => ({
         id: item?._id || item?.id,
         name: item?.name || "—",
-        categoryName: item?.categoryId?.name || "—",
+        categoryName:
+          item?.categoryId?.name ||
+          item?.category?.name ||
+          "—",
         amount: formatMoney(item?.amount),
         amountRaw: Number(item?.amount || 0),
         date: formatDate(item?.date),
-        academicYear: item?.academicYear || "—",
+        academicYear: getExpenseAcademicYearName(
+          item?.academicYear
+        ),
         notes: item?.notes || "—",
       })),
     [expenses]
@@ -190,7 +214,9 @@ const ExpensesListPage = () => {
 
   const stats = useMemo(
     () => ({
-      total: currentPagination?.totalDocs ?? mappedExpenses.length,
+      total:
+        currentPagination?.totalDocs ??
+        mappedExpenses.length,
       visible: mappedExpenses.length,
       totalAmount: mappedExpenses.reduce(
         (sum, item) => sum + item.amountRaw,
@@ -198,14 +224,24 @@ const ExpensesListPage = () => {
       ),
       categoriesCount: new Set(
         expenses
-          .map((item) => item?.categoryId?._id || item?.categoryId?.id)
+          .map(
+            (item) =>
+              item?.categoryId?._id ||
+              item?.categoryId?.id ||
+              item?.category?._id ||
+              item?.category?.id
+          )
           .filter(Boolean)
       ).size,
     }),
     [mappedExpenses, expenses, currentPagination]
   );
 
-  const activeFiltersCount = [name, categoryId, academicYear].filter(Boolean).length;
+  const activeFiltersCount = [
+    name,
+    categoryId,
+    academicYear,
+  ].filter(Boolean).length;
 
   const resetFilters = () => {
     setName("");
@@ -216,9 +252,7 @@ const ExpensesListPage = () => {
 
   const handleDelete = async (id, setActive) => {
     if (!permissions?.delete) {
-      toast.error(
-        "ليس لديك صلاحية حذف المصروفات"
-      );
+      toast.error("ليس لديك صلاحية حذف المصروفات");
       return;
     }
 
@@ -226,17 +260,25 @@ const ExpensesListPage = () => {
 
     if (response?.status) {
       toast.success("تم حذف المصروف بنجاح");
+
       setExpenses((previous) =>
-        previous.filter((item) => (item?._id || item?.id) !== id)
+        previous.filter(
+          (item) => (item?._id || item?.id) !== id
+        )
       );
+
       setLocalPagination((previous) =>
         previous
           ? {
               ...previous,
-              totalDocs: Math.max(Number(previous.totalDocs || 1) - 1, 0),
+              totalDocs: Math.max(
+                Number(previous.totalDocs || 1) - 1,
+                0
+              ),
             }
           : previous
       );
+
       setActive(false);
     } else {
       toast.error(
@@ -270,7 +312,8 @@ const ExpensesListPage = () => {
     </Button>
   ) : null;
 
-  const showEmptyState = !loading && mappedExpenses.length === 0;
+  const showEmptyState =
+    !loading && mappedExpenses.length === 0;
 
   return (
     <Container>
@@ -287,7 +330,10 @@ const ExpensesListPage = () => {
         <FinancialPageHeader
           title="إدارة المصروفات"
           description="سجّل مصروفات المدرسة وتابع تصنيفاتها وقيمتها والسنة الدراسية."
-          count={currentPagination?.totalDocs ?? mappedExpenses.length}
+          count={
+            currentPagination?.totalDocs ??
+            mappedExpenses.length
+          }
           actions={addAction}
         />
 
@@ -307,16 +353,19 @@ const ExpensesListPage = () => {
             value={stats.total}
             icon={<ReceiptLongRounded />}
           />
+
           <FinancialStatCard
             label="الظاهر في الصفحة"
             value={stats.visible}
             icon={<VisibilityRounded />}
           />
+
           <FinancialStatCard
             label="إجمالي مبالغ الصفحة"
             value={formatMoney(stats.totalAmount)}
             icon={<PaymentsRounded />}
           />
+
           <FinancialStatCard
             label="التصنيفات في الصفحة"
             value={stats.categoriesCount}
@@ -370,6 +419,7 @@ const ExpensesListPage = () => {
               >
                 البحث والتصفية
               </Typography>
+
               <Typography
                 sx={{
                   mt: 0.2,
@@ -440,7 +490,7 @@ const ExpensesListPage = () => {
               label="السنة الدراسية"
               icon={SchoolRounded}
               allLabel="كل السنوات"
-              options={Years.map((year) => ({ value: year, label: year }))}
+              options={academicYearOptions}
             />
           </Box>
         </Paper>
@@ -471,6 +521,7 @@ const ExpensesListPage = () => {
             >
               سجل المصروفات
             </Typography>
+
             <Typography
               sx={{
                 mt: 0.25,
@@ -484,7 +535,13 @@ const ExpensesListPage = () => {
 
           {showEmptyState ? (
             <FinancialEmptyState
-              icon={activeFiltersCount ? <SearchOffRounded /> : <ReceiptLongRounded />}
+              icon={
+                activeFiltersCount ? (
+                  <SearchOffRounded />
+                ) : (
+                  <ReceiptLongRounded />
+                )
+              }
               title={
                 activeFiltersCount
                   ? "لا توجد مصروفات مطابقة للفلاتر"
@@ -495,9 +552,21 @@ const ExpensesListPage = () => {
                   ? "غيّر الفلاتر أو امسحها لعرض نتائج أخرى."
                   : "أضف أول مصروف ليظهر في سجل المصروفات."
               }
-              actionLabel={activeFiltersCount ? "مسح الفلاتر" : undefined}
-              actionIcon={activeFiltersCount ? <RestartAltRounded /> : undefined}
-              onAction={activeFiltersCount ? resetFilters : undefined}
+              actionLabel={
+                activeFiltersCount
+                  ? "مسح الفلاتر"
+                  : undefined
+              }
+              actionIcon={
+                activeFiltersCount
+                  ? <RestartAltRounded />
+                  : undefined
+              }
+              onAction={
+                activeFiltersCount
+                  ? resetFilters
+                  : undefined
+              }
             />
           ) : (
             <Box sx={{ p: { xs: 0.7, md: 1 } }}>
@@ -507,19 +576,24 @@ const ExpensesListPage = () => {
                 loading={loading}
                 edit={permissions?.edit}
                 body={BODY}
-                deleteFn={permissions?.delete ? handleDelete : undefined}
+                deleteFn={
+                  permissions?.delete
+                    ? handleDelete
+                    : undefined
+                }
               />
 
-              {currentPagination && mappedExpenses.length > 0 && (
-                <PaginationControls
-                  pagination={currentPagination}
-                  page={page}
-                  onPageChange={setPage}
-                  limit={limit}
-                  onLimitChange={setLimit}
-                  label="عدد المصروفات"
-                />
-              )}
+              {currentPagination &&
+                mappedExpenses.length > 0 && (
+                  <PaginationControls
+                    pagination={currentPagination}
+                    page={page}
+                    onPageChange={setPage}
+                    limit={limit}
+                    onLimitChange={setLimit}
+                    label="عدد المصروفات"
+                  />
+                )}
             </Box>
           )}
         </Paper>
