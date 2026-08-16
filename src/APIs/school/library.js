@@ -1,4 +1,4 @@
-﻿import { api } from "../Axios";
+import { api } from "../Axios";
 
 const ENDPOINT = "/library";
 const ACADEMIC_YEARS_ENDPOINT = "/academic-years";
@@ -450,6 +450,34 @@ export const updateLibrary =
 export const removeLibrary =
   deleteLibrary;
 
+export const fetchLibraryBySubject = async (
+  subjectId
+) => {
+  const id = normalizeId(subjectId);
+
+  if (!id) {
+    return {
+      status: false,
+      message: "معرّف المادة غير موجود",
+    };
+  }
+
+  try {
+    const response = await api.get(
+      `${ENDPOINT}/by-subject/${id}`
+    );
+    return normalizeSuccess(response);
+  } catch (error) {
+    if (error?.response?.status === 404) {
+      return fetchLibraries({ subjectId: id });
+    }
+    return normalizeFailure(
+      error,
+      "تعذر تحميل مصادر المادة"
+    );
+  }
+};
+
 /* =========================================================
    Default Export
 ========================================================= */
@@ -460,6 +488,8 @@ export default {
   fetchLibraryList,
 
   fetchSingleLibrary,
+
+  fetchLibraryBySubject,
 
   fetchLibraryAcademicYears,
 

@@ -52,6 +52,7 @@ import { toast } from "react-toastify";
 import {
   deleteExam,
   fetchExams,
+  fetchTeacherExams,
 } from "@/APIs/school/exams";
 
 import nasaqLogo from "../../images/wadq-logo.png";
@@ -400,7 +401,7 @@ const TeacherExams = () => {
     setError("");
 
     try {
-      const response = await fetchExams({
+      const response = await fetchTeacherExams({
         page: 1,
         limit: 500,
       });

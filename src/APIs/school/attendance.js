@@ -1,4 +1,4 @@
-﻿import { api } from "../Axios";
+import { api } from "../Axios";
 
 const ENDPOINT = "/attendance";
 
@@ -89,8 +89,34 @@ export const deleteAttendance = async (
   }
 };
 
+export const fetchLectureAttendanceSheet = async (
+  lectureId,
+  date
+) => {
+  if (!lectureId) {
+    return "معرّف الحصة غير موجود";
+  }
+
+  try {
+    const response = await api.get(
+      `${ENDPOINT}/lecture/${lectureId}/sheet`,
+      {
+        params: date ? { date } : {},
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    return getErrorMessage(
+      error,
+      "تعذر تحميل كشف الحضور"
+    );
+  }
+};
+
 export default {
   fetchAttendance,
+  fetchLectureAttendanceSheet,
   addAttendance,
   editAttendance,
   deleteAttendance,

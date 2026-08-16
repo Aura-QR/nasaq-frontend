@@ -66,12 +66,15 @@ export const detectTeacherAttendanceIp = async () => {
   }
 };
 
-export const checkInTeacherAttendance = async ({ lat, lng }) => {
+export const checkInTeacherAttendance = async ({ lat, lng, mockLocationSuspected }) => {
   try {
     // لا نرسل checkInAt هنا نهائيًا؛ السيرفر هو الذي يسجل الوقت.
     const response = await api.post(`${ENDPOINT}/check-in`, {
       lat,
       lng,
+      ...(mockLocationSuspected !== undefined
+        ? { mockLocationSuspected: Boolean(mockLocationSuspected) }
+        : {}),
     });
 
     return response.data;

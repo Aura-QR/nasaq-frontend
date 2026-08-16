@@ -1,4 +1,4 @@
-﻿import { api } from "../Axios";
+import { api } from "../Axios";
 
 const ENDPOINT = "/exams";
 
@@ -19,6 +19,21 @@ export const fetchExams = async (filters = {}) => {
     return response.data;
   } catch (error) {
     return getErrorMessage(error, "تعذر تحميل الاختبارات");
+  }
+};
+
+export const fetchTeacherExams = async (filters = {}) => {
+  try {
+    const response = await api.get(`${ENDPOINT}/teacher/me`, {
+      params: filters,
+    });
+    return response.data;
+  } catch (error) {
+    // Fallback if endpoint is unavailable on legacy backend
+    if (error?.response?.status === 404) {
+      return fetchExams(filters);
+    }
+    return getErrorMessage(error, "تعذر تحميل اختبارات المعلم");
   }
 };
 
@@ -176,6 +191,7 @@ export const overrideExamGrade = gradeExamStudent;
 
 export default {
   fetchExams,
+  fetchTeacherExams,
   fetchSingleExam,
   addExam,
   editExam,
