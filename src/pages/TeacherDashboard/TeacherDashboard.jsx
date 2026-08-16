@@ -1372,10 +1372,11 @@ const TeacherDashboard = () => {
       <Box
         component="main"
         sx={{
-          width: "min(100%, 1440px)",
+          width: "100%",
+          maxWidth: "1680px",
           mx: "auto",
-          px: { xs: 1.5, md: 3 },
-          py: { xs: 1.5, md: 2 },
+          px: { xs: 2, sm: 3, md: 4, lg: 5 },
+          py: { xs: 2, sm: 2.5, md: 3.5 },
         }}
       >
         {error && (
@@ -1389,15 +1390,21 @@ const TeacherDashboard = () => {
                   onClick={() =>
                     loadDashboard()
                   }
+                  sx={{
+                    fontSize: "12.5px",
+                    fontWeight: 700,
+                  }}
                 >
                   إعادة المحاولة
                 </Button>
               ) : null
             }
             sx={{
-              mb: 1.5,
-              borderRadius: "14px",
-              fontSize: "11px",
+              mb: 2,
+              borderRadius: "16px",
+              fontSize: "13.5px",
+              py: 1,
+              px: 2,
             }}
           >
             {error}
@@ -1409,21 +1416,21 @@ const TeacherDashboard = () => {
           sx={{
             position: "relative",
             overflow: "hidden",
-            mb: 1.25,
-            p: { xs: 1.4, sm: 1.6, md: 1.8 },
-            borderRadius: "18px",
+            mb: { xs: 2, md: 2.5 },
+            p: { xs: 2.2, sm: 2.8, md: 3.2 },
+            borderRadius: "22px",
             color: "var(--color-white)",
             background:
               "linear-gradient(135deg, var(--color-navy-deep), var(--color-navy) 58%, var(--color-navy-light))",
             boxShadow:
               "0 18px 42px rgba(18,47,77,0.18)",
             "&::before": {
-              content: '\"\"',
+              content: '""',
               position: "absolute",
-              width: 250,
-              height: 250,
-              top: -155,
-              left: -70,
+              width: 320,
+              height: 320,
+              top: -180,
+              left: -90,
               border:
                 "1px solid rgba(242,215,146,0.18)",
               borderRadius: "50%",
@@ -1434,7 +1441,7 @@ const TeacherDashboard = () => {
             direction="row"
             alignItems="center"
             justifyContent="space-between"
-            gap={1}
+            gap={1.5}
             sx={{
               position: "relative",
               zIndex: 2,
@@ -1443,14 +1450,14 @@ const TeacherDashboard = () => {
           >
             <Box
               sx={{
-                height: 36,
-                minWidth: { xs: 58, sm: 72 },
-                px: { xs: 0.7, sm: 0.9 },
+                height: { xs: 40, sm: 46 },
+                minWidth: { xs: 68, sm: 88 },
+                px: { xs: 1, sm: 1.25 },
                 display: "grid",
                 placeItems: "center",
-                borderRadius: "11px",
+                borderRadius: "13px",
                 backgroundColor:
-                  "rgba(255,252,247,0.94)",
+                  "rgba(255,252,247,0.95)",
                 border:
                   "1px solid rgba(242,215,146,0.26)",
                 boxShadow:
@@ -1462,8 +1469,8 @@ const TeacherDashboard = () => {
                 src={nasaqLogo}
                 alt="شعار منصة نسق"
                 sx={{
-                  width: { xs: 50, sm: 62 },
-                  height: 29,
+                  width: { xs: 58, sm: 74 },
+                  height: { xs: 30, sm: 36 },
                   objectFit: "contain",
                 }}
               />
@@ -1472,12 +1479,12 @@ const TeacherDashboard = () => {
             <Stack
               direction="row"
               alignItems="center"
-              gap={0.7}
+              gap={1}
             >
               <Stack
                 direction="row"
                 alignItems="center"
-                gap={0.8}
+                gap={1.2}
                 role="button"
                 tabIndex={0}
                 aria-label="فتح الملف الشخصي"
@@ -1489,17 +1496,17 @@ const TeacherDashboard = () => {
                   }
                 }}
                 sx={{
-                  minHeight: 36,
-                  px: { xs: 0.55, sm: 0.75 },
-                  borderRadius: "11px",
+                  minHeight: 44,
+                  px: { xs: 1, sm: 1.5 },
+                  borderRadius: "14px",
                   backgroundColor:
                     "rgba(255,255,255,0.08)",
                   border:
-                    "1px solid rgba(255,255,255,0.12)",
+                    "1px solid rgba(255,255,255,0.14)",
                   cursor: "pointer",
                   transition: "background-color .18s ease, transform .18s ease",
                   "&:hover": {
-                    backgroundColor: "rgba(255,255,255,0.14)",
+                    backgroundColor: "rgba(255,255,255,0.15)",
                     transform: "translateY(-1px)",
                   },
                   "&:focus-visible": {
@@ -1510,13 +1517,13 @@ const TeacherDashboard = () => {
               >
                 <Avatar
                   sx={{
-                    width: 28,
-                    height: 28,
+                    width: 34,
+                    height: 34,
                     color:
                       "var(--color-navy-deep)",
                     backgroundColor:
                       "var(--color-gold-light)",
-                    fontSize: "13px",
+                    fontSize: "15px",
                     fontWeight: 800,
                   }}
                 >
@@ -1531,14 +1538,14 @@ const TeacherDashboard = () => {
                       xs: "none",
                       sm: "block",
                     },
-                    maxWidth: 180,
+                    maxWidth: 220,
                   }}
                 >
                   <Typography
                     noWrap
                     sx={{
                       color: "var(--color-white)",
-                      fontSize: "9px",
+                      fontSize: "13.5px",
                       fontWeight: 800,
                     }}
                   >
@@ -1547,8 +1554,8 @@ const TeacherDashboard = () => {
                   <Typography
                     sx={{
                       color:
-                        "rgba(255,255,255,0.62)",
-                      fontSize: "7.5px",
+                        "rgba(255,255,255,0.68)",
+                      fontSize: "11.5px",
                       fontWeight: 700,
                     }}
                   >
@@ -1568,26 +1575,26 @@ const TeacherDashboard = () => {
                       })
                     }
                     sx={{
-                      width: 34,
-                      height: 34,
+                      width: 42,
+                      height: 42,
                       color: "var(--color-white)",
                       backgroundColor:
                         "rgba(255,255,255,0.08)",
                       border:
-                        "1px solid rgba(255,255,255,0.12)",
+                        "1px solid rgba(255,255,255,0.14)",
                       "&:hover": {
                         backgroundColor:
-                          "rgba(255,255,255,0.14)",
+                          "rgba(255,255,255,0.16)",
                       },
                     }}
                   >
                     {refreshing ? (
                       <CircularProgress
-                        size={17}
+                        size={20}
                         color="inherit"
                       />
                     ) : (
-                      <RefreshRounded />
+                      <RefreshRounded sx={{ fontSize: 22 }} />
                     )}
                   </IconButton>
                 </span>
@@ -1598,20 +1605,20 @@ const TeacherDashboard = () => {
                   aria-label="تسجيل الخروج"
                   onClick={handleLogout}
                   sx={{
-                    width: 34,
-                    height: 34,
+                    width: 42,
+                    height: 42,
                     color: "#ffd2d2",
                     backgroundColor:
-                      "rgba(201,79,79,0.12)",
+                      "rgba(201,79,79,0.14)",
                     border:
-                      "1px solid rgba(255,210,210,0.16)",
+                      "1px solid rgba(255,210,210,0.18)",
                     "&:hover": {
                       backgroundColor:
-                        "rgba(201,79,79,0.20)",
+                        "rgba(201,79,79,0.24)",
                     },
                   }}
                 >
-                  <LogoutRounded />
+                  <LogoutRounded sx={{ fontSize: 21 }} />
                 </IconButton>
               </Tooltip>
             </Stack>
@@ -1627,27 +1634,29 @@ const TeacherDashboard = () => {
               md: "center",
             }}
             justifyContent="space-between"
-            gap={1.4}
+            gap={2}
             sx={{
               position: "relative",
               zIndex: 1,
-              mt: 1.15,
+              mt: { xs: 1.8, md: 2.2 },
             }}
           >
             <Box>
               <Chip
-                icon={<AutoAwesomeRounded />}
+                icon={<AutoAwesomeRounded sx={{ fontSize: "16px !important" }} />}
                 label="لوحة المعلم"
                 size="small"
                 sx={{
-                  mb: 0.65,
+                  mb: 1,
+                  py: 0.6,
+                  px: 0.5,
                   color:
                     "var(--color-gold-light)",
                   backgroundColor:
-                    "rgba(255,255,255,0.09)",
+                    "rgba(255,255,255,0.10)",
                   border:
-                    "1px solid rgba(242,215,146,0.20)",
-                  fontSize: "10px",
+                    "1px solid rgba(242,215,146,0.24)",
+                  fontSize: "12px",
                   fontWeight: 800,
                   "& .MuiChip-icon": {
                     color:
@@ -1661,12 +1670,13 @@ const TeacherDashboard = () => {
                 sx={{
                   color: "var(--color-white)",
                   fontSize: {
-                    xs: "22px",
-                    sm: "27px",
-                    md: "30px",
+                    xs: "24px",
+                    sm: "28px",
+                    md: "32px",
+                    lg: "36px",
                   },
-                  fontWeight: 800,
-                  lineHeight: 1.35,
+                  fontWeight: 900,
+                  lineHeight: 1.3,
                 }}
               >
                 {greeting}، {teacherName}
@@ -1674,18 +1684,18 @@ const TeacherDashboard = () => {
 
               <Typography
                 sx={{
-                  mt: 0.3,
-                  maxWidth: 620,
+                  mt: 0.6,
+                  maxWidth: 720,
                   color:
-                    "rgba(255,255,255,0.74)",
+                    "rgba(255,255,255,0.80)",
                   fontSize: {
-                    xs: "10px",
-                    sm: "11px",
+                    xs: "13px",
+                    sm: "14.5px",
                   },
-                  lineHeight: 1.55,
+                  lineHeight: 1.6,
                 }}
               >
-                تابع حصصك وتحضيراتك، وابدأ يومك من مكان واحد.
+                تابع حصصك وتحضيراتك، وابدأ يومك من مكان واحد بكل سهولة.
               </Typography>
 
               <Stack
@@ -1693,8 +1703,8 @@ const TeacherDashboard = () => {
                   xs: "column",
                   sm: "row",
                 }}
-                gap={1}
-                sx={{ mt: 1.05 }}
+                gap={1.2}
+                sx={{ mt: 1.8 }}
               >
                 <Button
                   variant="contained"
@@ -1705,16 +1715,20 @@ const TeacherDashboard = () => {
                     )
                   }
                   sx={{
-                    minHeight: 37,
-                    px: 1.6,
-                    borderRadius: "10px",
+                    minHeight: 44,
+                    px: 2.4,
+                    borderRadius: "12px",
                     color:
                       "var(--color-navy-deep)",
                     backgroundColor:
                       "var(--color-gold-light)",
-                    fontSize: "10px",
+                    fontSize: "13.5px",
                     fontWeight: 800,
                     textTransform: "none",
+                    boxShadow: "0 6px 16px rgba(211,164,79,0.25)",
+                    "&:hover": {
+                      backgroundColor: "#e8be6b",
+                    },
                   }}
                 >
                   اختر حصة للتحضير
@@ -1727,20 +1741,20 @@ const TeacherDashboard = () => {
                     navigate("/teacher/schedule")
                   }
                   sx={{
-                    minHeight: 37,
-                    px: 1.6,
-                    borderRadius: "10px",
+                    minHeight: 44,
+                    px: 2.2,
+                    borderRadius: "12px",
                     color: "var(--color-white)",
                     borderColor:
-                      "rgba(255,255,255,0.28)",
-                    fontSize: "11px",
+                      "rgba(255,255,255,0.32)",
+                    fontSize: "13.5px",
                     fontWeight: 800,
                     textTransform: "none",
                     "&:hover": {
                       borderColor:
                         "var(--color-gold-light)",
                       backgroundColor:
-                        "rgba(255,255,255,0.07)",
+                        "rgba(255,255,255,0.10)",
                     },
                   }}
                 >
@@ -1754,33 +1768,34 @@ const TeacherDashboard = () => {
               sx={{
                 width: {
                   xs: "100%",
-                  md: 270,
+                  md: 330,
+                  lg: 350,
                 },
-                p: 1.15,
+                p: { xs: 1.8, md: 2.2 },
                 border:
-                  "1px solid rgba(255,255,255,0.14)",
-                borderRadius: "14px",
+                  "1px solid rgba(255,255,255,0.16)",
+                borderRadius: "18px",
                 color: "var(--color-white)",
                 backgroundColor:
-                  "rgba(255,255,255,0.075)",
-                backdropFilter: "blur(10px)",
+                  "rgba(255,255,255,0.08)",
+                backdropFilter: "blur(12px)",
               }}
             >
               <Stack
                 direction="row"
                 alignItems="center"
-                spacing={0.8}
+                spacing={1}
               >
                 <ScheduleRounded
                   sx={{
                     color:
                       "var(--color-gold-light)",
-                    fontSize: 18,
+                    fontSize: 22,
                   }}
                 />
                 <Typography
                   sx={{
-                    fontSize: "11px",
+                    fontSize: "14px",
                     fontWeight: 800,
                   }}
                 >
@@ -1790,10 +1805,11 @@ const TeacherDashboard = () => {
 
               <Typography
                 sx={{
-                  mt: 0.35,
+                  mt: 0.5,
                   color:
-                    "rgba(255,255,255,0.68)",
-                  fontSize: "10px",
+                    "rgba(255,255,255,0.72)",
+                  fontSize: "13px",
+                  fontWeight: 600,
                 }}
               >
                 {todayLabel}
@@ -1801,9 +1817,9 @@ const TeacherDashboard = () => {
 
               <Divider
                 sx={{
-                  my: 0.75,
+                  my: 1.2,
                   borderColor:
-                    "rgba(255,255,255,0.12)",
+                    "rgba(255,255,255,0.14)",
                 }}
               />
 
@@ -1812,14 +1828,15 @@ const TeacherDashboard = () => {
                   direction="row"
                   alignItems="center"
                   justifyContent="space-between"
-                  gap={1}
+                  gap={1.2}
                 >
                   <Box sx={{ minWidth: 0 }}>
                     <Typography
                       sx={{
                         color:
-                          "rgba(255,255,255,0.62)",
-                        fontSize: "9px",
+                          "rgba(255,255,255,0.65)",
+                        fontSize: "11.5px",
+                        fontWeight: 600,
                       }}
                     >
                       أول حصة في جدول اليوم
@@ -1827,8 +1844,8 @@ const TeacherDashboard = () => {
                     <Typography
                       noWrap
                       sx={{
-                        mt: 0.35,
-                        fontSize: "12px",
+                        mt: 0.4,
+                        fontSize: "15px",
                         fontWeight: 800,
                       }}
                     >
@@ -1840,10 +1857,10 @@ const TeacherDashboard = () => {
                     <Typography
                       noWrap
                       sx={{
-                        mt: 0.25,
+                        mt: 0.3,
                         color:
-                          "rgba(255,255,255,0.64)",
-                        fontSize: "9px",
+                          "rgba(255,255,255,0.70)",
+                        fontSize: "12.5px",
                       }}
                     >
                       {getClassData(nextLecture).name}
@@ -1855,11 +1872,12 @@ const TeacherDashboard = () => {
                     size="small"
                     sx={{
                       flexShrink: 0,
+                      height: 28,
                       color:
                         "var(--color-navy-deep)",
                       backgroundColor:
                         "var(--color-gold-light)",
-                      fontSize: "9px",
+                      fontSize: "12px",
                       fontWeight: 800,
                     }}
                   />
@@ -1868,8 +1886,8 @@ const TeacherDashboard = () => {
                 <Typography
                   sx={{
                     color:
-                      "rgba(255,255,255,0.72)",
-                    fontSize: "11px",
+                      "rgba(255,255,255,0.78)",
+                    fontSize: "13.5px",
                     fontWeight: 700,
                   }}
                 >
@@ -1882,13 +1900,13 @@ const TeacherDashboard = () => {
 
         <Box
           sx={{
-            mb: 1.5,
+            mb: { xs: 2, md: 3 },
             display: "grid",
             gridTemplateColumns: {
               xs: "repeat(2, minmax(0, 1fr))",
               lg: "repeat(4, minmax(0, 1fr))",
             },
-            gap: 1,
+            gap: { xs: 1.5, sm: 2, md: 2.5 },
           }}
         >
           {stats.map((stat) => (
@@ -1896,26 +1914,31 @@ const TeacherDashboard = () => {
               key={stat.title}
               elevation={0}
               sx={{
-                p: 1.3,
+                p: { xs: 1.8, sm: 2.2 },
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                gap: 1,
+                gap: 1.5,
                 minWidth: 0,
                 border:
                   "1px solid rgba(36,74,112,0.08)",
-                borderRadius: "16px",
+                borderRadius: "18px",
                 backgroundColor:
                   "var(--color-cream)",
                 boxShadow:
                   "0 8px 22px rgba(18,47,77,0.05)",
+                transition: "transform .2s ease, box-shadow .2s ease",
+                "&:hover": {
+                  transform: "translateY(-2px)",
+                  boxShadow: "0 12px 28px rgba(18,47,77,0.08)",
+                },
               }}
             >
               <Box sx={{ minWidth: 0 }}>
                 <Typography
                   sx={{
                     color: "var(--color-muted)",
-                    fontSize: "9.5px",
+                    fontSize: "13px",
                     fontWeight: 700,
                   }}
                 >
@@ -1923,14 +1946,16 @@ const TeacherDashboard = () => {
                 </Typography>
                 <Typography
                   sx={{
-                    mt: 0.25,
+                    mt: 0.4,
                     color:
                       "var(--color-navy-deep)",
                     fontSize: {
-                      xs: "20px",
-                      md: "23px",
+                      xs: "24px",
+                      sm: "28px",
+                      md: "32px",
                     },
-                    fontWeight: 800,
+                    fontWeight: 900,
+                    lineHeight: 1.1,
                   }}
                 >
                   {stat.value}
@@ -1938,9 +1963,10 @@ const TeacherDashboard = () => {
                 <Typography
                   noWrap
                   sx={{
-                    mt: 0.2,
+                    mt: 0.4,
                     color: "var(--color-muted)",
-                    fontSize: "8px",
+                    fontSize: "12px",
+                    fontWeight: 600,
                   }}
                 >
                   {stat.helper}
@@ -1949,8 +1975,8 @@ const TeacherDashboard = () => {
 
               <Box
                 sx={{
-                  width: 38,
-                  height: 38,
+                  width: { xs: 44, sm: 52 },
+                  height: { xs: 44, sm: 52 },
                   display: "grid",
                   placeItems: "center",
                   flexShrink: 0,
@@ -1960,9 +1986,9 @@ const TeacherDashboard = () => {
                     "var(--color-gold-soft)",
                   border:
                     "1px solid rgba(211,164,79,0.20)",
-                  borderRadius: "11px",
+                  borderRadius: "14px",
                   "& svg": {
-                    fontSize: 20,
+                    fontSize: { xs: 22, sm: 26 },
                   },
                 }}
               >
@@ -1977,15 +2003,15 @@ const TeacherDashboard = () => {
             display: "grid",
             gridTemplateColumns: {
               xs: "1fr",
-              lg: "minmax(0, 1.35fr) minmax(320px, 0.65fr)",
+              lg: "minmax(0, 1.4fr) minmax(360px, 0.6fr)",
             },
-            gap: 1.5,
+            gap: { xs: 2, md: 3 },
           }}
         >
-          <Stack spacing={1.5}>
+          <Stack spacing={{ xs: 2, md: 3 }}>
             <SectionCard
               title="أدواتك السريعة"
-              subtitle="انتقل مباشرة إلى أهم مهام المعلم"
+              subtitle="انتقل مباشرة إلى أهم مهام المعلم اليومية"
             >
               <Box
                 sx={{
@@ -1994,7 +2020,7 @@ const TeacherDashboard = () => {
                     xs: "1fr",
                     sm: "repeat(2, minmax(0, 1fr))",
                   },
-                  gap: 1,
+                  gap: 1.5,
                 }}
               >
                 {quickTools.map((tool) => (
@@ -2003,36 +2029,38 @@ const TeacherDashboard = () => {
                     type="button"
                     onClick={tool.onClick}
                     sx={{
-                      p: 1.25,
-                      minHeight: 78,
+                      p: 2,
+                      minHeight: 88,
                       display: "flex",
                       alignItems: "center",
                       justifyContent:
                         "flex-start",
-                      gap: 1.2,
+                      gap: 1.5,
                       textAlign: "right",
                       border:
                         "1px solid rgba(36,74,112,0.08)",
-                      borderRadius: "14px",
+                      borderRadius: "16px",
                       color:
                         "var(--color-navy-deep)",
                       backgroundColor:
                         "var(--color-white)",
                       textTransform: "none",
+                      transition: "all .2s ease",
                       "&:hover": {
                         borderColor:
-                          "rgba(211,164,79,0.38)",
+                          "rgba(211,164,79,0.42)",
                         backgroundColor:
                           "var(--color-gold-soft)",
                         transform:
-                          "translateY(-1px)",
+                          "translateY(-2px)",
+                        boxShadow: "0 8px 20px rgba(18,47,77,0.06)",
                       },
                     }}
                   >
                     <Box
                       sx={{
-                        width: 38,
-                        height: 38,
+                        width: 48,
+                        height: 48,
                         display: "grid",
                         placeItems: "center",
                         flexShrink: 0,
@@ -2040,9 +2068,9 @@ const TeacherDashboard = () => {
                           "var(--color-gold-dark)",
                         backgroundColor:
                           "var(--color-gold-soft)",
-                        borderRadius: "11px",
+                        borderRadius: "13px",
                         "& svg": {
-                          fontSize: 20,
+                          fontSize: 24,
                         },
                       }}
                     >
@@ -2052,7 +2080,7 @@ const TeacherDashboard = () => {
                     <Box sx={{ minWidth: 0 }}>
                       <Typography
                         sx={{
-                          fontSize: "11.5px",
+                          fontSize: "14.5px",
                           fontWeight: 800,
                         }}
                       >
@@ -2060,10 +2088,10 @@ const TeacherDashboard = () => {
                       </Typography>
                       <Typography
                         sx={{
-                          mt: 0.3,
+                          mt: 0.4,
                           color:
                             "var(--color-muted)",
-                          fontSize: "8.5px",
+                          fontSize: "12px",
                           lineHeight: 1.55,
                         }}
                       >
@@ -2087,7 +2115,7 @@ const TeacherDashboard = () => {
                   endIcon={<ArrowBackRounded />}
                   sx={{
                     color: "var(--color-navy)",
-                    fontSize: "8.5px",
+                    fontSize: "13px",
                     fontWeight: 800,
                     textTransform: "none",
                   }}
@@ -2099,16 +2127,14 @@ const TeacherDashboard = () => {
               <Alert
                 severity="info"
                 sx={{
-                  mb: 0.9,
-                  py: 0.15,
-                  borderRadius: "10px",
-                  fontSize: "8.5px",
+                  mb: 1.5,
+                  py: 0.8,
+                  px: 1.5,
+                  borderRadius: "12px",
+                  fontSize: "13px",
                   "& .MuiAlert-icon": {
-                    py: 0.45,
-                    fontSize: 17,
-                  },
-                  "& .MuiAlert-message": {
-                    py: 0.45,
+                    py: 0.3,
+                    fontSize: 20,
                   },
                 }}
               >
@@ -2116,7 +2142,7 @@ const TeacherDashboard = () => {
               </Alert>
 
               {pendingCorrections.length > 0 ? (
-                <Stack spacing={0.75}>
+                <Stack spacing={1.2}>
                   {pendingCorrections
                     .slice(0, 5)
                     .map((correction) => (
@@ -2124,25 +2150,25 @@ const TeacherDashboard = () => {
                         key={correction.id}
                         elevation={0}
                         sx={{
-                          p: 1.05,
+                          p: { xs: 1.4, sm: 1.8 },
                           display: "grid",
                           gridTemplateColumns: {
                             xs: "1fr auto",
-                            sm: "42px minmax(0,1fr) auto",
+                            sm: "48px minmax(0,1fr) auto",
                           },
                           alignItems: "center",
-                          gap: 1,
+                          gap: 1.5,
                           border:
                             "1px solid rgba(36,74,112,0.07)",
-                          borderRadius: "13px",
+                          borderRadius: "16px",
                           backgroundColor:
                             "var(--color-white)",
                         }}
                       >
                         <Box
                           sx={{
-                            width: 36,
-                            height: 36,
+                            width: 44,
+                            height: 44,
                             display: {
                               xs: "none",
                               sm: "grid",
@@ -2151,9 +2177,9 @@ const TeacherDashboard = () => {
                             color: "var(--color-gold-dark)",
                             backgroundColor:
                               "var(--color-gold-soft)",
-                            borderRadius: "10px",
+                            borderRadius: "12px",
                             "& svg": {
-                              fontSize: 19,
+                              fontSize: 22,
                             },
                           }}
                         >
@@ -2165,16 +2191,16 @@ const TeacherDashboard = () => {
                             direction="row"
                             alignItems="center"
                             flexWrap="wrap"
-                            gap={0.6}
+                            gap={0.8}
                           >
                             <Chip
                               label={correction.typeLabel}
                               size="small"
                               sx={{
-                                height: 20,
+                                height: 24,
                                 color: "#8a5f12",
                                 backgroundColor: "#fff3d8",
-                                fontSize: "7.5px",
+                                fontSize: "11.5px",
                                 fontWeight: 800,
                               }}
                             />
@@ -2183,7 +2209,7 @@ const TeacherDashboard = () => {
                               sx={{
                                 color:
                                   "var(--color-navy-deep)",
-                                fontSize: "10.5px",
+                                fontSize: "14.5px",
                                 fontWeight: 800,
                               }}
                             >
@@ -2194,10 +2220,10 @@ const TeacherDashboard = () => {
                           <Typography
                             noWrap
                             sx={{
-                              mt: 0.3,
+                              mt: 0.4,
                               color:
                                 "var(--color-muted)",
-                              fontSize: "8px",
+                              fontSize: "12.5px",
                             }}
                           >
                             {correction.student} • {correction.subject} • {formatDateTime({
@@ -2215,22 +2241,24 @@ const TeacherDashboard = () => {
                             navigate(correction.path)
                           }
                           sx={{
-                            minHeight: 31,
-                            px: 1.15,
-                            borderRadius: "9px",
+                            minHeight: 38,
+                            px: 1.8,
+                            borderRadius: "11px",
                             color: "var(--color-white)",
                             backgroundColor:
                               "var(--color-navy)",
-                            fontSize: "8.5px",
+                            fontSize: "12.5px",
                             fontWeight: 800,
                             textTransform: "none",
                             "& .MuiButton-startIcon": {
-                              marginLeft: "4px",
+                              marginLeft: "6px",
                               marginRight: 0,
                             },
                             "& svg": {
-                              fontSize:
-                                "14px !important",
+                              fontSize: "16px !important",
+                            },
+                            "&:hover": {
+                              backgroundColor: "var(--color-navy-deep)",
                             },
                           }}
                         >
@@ -2243,8 +2271,9 @@ const TeacherDashboard = () => {
                     <Typography
                       sx={{
                         color: "var(--color-muted)",
-                        fontSize: "8.5px",
+                        fontSize: "12.5px",
                         fontWeight: 700,
+                        pt: 0.5,
                       }}
                     >
                       يوجد {pendingCorrections.length - 5} تسليم إضافي ينتظر التصحيح.
@@ -2271,7 +2300,7 @@ const TeacherDashboard = () => {
                   }
                   sx={{
                     color: "var(--color-navy)",
-                    fontSize: "9.5px",
+                    fontSize: "13px",
                     fontWeight: 800,
                     textTransform: "none",
                   }}
@@ -2281,7 +2310,7 @@ const TeacherDashboard = () => {
               }
             >
               {todayLectures.length > 0 ? (
-                <Stack spacing={0.75}>
+                <Stack spacing={1.2}>
                   {todayLectures.map((lecture) => {
                     const preparation =
                       lecture.dashboardPreparation;
@@ -2297,17 +2326,17 @@ const TeacherDashboard = () => {
                         key={getLectureId(lecture)}
                         elevation={0}
                         sx={{
-                          p: 1.1,
+                          p: { xs: 1.4, sm: 1.8 },
                           display: "grid",
                           gridTemplateColumns: {
                             xs: "1fr auto",
-                            sm: "105px 1fr auto",
+                            sm: "120px 1fr auto",
                           },
                           alignItems: "center",
-                          gap: 1,
+                          gap: 1.5,
                           border:
                             "1px solid rgba(36,74,112,0.07)",
-                          borderRadius: "13px",
+                          borderRadius: "16px",
                           backgroundColor:
                             "var(--color-white)",
                         }}
@@ -2320,11 +2349,12 @@ const TeacherDashboard = () => {
                               xs: "none",
                               sm: "inline-flex",
                             },
+                            height: 28,
                             color:
                               "var(--color-navy-deep)",
                             backgroundColor:
                               "rgba(36,74,112,0.06)",
-                            fontSize: "8.5px",
+                            fontSize: "12px",
                             fontWeight: 800,
                           }}
                         />
@@ -2335,7 +2365,7 @@ const TeacherDashboard = () => {
                             sx={{
                               color:
                                 "var(--color-navy-deep)",
-                              fontSize: "11.5px",
+                              fontSize: "15px",
                               fontWeight: 800,
                             }}
                           >
@@ -2347,10 +2377,10 @@ const TeacherDashboard = () => {
                           <Typography
                             noWrap
                             sx={{
-                              mt: 0.25,
+                              mt: 0.35,
                               color:
                                 "var(--color-muted)",
-                              fontSize: "8.5px",
+                              fontSize: "12.5px",
                             }}
                           >
                             {getClassData(lecture).name} • {getSlotLabel(lecture)}
@@ -2362,7 +2392,7 @@ const TeacherDashboard = () => {
                           alignItems="center"
                           justifyContent="flex-end"
                           flexWrap="wrap"
-                          gap={0.65}
+                          gap={0.8}
                         >
                           <Button
                             type="button"
@@ -2373,24 +2403,27 @@ const TeacherDashboard = () => {
                               openAttendance(lecture)
                             }
                             sx={{
-                              minHeight: 31,
-                              px: 1,
-                              borderRadius: "9px",
+                              minHeight: 38,
+                              px: 1.5,
+                              borderRadius: "11px",
                               color: "var(--color-navy)",
                               borderColor:
-                                "rgba(36,74,112,0.18)",
+                                "rgba(36,74,112,0.22)",
                               backgroundColor:
                                 "rgba(36,74,112,0.025)",
-                              fontSize: "8.5px",
+                              fontSize: "12.5px",
                               fontWeight: 800,
                               textTransform: "none",
                               "& .MuiButton-startIcon": {
-                                marginLeft: "4px",
+                                marginLeft: "6px",
                                 marginRight: 0,
                               },
                               "& svg": {
-                                fontSize:
-                                  "14px !important",
+                                fontSize: "16px !important",
+                              },
+                              "&:hover": {
+                                backgroundColor: "rgba(36,74,112,0.07)",
+                                borderColor: "var(--color-navy)",
                               },
                             }}
                           >
@@ -2427,9 +2460,9 @@ const TeacherDashboard = () => {
                               );
                             }}
                             sx={{
-                              minHeight: 31,
-                              px: 1,
-                              borderRadius: "9px",
+                              minHeight: 38,
+                              px: 1.5,
+                              borderRadius: "11px",
                               color: hasPreparation
                                 ? "var(--color-white)"
                                 : "var(--color-navy)",
@@ -2438,17 +2471,21 @@ const TeacherDashboard = () => {
                                   ? "#287a51"
                                   : "transparent",
                               borderColor:
-                                "rgba(36,74,112,0.18)",
-                              fontSize: "8.5px",
+                                "rgba(36,74,112,0.22)",
+                              fontSize: "12.5px",
                               fontWeight: 800,
                               textTransform: "none",
                               "& .MuiButton-startIcon": {
-                                marginLeft: "4px",
+                                marginLeft: "6px",
                                 marginRight: 0,
                               },
                               "& svg": {
-                                fontSize:
-                                  "14px !important",
+                                fontSize: "16px !important",
+                              },
+                              "&:hover": {
+                                backgroundColor: hasPreparation
+                                  ? "#226744"
+                                  : "rgba(36,74,112,0.07)",
                               },
                             }}
                           >
@@ -2475,23 +2512,23 @@ const TeacherDashboard = () => {
             </SectionCard>
           </Stack>
 
-          <Stack spacing={1.5}>
+          <Stack spacing={{ xs: 2, md: 3 }}>
             <SectionCard
               title="آخر التحضيرات"
               subtitle="أحدث الملفات المرتبطة بحصصك"
             >
               {recentPreparations.length > 0 ? (
-                <Stack spacing={0.75}>
+                <Stack spacing={1.2}>
                   {recentPreparations.map(
                     ({ id, preparation, lecture }) => (
                       <Paper
                         key={id}
                         elevation={0}
                         sx={{
-                          p: 1.05,
+                          p: { xs: 1.4, sm: 1.6 },
                           border:
                             "1px solid rgba(36,74,112,0.07)",
-                          borderRadius: "13px",
+                          borderRadius: "16px",
                           backgroundColor:
                             "var(--color-white)",
                         }}
@@ -2500,7 +2537,7 @@ const TeacherDashboard = () => {
                           direction="row"
                           alignItems="center"
                           justifyContent="space-between"
-                          gap={1}
+                          gap={1.2}
                         >
                           <Box sx={{ minWidth: 0 }}>
                             <Typography
@@ -2508,7 +2545,7 @@ const TeacherDashboard = () => {
                               sx={{
                                 color:
                                   "var(--color-navy-deep)",
-                                fontSize: "11px",
+                                fontSize: "14.5px",
                                 fontWeight: 800,
                               }}
                             >
@@ -2521,10 +2558,10 @@ const TeacherDashboard = () => {
                             <Typography
                               noWrap
                               sx={{
-                                mt: 0.25,
+                                mt: 0.35,
                                 color:
                                   "var(--color-muted)",
-                                fontSize: "8px",
+                                fontSize: "12.5px",
                               }}
                             >
                               {lecture
@@ -2539,10 +2576,11 @@ const TeacherDashboard = () => {
                             </Typography>
                             <Typography
                               sx={{
-                                mt: 0.25,
+                                mt: 0.35,
                                 color:
                                   "var(--color-muted)",
-                                fontSize: "7.5px",
+                                fontSize: "11.5px",
+                                fontWeight: 600,
                               }}
                             >
                               {formatDateTime(
@@ -2560,20 +2598,23 @@ const TeacherDashboard = () => {
                                 )
                               }
                               sx={{
-                                width: 32,
-                                height: 32,
+                                width: 38,
+                                height: 38,
                                 flexShrink: 0,
                                 color:
                                   "var(--color-navy)",
                                 backgroundColor:
                                   "rgba(36,74,112,0.055)",
                                 border:
-                                  "1px solid rgba(36,74,112,0.08)",
-                                borderRadius: "9px",
+                                  "1px solid rgba(36,74,112,0.10)",
+                                borderRadius: "11px",
+                                "&:hover": {
+                                  backgroundColor: "rgba(36,74,112,0.12)",
+                                },
                               }}
                             >
                               <VisibilityRounded
-                                sx={{ fontSize: 17 }}
+                                sx={{ fontSize: 20 }}
                               />
                             </IconButton>
                           </Tooltip>
@@ -2591,7 +2632,7 @@ const TeacherDashboard = () => {
                     sx={{
                       alignSelf: "flex-start",
                       color: "var(--color-navy)",
-                      fontSize: "9px",
+                      fontSize: "13px",
                       fontWeight: 800,
                       textTransform: "none",
                     }}
@@ -2620,7 +2661,7 @@ const TeacherDashboard = () => {
                 sx={{
                   display: "grid",
                   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: 0.8,
+                  gap: 1.2,
                 }}
               >
                 <Button
@@ -2629,34 +2670,39 @@ const TeacherDashboard = () => {
                     navigate("/teacher/exams")
                   }
                   sx={{
-                    p: 1,
+                    p: 1.5,
                     display: "block",
                     textAlign: "right",
                     border:
                       "1px solid rgba(36,74,112,0.07)",
-                    borderRadius: "12px",
+                    borderRadius: "15px",
                     color: "var(--color-navy-deep)",
                     backgroundColor:
                       "var(--color-white)",
                     textTransform: "none",
+                    transition: "all .2s ease",
+                    "&:hover": {
+                      borderColor: "rgba(36,74,112,0.22)",
+                      backgroundColor: "rgba(36,74,112,0.02)",
+                    },
                   }}
                 >
                   <Stack
                     direction="row"
                     alignItems="center"
                     justifyContent="space-between"
-                    gap={0.6}
+                    gap={1}
                   >
                     <QuizRounded
                       sx={{
                         color: "var(--color-navy)",
-                        fontSize: 19,
+                        fontSize: 24,
                       }}
                     />
                     <Typography
                       sx={{
-                        fontSize: "17px",
-                        fontWeight: 800,
+                        fontSize: "22px",
+                        fontWeight: 900,
                       }}
                     >
                       {exams.length}
@@ -2664,8 +2710,8 @@ const TeacherDashboard = () => {
                   </Stack>
                   <Typography
                     sx={{
-                      mt: 0.45,
-                      fontSize: "9px",
+                      mt: 0.6,
+                      fontSize: "13.5px",
                       fontWeight: 800,
                     }}
                   >
@@ -2674,9 +2720,9 @@ const TeacherDashboard = () => {
                   <Typography
                     noWrap
                     sx={{
-                      mt: 0.2,
+                      mt: 0.3,
                       color: "var(--color-muted)",
-                      fontSize: "7.5px",
+                      fontSize: "11.5px",
                     }}
                   >
                     التصحيح من تفاصيل الاختبار
@@ -2689,35 +2735,40 @@ const TeacherDashboard = () => {
                     navigate("/school/projects")
                   }
                   sx={{
-                    p: 1,
+                    p: 1.5,
                     display: "block",
                     textAlign: "right",
                     border:
                       "1px solid rgba(36,74,112,0.07)",
-                    borderRadius: "12px",
+                    borderRadius: "15px",
                     color: "var(--color-navy-deep)",
                     backgroundColor:
                       "var(--color-white)",
                     textTransform: "none",
+                    transition: "all .2s ease",
+                    "&:hover": {
+                      borderColor: "rgba(211,164,79,0.30)",
+                      backgroundColor: "var(--color-gold-soft)",
+                    },
                   }}
                 >
                   <Stack
                     direction="row"
                     alignItems="center"
                     justifyContent="space-between"
-                    gap={0.6}
+                    gap={1}
                   >
                     <AssignmentRounded
                       sx={{
                         color:
                           "var(--color-gold-dark)",
-                        fontSize: 19,
+                        fontSize: 24,
                       }}
                     />
                     <Typography
                       sx={{
-                        fontSize: "17px",
-                        fontWeight: 800,
+                        fontSize: "22px",
+                        fontWeight: 900,
                       }}
                     >
                       {projects.length}
@@ -2725,8 +2776,8 @@ const TeacherDashboard = () => {
                   </Stack>
                   <Typography
                     sx={{
-                      mt: 0.45,
-                      fontSize: "9px",
+                      mt: 0.6,
+                      fontSize: "13.5px",
                       fontWeight: 800,
                     }}
                   >
@@ -2735,9 +2786,9 @@ const TeacherDashboard = () => {
                   <Typography
                     noWrap
                     sx={{
-                      mt: 0.2,
+                      mt: 0.3,
                       color: "var(--color-muted)",
-                      fontSize: "7.5px",
+                      fontSize: "11.5px",
                     }}
                   >
                     {pendingProjectCorrections.length} تسليم ينتظر التصحيح
@@ -2747,8 +2798,8 @@ const TeacherDashboard = () => {
 
               {recentEvaluations.length > 0 && (
                 <Stack
-                  spacing={0.65}
-                  sx={{ mt: 0.9 }}
+                  spacing={1}
+                  sx={{ mt: 1.4 }}
                 >
                   {recentEvaluations.map((item) => (
                     <Button
@@ -2758,32 +2809,35 @@ const TeacherDashboard = () => {
                         navigate(item.path)
                       }
                       sx={{
-                        p: 0.75,
+                        p: 1.1,
                         justifyContent: "flex-start",
-                        gap: 0.7,
+                        gap: 1,
                         textAlign: "right",
-                        borderRadius: "10px",
+                        borderRadius: "12px",
                         color:
                           "var(--color-navy-deep)",
                         backgroundColor:
                           "rgba(36,74,112,0.025)",
                         textTransform: "none",
+                        "&:hover": {
+                          backgroundColor: "rgba(36,74,112,0.06)",
+                        },
                       }}
                     >
                       {item.type === "exam" ? (
                         <QuizRounded
-                          sx={{ fontSize: 16 }}
+                          sx={{ fontSize: 19 }}
                         />
                       ) : (
                         <AssignmentRounded
-                          sx={{ fontSize: 16 }}
+                          sx={{ fontSize: 19 }}
                         />
                       )}
                       <Box sx={{ minWidth: 0 }}>
                         <Typography
                           noWrap
                           sx={{
-                            fontSize: "8.5px",
+                            fontSize: "13px",
                             fontWeight: 800,
                           }}
                         >
@@ -2794,7 +2848,7 @@ const TeacherDashboard = () => {
                           sx={{
                             color:
                               "var(--color-muted)",
-                            fontSize: "7px",
+                            fontSize: "11.5px",
                           }}
                         >
                           {item.typeLabel} • {item.subject}
@@ -2811,20 +2865,20 @@ const TeacherDashboard = () => {
               subtitle="الفصول المسندة إليك وعدد الطلاب"
             >
               {classRows.length > 0 ? (
-                <Stack spacing={0.7}>
+                <Stack spacing={1}>
                   {classRows.slice(0, 5).map((classItem) => (
                     <Paper
                       key={classItem.id}
                       elevation={0}
                       sx={{
-                        p: 1,
+                        p: 1.3,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        gap: 1,
+                        gap: 1.2,
                         border:
                           "1px solid rgba(36,74,112,0.07)",
-                        borderRadius: "12px",
+                        borderRadius: "14px",
                         backgroundColor:
                           "var(--color-white)",
                       }}
@@ -2832,13 +2886,13 @@ const TeacherDashboard = () => {
                       <Stack
                         direction="row"
                         alignItems="center"
-                        gap={0.8}
+                        gap={1}
                         sx={{ minWidth: 0 }}
                       >
                         <Box
                           sx={{
-                            width: 31,
-                            height: 31,
+                            width: 38,
+                            height: 38,
                             display: "grid",
                             placeItems: "center",
                             flexShrink: 0,
@@ -2846,9 +2900,9 @@ const TeacherDashboard = () => {
                               "var(--color-navy)",
                             backgroundColor:
                               "rgba(36,74,112,0.06)",
-                            borderRadius: "9px",
+                            borderRadius: "11px",
                             "& svg": {
-                              fontSize: 17,
+                              fontSize: 20,
                             },
                           }}
                         >
@@ -2860,7 +2914,7 @@ const TeacherDashboard = () => {
                           sx={{
                             color:
                               "var(--color-navy-deep)",
-                            fontSize: "10px",
+                            fontSize: "13.5px",
                             fontWeight: 800,
                           }}
                         >
@@ -2873,9 +2927,10 @@ const TeacherDashboard = () => {
                         size="small"
                         sx={{
                           flexShrink: 0,
+                          height: 26,
                           color: "#287a51",
                           backgroundColor: "#e7f6ed",
-                          fontSize: "8px",
+                          fontSize: "11.5px",
                           fontWeight: 800,
                         }}
                       />
@@ -2894,9 +2949,9 @@ const TeacherDashboard = () => {
             <Paper
               elevation={0}
               sx={{
-                p: 1.7,
+                p: 2.2,
                 overflow: "hidden",
-                borderRadius: "17px",
+                borderRadius: "20px",
                 color: "var(--color-white)",
                 background:
                   "linear-gradient(145deg, var(--color-navy), var(--color-navy-deep))",
@@ -2908,14 +2963,14 @@ const TeacherDashboard = () => {
                 direction="row"
                 alignItems="center"
                 justifyContent="space-between"
-                gap={1}
+                gap={1.5}
               >
                 <Box>
                   <Typography
                     sx={{
                       color:
                         "var(--color-gold-light)",
-                      fontSize: "9px",
+                      fontSize: "12.5px",
                       fontWeight: 800,
                     }}
                   >
@@ -2923,9 +2978,10 @@ const TeacherDashboard = () => {
                   </Typography>
                   <Typography
                     sx={{
-                      mt: 0.45,
-                      fontSize: "18px",
-                      fontWeight: 800,
+                      mt: 0.5,
+                      fontSize: "26px",
+                      fontWeight: 900,
+                      lineHeight: 1.1,
                     }}
                   >
                     {completionRate}%
@@ -2937,7 +2993,7 @@ const TeacherDashboard = () => {
                     sx={{
                       color:
                         "var(--color-gold-light)",
-                      fontSize: 30,
+                      fontSize: 36,
                     }}
                   />
                 ) : (
@@ -2945,7 +3001,7 @@ const TeacherDashboard = () => {
                     sx={{
                       color:
                         "var(--color-gold-light)",
-                      fontSize: 30,
+                      fontSize: 36,
                     }}
                   />
                 )}
@@ -2953,10 +3009,10 @@ const TeacherDashboard = () => {
 
               <Typography
                 sx={{
-                  mt: 0.6,
+                  mt: 0.8,
                   color:
-                    "rgba(255,255,255,0.68)",
-                  fontSize: "9px",
+                    "rgba(255,255,255,0.72)",
+                  fontSize: "13px",
                   lineHeight: 1.6,
                 }}
               >
@@ -2971,11 +3027,11 @@ const TeacherDashboard = () => {
                 variant="determinate"
                 value={completionRate}
                 sx={{
-                  height: 7,
-                  mt: 1.4,
+                  height: 9,
+                  mt: 1.8,
                   borderRadius: 999,
                   backgroundColor:
-                    "rgba(255,255,255,0.12)",
+                    "rgba(255,255,255,0.14)",
                   "& .MuiLinearProgress-bar": {
                     borderRadius: 999,
                     backgroundColor:
@@ -3000,10 +3056,10 @@ const SectionCard = ({
   <Paper
     elevation={0}
     sx={{
-      p: { xs: 1.35, sm: 1.6 },
+      p: { xs: 1.8, sm: 2.4 },
       border:
         "1px solid rgba(36,74,112,0.08)",
-      borderRadius: "17px",
+      borderRadius: "20px",
       backgroundColor:
         "var(--color-cream)",
       boxShadow:
@@ -3014,8 +3070,8 @@ const SectionCard = ({
       direction="row"
       alignItems="flex-start"
       justifyContent="space-between"
-      gap={1}
-      sx={{ mb: 1.2 }}
+      gap={1.2}
+      sx={{ mb: 1.8 }}
     >
       <Box>
         <Typography
@@ -3023,7 +3079,7 @@ const SectionCard = ({
           sx={{
             color:
               "var(--color-navy-deep)",
-            fontSize: "14px",
+            fontSize: "17px",
             fontWeight: 800,
           }}
         >
@@ -3031,9 +3087,9 @@ const SectionCard = ({
         </Typography>
         <Typography
           sx={{
-            mt: 0.2,
+            mt: 0.35,
             color: "var(--color-muted)",
-            fontSize: "8.5px",
+            fontSize: "12.5px",
           }}
         >
           {subtitle}
@@ -3055,27 +3111,27 @@ const EmptyState = ({
 }) => (
   <Stack
     alignItems="center"
-    spacing={0.65}
+    spacing={1}
     sx={{
-      minHeight: 145,
-      py: 2,
-      px: 1,
+      minHeight: 170,
+      py: 2.5,
+      px: 1.5,
       justifyContent: "center",
       textAlign: "center",
     }}
   >
     <Box
       sx={{
-        width: 42,
-        height: 42,
+        width: 52,
+        height: 52,
         display: "grid",
         placeItems: "center",
         color: "var(--color-gold-dark)",
         backgroundColor:
           "var(--color-gold-soft)",
-        borderRadius: "12px",
+        borderRadius: "15px",
         "& svg": {
-          fontSize: 22,
+          fontSize: 26,
         },
       }}
     >
@@ -3085,7 +3141,7 @@ const EmptyState = ({
     <Typography
       sx={{
         color: "var(--color-navy-deep)",
-        fontSize: "11px",
+        fontSize: "14.5px",
         fontWeight: 800,
       }}
     >
@@ -3094,9 +3150,9 @@ const EmptyState = ({
 
     <Typography
       sx={{
-        maxWidth: 330,
+        maxWidth: 380,
         color: "var(--color-muted)",
-        fontSize: "8.5px",
+        fontSize: "12.5px",
         lineHeight: 1.6,
       }}
     >
@@ -3109,9 +3165,9 @@ const EmptyState = ({
         size="small"
         onClick={onAction}
         sx={{
-          mt: 0.25,
+          mt: 0.5,
           color: "var(--color-navy)",
-          fontSize: "9px",
+          fontSize: "12.5px",
           fontWeight: 800,
           textTransform: "none",
         }}
@@ -3127,41 +3183,42 @@ const DashboardSkeleton = () => (
     dir="rtl"
     sx={{
       minHeight: "100vh",
-      p: { xs: 1.5, md: 3 },
+      p: { xs: 2, md: 4 },
       backgroundColor: "var(--color-page)",
     }}
   >
     <Box
       sx={{
-        width: "min(100%, 1380px)",
+        width: "100%",
+        maxWidth: "1680px",
         mx: "auto",
       }}
     >
       <Skeleton
         variant="rounded"
-        height={235}
+        height={260}
         sx={{
-          mb: 1.5,
+          mb: 2.5,
           borderRadius: "22px",
         }}
       />
       <Box
         sx={{
-          mb: 1.5,
+          mb: 2.5,
           display: "grid",
           gridTemplateColumns: {
             xs: "repeat(2, 1fr)",
             lg: "repeat(4, 1fr)",
           },
-          gap: 1,
+          gap: 2,
         }}
       >
         {[1, 2, 3, 4].map((item) => (
           <Skeleton
             key={item}
             variant="rounded"
-            height={88}
-            sx={{ borderRadius: "16px" }}
+            height={100}
+            sx={{ borderRadius: "18px" }}
           />
         ))}
       </Box>
@@ -3170,20 +3227,20 @@ const DashboardSkeleton = () => (
           display: "grid",
           gridTemplateColumns: {
             xs: "1fr",
-            lg: "1.35fr 0.65fr",
+            lg: "1.4fr 0.6fr",
           },
-          gap: 1.5,
+          gap: 2.5,
         }}
       >
         <Skeleton
           variant="rounded"
-          height={390}
-          sx={{ borderRadius: "17px" }}
+          height={460}
+          sx={{ borderRadius: "20px" }}
         />
         <Skeleton
           variant="rounded"
-          height={390}
-          sx={{ borderRadius: "17px" }}
+          height={460}
+          sx={{ borderRadius: "20px" }}
         />
       </Box>
     </Box>
