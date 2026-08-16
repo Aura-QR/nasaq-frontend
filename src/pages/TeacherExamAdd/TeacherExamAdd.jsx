@@ -689,13 +689,15 @@ const TeacherExamAdd = () => {
         minHeight: "100vh",
         backgroundColor: "#fff",
         color: "var(--color-navy-deep, #122F4D)",
-        py: { xs: 1.5, md: 2.2 },
+        py: { xs: 2, sm: 2.5, md: 3.5 },
       }}
     >
       <Box
         sx={{
-          width: "min(1480px, calc(100% - 24px))",
+          width: "100%",
+          maxWidth: "1680px",
           mx: "auto",
+          px: { xs: 2, sm: 3, md: 4, lg: 5 },
         }}
       >
         <Paper
@@ -703,17 +705,17 @@ const TeacherExamAdd = () => {
           sx={{
             position: "relative",
             overflow: "hidden",
-            p: { xs: 1.7, md: 2.4 },
+            p: { xs: 2.2, md: 3 },
             borderRadius: "24px",
             color: "white",
             background:
               "linear-gradient(120deg, #173B5E 0%, #244F78 55%, #2C5C87 100%)",
             boxShadow: "0 18px 45px rgba(18,47,77,.18)",
             "&::after": {
-              content: '\"\"',
+              content: '""',
               position: "absolute",
-              width: 260,
-              height: 260,
+              width: 320,
+              height: 320,
               left: -80,
               top: -120,
               border: "1px solid rgba(255,255,255,.08)",
@@ -728,17 +730,17 @@ const TeacherExamAdd = () => {
             gap={1.5}
             sx={{ position: "relative", zIndex: 1 }}
           >
-            <Stack direction="row" alignItems="center" spacing={1.4}>
+            <Stack direction="row" alignItems="center" spacing={1.6}>
               <Box
                 sx={{
-                  width: { xs: 52, md: 56 },
-                  height: { xs: 52, md: 56 },
+                  width: { xs: 52, md: 60 },
+                  height: { xs: 52, md: 60 },
                   p: 0.8,
                   flexShrink: 0,
                   display: "grid",
                   placeItems: "center",
                   backgroundColor: "#fff",
-                  borderRadius: "14px",
+                  borderRadius: "16px",
                   boxShadow: "0 8px 20px rgba(0,0,0,.12)",
                 }}
               >
@@ -756,30 +758,30 @@ const TeacherExamAdd = () => {
                   label="بوابة المعلم"
                   size="small"
                   sx={{
-                    mb: 0.65,
-                    height: 25,
+                    mb: 0.8,
+                    height: 27,
                     color: "#F2D792",
                     backgroundColor: "rgba(242,215,146,.12)",
                     border: "1px solid rgba(242,215,146,.22)",
-                    fontSize: "9px",
+                    fontSize: "12px",
                     fontWeight: 800,
-                    "& .MuiChip-icon": { color: "inherit", fontSize: 15 },
+                    "& .MuiChip-icon": { color: "inherit", fontSize: 16 },
                   }}
                 />
                 <Typography
                   sx={{
-                    fontSize: { xs: "21px", md: "28px" },
+                    fontSize: { xs: "24px", md: "32px" },
                     fontWeight: 900,
-                    lineHeight: 1.18,
+                    lineHeight: 1.2,
                   }}
                 >
                   إنشاء اختبار جديد
                 </Typography>
                 <Typography
                   sx={{
-                    mt: 0.3,
-                    color: "rgba(255,255,255,.72)",
-                    fontSize: { xs: "9.5px", md: "10.5px" },
+                    mt: 0.5,
+                    color: "rgba(255,255,255,.80)",
+                    fontSize: { xs: "12.5px", md: "14px" },
                   }}
                 >
                   حدد المادة والفصول ثم أضف الأسئلة والإجابات الصحيحة.
@@ -787,15 +789,15 @@ const TeacherExamAdd = () => {
               </Box>
             </Stack>
 
-            <Stack direction={{ xs: "column", sm: "row" }} gap={0.8}>
+            <Stack direction={{ xs: "column", sm: "row" }} gap={1}>
               <Button
                 type="button"
                 onClick={() => navigate("/teacher/exams")}
                 variant="outlined"
                 startIcon={<ArrowBackRounded />}
                 sx={{
-                  minHeight: 42,
-                  px: 1.7,
+                  minHeight: 44,
+                  px: 2,
                   borderColor: "rgba(255,255,255,.28)",
                   color: "white",
                   borderRadius: "12px",

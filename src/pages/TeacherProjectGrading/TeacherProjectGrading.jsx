@@ -378,8 +378,8 @@ const StatCard = ({
       <Box sx={{ minWidth: 0 }}>
         <Typography
           sx={{
-            color: "#6d7d90",
-            fontSize: "10px",
+            color: "#778594",
+            fontSize: "13px",
             fontWeight: 800,
           }}
         >
@@ -389,7 +389,7 @@ const StatCard = ({
           sx={{
             mt: 0.35,
             color: "#122f4d",
-            fontSize: "24px",
+            fontSize: { xs: "24px", sm: "28px", md: "32px" },
             fontWeight: 900,
             lineHeight: 1.1,
           }}
@@ -397,10 +397,12 @@ const StatCard = ({
           {value}
         </Typography>
         <Typography
+          noWrap
           sx={{
             mt: 0.45,
-            color: "#94a0af",
-            fontSize: "8px",
+            color: "#95a1ae",
+            fontSize: "12px",
+            fontWeight: 600,
           }}
         >
           {helper}
@@ -895,7 +897,7 @@ const TeacherProjectGrading = () => {
       dir="rtl"
       sx={{
         minHeight: "100vh",
-        p: { xs: 1.2, md: 2.5 },
+        py: { xs: 2, sm: 2.5, md: 3.5 },
         color: "#122f4d",
         background:
           "linear-gradient(180deg,#f6f3eb 0%,#f4f0e7 100%)",
@@ -903,14 +905,16 @@ const TeacherProjectGrading = () => {
     >
       <Box
         sx={{
-          width: "min(1500px,100%)",
+          width: "100%",
+          maxWidth: "1680px",
           mx: "auto",
+          px: { xs: 2, sm: 3, md: 4, lg: 5 },
         }}
       >
         <Paper
           elevation={0}
           sx={{
-            p: { xs: 1.5, md: 2.2 },
+            p: { xs: 2.2, md: 3 },
             overflow: "hidden",
             position: "relative",
             color: "white",
@@ -920,11 +924,11 @@ const TeacherProjectGrading = () => {
             boxShadow:
               "0 18px 44px rgba(18,47,77,.16)",
             "&::after": {
-              content: '\"\"',
+              content: '""',
               position: "absolute",
               inset: "auto -60px -100px auto",
-              width: 260,
-              height: 260,
+              width: 320,
+              height: 320,
               borderRadius: "50%",
               border:
                 "1px solid rgba(255,255,255,.08)",
@@ -941,12 +945,12 @@ const TeacherProjectGrading = () => {
             <Stack
               direction="row"
               alignItems="center"
-              gap={1.2}
+              gap={1.5}
             >
               <Box
                 sx={{
-                  width: 64,
-                  height: 50,
+                  width: { xs: 52, md: 62 },
+                  height: { xs: 46, md: 54 },
                   p: 0.7,
                   display: "grid",
                   placeItems: "center",
@@ -973,12 +977,15 @@ const TeacherProjectGrading = () => {
                   size="small"
                   sx={{
                     mb: 0.7,
+                    height: 27,
                     color: "#ffe19b",
                     backgroundColor:
                       "rgba(255,255,255,.1)",
+                    fontSize: "12px",
                     fontWeight: 800,
                     "& .MuiChip-icon": {
                       color: "inherit",
+                      fontSize: 16,
                     },
                   }}
                 />
@@ -997,9 +1004,9 @@ const TeacherProjectGrading = () => {
                 </Typography>
                 <Typography
                   sx={{
-                    mt: 0.35,
-                    color: "rgba(255,255,255,.72)",
-                    fontSize: "10px",
+                    mt: 0.45,
+                    color: "rgba(255,255,255,.80)",
+                    fontSize: { xs: "12.5px", md: "14px" },
                   }}
                 >
                   راجع ملفات الطلاب، أضف الدرجة، وسجّل ملاحظاتك من مكان واحد.
@@ -1009,7 +1016,7 @@ const TeacherProjectGrading = () => {
 
             <Stack
               direction="row"
-              gap={0.8}
+              gap={1}
               flexWrap="wrap"
             >
               <Button

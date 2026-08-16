@@ -319,18 +319,18 @@ const TeacherCheckIn = () => {
       dir="rtl"
       sx={{
         minHeight: "100vh",
-        px: { xs: 1.5, md: 3 },
-        py: { xs: 2, md: 3 },
+        px: { xs: 2, sm: 3, md: 4, lg: 5 },
+        py: { xs: 2, sm: 2.5, md: 3.5 },
         backgroundColor: "var(--color-page, #F7F8FA)",
       }}
     >
-      <Box sx={{ width: "min(1180px, 100%)", mx: "auto" }}>
+      <Box sx={{ width: "100%", maxWidth: "1680px", mx: "auto" }}>
         <Paper
           elevation={0}
           sx={{
             position: "relative",
             overflow: "hidden",
-            p: { xs: 2, md: 3 },
+            p: { xs: 2.2, md: 3 },
             borderRadius: "24px",
             color: "#fff",
             background:
@@ -351,15 +351,18 @@ const TeacherCheckIn = () => {
                 size="small"
                 sx={{
                   mb: 1,
+                  height: 27,
                   color: "#F2D792",
                   backgroundColor: "rgba(242,215,146,.12)",
-                  "& .MuiChip-icon": { color: "inherit" },
+                  fontSize: "12px",
+                  fontWeight: 800,
+                  "& .MuiChip-icon": { color: "inherit", fontSize: 16 },
                 }}
               />
               <Typography sx={{ fontSize: { xs: 24, md: 32 }, fontWeight: 900 }}>
                 تسجيل الحضور
               </Typography>
-              <Typography sx={{ mt: 0.5, color: "rgba(255,255,255,.72)", fontSize: 12 }}>
+              <Typography sx={{ mt: 0.5, color: "rgba(255,255,255,.80)", fontSize: { xs: 12.5, md: 14 } }}>
                 صباح الخير، {teacherName}. يتم التحقق من الموقع وشبكة المدرسة عند التسجيل.
               </Typography>
             </Box>

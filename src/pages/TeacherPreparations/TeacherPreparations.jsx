@@ -591,13 +591,13 @@ const StatCard = ({ title, value, helper, icon, tone = "blue" }) => {
       }}
     >
       <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ color: COLORS.muted, fontSize: 10, fontWeight: 800 }}>
+        <Typography sx={{ color: COLORS.muted, fontSize: 13, fontWeight: 800 }}>
           {title}
         </Typography>
-        <Typography sx={{ color: COLORS.navyDark, fontSize: 22, fontWeight: 900, lineHeight: 1.15 }}>
+        <Typography sx={{ color: COLORS.navyDark, fontSize: { xs: 24, sm: 28, md: 32 }, fontWeight: 900, lineHeight: 1.15 }}>
           {value}
         </Typography>
-        <Typography noWrap sx={{ color: "#a0aab5", fontSize: 8.5, mt: 0.25 }}>
+        <Typography noWrap sx={{ color: "#a0aab5", fontSize: 12, fontWeight: 600, mt: 0.35 }}>
           {helper}
         </Typography>
       </Box>
@@ -1181,8 +1181,8 @@ const TeacherPreparations = () => {
                           {prepared ? <CheckCircleRounded /> : <WarningAmberRounded />}
                         </Box>
                         <Box sx={{ minWidth: 0 }}>
-                          <Stack direction="row" alignItems="center" gap={0.6} flexWrap="wrap">
-                            <Typography noWrap sx={{ color: COLORS.navyDark, fontSize: 12.5, fontWeight: 900 }}>
+                          <Stack direction="row" alignItems="center" gap={0.8} flexWrap="wrap">
+                            <Typography noWrap sx={{ color: COLORS.navyDark, fontSize: 15, fontWeight: 900 }}>
                               {row.subject.name}
                               {row.subject.code ? ` - ${row.subject.code}` : ""}
                             </Typography>
@@ -1190,18 +1190,18 @@ const TeacherPreparations = () => {
                               size="small"
                               label={prepared ? "تم التحضير" : "تحتاج تحضير"}
                               sx={{
-                                height: 21,
-                                fontSize: 7.5,
+                                height: 26,
+                                fontSize: 11.5,
                                 fontWeight: 900,
                                 color: prepared ? COLORS.green : COLORS.gold,
                                 bgcolor: prepared ? COLORS.greenSoft : COLORS.goldSoft,
                               }}
                             />
                           </Stack>
-                          <Typography noWrap sx={{ color: COLORS.muted, fontSize: 8.5, mt: 0.2 }}>
+                          <Typography noWrap sx={{ color: COLORS.muted, fontSize: 12.5, mt: 0.3 }}>
                             {row.classData.label} • {getDayLabel(row.lecture)} • {getSlotLabel(row.lecture)}
                           </Typography>
-                          <Typography noWrap sx={{ color: "#a2acb6", fontSize: 8, mt: 0.15 }}>
+                          <Typography noWrap sx={{ color: "#a2acb6", fontSize: 11.5, mt: 0.25 }}>
                             {prepared
                               ? `${filesCount} ملف${getPreparationDate(preparation) ? ` • آخر تحديث ${getPreparationDate(preparation)}` : ""}`
                               : "لم يتم رفع ملف تحضير لهذه الحصة"}

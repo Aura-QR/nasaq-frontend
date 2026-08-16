@@ -951,11 +951,11 @@ const TeacherSchedule = () => {
         sx={{
           minHeight: "100dvh",
           bgcolor: "#f6f4ef",
-          px: { xs: 1, md: 2 },
-          py: { xs: 1, md: 1.5 },
+          px: { xs: 2, sm: 3, md: 4, lg: 5 },
+          py: { xs: 2, sm: 2.5, md: 3.5 },
         }}
       >
-        <Box sx={{ maxWidth: 1180, mx: "auto" }}>
+        <Box sx={{ width: "100%", maxWidth: 1680, mx: "auto" }}>
           <Paper
             elevation={0}
             sx={{
@@ -1435,11 +1435,11 @@ const TeacherSchedule = () => {
       sx={{
         minHeight: "100dvh",
         bgcolor: "#fff",
-        px: { xs: 1, md: 1.5 },
-        py: { xs: 1, md: 1.15 },
+        px: { xs: 2, sm: 3, md: 4, lg: 5 },
+        py: { xs: 2, sm: 2.5, md: 3.5 },
       }}
     >
-      <Box sx={{ maxWidth: 1520, mx: "auto" }}>
+      <Box sx={{ width: "100%", maxWidth: 1680, mx: "auto" }}>
         <Paper
           elevation={0}
           sx={{
@@ -1449,9 +1449,9 @@ const TeacherSchedule = () => {
             color: "#fff",
             background:
               "linear-gradient(115deg, #173f64 0%, #245b86 58%, #2d6b99 100%)",
-            px: { xs: 1.5, md: 2 },
-            py: { xs: 1.25, md: 1.4 },
-            mb: 1,
+            px: { xs: 2, md: 3 },
+            py: { xs: 2, md: 2.5 },
+            mb: 2,
           }}
         >
           <Box
@@ -1470,18 +1470,18 @@ const TeacherSchedule = () => {
             direction={{ xs: "column", md: "row" }}
             alignItems={{ xs: "stretch", md: "center" }}
             justifyContent="space-between"
-            spacing={1}
+            spacing={1.5}
             sx={{ position: "relative", zIndex: 1 }}
           >
             <Stack
               direction="row"
               alignItems="center"
-              spacing={1}
+              spacing={1.5}
             >
               <Box
                 sx={{
-                  width: { xs: 46, md: 52 },
-                  height: { xs: 46, md: 52 },
+                  width: { xs: 50, md: 58 },
+                  height: { xs: 50, md: 58 },
                   borderRadius: 2.5,
                   bgcolor: "#fff",
                   display: "grid",
@@ -1508,19 +1508,20 @@ const TeacherSchedule = () => {
                   label={isPreparationMode ? "مسار التحضير" : "بوابة المعلم"}
                   icon={<ScheduleRounded />}
                   sx={{
-                    mb: 0.3,
+                    mb: 0.5,
                     bgcolor: "rgba(255, 216, 128, .13)",
                     color: "#ffdc8e",
                     border: "1px solid rgba(255, 220, 142, .28)",
                     fontWeight: 900,
+                    fontSize: "12px",
                     "& .MuiChip-icon": { color: "#ffdc8e" },
                   }}
                 />
                 <Typography
                   sx={{
-                    fontSize: { xs: 23, md: 28 },
+                    fontSize: { xs: 24, md: 32 },
                     fontWeight: 900,
-                    lineHeight: 1.05,
+                    lineHeight: 1.2,
                   }}
                 >
                   {isPreparationMode
@@ -1529,9 +1530,9 @@ const TeacherSchedule = () => {
                 </Typography>
                 <Typography
                   sx={{
-                    color: "rgba(255,255,255,.75)",
-                    mt: 0.3,
-                    fontSize: { xs: 10.5, md: 11.5 },
+                    color: "rgba(255,255,255,.82)",
+                    mt: 0.5,
+                    fontSize: { xs: 12.5, md: 14 },
                   }}
                 >
                   {isPreparationMode

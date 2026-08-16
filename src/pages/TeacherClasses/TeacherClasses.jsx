@@ -484,8 +484,8 @@ const StatCard = ({ icon, title, value, helper, accent = "navy" }) => {
       <Box sx={{ minWidth: 0 }}>
         <Typography
           sx={{
-            color: "#7C8796",
-            fontSize: "9px",
+            color: "#7B8794",
+            fontSize: "13px",
             fontWeight: 800,
           }}
         >
@@ -494,9 +494,9 @@ const StatCard = ({ icon, title, value, helper, accent = "navy" }) => {
 
         <Typography
           sx={{
-            mt: 0.2,
+            mt: 0.3,
             color: "#122F4D",
-            fontSize: "20px",
+            fontSize: { xs: "24px", sm: "28px", md: "32px" },
             lineHeight: 1.1,
             fontWeight: 900,
           }}
@@ -507,9 +507,10 @@ const StatCard = ({ icon, title, value, helper, accent = "navy" }) => {
         <Typography
           noWrap
           sx={{
-            mt: 0.35,
+            mt: 0.45,
             color: "#9AA6B2",
-            fontSize: "8.5px",
+            fontSize: "12px",
+            fontWeight: 600,
           }}
         >
           {helper}
@@ -518,14 +519,15 @@ const StatCard = ({ icon, title, value, helper, accent = "navy" }) => {
 
       <Box
         sx={{
-          ...TEACHER_UI.statIcon,
+          width: { xs: 44, sm: 52 },
+          height: { xs: 44, sm: 52 },
           display: "grid",
           placeItems: "center",
           flexShrink: 0,
-          borderRadius: TEACHER_UI.statIcon.borderRadius,
+          borderRadius: "14px",
           color: palette.color,
           backgroundColor: palette.background,
-          "& svg": { fontSize: 20 },
+          "& svg": { fontSize: 24 },
         }}
       >
         {icon}
@@ -1050,10 +1052,10 @@ const TeacherClasses = () => {
                 spacing={1.2}
               >
                 <Box>
-                  <Typography sx={{ fontSize: "13px", fontWeight: 900 }}>
+                  <Typography sx={{ fontSize: "16px", fontWeight: 900 }}>
                     فصولك الدراسية
                   </Typography>
-                  <Typography sx={{ mt: 0.15, color: "#97A2AE", fontSize: "8.5px" }}>
+                  <Typography sx={{ mt: 0.3, color: "#97A2AE", fontSize: "12.5px" }}>
                     اختر الفصل لعرض الطلاب والمواد والحصص المرتبطة به
                   </Typography>
                 </Box>
@@ -1080,10 +1082,10 @@ const TeacherClasses = () => {
 
               <Box
                 sx={{
-                  mt: 1.1,
+                  mt: 1.5,
                   display: { xs: "none", md: "grid" },
-                  gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-                  gap: 0.85,
+                  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                  gap: 1.2,
                 }}
               >
                 {classes.map((classItem) => {
@@ -1100,7 +1102,8 @@ const TeacherClasses = () => {
                       sx={{
                         appearance: "none",
                         width: "100%",
-                        ...TEACHER_UI.listCard,
+                        p: 1.6,
+                        borderRadius: "14px",
                         textAlign: "right",
                         cursor: "pointer",
                         border: selected
@@ -1121,10 +1124,10 @@ const TeacherClasses = () => {
                     >
                       <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
                         <Box sx={{ minWidth: 0 }}>
-                          <Typography noWrap sx={{ fontSize: "11px", fontWeight: 900, color: "#122F4D" }}>
+                          <Typography noWrap sx={{ fontSize: "14.5px", fontWeight: 900, color: "#122F4D" }}>
                             {classItem.label}
                           </Typography>
-                          <Typography sx={{ mt: 0.25, color: "#8F9BA8", fontSize: "8px" }}>
+                          <Typography sx={{ mt: 0.3, color: "#8F9BA8", fontSize: "12px" }}>
                             {classItem.subjects.length} مادة • {classItem.lectures.length} حصة أسبوعيًا
                           </Typography>
                         </Box>
@@ -1133,13 +1136,13 @@ const TeacherClasses = () => {
                           size="small"
                           label={`${classStudents.length} طالب`}
                           sx={{
-                            height: 23,
+                            height: 26,
                             flexShrink: 0,
                             color: selected ? "#214E78" : "#25865A",
                             backgroundColor: selected
                               ? "rgba(33,78,120,.10)"
                               : "rgba(37,134,90,.09)",
-                            "& .MuiChip-label": { px: 1, fontSize: "8px", fontWeight: 900 },
+                            "& .MuiChip-label": { px: 1, fontSize: "11.5px", fontWeight: 900 },
                           }}
                         />
                       </Stack>

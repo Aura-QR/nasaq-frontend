@@ -282,13 +282,13 @@ const StatCard = ({ title, value, helper, icon, tone = "blue" }) => {
       }}
     >
       <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ color: COLORS.muted, fontSize: 10, fontWeight: 800 }}>
+        <Typography sx={{ color: COLORS.muted, fontSize: 13, fontWeight: 800 }}>
           {title}
         </Typography>
-        <Typography sx={{ color: COLORS.navyDark, fontSize: 22, fontWeight: 900, lineHeight: 1.15 }}>
+        <Typography sx={{ color: COLORS.navyDark, fontSize: { xs: 24, sm: 28, md: 32 }, fontWeight: 900, lineHeight: 1.15 }}>
           {value}
         </Typography>
-        <Typography noWrap sx={{ color: "#a0aab5", fontSize: 8.5, mt: 0.25 }}>
+        <Typography noWrap sx={{ color: "#a0aab5", fontSize: 12, fontWeight: 600, mt: 0.35 }}>
           {helper}
         </Typography>
       </Box>
@@ -1346,17 +1346,17 @@ const TeacherLibrary = () => {
                       <Box sx={{ minWidth: 0, flex: 1 }}>
                         <Typography
                           noWrap
-                          sx={{ color: COLORS.navyDark, fontSize: 12.5, fontWeight: 900 }}
+                          sx={{ color: COLORS.navyDark, fontSize: 15, fontWeight: 900 }}
                         >
                           {item.title}
                         </Typography>
                         <Typography
                           noWrap
-                          sx={{ color: COLORS.muted, fontSize: 8.5, mt: 0.35 }}
+                          sx={{ color: COLORS.muted, fontSize: 12.5, mt: 0.35 }}
                         >
                           {item.link || "رابط غير متاح"}
                         </Typography>
-                        <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 0.8 }}>
+                        <Stack direction="row" flexWrap="wrap" gap={0.8} sx={{ mt: 1 }}>
                           <Chip
                             label={
                               [item.subjectName, item.subjectCode]
@@ -1365,10 +1365,10 @@ const TeacherLibrary = () => {
                             }
                             size="small"
                             sx={{
-                              height: 22,
+                              height: 26,
                               bgcolor: COLORS.navySoft,
                               color: COLORS.navy,
-                              fontSize: 8,
+                              fontSize: 11.5,
                               fontWeight: 800,
                             }}
                           />
@@ -1376,10 +1376,10 @@ const TeacherLibrary = () => {
                             label={item.yearName}
                             size="small"
                             sx={{
-                              height: 22,
+                              height: 26,
                               bgcolor: COLORS.greenSoft,
                               color: COLORS.green,
-                              fontSize: 8,
+                              fontSize: 11.5,
                               fontWeight: 800,
                             }}
                           />
@@ -1388,10 +1388,10 @@ const TeacherLibrary = () => {
                               label={item.termName}
                               size="small"
                               sx={{
-                                height: 22,
+                                height: 26,
                                 bgcolor: COLORS.goldSoft,
                                 color: COLORS.gold,
-                                fontSize: 8,
+                                fontSize: 11.5,
                                 fontWeight: 800,
                               }}
                             />

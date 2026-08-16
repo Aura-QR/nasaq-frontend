@@ -373,7 +373,7 @@ const StatCard = ({ icon, label, value, helper, accent = "navy" }) => {
         <Typography
           sx={{
             color: "#7B8794",
-            fontSize: "9.5px",
+            fontSize: "13px",
             fontWeight: 800,
           }}
         >
@@ -381,9 +381,9 @@ const StatCard = ({ icon, label, value, helper, accent = "navy" }) => {
         </Typography>
         <Typography
           sx={{
-            mt: 0.25,
+            mt: 0.35,
             color: "#122F4D",
-            fontSize: "24px",
+            fontSize: { xs: "24px", sm: "28px", md: "32px" },
             lineHeight: 1.15,
             fontWeight: 900,
           }}
@@ -395,7 +395,8 @@ const StatCard = ({ icon, label, value, helper, accent = "navy" }) => {
           sx={{
             mt: 0.45,
             color: "#9AA6B2",
-            fontSize: "8.5px",
+            fontSize: "12px",
+            fontWeight: 600,
           }}
         >
           {helper}
@@ -981,15 +982,17 @@ const TeacherAttendance = () => {
       dir="rtl"
       sx={{
         minHeight: "100vh",
-        py: { xs: 1.5, md: 2.2 },
+        py: { xs: 2, sm: 2.5, md: 3.5 },
         color: "#122F4D",
         backgroundColor: "transparent",
       }}
     >
       <Box
         sx={{
-          width: "min(1480px, calc(100% - 24px))",
+          width: "100%",
+          maxWidth: "1680px",
           mx: "auto",
+          px: { xs: 2, sm: 3, md: 4, lg: 5 },
         }}
       >
         <Paper
@@ -1517,35 +1520,35 @@ const TeacherAttendance = () => {
                         <Box sx={{ minWidth: 0 }}>
                           <Typography
                             noWrap
-                            sx={{ fontSize: "11px", fontWeight: 900 }}
+                            sx={{ fontSize: "14.5px", fontWeight: 900 }}
                           >
                             {name}
                           </Typography>
                           <Typography
                             noWrap
-                            sx={{ mt: 0.2, color: "#8B96A3", fontSize: "8.5px" }}
+                            sx={{ mt: 0.3, color: "#8B96A3", fontSize: "12.5px" }}
                           >
                             {code || `رقم الطالب: ${studentId.slice(-6)}`}
                           </Typography>
                         </Box>
                       </Stack>
 
-                      <Stack direction="row" alignItems="center" spacing={0.25}>
+                      <Stack direction="row" alignItems="center" spacing={0.5}>
                         <Chip
                           icon={isAbsent ? <PersonOffRounded /> : <CheckCircleRounded />}
                           label={isAbsent ? "غائب" : "حاضر"}
                           size="small"
                           sx={{
-                            height: 27,
+                            height: 28,
                             color: isAbsent ? "#A93434" : "#237449",
                             backgroundColor: isAbsent
                               ? "rgba(196,69,69,.10)"
                               : "rgba(37,134,90,.10)",
-                            fontSize: "8.5px",
+                            fontSize: "12px",
                             fontWeight: 900,
                             "& .MuiChip-icon": {
                               color: "inherit",
-                              fontSize: 15,
+                              fontSize: 16,
                             },
                           }}
                         />
@@ -1554,7 +1557,7 @@ const TeacherAttendance = () => {
                           tabIndex={-1}
                           disableRipple
                           sx={{
-                            p: 0.45,
+                            p: 0.6,
                             color: "rgba(36,74,112,.28)",
                             "&.Mui-checked": { color: "#C44545" },
                           }}
@@ -1569,30 +1572,30 @@ const TeacherAttendance = () => {
             <Paper
               elevation={0}
               sx={{
-                mt: 1.25,
-                p: { xs: 1.2, md: 1.35 },
+                mt: 2,
+                p: { xs: 1.8, md: 2.2 },
                 display: "flex",
                 flexDirection: { xs: "column", sm: "row" },
                 alignItems: { xs: "stretch", sm: "center" },
                 justifyContent: "space-between",
-                gap: 1,
+                gap: 1.5,
                 border: hasChanges
-                  ? "1px solid rgba(211,164,79,.28)"
+                  ? "1px solid rgba(211,164,79,.38)"
                   : "1px solid rgba(36,74,112,.08)",
-                borderRadius: "16px",
+                borderRadius: "18px",
                 backgroundColor: hasChanges
-                  ? "rgba(242,215,146,.12)"
+                  ? "rgba(242,215,146,.14)"
                   : "#fff",
                 boxShadow: "0 10px 24px rgba(18,47,77,.05)",
               }}
             >
               <Box>
-                <Typography sx={{ fontSize: "11px", fontWeight: 900 }}>
+                <Typography sx={{ fontSize: "14.5px", fontWeight: 900 }}>
                   {hasChanges
                     ? "لديك تغييرات غير محفوظة"
                     : "سجل الحضور محفوظ"}
                 </Typography>
-                <Typography sx={{ mt: 0.2, color: "#8B96A3", fontSize: "8.8px" }}>
+                <Typography sx={{ mt: 0.3, color: "#8B96A3", fontSize: "12.5px" }}>
                   {counts.present} حاضر • {counts.absent} غائب • {formatDisplayDate(selectedDate)}
                 </Typography>
               </Box>
@@ -1604,19 +1607,19 @@ const TeacherAttendance = () => {
                 onClick={handleSave}
                 startIcon={
                   saving ? (
-                    <CircularProgress size={15} color="inherit" />
+                    <CircularProgress size={16} color="inherit" />
                   ) : (
                     <SaveRounded />
                   )
                 }
                 sx={{
-                  minHeight: 42,
-                  px: 2.2,
+                  minHeight: 44,
+                  px: 2.6,
                   borderRadius: "12px",
                   color: "#122F4D",
                   backgroundColor: "#F2D792",
                   boxShadow: "none",
-                  fontSize: "10px",
+                  fontSize: "13.5px",
                   fontWeight: 900,
                   textTransform: "none",
                   "&:hover": {

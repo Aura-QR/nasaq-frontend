@@ -507,7 +507,7 @@ const StatCard = ({ icon, label, value, helper, tone = "navy" }) => {
         <Typography
           sx={{
             color: COLORS.muted,
-            fontSize: "9px",
+            fontSize: "13px",
             fontWeight: 800,
           }}
         >
@@ -515,9 +515,9 @@ const StatCard = ({ icon, label, value, helper, tone = "navy" }) => {
         </Typography>
         <Typography
           sx={{
-            mt: 0.1,
+            mt: 0.35,
             color: COLORS.navyDeep,
-            fontSize: "22px",
+            fontSize: { xs: "24px", sm: "28px", md: "32px" },
             lineHeight: 1.1,
             fontWeight: 900,
           }}
@@ -527,9 +527,10 @@ const StatCard = ({ icon, label, value, helper, tone = "navy" }) => {
         <Typography
           noWrap
           sx={{
-            mt: 0.25,
+            mt: 0.45,
             color: COLORS.muted,
-            fontSize: "8px",
+            fontSize: "12px",
+            fontWeight: 600,
           }}
         >
           {helper}
@@ -1257,16 +1258,16 @@ const TeacherExamGrading = () => {
                         <Box sx={{ minWidth: 0 }}>
                           <Typography
                             noWrap
-                            sx={{ fontSize: "10px", fontWeight: 900 }}
+                            sx={{ fontSize: "14px", fontWeight: 900 }}
                           >
                             {getExamTitle(exam)}
                           </Typography>
                           <Typography
                             noWrap
                             sx={{
-                              mt: 0.2,
+                              mt: 0.3,
                               color: COLORS.muted,
-                              fontSize: "8px",
+                              fontSize: "12px",
                             }}
                           >
                             {getSubjectLabel(exam)}
@@ -1278,8 +1279,8 @@ const TeacherExamGrading = () => {
                           size="small"
                           sx={{
                             flexShrink: 0,
-                            height: 22,
-                            fontSize: "7.5px",
+                            height: 26,
+                            fontSize: "11.5px",
                             fontWeight: 900,
                           }}
                         />
@@ -1535,26 +1536,26 @@ const TeacherExamGrading = () => {
                           <Box sx={{ minWidth: 0 }}>
                             <Typography
                               noWrap
-                              sx={{ fontSize: "10px", fontWeight: 900 }}
+                              sx={{ fontSize: "14.5px", fontWeight: 900 }}
                             >
                               {getStudentName(result)}
                             </Typography>
                             {!!email && (
                               <Typography
                                 noWrap
-                                sx={{ mt: 0.15, color: COLORS.muted, fontSize: "7.5px" }}
+                                sx={{ mt: 0.3, color: COLORS.muted, fontSize: "12px" }}
                               >
                                 {email}
                               </Typography>
                             )}
                             <Typography
-                              sx={{ mt: 0.25, color: COLORS.muted, fontSize: "7.5px" }}
+                              sx={{ mt: 0.3, color: COLORS.muted, fontSize: "12px" }}
                             >
                               {formatDate(getSubmittedAt(result), true)}
                             </Typography>
                           </Box>
 
-                          <Stack alignItems="flex-end" spacing={0.45}>
+                          <Stack alignItems="flex-end" spacing={0.8}>
                             <Chip
                               label={
                                 graded
@@ -1563,17 +1564,17 @@ const TeacherExamGrading = () => {
                               }
                               size="small"
                               sx={{
-                                height: 22,
+                                height: 28,
                                 color: graded ? COLORS.green : "#9B6810",
                                 backgroundColor: graded
                                   ? COLORS.greenSoft
                                   : COLORS.goldSoft,
-                                fontSize: "8px",
+                                fontSize: "12px",
                                 fontWeight: 900,
                               }}
                             />
 
-                            <Stack direction="row" spacing={0.35}>
+                            <Stack direction="row" spacing={0.6}>
                               <Tooltip title="عرض الإجابات">
                                 <span>
                                   <IconButton
@@ -1581,12 +1582,12 @@ const TeacherExamGrading = () => {
                                     disabled={!getAnswers(result).length}
                                     size="small"
                                     sx={{
-                                      width: 30,
-                                      height: 30,
+                                      width: 36,
+                                      height: 36,
                                       border: `1px solid ${COLORS.border}`,
                                     }}
                                   >
-                                    <VisibilityRounded sx={{ fontSize: 16 }} />
+                                    <VisibilityRounded sx={{ fontSize: 19 }} />
                                   </IconButton>
                                 </span>
                               </Tooltip>
@@ -1596,13 +1597,16 @@ const TeacherExamGrading = () => {
                                 startIcon={<GradingRounded />}
                                 sx={{
                                   ...TEACHER_UI.button,
-                                  minHeight: 30,
+                                  minHeight: 36,
+                                  px: 1.8,
+                                  fontSize: "12.5px",
+                                  fontWeight: 800,
                                   color: "white",
                                   backgroundColor: COLORS.navy,
                                   "&:hover": { backgroundColor: COLORS.navyDeep },
                                 }}
                               >
-                                {graded ? "تعديل" : "تصحيح"}
+                                {graded ? "تعديل الدرجة" : "رصد الدرجة"}
                               </Button>
                             </Stack>
                           </Stack>

@@ -388,20 +388,20 @@ const StatCard = ({ title, value, helper, icon, tone = "blue" }) => {
       }}
     >
       <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ color: COLORS.muted, fontSize: 9.3, fontWeight: 800 }}>
+        <Typography sx={{ color: COLORS.muted, fontSize: 13, fontWeight: 800 }}>
           {title}
         </Typography>
         <Typography
           sx={{
             color: COLORS.navyDark,
-            fontSize: 19,
+            fontSize: { xs: 24, sm: 28, md: 32 },
             fontWeight: 900,
             lineHeight: 1.15,
           }}
         >
           {value}
         </Typography>
-        <Typography noWrap sx={{ color: "#a0aab5", fontSize: 8.1, mt: 0.18 }}>
+        <Typography noWrap sx={{ color: "#a0aab5", fontSize: 12, fontWeight: 600, mt: 0.35 }}>
           {helper}
         </Typography>
       </Box>
@@ -929,27 +929,27 @@ const TeacherProfile = () => {
               }}
             />
             <Box>
-              <Typography sx={{ fontSize: { xs: 22, md: 27 }, fontWeight: 900, lineHeight: 1.15 }}>
+              <Typography sx={{ fontSize: { xs: 24, md: 32 }, fontWeight: 900, lineHeight: 1.2 }}>
                 حسابي
               </Typography>
-              <Typography sx={{ color: "rgba(255,255,255,.72)", fontSize: 9.5, mt: 0.25 }}>
+              <Typography sx={{ color: "rgba(255,255,255,.80)", fontSize: { xs: 12.5, md: 14 }, mt: 0.5 }}>
                 بيانات حسابك الأساسية والارتباطات الدراسية
               </Typography>
             </Box>
           </Stack>
 
-          <Stack direction="row" alignItems="center" gap={0.7} sx={{ zIndex: 1 }}>
+          <Stack direction="row" alignItems="center" gap={1} sx={{ zIndex: 1 }}>
             <Button
               startIcon={<ArrowBackRounded />}
               onClick={() => navigate("/teacher/dashboard")}
               sx={{
-                minHeight: 34,
-                px: 1.4,
+                minHeight: 40,
+                px: 2,
                 color: "#fff",
-                fontSize: 10,
+                fontSize: "13px",
                 fontWeight: 900,
-                border: "1px solid rgba(255,255,255,.25)",
-                borderRadius: 1.7,
+                border: "1px solid rgba(255,255,255,.28)",
+                borderRadius: "12px",
               }}
             >
               لوحة التحكم
@@ -1059,13 +1059,13 @@ const TeacherProfile = () => {
               <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Typography
                   noWrap
-                  sx={{ color: COLORS.navyDark, fontSize: 16, fontWeight: 900 }}
+                  sx={{ color: COLORS.navyDark, fontSize: 18, fontWeight: 900 }}
                 >
                   {displayName}
                 </Typography>
                 <Typography
                   noWrap
-                  sx={{ color: COLORS.muted, fontSize: 9.2, mt: 0.1 }}
+                  sx={{ color: COLORS.muted, fontSize: 13, mt: 0.2 }}
                 >
                   {specialization || "معلم"}
                 </Typography>
@@ -1073,11 +1073,11 @@ const TeacherProfile = () => {
                   size="small"
                   label={isActive ? "حساب نشط" : "حساب موقوف"}
                   sx={{
-                    mt: 0.55,
-                    height: 21,
+                    mt: 0.8,
+                    height: 26,
                     color: isActive ? COLORS.green : COLORS.red,
                     bgcolor: isActive ? COLORS.greenSoft : COLORS.redSoft,
-                    fontSize: 8.2,
+                    fontSize: 11.5,
                     fontWeight: 900,
                   }}
                 />
@@ -1086,37 +1086,37 @@ const TeacherProfile = () => {
 
             <Box
               sx={{
-                mt: 1.15,
-                p: 1,
-                borderRadius: 1.9,
+                mt: 1.5,
+                p: 1.5,
+                borderRadius: "14px",
                 bgcolor: "#f8fafc",
                 border: `1px solid ${COLORS.border}`,
               }}
             >
               {email && (
-                <Stack direction="row" alignItems="center" gap={0.8}>
+                <Stack direction="row" alignItems="center" gap={1}>
                   <Box
                     sx={{
-                      width: 28,
-                      height: 28,
+                      width: 36,
+                      height: 36,
                       display: "grid",
                       placeItems: "center",
-                      borderRadius: 1.3,
+                      borderRadius: "10px",
                       color: COLORS.navy,
                       bgcolor: COLORS.navySoft,
                       flexShrink: 0,
                     }}
                   >
-                    <EmailOutlined sx={{ fontSize: 16 }} />
+                    <EmailOutlined sx={{ fontSize: 18 }} />
                   </Box>
                   <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography sx={{ color: COLORS.muted, fontSize: 8, fontWeight: 800 }}>
+                    <Typography sx={{ color: COLORS.muted, fontSize: 12, fontWeight: 800 }}>
                       البريد الإلكتروني
                     </Typography>
                     <Typography
                       noWrap
                       dir="ltr"
-                      sx={{ color: COLORS.navyDark, fontSize: 9.2, fontWeight: 900, textAlign: "left" }}
+                      sx={{ color: COLORS.navyDark, fontSize: 13.5, fontWeight: 900, textAlign: "left" }}
                     >
                       {email}
                     </Typography>
@@ -1125,29 +1125,29 @@ const TeacherProfile = () => {
               )}
 
               {phone && (
-                <Stack direction="row" alignItems="center" gap={0.8} sx={{ mt: email ? 0.8 : 0 }}>
+                <Stack direction="row" alignItems="center" gap={1} sx={{ mt: email ? 1 : 0 }}>
                   <Box
                     sx={{
-                      width: 28,
-                      height: 28,
+                      width: 36,
+                      height: 36,
                       display: "grid",
                       placeItems: "center",
-                      borderRadius: 1.3,
+                      borderRadius: "10px",
                       color: COLORS.green,
                       bgcolor: COLORS.greenSoft,
                       flexShrink: 0,
                     }}
                   >
-                    <LocalPhoneOutlined sx={{ fontSize: 16 }} />
+                    <LocalPhoneOutlined sx={{ fontSize: 18 }} />
                   </Box>
                   <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography sx={{ color: COLORS.muted, fontSize: 8, fontWeight: 800 }}>
+                    <Typography sx={{ color: COLORS.muted, fontSize: 12, fontWeight: 800 }}>
                       رقم الهاتف
                     </Typography>
                     <Typography
                       noWrap
                       dir="ltr"
-                      sx={{ color: COLORS.navyDark, fontSize: 9.2, fontWeight: 900, textAlign: "left" }}
+                      sx={{ color: COLORS.navyDark, fontSize: 13.5, fontWeight: 900, textAlign: "left" }}
                     >
                       {phone}
                     </Typography>
@@ -1158,28 +1158,28 @@ const TeacherProfile = () => {
 
             <Box
               sx={{
-                mt: 1,
+                mt: 1.5,
                 display: "grid",
                 gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: 0.7,
+                gap: 1,
               }}
             >
               <Button
                 variant="contained"
                 onClick={openProfileDialog}
                 sx={{
-                  minHeight: 38,
+                  minHeight: 42,
                   bgcolor: COLORS.navy,
-                  borderRadius: 1.7,
-                  fontSize: 8.8,
+                  borderRadius: "12px",
+                  fontSize: 13,
                   fontWeight: 900,
                   boxShadow: "none",
                   whiteSpace: "nowrap",
                   "&:hover": { bgcolor: COLORS.navyDark, boxShadow: "none" },
                 }}
               >
-                <Stack direction="row" alignItems="center" justifyContent="center" gap={0.45}>
-                  <EditRounded sx={{ fontSize: 16 }} />
+                <Stack direction="row" alignItems="center" justifyContent="center" gap={0.6}>
+                  <EditRounded sx={{ fontSize: 18 }} />
                   <span>تعديل البيانات</span>
                 </Stack>
               </Button>
@@ -1188,18 +1188,18 @@ const TeacherProfile = () => {
                 variant="outlined"
                 onClick={openPasswordDialog}
                 sx={{
-                  minHeight: 38,
+                  minHeight: 42,
                   color: COLORS.navy,
                   borderColor: "#b9c8d4",
-                  borderRadius: 1.7,
-                  fontSize: 8.8,
+                  borderRadius: "12px",
+                  fontSize: 13,
                   fontWeight: 900,
                   whiteSpace: "nowrap",
                   "&:hover": { borderColor: COLORS.navy, bgcolor: COLORS.navySoft },
                 }}
               >
-                <Stack direction="row" alignItems="center" justifyContent="center" gap={0.45}>
-                  <LockResetRounded sx={{ fontSize: 16 }} />
+                <Stack direction="row" alignItems="center" justifyContent="center" gap={0.6}>
+                  <LockResetRounded sx={{ fontSize: 18 }} />
                   <span>تغيير المرور</span>
                 </Stack>
               </Button>

@@ -345,8 +345,8 @@ const StatCard = ({ icon, label, value, helper, accent = "navy" }) => {
       <Box sx={{ minWidth: 0 }}>
         <Typography
           sx={{
-            color: "var(--color-muted, #708198)",
-            fontSize: "10px",
+            color: "#7B8794",
+            fontSize: "13px",
             fontWeight: 800,
           }}
         >
@@ -354,20 +354,22 @@ const StatCard = ({ icon, label, value, helper, accent = "navy" }) => {
         </Typography>
         <Typography
           sx={{
-            mt: 0.25,
-            color: "var(--color-navy-deep, #122F4D)",
-            fontSize: "23px",
+            mt: 0.35,
+            color: "#122F4D",
+            fontSize: { xs: "24px", sm: "28px", md: "32px" },
+            lineHeight: 1.15,
             fontWeight: 900,
-            lineHeight: 1.2,
           }}
         >
           {value}
         </Typography>
         <Typography
+          noWrap
           sx={{
-            mt: 0.35,
-            color: "var(--color-muted, #708198)",
-            fontSize: "9px",
+            mt: 0.45,
+            color: "#9AA6B2",
+            fontSize: "12px",
+            fontWeight: 600,
           }}
         >
           {helper}
@@ -528,13 +530,15 @@ const TeacherExams = () => {
         minHeight: "100vh",
         backgroundColor: "transparent",
         color: "var(--color-navy-deep, #122F4D)",
-        py: { xs: 1.5, md: 2.2 },
+        py: { xs: 2, sm: 2.5, md: 3.5 },
       }}
     >
       <Box
         sx={{
-          width: "min(1480px, calc(100% - 24px))",
+          width: "100%",
+          maxWidth: "1680px",
           mx: "auto",
+          px: { xs: 2, sm: 3, md: 4, lg: 5 },
         }}
       >
         <Paper
@@ -542,7 +546,7 @@ const TeacherExams = () => {
           sx={{
             position: "relative",
             overflow: "hidden",
-            p: { xs: 1.7, md: 2.4 },
+            p: { xs: 2.2, md: 3 },
             borderRadius: "24px",
             color: "white",
             background:
@@ -551,8 +555,8 @@ const TeacherExams = () => {
             "&::after": {
               content: '""',
               position: "absolute",
-              width: 260,
-              height: 260,
+              width: 320,
+              height: 320,
               left: -80,
               top: -120,
               border: "1px solid rgba(255,255,255,.08)",
@@ -570,19 +574,19 @@ const TeacherExams = () => {
             <Stack
               direction="row"
               alignItems="center"
-              spacing={1.55}
+              spacing={1.8}
               sx={{ minWidth: 0 }}
             >
               <Box
                 sx={{
-                  width: { xs: 52, md: 56 },
-                  height: { xs: 52, md: 56 },
+                  width: { xs: 52, md: 60 },
+                  height: { xs: 52, md: 60 },
                   p: 0.8,
                   flexShrink: 0,
                   display: "grid",
                   placeItems: "center",
                   backgroundColor: "#fff",
-                  borderRadius: "14px",
+                  borderRadius: "16px",
                   boxShadow: "0 8px 20px rgba(0,0,0,.12)",
                 }}
               >
@@ -605,21 +609,21 @@ const TeacherExams = () => {
                   label="بوابة المعلم"
                   size="small"
                   sx={{
-                    mb: 0.75,
-                    height: 25,
+                    mb: 0.8,
+                    height: 27,
                     color: "#F2D792",
                     backgroundColor: "rgba(242,215,146,.12)",
                     border: "1px solid rgba(242,215,146,.22)",
-                    fontSize: "9px",
+                    fontSize: "12px",
                     fontWeight: 800,
-                    "& .MuiChip-icon": { color: "inherit", fontSize: 15 },
+                    "& .MuiChip-icon": { color: "inherit", fontSize: 16 },
                   }}
                 />
                 <Typography
                   sx={{
-                    fontSize: { xs: "22px", md: "28px" },
+                    fontSize: { xs: "24px", md: "32px" },
                     fontWeight: 900,
-                    lineHeight: 1.18,
+                    lineHeight: 1.2,
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -627,20 +631,20 @@ const TeacherExams = () => {
                 </Typography>
                 <Typography
                   sx={{
-                    mt: 0.35,
-                    color: "rgba(255,255,255,.72)",
-                    fontSize: { xs: "9.5px", md: "10.5px" },
-                    lineHeight: 1.7,
+                    mt: 0.5,
+                    color: "rgba(255,255,255,.80)",
+                    fontSize: { xs: "12.5px", md: "14px" },
+                    lineHeight: 1.6,
                   }}
                 >
-                  أنشئ اختباراتك وتابع حالتها وأسئلتها من مكان واحد.
+                  أنشئ اختباراتك وتابع حالتها وأسئلتها وتصحيح الطلاب من مكان واحد.
                 </Typography>
               </Box>
             </Stack>
 
             <Stack
               direction={{ xs: "column", sm: "row" }}
-              gap={0.8}
+              gap={1.2}
               alignItems={{ xs: "stretch", sm: "center" }}
             >
               <Button
@@ -649,16 +653,16 @@ const TeacherExams = () => {
                 variant="outlined"
                 startIcon={<ArrowBackRounded />}
                 sx={{
-                  minHeight: 42,
-                  px: 1.7,
+                  minHeight: 44,
+                  px: 2,
                   borderColor: "rgba(255,255,255,.28)",
                   color: "white",
                   borderRadius: "12px",
-                  fontSize: "10px",
+                  fontSize: "13px",
                   fontWeight: 800,
                   textTransform: "none",
                   "&:hover": {
-                    borderColor: "rgba(255,255,255,.5)",
+                    borderColor: "#F2D792",
                     backgroundColor: "rgba(255,255,255,.08)",
                   },
                   "& .MuiButton-startIcon": {
@@ -1056,7 +1060,7 @@ const TeacherExams = () => {
                             <Typography
                               sx={{
                                 color: "var(--color-gold-dark, #B78430)",
-                                fontSize: "9px",
+                                fontSize: "12px",
                                 fontWeight: 900,
                               }}
                             >
@@ -1065,9 +1069,9 @@ const TeacherExams = () => {
                             <Typography
                               title={getSubjectLabel(exam)}
                               sx={{
-                                mt: 0.15,
+                                mt: 0.25,
                                 color: "var(--color-navy-deep, #122F4D)",
-                                fontSize: "14px",
+                                fontSize: "16px",
                                 fontWeight: 900,
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -1079,9 +1083,9 @@ const TeacherExams = () => {
                             {!!exam?.title && (
                               <Typography
                                 sx={{
-                                  mt: 0.15,
+                                  mt: 0.2,
                                   color: "var(--color-muted, #708198)",
-                                  fontSize: "9px",
+                                  fontSize: "12.5px",
                                 }}
                               >
                                 {getSubjectLabel(exam)}
@@ -1096,13 +1100,14 @@ const TeacherExams = () => {
                           size="small"
                           sx={{
                             flexShrink: 0,
+                            height: 28,
                             color: statusConfig.color,
                             backgroundColor: statusConfig.background,
-                            fontSize: "8.5px",
+                            fontSize: "11.5px",
                             fontWeight: 900,
                             "& .MuiChip-icon": {
                               color: "inherit",
-                              fontSize: 15,
+                              fontSize: 16,
                             },
                           }}
                         />
@@ -1110,26 +1115,26 @@ const TeacherExams = () => {
 
                       <Box
                         sx={{
-                          mt: 1.35,
+                          mt: 1.5,
                           display: "grid",
                           gridTemplateColumns: "repeat(2, minmax(0,1fr))",
-                          gap: 0.7,
+                          gap: 1,
                         }}
                       >
                         <Box
                           sx={{
-                            p: 0.85,
-                            borderRadius: "11px",
+                            p: 1.1,
+                            borderRadius: "12px",
                             backgroundColor: "#F8FAFC",
                           }}
                         >
-                          <Stack direction="row" spacing={0.6} alignItems="center">
-                            <CalendarMonthRounded sx={{ fontSize: 16 }} />
+                          <Stack direction="row" spacing={0.8} alignItems="center">
+                            <CalendarMonthRounded sx={{ fontSize: 18 }} />
                             <Box>
-                              <Typography sx={{ fontSize: "8px", color: "#7B8798" }}>
+                              <Typography sx={{ fontSize: "11px", color: "#7B8798" }}>
                                 البداية
                               </Typography>
-                              <Typography sx={{ fontSize: "9px", fontWeight: 800 }}>
+                              <Typography sx={{ fontSize: "12.5px", fontWeight: 800 }}>
                                 {formatDate(exam?.startDate)}
                               </Typography>
                             </Box>
@@ -1138,18 +1143,18 @@ const TeacherExams = () => {
 
                         <Box
                           sx={{
-                            p: 0.85,
-                            borderRadius: "11px",
+                            p: 1.1,
+                            borderRadius: "12px",
                             backgroundColor: "#F8FAFC",
                           }}
                         >
-                          <Stack direction="row" spacing={0.6} alignItems="center">
-                            <EventAvailableRounded sx={{ fontSize: 16 }} />
+                          <Stack direction="row" spacing={0.8} alignItems="center">
+                            <EventAvailableRounded sx={{ fontSize: 18 }} />
                             <Box>
-                              <Typography sx={{ fontSize: "8px", color: "#7B8798" }}>
+                              <Typography sx={{ fontSize: "11px", color: "#7B8798" }}>
                                 النهاية
                               </Typography>
-                              <Typography sx={{ fontSize: "9px", fontWeight: 800 }}>
+                              <Typography sx={{ fontSize: "12.5px", fontWeight: 800 }}>
                                 {formatDate(exam?.endDate)}
                               </Typography>
                             </Box>
@@ -1160,26 +1165,26 @@ const TeacherExams = () => {
                       <Stack
                         direction="row"
                         flexWrap="wrap"
-                        gap={0.55}
-                        sx={{ mt: 1.05 }}
+                        gap={0.8}
+                        sx={{ mt: 1.2 }}
                       >
                         <Chip
                           icon={<HelpOutlineRounded />}
                           label={`${questions.length} سؤال`}
                           size="small"
-                          sx={{ fontSize: "8.5px", fontWeight: 800 }}
+                          sx={{ height: 26, fontSize: "11.5px", fontWeight: 800 }}
                         />
                         <Chip
                           icon={<ScheduleRounded />}
                           label={duration ? `${duration} دقيقة` : "المدة غير محددة"}
                           size="small"
-                          sx={{ fontSize: "8.5px", fontWeight: 800 }}
+                          sx={{ height: 26, fontSize: "11.5px", fontWeight: 800 }}
                         />
                         <Chip
                           icon={<MenuBookRounded />}
                           label={`${classes.length} فصل`}
                           size="small"
-                          sx={{ fontSize: "8.5px", fontWeight: 800 }}
+                          sx={{ height: 26, fontSize: "11.5px", fontWeight: 800 }}
                         />
                       </Stack>
 
