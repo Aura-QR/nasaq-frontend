@@ -23,6 +23,12 @@ import TeacherLibrary from "@/pages/TeacherLibrary/TeacherLibrary";
 import TeacherProfile from "@/pages/TeacherProfile/TeacherProfile";
 import TeacherProjects from "@/pages/TeacherProjects/TeacherProjects";
 
+/* NEW: Teacher self check-in */
+import TeacherCheckIn from "@/pages/TeacherCheckIn/TeacherCheckIn";
+
+/* NEW: Admin teacher attendance management */
+import TeacherAttendanceAdmin from "@/pages/School/TeacherAttendance/TeacherAttendanceAdmin";
+
 import PreparationAdd from "@/pages/School/Preparation/Add";
 import PreparationProfile from "@/pages/School/Preparation/Profile";
 import PreparationEdit from "@/pages/School/Preparation/Edit";
@@ -56,7 +62,10 @@ import {
 const AppRouter = () => {
   return (
     <Routes>
-      {/* Public routes */}
+      {/* =========================
+          Public routes
+      ========================= */}
+
       <Route
         path="/"
         element={<Home />}
@@ -82,7 +91,10 @@ const AppRouter = () => {
         }
       />
 
-      {/* Guest routes */}
+      {/* =========================
+          Guest routes
+      ========================= */}
+
       <Route element={<GuestRoute />}>
         <Route
           path="/login"
@@ -95,13 +107,19 @@ const AppRouter = () => {
         />
       </Route>
 
-      {/* Authenticated routes */}
+      {/* =========================
+          Authenticated routes
+      ========================= */}
+
       <Route
         element={
           <AuthenticatedRoute loginPath="/login" />
         }
       >
-        {/* Platform admin routes */}
+        {/* =========================
+            Platform admin routes
+        ========================= */}
+
         <Route
           element={
             <RoleRoute
@@ -142,7 +160,10 @@ const AppRouter = () => {
           </Route>
         </Route>
 
-        {/* Owner-only routes */}
+        {/* =========================
+            Owner-only routes
+        ========================= */}
+
         <Route element={<OwnerOnlyRoute />}>
           <Route
             path="/school/managers"
@@ -155,7 +176,11 @@ const AppRouter = () => {
           />
         </Route>
 
-        {/* School administration routes */}
+        {/* =========================
+            School administration
+            OWNER / MANAGER / SUPERVISOR
+        ========================= */}
+
         <Route
           element={
             <RoleRoute
@@ -179,9 +204,20 @@ const AppRouter = () => {
             path="/school/settings"
             element={<SchoolSettings />}
           />
+
+          {/* NEW:
+              Teacher attendance administration
+          */}
+          <Route
+            path="/school/teacher-attendance"
+            element={<TeacherAttendanceAdmin />}
+          />
         </Route>
 
-        {/* Teacher routes */}
+        {/* =========================
+            Teacher routes
+        ========================= */}
+
         <Route
           element={
             <RoleRoute
@@ -216,12 +252,26 @@ const AppRouter = () => {
             element={<TeacherClasses />}
           />
 
+          {/* Student attendance handled by teacher.
+              DON'T CHANGE THIS ROUTE.
+          */}
           <Route
             path="/teacher/attendance"
             element={<TeacherAttendance />}
           />
 
-          {/* Teacher exams */}
+          {/* NEW:
+              Teacher's own self check-in
+          */}
+          <Route
+            path="/teacher/check-in"
+            element={<TeacherCheckIn />}
+          />
+
+          {/* =========================
+              Teacher exams
+          ========================= */}
+
           <Route
             path="/teacher/exams"
             element={<TeacherExams />}
@@ -237,7 +287,10 @@ const AppRouter = () => {
             element={<TeacherExamGrading />}
           />
 
-          {/* Teacher projects */}
+          {/* =========================
+              Teacher projects
+          ========================= */}
+
           <Route
             path="/teacher/projects"
             element={<TeacherProjects />}
@@ -248,7 +301,10 @@ const AppRouter = () => {
             element={<TeacherProjectGrading />}
           />
 
-          {/* Teacher preparations */}
+          {/* =========================
+              Teacher preparations
+          ========================= */}
+
           <Route
             path="/teacher/preparations"
             element={<TeacherPreparations />}
@@ -280,6 +336,10 @@ const AppRouter = () => {
             element={<PreparationProfile />}
           />
 
+          {/* =========================
+              Teacher library/profile
+          ========================= */}
+
           <Route
             path="/teacher/library"
             element={<TeacherLibrary />}
@@ -291,7 +351,10 @@ const AppRouter = () => {
           />
         </Route>
 
-        {/* Student routes */}
+        {/* =========================
+            Student routes
+        ========================= */}
+
         <Route
           element={
             <RoleRoute
@@ -316,7 +379,10 @@ const AppRouter = () => {
         {appRoutes}
       </Route>
 
-      {/* Unknown routes */}
+      {/* =========================
+          Unknown routes
+      ========================= */}
+
       <Route
         path="*"
         element={

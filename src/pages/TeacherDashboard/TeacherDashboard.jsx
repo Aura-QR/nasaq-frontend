@@ -28,6 +28,7 @@ import {
   GroupsRounded,
   HowToRegRounded,
   LibraryBooksRounded,
+  LocationOnRounded,
   LogoutRounded,
   MenuBookRounded,
   QuizRounded,
@@ -1247,10 +1248,10 @@ const TeacherDashboard = () => {
           navigate("/teacher/schedule"),
       },
       {
-        title: "تسجيل الحضور",
+        title: "حضور الطلاب",
         description: todayLectures.length
           ? "ابدأ تسجيل حضور وغياب طلاب حصص اليوم"
-          : "راجع سجلات الحضور والغياب",
+          : "راجع سجلات حضور وغياب الطلاب",
         icon: <HowToRegRounded />,
         onClick: () => {
           if (todayLectures[0]) {
@@ -1260,6 +1261,14 @@ const TeacherDashboard = () => {
 
           navigate("/teacher/attendance");
         },
+      },
+      {
+        title: "تسجيل حضوري",
+        description:
+          "سجل حضورك الشخصي باستخدام الموقع الجغرافي وشبكة المدرسة",
+        icon: <LocationOnRounded />,
+        onClick: () =>
+          navigate("/teacher/check-in"),
       },
       {
         title: "تحضيراتي",
@@ -2385,7 +2394,7 @@ const TeacherDashboard = () => {
                               },
                             }}
                           >
-                            تسجيل الحضور
+                            حضور الطلاب
                           </Button>
 
                           <Button

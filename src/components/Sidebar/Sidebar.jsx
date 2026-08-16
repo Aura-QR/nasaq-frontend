@@ -342,10 +342,17 @@ const Sidebar = ({ active, setActive }) => {
         title: "الخدمات والمتابعة",
         items: [
           {
-            name: "إدارة الحضور",
+            name: "إدارة حضور الطلاب",
             icon: absenceIcon,
             to: "/school/attendance",
             show: attendancePermissions.read,
+          },
+          {
+            name: "حضور المعلمين",
+            Icon: HowToRegRounded,
+            iconType: "mui",
+            to: "/school/teacher-attendance",
+            show: canManageSchoolSettings,
           },
           {
             name: "إدارة التحضير",
@@ -568,10 +575,17 @@ const Sidebar = ({ active, setActive }) => {
           title: "الخدمات والمتابعة",
           items: [
             {
-              name: "تسجيل الحضور",
+              name: "حضور الطلاب",
               Icon: HowToRegRounded,
               iconType: "mui",
               to: "/teacher/attendance",
+              show: true,
+            },
+            {
+              name: "تسجيل حضوري",
+              Icon: HowToRegRounded,
+              iconType: "mui",
+              to: "/teacher/check-in",
               show: true,
             },
             {

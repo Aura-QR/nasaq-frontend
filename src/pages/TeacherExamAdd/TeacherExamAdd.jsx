@@ -273,15 +273,15 @@ const SectionTitle = ({ icon, title, description, endContent }) => (
     <Stack direction="row" alignItems="center" spacing={1}>
       <Box
         sx={{
-          width: 34,
-          height: 34,
+          width: 40,
+          height: 40,
           display: "grid",
           placeItems: "center",
           flexShrink: 0,
           color: "var(--color-gold-dark, #B78430)",
           backgroundColor: "var(--color-gold-soft, #FBF0D8)",
-          borderRadius: "10px",
-          "& svg": { fontSize: 18 },
+          borderRadius: "12px",
+          "& svg": { fontSize: 21 },
         }}
       >
         {icon}
@@ -291,7 +291,7 @@ const SectionTitle = ({ icon, title, description, endContent }) => (
         <Typography
           sx={{
             color: "var(--color-navy-deep, #122F4D)",
-            fontSize: "12.5px",
+            fontSize: "14px",
             fontWeight: 900,
           }}
         >
@@ -301,7 +301,7 @@ const SectionTitle = ({ icon, title, description, endContent }) => (
           sx={{
             mt: 0.15,
             color: "var(--color-muted, #708198)",
-            fontSize: "8.5px",
+            fontSize: "9.5px",
           }}
         >
           {description}
@@ -315,15 +315,15 @@ const SectionTitle = ({ icon, title, description, endContent }) => (
 
 const fieldSx = {
   "& .MuiOutlinedInput-root": {
-    minHeight: 40,
-    borderRadius: "10px",
+    minHeight: 46,
+    borderRadius: "12px",
     backgroundColor: "#fff",
   },
   "& .MuiInputLabel-root": {
-    fontSize: "11px",
+    fontSize: "12px",
   },
   "& .MuiInputBase-input": {
-    fontSize: "11px",
+    fontSize: "12px",
   },
 };
 
@@ -353,7 +353,7 @@ const TeacherExamAdd = () => {
       const [profileResult, classesResult, subjectsResult] =
         await Promise.allSettled([
           api.get("/teachers/me"),
-          api.get("/classes/my-classes"),
+          api.get("/classes/teacher/me"),
           api.get("/subjects/teacher/me"),
         ]);
 
@@ -686,14 +686,15 @@ const TeacherExamAdd = () => {
       onSubmit={handleSubmit}
       dir="rtl"
       sx={{
+        minHeight: "100vh",
         backgroundColor: "#fff",
         color: "var(--color-navy-deep, #122F4D)",
-        py: { xs: 1, md: 1.25 },
+        py: { xs: 1.5, md: 2.2 },
       }}
     >
       <Box
         sx={{
-          width: "min(1320px, calc(100% - 28px))",
+          width: "min(1480px, calc(100% - 24px))",
           mx: "auto",
         }}
       >
@@ -702,8 +703,8 @@ const TeacherExamAdd = () => {
           sx={{
             position: "relative",
             overflow: "hidden",
-            p: { xs: 1.35, md: 1.65 },
-            borderRadius: "20px",
+            p: { xs: 1.7, md: 2.4 },
+            borderRadius: "24px",
             color: "white",
             background:
               "linear-gradient(120deg, #173B5E 0%, #244F78 55%, #2C5C87 100%)",
@@ -711,10 +712,10 @@ const TeacherExamAdd = () => {
             "&::after": {
               content: '\"\"',
               position: "absolute",
-              width: 210,
-              height: 210,
-              left: -70,
-              top: -105,
+              width: 260,
+              height: 260,
+              left: -80,
+              top: -120,
               border: "1px solid rgba(255,255,255,.08)",
               borderRadius: "50%",
             },
@@ -730,14 +731,14 @@ const TeacherExamAdd = () => {
             <Stack direction="row" alignItems="center" spacing={1.4}>
               <Box
                 sx={{
-                  width: { xs: 44, md: 46 },
-                  height: { xs: 44, md: 46 },
-                  p: 0.65,
+                  width: { xs: 52, md: 56 },
+                  height: { xs: 52, md: 56 },
+                  p: 0.8,
                   flexShrink: 0,
                   display: "grid",
                   placeItems: "center",
                   backgroundColor: "#fff",
-                  borderRadius: "10px",
+                  borderRadius: "14px",
                   boxShadow: "0 8px 20px rgba(0,0,0,.12)",
                 }}
               >
@@ -755,19 +756,19 @@ const TeacherExamAdd = () => {
                   label="بوابة المعلم"
                   size="small"
                   sx={{
-                    mb: 0.4,
-                    height: 22,
+                    mb: 0.65,
+                    height: 25,
                     color: "#F2D792",
                     backgroundColor: "rgba(242,215,146,.12)",
                     border: "1px solid rgba(242,215,146,.22)",
-                    fontSize: "8px",
+                    fontSize: "9px",
                     fontWeight: 800,
-                    "& .MuiChip-icon": { color: "inherit", fontSize: 13 },
+                    "& .MuiChip-icon": { color: "inherit", fontSize: 15 },
                   }}
                 />
                 <Typography
                   sx={{
-                    fontSize: { xs: "19px", md: "23px" },
+                    fontSize: { xs: "21px", md: "28px" },
                     fontWeight: 900,
                     lineHeight: 1.18,
                   }}
@@ -776,9 +777,9 @@ const TeacherExamAdd = () => {
                 </Typography>
                 <Typography
                   sx={{
-                    mt: 0.2,
+                    mt: 0.3,
                     color: "rgba(255,255,255,.72)",
-                    fontSize: { xs: "8.5px", md: "9.5px" },
+                    fontSize: { xs: "9.5px", md: "10.5px" },
                   }}
                 >
                   حدد المادة والفصول ثم أضف الأسئلة والإجابات الصحيحة.
@@ -793,12 +794,12 @@ const TeacherExamAdd = () => {
                 variant="outlined"
                 startIcon={<ArrowBackRounded />}
                 sx={{
-                  minHeight: 36,
-                  px: 1.35,
+                  minHeight: 42,
+                  px: 1.7,
                   borderColor: "rgba(255,255,255,.28)",
                   color: "white",
-                  borderRadius: "10px",
-                  fontSize: "9px",
+                  borderRadius: "12px",
+                  fontSize: "10px",
                   fontWeight: 800,
                   textTransform: "none",
                   "&:hover": {
@@ -813,6 +814,37 @@ const TeacherExamAdd = () => {
               >
                 اختباراتي
               </Button>
+
+              <Button
+                type="submit"
+                disabled={saving || loadingOptions || !offerings.length}
+                variant="contained"
+                startIcon={
+                  saving ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : (
+                    <SaveRounded />
+                  )
+                }
+                sx={{
+                  minHeight: 42,
+                  px: 2.1,
+                  borderRadius: "12px",
+                  color: "var(--color-navy-deep, #122F4D)",
+                  backgroundColor: "#F2D792",
+                  boxShadow: "none",
+                  fontSize: "10px",
+                  fontWeight: 900,
+                  textTransform: "none",
+                  "&:hover": { backgroundColor: "#E8C96F", boxShadow: "none" },
+                  "& .MuiButton-startIcon": {
+                    marginLeft: "6px",
+                    marginRight: 0,
+                  },
+                }}
+              >
+                {saving ? "جارٍ إنشاء الاختبار" : "حفظ الاختبار"}
+              </Button>
             </Stack>
           </Stack>
         </Paper>
@@ -825,7 +857,7 @@ const TeacherExamAdd = () => {
                 إعادة المحاولة
               </Button>
             }
-            sx={{ mt: 1, borderRadius: "12px", py: 0.2 }}
+            sx={{ mt: 1.4, borderRadius: "14px" }}
           >
             {optionsError}
           </Alert>
@@ -833,20 +865,20 @@ const TeacherExamAdd = () => {
 
         <Box
           sx={{
-            mt: 1,
+            mt: 1.4,
             display: "grid",
-            gridTemplateColumns: { xs: "1fr", lg: "minmax(300px, .86fr) minmax(0, 1.7fr)" },
-            gap: 1,
+            gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1.05fr) minmax(0, 1.65fr)" },
+            gap: 1.3,
             alignItems: "start",
           }}
         >
-          <Stack spacing={1} sx={{ position: { lg: "sticky" }, top: 10 }}>
+          <Stack spacing={1.3} sx={{ position: { lg: "sticky" }, top: 16 }}>
             <Paper
               elevation={0}
               sx={{
-                p: { xs: 1.15, md: 1.3 },
+                p: { xs: 1.5, md: 1.8 },
                 border: "1px solid rgba(36,74,112,.09)",
-                borderRadius: "15px",
+                borderRadius: "18px",
                 boxShadow: "0 12px 28px rgba(18,47,77,.05)",
               }}
             >
@@ -856,10 +888,10 @@ const TeacherExamAdd = () => {
                 description="البيانات الأساسية وموعد إتاحة الاختبار."
               />
 
-              <Divider sx={{ my: 1.05, borderColor: "rgba(36,74,112,.07)" }} />
+              <Divider sx={{ my: 1.5, borderColor: "rgba(36,74,112,.07)" }} />
 
               {loadingOptions ? (
-                <Box sx={{ minHeight: 145, display: "grid", placeItems: "center" }}>
+                <Box sx={{ minHeight: 210, display: "grid", placeItems: "center" }}>
                   <Stack alignItems="center" spacing={1}>
                     <CircularProgress size={26} sx={{ color: "#B78430" }} />
                     <Typography sx={{ color: "#708198", fontSize: "10px" }}>
@@ -868,7 +900,7 @@ const TeacherExamAdd = () => {
                   </Stack>
                 </Box>
               ) : (
-                <Stack spacing={0.85}>
+                <Stack spacing={1.2}>
                   <TextField
                     select
                     label="المادة الدراسية"
@@ -914,7 +946,7 @@ const TeacherExamAdd = () => {
                     sx={{
                       display: "grid",
                       gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-                      gap: 0.75,
+                      gap: 1,
                     }}
                   >
                     <TextField
@@ -957,9 +989,9 @@ const TeacherExamAdd = () => {
             <Paper
               elevation={0}
               sx={{
-                p: { xs: 1.15, md: 1.3 },
+                p: { xs: 1.5, md: 1.8 },
                 border: "1px solid rgba(36,74,112,.09)",
-                borderRadius: "15px",
+                borderRadius: "18px",
                 boxShadow: "0 12px 28px rgba(18,47,77,.05)",
               }}
             >
@@ -976,11 +1008,11 @@ const TeacherExamAdd = () => {
                 }
               />
 
-              <Divider sx={{ my: 1, borderColor: "rgba(36,74,112,.07)" }} />
+              <Divider sx={{ my: 1.4, borderColor: "rgba(36,74,112,.07)" }} />
 
               {!subjectOfferingId ? (
                 <Typography
-                  sx={{ py: 1.2, color: "#708198", fontSize: "9px", textAlign: "center" }}
+                  sx={{ py: 2, color: "#708198", fontSize: "10px", textAlign: "center" }}
                 >
                   اختر المادة أولًا لعرض الفصول المتاحة.
                 </Typography>
@@ -1001,13 +1033,13 @@ const TeacherExamAdd = () => {
                           elevation={0}
                           onClick={() => toggleClass(classId)}
                           sx={{
-                            px: 0.85,
-                            py: 0.4,
+                            px: 1.1,
+                            py: 0.65,
                             cursor: "pointer",
                             border: checked
                               ? "1px solid rgba(183,132,48,.4)"
                               : "1px solid rgba(36,74,112,.08)",
-                            borderRadius: "10px",
+                            borderRadius: "12px",
                             backgroundColor: checked ? "#FBF0D8" : "#fff",
                           }}
                         >
@@ -1018,7 +1050,6 @@ const TeacherExamAdd = () => {
                                 checked={checked}
                                 onChange={() => toggleClass(classId)}
                                 sx={{
-                                  p: 0.45,
                                   color: "#B78430",
                                   "&.Mui-checked": { color: "#B78430" },
                                 }}
@@ -1026,10 +1057,10 @@ const TeacherExamAdd = () => {
                             }
                             label={
                               <Box>
-                                <Typography sx={{ fontSize: "10px", fontWeight: 800 }}>
+                                <Typography sx={{ fontSize: "11px", fontWeight: 800 }}>
                                   {getClassLabel(classEntity, index)}
                                 </Typography>
-                                <Typography sx={{ color: "#708198", fontSize: "8px" }}>
+                                <Typography sx={{ color: "#708198", fontSize: "9px" }}>
                                   {classEntity?.studentsCount ??
                                     classEntity?.studentCount ??
                                     classEntity?.students?.length ??
@@ -1054,335 +1085,331 @@ const TeacherExamAdd = () => {
             <Paper
               elevation={0}
               sx={{
-                p: 1.05,
+                p: 1.5,
                 color: "white",
-                borderRadius: "15px",
+                borderRadius: "18px",
                 background: "linear-gradient(135deg, #173B5E, #2C5C87)",
               }}
             >
               <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Box>
-                  <Typography sx={{ color: "#F2D792", fontSize: "9px", fontWeight: 900 }}>
+                  <Typography sx={{ color: "#F2D792", fontSize: "10px", fontWeight: 900 }}>
                     ملخص الاختبار
                   </Typography>
-                  <Typography sx={{ mt: 0.2, fontSize: "19px", fontWeight: 900 }}>
+                  <Typography sx={{ mt: 0.4, fontSize: "23px", fontWeight: 900 }}>
                     {completedQuestions} / {questions.length}
                   </Typography>
-                  <Typography sx={{ color: "rgba(255,255,255,.68)", fontSize: "8px" }}>
+                  <Typography sx={{ color: "rgba(255,255,255,.68)", fontSize: "9px" }}>
                     أسئلة مكتملة من إجمالي الأسئلة
                   </Typography>
                 </Box>
-                <CheckCircleRounded sx={{ color: "#F2D792", fontSize: 30 }} />
+                <CheckCircleRounded sx={{ color: "#F2D792", fontSize: 36 }} />
               </Stack>
             </Paper>
           </Stack>
-
-          <Stack spacing={1} sx={{ minWidth: 0 }}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: { xs: 1.15, md: 1.3 },
-                border: "1px solid rgba(36,74,112,.09)",
-                borderRadius: "15px",
-                boxShadow: "0 12px 28px rgba(18,47,77,.05)",
-              }}
-            >
-              <SectionTitle
-                icon={<MenuBookRounded />}
-                title="أسئلة الاختبار"
-                description="أضف السؤال والاختيارات وحدد الإجابة الصحيحة."
-                endContent={
-                  <Button
-                    type="button"
-                    onClick={addQuestionCard}
-                    variant="outlined"
-                    startIcon={<AddRounded />}
-                    sx={{
-                      minHeight: 34,
-                      borderRadius: "9px",
-                      color: "#244A70",
-                      borderColor: "rgba(36,74,112,.25)",
-                      fontSize: "9px",
-                      fontWeight: 800,
-                      textTransform: "none",
-                      "& .MuiButton-startIcon": { marginLeft: "5px", marginRight: 0 },
-                    }}
-                  >
-                    إضافة سؤال
-                  </Button>
-                }
-              />
-
-              <Divider sx={{ my: 1.05, borderColor: "rgba(36,74,112,.07)" }} />
-
-              {validationErrors.questions && (
-                <Alert severity="error" sx={{ mb: 1.2, borderRadius: "12px" }}>
-                  بعض الأسئلة غير مكتملة. راجع نص السؤال والاختيارات والإجابة الصحيحة.
-                </Alert>
-              )}
-
-              <Stack spacing={0.85}>
-                {questions.map((question, questionIndex) => {
-                  const questionError = validationErrors.questions?.[questionIndex] || {};
-
-                  return (
-                    <Paper
-                      key={question.localId}
-                      elevation={0}
-                      sx={{
-                        overflow: "hidden",
-                        border: Object.keys(questionError).length
-                          ? "1px solid rgba(211,47,47,.32)"
-                          : "1px solid rgba(36,74,112,.09)",
-                        borderRadius: "13px",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          height: 3,
-                          backgroundColor: Object.keys(questionError).length
-                            ? "#D32F2F"
-                            : "#244A70",
-                        }}
-                      />
-
-                      <Box sx={{ p: { xs: 0.95, md: 1.05 } }}>
-                        <Stack
-                          direction="row"
-                          alignItems="center"
-                          justifyContent="space-between"
-                          gap={1}
-                        >
-                          <Stack direction="row" alignItems="center" spacing={0.8}>
-                            <Box
-                              sx={{
-                                width: 30,
-                                height: 30,
-                                display: "grid",
-                                placeItems: "center",
-                                color: "#fff",
-                                backgroundColor: "#244A70",
-                                borderRadius: "9px",
-                                fontSize: "10px",
-                                fontWeight: 900,
-                              }}
-                            >
-                              {questionIndex + 1}
-                            </Box>
-                            <Box>
-                              <Typography sx={{ fontSize: "11px", fontWeight: 900 }}>
-                                السؤال {questionIndex + 1}
-                              </Typography>
-                              <Typography sx={{ color: "#708198", fontSize: "8px" }}>
-                                اختر الإجابة الصحيحة من الدائرة بجوار الاختيار.
-                              </Typography>
-                            </Box>
-                          </Stack>
-
-                          <Stack direction="row" spacing={0.3}>
-                            <Tooltip title="نسخ السؤال">
-                              <IconButton
-                                type="button"
-                                onClick={() => duplicateQuestion(questionIndex)}
-                                size="small"
-                                sx={{ color: "#244A70" }}
-                              >
-                                <ContentCopyRounded fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="حذف السؤال">
-                              <IconButton
-                                type="button"
-                                onClick={() => removeQuestion(questionIndex)}
-                                size="small"
-                                sx={{ color: "#C94848" }}
-                              >
-                                <DeleteOutlineRounded fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Stack>
-                        </Stack>
-
-                        <TextField
-                          multiline
-                          minRows={1}
-                          fullWidth
-                          label="نص السؤال"
-                          value={question.question}
-                          onChange={(event) =>
-                            updateQuestion(questionIndex, { question: event.target.value })
-                          }
-                          error={Boolean(questionError.question)}
-                          helperText={questionError.question}
-                          sx={{ ...fieldSx, mt: 0.85 }}
-                        />
-
-                        <Box
-                          sx={{
-                            mt: 0.75,
-                            display: "grid",
-                            gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-                            gap: 0.6,
-                          }}
-                        >
-                          {question.options.map((option, optionIndex) => {
-                            const checked =
-                              Boolean(option.trim()) &&
-                              question.correctAnswer === option;
-
-                            return (
-                              <Stack
-                                key={`${question.localId}-option-${optionIndex}`}
-                                direction="row"
-                                alignItems="center"
-                                spacing={0.2}
-                              >
-                                <Radio
-                                  size="small"
-                                  checked={checked}
-                                  disabled={!option.trim()}
-                                  onChange={() =>
-                                    updateQuestion(questionIndex, {
-                                      correctAnswer: option,
-                                    })
-                                  }
-                                  sx={{
-                                    p: 0.45,
-                                    color: "#B78430",
-                                    "&.Mui-checked": { color: "#B78430" },
-                                  }}
-                                />
-                                <TextField
-                                  fullWidth
-                                  label={`الاختيار ${optionIndex + 1}`}
-                                  value={option}
-                                  onChange={(event) =>
-                                    updateOption(questionIndex, optionIndex, event.target.value)
-                                  }
-                                  sx={fieldSx}
-                                />
-                              </Stack>
-                            );
-                          })}
-                        </Box>
-
-                        {(questionError.options || questionError.correctAnswer) && (
-                          <Stack direction="row" alignItems="center" spacing={0.4} sx={{ mt: 0.55 }}>
-                            <WarningAmberRounded sx={{ color: "#D32F2F", fontSize: 16 }} />
-                            <Typography sx={{ color: "#D32F2F", fontSize: "9.5px" }}>
-                              {questionError.options || questionError.correctAnswer}
-                            </Typography>
-                          </Stack>
-                        )}
-
-                        {question.correctAnswer && !questionError.correctAnswer && (
-                          <Chip
-                            icon={<RadioButtonCheckedRounded />}
-                            label={`الإجابة الصحيحة: ${question.correctAnswer}`}
-                            size="small"
-                            sx={{
-                              mt: 0.7,
-                              color: "#237449",
-                              backgroundColor: "rgba(116,201,154,.14)",
-                              fontSize: "8px",
-                              fontWeight: 800,
-                              "& .MuiChip-icon": { color: "inherit", fontSize: 13 },
-                            }}
-                          />
-                        )}
-                      </Box>
-                    </Paper>
-                  );
-                })}
-              </Stack>
-
-              <Button
-                type="button"
-                onClick={addQuestionCard}
-                fullWidth
-                variant="outlined"
-                startIcon={<AddRounded />}
-                sx={{
-                  mt: 0.9,
-                  minHeight: 40,
-                  borderStyle: "dashed",
-                  borderRadius: "10px",
-                  color: "#B78430",
-                  borderColor: "rgba(183,132,48,.38)",
-                  backgroundColor: "rgba(251,240,216,.28)",
-                  fontSize: "10px",
-                  fontWeight: 900,
-                  textTransform: "none",
-                  "& .MuiButton-startIcon": { marginLeft: "5px", marginRight: 0 },
-                }}
-              >
-                إضافة سؤال آخر
-              </Button>
-            </Paper>
 
           <Paper
             elevation={0}
             sx={{
-              p: 0.9,
-              display: "flex",
-              flexDirection: { xs: "column", sm: "row" },
-              alignItems: { xs: "stretch", sm: "center" },
-              justifyContent: "space-between",
-              gap: 1,
+              p: { xs: 1.5, md: 1.8 },
               border: "1px solid rgba(36,74,112,.09)",
-              borderRadius: "13px",
-              boxShadow: "0 10px 24px rgba(18,47,77,.04)",
+              borderRadius: "18px",
+              boxShadow: "0 12px 28px rgba(18,47,77,.05)",
             }}
           >
-            <Stack direction="row" alignItems="center" spacing={0.8}>
-              <CalendarMonthRounded sx={{ color: "#B78430" }} />
-              <Box>
-                <Typography sx={{ fontSize: "11px", fontWeight: 900 }}>
-                  راجع بيانات الاختبار قبل الحفظ
-                </Typography>
-                <Typography sx={{ color: "#708198", fontSize: "9px" }}>
-                  سيظهر الاختبار للفصول المحددة وفق تاريخ البداية والنهاية.
-                </Typography>
-              </Box>
+            <SectionTitle
+              icon={<MenuBookRounded />}
+              title="أسئلة الاختبار"
+              description="أضف السؤال والاختيارات وحدد الإجابة الصحيحة."
+              endContent={
+                <Button
+                  type="button"
+                  onClick={addQuestionCard}
+                  variant="outlined"
+                  startIcon={<AddRounded />}
+                  sx={{
+                    minHeight: 38,
+                    borderRadius: "10px",
+                    color: "#244A70",
+                    borderColor: "rgba(36,74,112,.25)",
+                    fontSize: "10px",
+                    fontWeight: 800,
+                    textTransform: "none",
+                    "& .MuiButton-startIcon": { marginLeft: "5px", marginRight: 0 },
+                  }}
+                >
+                  إضافة سؤال
+                </Button>
+              }
+            />
+
+            <Divider sx={{ my: 1.5, borderColor: "rgba(36,74,112,.07)" }} />
+
+            {validationErrors.questions && (
+              <Alert severity="error" sx={{ mb: 1.2, borderRadius: "12px" }}>
+                بعض الأسئلة غير مكتملة. راجع نص السؤال والاختيارات والإجابة الصحيحة.
+              </Alert>
+            )}
+
+            <Stack spacing={1.2}>
+              {questions.map((question, questionIndex) => {
+                const questionError = validationErrors.questions?.[questionIndex] || {};
+
+                return (
+                  <Paper
+                    key={question.localId}
+                    elevation={0}
+                    sx={{
+                      overflow: "hidden",
+                      border: Object.keys(questionError).length
+                        ? "1px solid rgba(211,47,47,.32)"
+                        : "1px solid rgba(36,74,112,.09)",
+                      borderRadius: "16px",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        height: 4,
+                        backgroundColor: Object.keys(questionError).length
+                          ? "#D32F2F"
+                          : "#244A70",
+                      }}
+                    />
+
+                    <Box sx={{ p: { xs: 1.2, md: 1.5 } }}>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        gap={1}
+                      >
+                        <Stack direction="row" alignItems="center" spacing={0.8}>
+                          <Box
+                            sx={{
+                              width: 34,
+                              height: 34,
+                              display: "grid",
+                              placeItems: "center",
+                              color: "#fff",
+                              backgroundColor: "#244A70",
+                              borderRadius: "10px",
+                              fontSize: "11px",
+                              fontWeight: 900,
+                            }}
+                          >
+                            {questionIndex + 1}
+                          </Box>
+                          <Box>
+                            <Typography sx={{ fontSize: "12px", fontWeight: 900 }}>
+                              السؤال {questionIndex + 1}
+                            </Typography>
+                            <Typography sx={{ color: "#708198", fontSize: "9px" }}>
+                              اختر الإجابة الصحيحة من الدائرة بجوار الاختيار.
+                            </Typography>
+                          </Box>
+                        </Stack>
+
+                        <Stack direction="row" spacing={0.3}>
+                          <Tooltip title="نسخ السؤال">
+                            <IconButton
+                              type="button"
+                              onClick={() => duplicateQuestion(questionIndex)}
+                              size="small"
+                              sx={{ color: "#244A70" }}
+                            >
+                              <ContentCopyRounded fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="حذف السؤال">
+                            <IconButton
+                              type="button"
+                              onClick={() => removeQuestion(questionIndex)}
+                              size="small"
+                              sx={{ color: "#C94848" }}
+                            >
+                              <DeleteOutlineRounded fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </Stack>
+
+                      <TextField
+                        multiline
+                        minRows={2}
+                        fullWidth
+                        label="نص السؤال"
+                        value={question.question}
+                        onChange={(event) =>
+                          updateQuestion(questionIndex, { question: event.target.value })
+                        }
+                        error={Boolean(questionError.question)}
+                        helperText={questionError.question}
+                        sx={{ ...fieldSx, mt: 1.2 }}
+                      />
+
+                      <Box
+                        sx={{
+                          mt: 1.1,
+                          display: "grid",
+                          gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                          gap: 0.9,
+                        }}
+                      >
+                        {question.options.map((option, optionIndex) => {
+                          const checked =
+                            Boolean(option.trim()) &&
+                            question.correctAnswer === option;
+
+                          return (
+                            <Stack
+                              key={`${question.localId}-option-${optionIndex}`}
+                              direction="row"
+                              alignItems="center"
+                              spacing={0.2}
+                            >
+                              <Radio
+                                checked={checked}
+                                disabled={!option.trim()}
+                                onChange={() =>
+                                  updateQuestion(questionIndex, {
+                                    correctAnswer: option,
+                                  })
+                                }
+                                sx={{
+                                  color: "#B78430",
+                                  "&.Mui-checked": { color: "#B78430" },
+                                }}
+                              />
+                              <TextField
+                                fullWidth
+                                label={`الاختيار ${optionIndex + 1}`}
+                                value={option}
+                                onChange={(event) =>
+                                  updateOption(questionIndex, optionIndex, event.target.value)
+                                }
+                                sx={fieldSx}
+                              />
+                            </Stack>
+                          );
+                        })}
+                      </Box>
+
+                      {(questionError.options || questionError.correctAnswer) && (
+                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.8 }}>
+                          <WarningAmberRounded sx={{ color: "#D32F2F", fontSize: 16 }} />
+                          <Typography sx={{ color: "#D32F2F", fontSize: "9.5px" }}>
+                            {questionError.options || questionError.correctAnswer}
+                          </Typography>
+                        </Stack>
+                      )}
+
+                      {question.correctAnswer && !questionError.correctAnswer && (
+                        <Chip
+                          icon={<RadioButtonCheckedRounded />}
+                          label={`الإجابة الصحيحة: ${question.correctAnswer}`}
+                          size="small"
+                          sx={{
+                            mt: 1,
+                            color: "#237449",
+                            backgroundColor: "rgba(116,201,154,.14)",
+                            fontSize: "9px",
+                            fontWeight: 800,
+                            "& .MuiChip-icon": { color: "inherit", fontSize: 15 },
+                          }}
+                        />
+                      )}
+                    </Box>
+                  </Paper>
+                );
+              })}
             </Stack>
 
-            <Stack direction={{ xs: "column", sm: "row" }} gap={0.7}>
-              <Button
-                type="button"
-                onClick={() => navigate("/teacher/exams")}
-                variant="text"
-                sx={{ color: "#708198", fontSize: "10px", fontWeight: 800 }}
-              >
-                إلغاء
-              </Button>
-              <Button
-                type="submit"
-                disabled={saving || loadingOptions || !offerings.length}
-                variant="contained"
-                startIcon={
-                  saving ? <CircularProgress size={15} color="inherit" /> : <SaveRounded />
-                }
-                sx={{
-                  minHeight: 36,
-                  px: 1.8,
-                  color: "#122F4D",
-                  backgroundColor: "#F2D792",
-                  borderRadius: "9px",
-                  boxShadow: "none",
-                  fontSize: "10px",
-                  fontWeight: 900,
-                  textTransform: "none",
-                  "&:hover": { backgroundColor: "#E8C96F", boxShadow: "none" },
-                  "& .MuiButton-startIcon": { marginLeft: "5px", marginRight: 0 },
-                }}
-              >
-                {saving ? "جارٍ الحفظ" : "إنشاء الاختبار"}
-              </Button>
-            </Stack>
+            <Button
+              type="button"
+              onClick={addQuestionCard}
+              fullWidth
+              variant="outlined"
+              startIcon={<AddRounded />}
+              sx={{
+                mt: 1.3,
+                minHeight: 46,
+                borderStyle: "dashed",
+                borderRadius: "12px",
+                color: "#B78430",
+                borderColor: "rgba(183,132,48,.38)",
+                backgroundColor: "rgba(251,240,216,.28)",
+                fontSize: "10px",
+                fontWeight: 900,
+                textTransform: "none",
+                "& .MuiButton-startIcon": { marginLeft: "5px", marginRight: 0 },
+              }}
+            >
+              إضافة سؤال آخر
+            </Button>
           </Paper>
-          </Stack>
         </Box>
 
+        <Paper
+          elevation={0}
+          sx={{
+            mt: 1.3,
+            p: 1.2,
+            display: "flex",
+            flexDirection: { xs: "column", sm: "row" },
+            alignItems: { xs: "stretch", sm: "center" },
+            justifyContent: "space-between",
+            gap: 1,
+            border: "1px solid rgba(36,74,112,.09)",
+            borderRadius: "16px",
+            boxShadow: "0 10px 24px rgba(18,47,77,.04)",
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={0.8}>
+            <CalendarMonthRounded sx={{ color: "#B78430" }} />
+            <Box>
+              <Typography sx={{ fontSize: "11px", fontWeight: 900 }}>
+                راجع بيانات الاختبار قبل الحفظ
+              </Typography>
+              <Typography sx={{ color: "#708198", fontSize: "9px" }}>
+                سيظهر الاختبار للفصول المحددة وفق تاريخ البداية والنهاية.
+              </Typography>
+            </Box>
+          </Stack>
+
+          <Stack direction={{ xs: "column", sm: "row" }} gap={0.7}>
+            <Button
+              type="button"
+              onClick={() => navigate("/teacher/exams")}
+              variant="text"
+              sx={{ color: "#708198", fontSize: "10px", fontWeight: 800 }}
+            >
+              إلغاء
+            </Button>
+            <Button
+              type="submit"
+              disabled={saving || loadingOptions || !offerings.length}
+              variant="contained"
+              startIcon={
+                saving ? <CircularProgress size={15} color="inherit" /> : <SaveRounded />
+              }
+              sx={{
+                minHeight: 42,
+                px: 2.3,
+                color: "#122F4D",
+                backgroundColor: "#F2D792",
+                borderRadius: "11px",
+                boxShadow: "none",
+                fontSize: "10px",
+                fontWeight: 900,
+                textTransform: "none",
+                "&:hover": { backgroundColor: "#E8C96F", boxShadow: "none" },
+                "& .MuiButton-startIcon": { marginLeft: "5px", marginRight: 0 },
+              }}
+            >
+              {saving ? "جارٍ الحفظ" : "إنشاء الاختبار"}
+            </Button>
+          </Stack>
+        </Paper>
       </Box>
     </Box>
   );
