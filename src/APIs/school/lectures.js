@@ -5,6 +5,7 @@ const ENDPOINT = "/lectures";
 const CACHE_TTL = 15000;
 const cache = new Map();
 const pending = new Map();
+let cacheGeneration = 0;
 
 const normalizeId = (value) => {
   if (value && typeof value === "object") {
@@ -22,7 +23,6 @@ const normalizeSuccess = (response) => {
       status: false,
       message: payload?.message || "فشلت العملية",
       data: payload?.data,
-      pagination: payload?.pagination ?? null,
     };
   }
 
@@ -30,7 +30,6 @@ const normalizeSuccess = (response) => {
     status: true,
     message: payload?.message || "Success",
     data: payload?.data ?? payload,
-    pagination: payload?.pagination ?? null,
   };
 };
 
@@ -74,14 +73,20 @@ const getCached = async (
     return pending.get(key);
   }
 
+  const requestGeneration = cacheGeneration;
+
   const request = api
     .get(endpoint, { params: cleanedParams })
     .then(normalizeSuccess)
     .then((result) => {
-      cache.set(key, {
-        value: result,
-        createdAt: Date.now(),
-      });
+      // لو حصل تعديل أثناء ما الـ GET القديم لسه شغال،
+      // ممنوع يرجّع البيانات القديمة للكاش بعد الـ invalidate.
+      if (requestGeneration === cacheGeneration) {
+        cache.set(key, {
+          value: result,
+          createdAt: Date.now(),
+        });
+      }
 
       return result;
     })
@@ -91,14 +96,20 @@ const getCached = async (
         fallback
       )
     )
-    .finally(() => pending.delete(key));
+    .finally(() => {
+      if (pending.get(key) === request) {
+        pending.delete(key);
+      }
+    });
 
   pending.set(key, request);
   return request;
 };
 
 export const invalidateLecturesCache = () => {
+  cacheGeneration += 1;
   cache.clear();
+  pending.clear();
 };
 
 export const fetchLectures = async (
@@ -109,7 +120,11 @@ export const fetchLectures = async (
     ENDPOINT,
     filters,
     "تعذر تحميل الحصص",
-    options
+    {
+      ...options,
+      // الحصص بيانات تشغيلية تتغير باستمرار؛ لا نعرض Snapshot قديم.
+      force: options.force ?? true,
+    }
   );
 
 export const fetchLecturesList = async (
@@ -119,18 +134,10 @@ export const fetchLecturesList = async (
     `${ENDPOINT}/list`,
     {},
     "تعذر تحميل قائمة الحصص",
-    options
-  );
-
-export const fetchTeacherMyClasses = async (
-  filters = {},
-  options = {}
-) =>
-  getCached(
-    `${ENDPOINT}/teacher/me/classes`,
-    filters,
-    "تعذر تحميل فصول المعلم",
-    options
+    {
+      ...options,
+      force: options.force ?? true,
+    }
   );
 
 export const fetchSingleLecture = async (
@@ -150,7 +157,10 @@ export const fetchSingleLecture = async (
     `${ENDPOINT}/${lectureId}`,
     {},
     "تعذر تحميل بيانات الحصة",
-    options
+    {
+      ...options,
+      force: options.force ?? true,
+    }
   );
 };
 
@@ -217,7 +227,9 @@ export const normalizeLecturePayload = (
       data.subjectOfferingId
     ),
     termId: normalizeId(data.termId),
-    dayOfWeek: String(data.dayOfWeek || "")
+    dayOfWeek: String(
+      data.dayOfWeek || ""
+    )
       .trim()
       .toLowerCase(),
     slot: Number(data.slot),
@@ -266,7 +278,32 @@ export const editLecture = async (data, id) => {
     );
 
     invalidateLecturesCache();
-    return normalizeSuccess(response);
+
+    const normalized = normalizeSuccess(response);
+
+    // تأكيد من السيرفر نفسه بعد الحفظ، وليس من أي كاش محلي.
+    try {
+      const fresh = await api.get(
+        `${ENDPOINT}/${lectureId}`,
+        {
+          params: {
+            _fresh: Date.now(),
+          },
+        }
+      );
+
+      invalidateLecturesCache();
+
+      return {
+        ...normalized,
+        data:
+          fresh?.data?.data ??
+          fresh?.data ??
+          normalized.data,
+      };
+    } catch {
+      return normalized;
+    }
   } catch (error) {
     return normalizeFailure(
       getApiError(error, "تعذر تعديل الحصة"),

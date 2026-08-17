@@ -1,109 +1,221 @@
 import { useMemo } from "react";
+
 import {
-  Assignment,
-  BarChart,
-  EmojiEvents,
-  FactCheck,
-  MenuBook,
-  Quiz,
-  School,
-  TrendingUp,
+  Box,
+  Chip,
+  CircularProgress,
+  IconButton,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
+
+import {
+  ArrowForwardRounded,
+  AssignmentRounded,
+  BarChartRounded,
+  EmojiEventsRounded,
+  FactCheckRounded,
+  MenuBookRounded,
+  QuizRounded,
+  SchoolRounded,
+  TrendingUpRounded,
 } from "@mui/icons-material";
-import { useParams } from "react-router-dom";
-import Back from "@/components/Back/Back";
+
+import {
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+
 import Container from "@/components/Container/Container";
 import SUBJECT_PALETTES from "@/utils/constants/SubjectPalettes";
-import { useGradesCriteria, useStudentSubjects } from "@/utils/hooks/apis/student/useStudent";
+
+import {
+  useGradesCriteria,
+  useStudentSubjects,
+} from "@/utils/hooks/apis/student/useStudent";
 
 const subjectFallback = {
-  subjectName: "الرياضيات",
-  subjectCode: "MATH-01",
-  teacherName: "أ. سارة خالد",
-  termLabel: "الفصل الدراسي الثاني",
+  subjectName: "مادة دراسية",
+  subjectCode: "",
+  teacherName: "غير محدد",
+  termLabel: "الفصل الدراسي",
+};
+
+const COLORS = {
+  navy: "#244a70",
+  deepNavy: "#122f4d",
+  gold: "#d3a44f",
+  blue: "#4e8dcc",
+  blueLight: "#edf6ff",
+  green: "#43a978",
+  greenLight: "#eaf8f1",
+  orange: "#e69a43",
+  orangeLight: "#fff3e4",
+  purple: "#8068c9",
+  purpleLight: "#f3efff",
+  pink: "#d77993",
+  pinkLight: "#fff0f4",
 };
 
 const sectionConfigs = [
   {
     key: "final",
     label: "الاختبار النهائي",
-    helperText: "يوضح الدرجة النهائية المعتمدة في المادة.",
+    helperText: "الدرجة النهائية المعتمدة في المادة",
     entryLabel: "النتيجة النهائية",
-    Icon: EmojiEvents,
-    accent: "text-[#318dce]",
-    softBg: "bg-[#EEF5FF]",
-    border: "border-[#BCD7FF]",
-    fill: "bg-[#318dce]",
+    Icon: EmojiEventsRounded,
+    color: COLORS.blue,
+    background: COLORS.blueLight,
+    border: "#d7e8fa",
   },
   {
     key: "activities",
     label: "الأنشطة",
-    helperText: "الحضور والمشاركة والتفاعل المستمر.",
+    helperText: "الحضور والمشاركة والتفاعل",
     entryLabel: "النشاط الصفي",
-    Icon: FactCheck,
-    accent: "text-pink-600",
-    softBg: "bg-pink-50",
-    border: "border-pink-200",
-    fill: "bg-pink-500",
+    Icon: FactCheckRounded,
+    color: COLORS.pink,
+    background: COLORS.pinkLight,
+    border: "#f1dce4",
   },
   {
     key: "assignments",
     label: "الواجبات",
-    helperText: "متابعة أداء الطالب في الواجبات المطلوبة.",
+    helperText: "متابعة أداء الطالب في الواجبات",
     entryLabel: "واجب",
-    Icon: Assignment,
-    accent: "text-amber-600",
-    softBg: "bg-amber-50",
-    border: "border-amber-200",
-    fill: "bg-amber-500",
+    Icon: AssignmentRounded,
+    color: COLORS.orange,
+    background: COLORS.orangeLight,
+    border: "#f3dfc4",
   },
   {
     key: "quizzes",
-    label: "الكويزات",
-    helperText: "نتائج التقييمات القصيرة أثناء الفصل.",
-    entryLabel: "كويز",
-    Icon: Quiz,
-    accent: "text-emerald-600",
-    softBg: "bg-emerald-50",
-    border: "border-emerald-200",
-    fill: "bg-emerald-500",
+    label: "الاختبارات القصيرة",
+    helperText: "نتائج التقييمات القصيرة",
+    entryLabel: "اختبار قصير",
+    Icon: QuizRounded,
+    color: COLORS.green,
+    background: COLORS.greenLight,
+    border: "#d5ecdf",
   },
   {
     key: "projects",
     label: "المشاريع",
-    helperText: "مستوى الإنجاز في المشاريع العملية للمادة.",
+    helperText: "مستوى الإنجاز في المشاريع",
     entryLabel: "مشروع",
-    Icon: BarChart,
-    accent: "text-indigo-600",
-    softBg: "bg-indigo-50",
-    border: "border-indigo-200",
-    fill: "bg-indigo-500",
+    Icon: BarChartRounded,
+    color: COLORS.purple,
+    background: COLORS.purpleLight,
+    border: "#e3dcf8",
   },
 ];
 
 const getPercentage = (grade, max) => {
   if (!max) return 0;
-  return Math.round((grade / max) * 100);
+  return Math.min(100, Math.max(0, Math.round((grade / max) * 100)));
+};
+
+const getTeacherName = (grades, selectedSubject) => {
+  const teacher =
+    grades?.teacher ||
+    grades?.teacherId ||
+    selectedSubject?.teacher ||
+    selectedSubject?.teacherId ||
+    selectedSubject?.subjectOfferingId?.teacher ||
+    selectedSubject?.subjectOfferingId?.teacherId;
+
+  if (!teacher) return subjectFallback.teacherName;
+  if (typeof teacher === "string") return teacher;
+
+  return (
+    teacher?.name ||
+    teacher?.fullName ||
+    [teacher?.firstName, teacher?.fatherName, teacher?.familyName]
+      .filter(Boolean)
+      .join(" ") ||
+    subjectFallback.teacherName
+  );
+};
+
+const getSubjectName = (grades, selectedSubject) =>
+  grades?.subject?.subjectName ||
+  grades?.subject?.name ||
+  selectedSubject?.subjectName ||
+  selectedSubject?.name ||
+  selectedSubject?.subjectId?.subjectName ||
+  selectedSubject?.subjectId?.name ||
+  selectedSubject?.subjectOfferingId?.subjectId?.subjectName ||
+  selectedSubject?.subjectOfferingId?.subjectId?.name ||
+  subjectFallback.subjectName;
+
+const getSubjectCode = (grades, selectedSubject) =>
+  grades?.subject?.subjectCode ||
+  grades?.subject?.code ||
+  selectedSubject?.subjectCode ||
+  selectedSubject?.code ||
+  selectedSubject?.subjectId?.subjectCode ||
+  selectedSubject?.subjectId?.code ||
+  selectedSubject?.subjectOfferingId?.subjectId?.subjectCode ||
+  selectedSubject?.subjectOfferingId?.subjectId?.code ||
+  subjectFallback.subjectCode;
+
+const getTermLabel = (grades, selectedSubject) => {
+  const term =
+    grades?.term ||
+    grades?.termId ||
+    selectedSubject?.term ||
+    selectedSubject?.termId ||
+    selectedSubject?.subjectOfferingId?.term ||
+    selectedSubject?.subjectOfferingId?.termId;
+
+  if (typeof term === "string") {
+    return grades?.academicYear || subjectFallback.termLabel;
+  }
+
+  return term?.name || term?.label || grades?.academicYear || subjectFallback.termLabel;
 };
 
 const SubjectGrades = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+
   const { subjects } = useStudentSubjects();
   const { grades } = useGradesCriteria({ subjectId: id });
   const gradesData = grades?.grades || null;
-  console.log(gradesData)
 
   const subjectsList = useMemo(
-    () => subjects || [],
+    () => (Array.isArray(subjects) ? subjects : []),
     [subjects]
   );
 
   const selectedSubject = useMemo(
-    () => subjectsList.find((subject) => subject?._id === id),
+    () =>
+      subjectsList.find(
+        (subject) =>
+          String(
+            subject?._id ||
+              subject?.id ||
+              subject?.subjectOfferingId?._id ||
+              subject?.subjectOfferingId?.id ||
+              ""
+          ) === String(id)
+      ),
     [subjectsList, id]
   );
 
   const subjectIndex = useMemo(
-    () => subjectsList.findIndex((subject) => subject?._id === id),
+    () =>
+      subjectsList.findIndex(
+        (subject) =>
+          String(
+            subject?._id ||
+              subject?.id ||
+              subject?.subjectOfferingId?._id ||
+              subject?.subjectOfferingId?.id ||
+              ""
+          ) === String(id)
+      ),
     [subjectsList, id]
   );
 
@@ -113,19 +225,11 @@ const SubjectGrades = () => {
       : SUBJECT_PALETTES[0];
 
   const subjectDetails = {
-    subjectName:
-      grades?.subject?.subjectName ||
-      selectedSubject?.subjectName ||
-      subjectFallback.subjectName,
-    subjectCode:
-      grades?.subject?.subjectCode ||
-      selectedSubject?.subjectCode ||
-      subjectFallback.subjectCode,
-    teacherName: subjectFallback.teacherName,
-    termLabel: grades?.academicYear || subjectFallback.termLabel,
+    subjectName: getSubjectName(grades, selectedSubject),
+    subjectCode: getSubjectCode(grades, selectedSubject),
+    teacherName: getTeacherName(grades, selectedSubject),
+    termLabel: getTermLabel(grades, selectedSubject),
   };
-
-  const hasBackendGrades = Boolean(gradesData);
 
   const sectionSummaries = useMemo(() => {
     return sectionConfigs.map((section) => {
@@ -134,21 +238,25 @@ const SubjectGrades = () => {
         section.key === "final" || section.key === "activities"
           ? { grade: 0, total: 0 }
           : [];
+
       const resolvedValue = rawValue ?? fallbackValue;
       const rawEntries = Array.isArray(resolvedValue)
         ? resolvedValue
         : [resolvedValue];
-      const entries = rawEntries.map((entry, index) => ({
-        grade: Number(entry?.grade) || 0,
-        max: Number(entry?.total ?? entry?.max) || 0,
-        title: Array.isArray(resolvedValue)
-          ? `${section.entryLabel} ${entry?.number || index + 1}`
-          : section.entryLabel,
-        percentage: getPercentage(
-          Number(entry?.grade) || 0,
-          Number(entry?.total ?? entry?.max) || 0
-        ),
-      }));
+
+      const entries = rawEntries.map((entry, index) => {
+        const grade = Number(entry?.grade) || 0;
+        const max = Number(entry?.total ?? entry?.max) || 0;
+
+        return {
+          grade,
+          max,
+          title: Array.isArray(resolvedValue)
+            ? `${section.entryLabel} ${entry?.number || index + 1}`
+            : section.entryLabel,
+          percentage: getPercentage(grade, max),
+        };
+      });
 
       const totals = entries.reduce(
         (summary, entry) => ({
@@ -164,6 +272,7 @@ const SubjectGrades = () => {
         totalGrade: totals.grade,
         totalMax: totals.max,
         percentage: getPercentage(totals.grade, totals.max),
+        hasBackendValue: rawValue !== undefined,
       };
     });
   }, [gradesData]);
@@ -179,215 +288,593 @@ const SubjectGrades = () => {
     );
   }, [sectionSummaries]);
 
-  const bestSection = useMemo(() => {
-    return sectionSummaries.reduce((best, section) => {
-      if (!best || section.percentage > best.percentage) {
-        return section;
-      }
-      return best;
-    }, null);
+  const overallPercentage = getPercentage(
+    overallSummary.grade,
+    overallSummary.max
+  );
+
+  const visibleSections = useMemo(() => {
+    const actual = sectionSummaries.filter(
+      (section) =>
+        section.hasBackendValue ||
+        section.totalMax > 0 ||
+        section.totalGrade > 0
+    );
+
+    return actual.length
+      ? actual
+      : sectionSummaries.filter((section) => section.entries.length > 0);
   }, [sectionSummaries]);
-
-  const overallPercentage = getPercentage(overallSummary.grade, overallSummary.max);
-
-  const summaryCards = [
-    {
-      label: "النسبة الكلية",
-      value: `${overallPercentage}%`,
-      note: "أداء الطالب في جميع عناصر التقييم",
-      Icon: TrendingUp,
-      accent: "text-[#318dce]",
-      softBg: "bg-[#EEF5FF]",
-      border: "border-[#BCD7FF]",
-    },
-    {
-      label: "الدرجة المحصّلة",
-      value: `${overallSummary.grade}/${overallSummary.max}`,
-      note: "مجموع الدرجات الحالية في المادة",
-      Icon: School,
-      accent: "text-emerald-600",
-      softBg: "bg-emerald-50",
-      border: "border-emerald-200",
-    },
-    {
-      label: "عناصر التقييم",
-      value: overallSummary.items,
-      note: "عدد الدرجات المعروضة في هذا العرض",
-      Icon: FactCheck,
-      accent: "text-amber-600",
-      softBg: "bg-amber-50",
-      border: "border-amber-200",
-    },
-    {
-      label: "أفضل قسم",
-      value: bestSection?.label || "-",
-      note: bestSection ? `${bestSection.percentage}%` : "-",
-      Icon: EmojiEvents,
-      accent: "text-pink-600",
-      softBg: "bg-pink-50",
-      border: "border-pink-200",
-    },
-  ];
 
   return (
     <Container noSidebar={true}>
-      <Back title={"درجاتي"} />
+      <Box dir="rtl" sx={{ width: "100%" }}>
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 1.6,
+            px: { xs: 1.5, sm: 2, md: 2.4 },
+            py: { xs: 1.4, md: 1.7 },
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderRadius: "20px",
+            border: "1px solid rgba(18,47,77,.055)",
+            background: "linear-gradient(120deg,#ffffff,#fbfdff)",
+            boxShadow: "0 8px 24px rgba(18,47,77,.04)",
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <IconButton
+              onClick={() => navigate("/student-dashboard/subjects")}
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: "12px",
+                color: COLORS.navy,
+                backgroundColor: "#f2f6fa",
+                border: "1px solid rgba(36,74,112,.06)",
+                "&:hover": { backgroundColor: "#e8f0f7" },
+              }}
+            >
+              <ArrowForwardRounded />
+            </IconButton>
 
-      <div className="mt-4 min-h-[calc(100vh-200px)] space-y-4 sm:mt-6 sm:space-y-6">
-        <div className={`relative overflow-hidden rounded-[24px] border ${palette.border} ${palette.bg} p-4 shadow-sm sm:rounded-[28px] sm:p-6`}>
-          <span className={`pointer-events-none absolute -top-10 left-2 h-24 w-24 rounded-full ${palette.badge} opacity-10 sm:left-6 sm:h-32 sm:w-32`} />
-          <span className={`pointer-events-none absolute -bottom-10 right-2 h-28 w-28 rounded-full ${palette.badge} opacity-10 sm:-bottom-14 sm:right-10 sm:h-40 sm:w-40`} />
+            <Box
+              sx={{
+                width: 43,
+                height: 43,
+                display: { xs: "none", sm: "grid" },
+                placeItems: "center",
+                borderRadius: "13px",
+                color: COLORS.blue,
+                backgroundColor: COLORS.blueLight,
+              }}
+            >
+              <TrendingUpRounded sx={{ fontSize: 21 }} />
+            </Box>
 
-          <div className="relative grid grid-cols-1 gap-6 lg:grid-cols-[1.6fr_0.9fr] lg:items-center">
-            <div>
-              <div className="mb-4 flex flex-wrap items-center gap-2 sm:gap-3">
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#318dce] shadow-sm sm:px-4 sm:text-sm">
-                  {hasBackendGrades ? "بيانات فعلية" : "بيانات تجريبية"}
-                </span>
-                {subjectDetails.subjectCode && (
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold text-white sm:px-4 sm:text-sm ${palette.badge}`}>
-                    {subjectDetails.subjectCode}
-                  </span>
-                )}
-              </div>
+            <Box>
+              <Typography
+                component="h1"
+                sx={{
+                  color: COLORS.deepNavy,
+                  fontSize: { xs: "17px", md: "20px" },
+                  fontWeight: 900,
+                }}
+              >
+                درجاتي
+              </Typography>
 
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-white shadow-sm sm:h-16 sm:w-16 sm:rounded-3xl">
-                  <MenuBook className={`text-[28px] sm:text-3xl ${palette.icon}`} />
-                </div>
+              <Typography sx={{ mt: 0.1, color: "#909ba6", fontSize: "9px" }}>
+                تابع مستواك ودرجاتك في المادة
+              </Typography>
+            </Box>
+          </Stack>
+        </Paper>
 
-                <div>
-                  <h1 className="text-2xl font-bold leading-tight text-[#1E293B] sm:text-3xl">{subjectDetails.subjectName}</h1>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600 sm:leading-7">
-                    عرض واضح لكل درجات المادة بحيث يقدر الطالب يفهم مستوى أدائه بسرعة ويعرف أين يحتاج يركز أكثر.
-                  </p>
+        <Paper
+          elevation={0}
+          sx={{
+            position: "relative",
+            overflow: "hidden",
+            mb: 1.5,
+            p: { xs: 1.7, md: 2.2 },
+            minHeight: { xs: 180, md: 170 },
+            display: "flex",
+            alignItems: "center",
+            borderRadius: "23px",
+            border: "1px solid rgba(78,141,204,.18)",
+            background:
+              "linear-gradient(120deg,#eef6ff 0%,#f9fcff 58%,#fff8ea 100%)",
+            boxShadow: "0 10px 28px rgba(18,47,77,.045)",
+          }}
+        >
+          <Box
+            sx={{
+              position: "absolute",
+              width: 150,
+              height: 150,
+              right: -70,
+              bottom: -90,
+              borderRadius: "50%",
+              backgroundColor: "rgba(78,141,204,.08)",
+            }}
+          />
 
-                  <div className="mt-4 flex flex-col gap-2 text-sm text-gray-600 sm:flex-row sm:flex-wrap sm:gap-3">
-                    <span className="rounded-full border border-white/70 bg-white px-4 py-2 text-center shadow-sm sm:text-right">
-                      {subjectDetails.termLabel}
-                    </span>
-                    <span className="rounded-full border border-white/70 bg-white px-4 py-2 text-center shadow-sm sm:text-right">
-                      المعلم: {subjectDetails.teacherName}
-                    </span>
-                    <span className="rounded-full border border-white/70 bg-white px-4 py-2 text-center shadow-sm sm:text-right">
-                      {overallSummary.items} عناصر تقييم
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <Box
+            sx={{
+              position: "absolute",
+              width: 120,
+              height: 120,
+              left: -55,
+              top: -70,
+              borderRadius: "50%",
+              backgroundColor: "rgba(211,164,79,.09)",
+            }}
+          />
 
-            <div className="rounded-[22px] border border-white/80 bg-white/90 p-4 shadow-sm backdrop-blur-sm sm:rounded-[24px] sm:p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-500">المعدل الحالي</p>
-                  <p className="mt-1 text-3xl font-bold text-[#1E293B] sm:text-4xl">{overallPercentage}%</p>
-                </div>
-                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${palette.bg} border ${palette.border} sm:h-14 sm:w-14`}>
-                  <TrendingUp className={`text-[26px] sm:text-3xl ${palette.icon}`} />
-                </div>
-              </div>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            alignItems={{ xs: "stretch", md: "center" }}
+            justifyContent="space-between"
+            spacing={2}
+            sx={{ position: "relative", zIndex: 1, width: "100%" }}
+          >
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Stack direction="row" alignItems="center" spacing={1.1}>
+                <Box
+                  sx={{
+                    width: 52,
+                    height: 52,
+                    display: "grid",
+                    placeItems: "center",
+                    flexShrink: 0,
+                    borderRadius: "16px",
+                    color: COLORS.blue,
+                    backgroundColor: "#fff",
+                    border: "1px solid rgba(78,141,204,.14)",
+                  }}
+                >
+                  <MenuBookRounded sx={{ fontSize: 25 }} />
+                </Box>
 
-              <div className="mt-5">
-                <div className="mb-2 flex items-center justify-between text-sm font-medium text-gray-500">
-                  <span>التقدم في المادة</span>
-                  <span>{overallSummary.grade} من {overallSummary.max}</span>
-                </div>
-                <div className="h-3 overflow-hidden rounded-full bg-gray-100">
-                  <div className={`h-full rounded-full ${palette.badge}`} style={{ width: `${overallPercentage}%` }} />
-                </div>
-              </div>
+                <Box sx={{ minWidth: 0 }}>
+                  <Stack direction="row" sx={{ mb: 0.5, flexWrap: "wrap", gap: 0.6 }}>
+                    {subjectDetails.subjectCode && (
+                      <Chip
+                        label={subjectDetails.subjectCode}
+                        size="small"
+                        sx={{
+                          height: 24,
+                          color: "#fff",
+                          backgroundColor: COLORS.blue,
+                          fontSize: "8px",
+                          fontWeight: 900,
+                        }}
+                      />
+                    )}
 
-              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl bg-gray-50 p-4">
-                  <p className="text-xs font-semibold text-gray-500">أقوى نتيجة</p>
-                  <p className="mt-2 text-sm font-bold text-[#1E293B]">{bestSection?.label || "-"}</p>
-                </div>
-                <div className="rounded-2xl bg-gray-50 p-4">
-                  <p className="text-xs font-semibold text-gray-500">أعلى نسبة</p>
-                  <p className="mt-2 text-sm font-bold text-[#1E293B]">{bestSection ? `${bestSection.percentage}%` : "-"}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+                    <Chip
+                      label={gradesData ? "بيانات الدرجات" : "لا توجد درجات بعد"}
+                      size="small"
+                      sx={{
+                        height: 24,
+                        color: gradesData ? COLORS.green : COLORS.orange,
+                        backgroundColor: gradesData
+                          ? COLORS.greenLight
+                          : COLORS.orangeLight,
+                        fontSize: "8px",
+                        fontWeight: 900,
+                      }}
+                    />
+                  </Stack>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
-          {summaryCards.map((card) => (
-            <div key={card.label} className={`rounded-[24px] border ${card.border} ${card.softBg} p-4 shadow-sm sm:rounded-3xl sm:p-5`}>
-              <div className="flex items-start justify-between gap-3 sm:gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-gray-500">{card.label}</p>
-                  <p className="mt-2 text-xl font-bold text-[#1E293B] break-words sm:mt-3 sm:text-2xl">{card.value}</p>
-                  <p className="mt-2 text-xs font-medium text-gray-500">{card.note}</p>
-                </div>
-                <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border ${card.border} bg-white sm:h-12 sm:w-12`}>
-                  <card.Icon className={`text-2xl ${card.accent}`} />
-                </div>
-              </div>
-            </div>
+                  <Typography
+                    noWrap
+                    sx={{
+                      color: COLORS.deepNavy,
+                      fontSize: { xs: "21px", md: "26px" },
+                      lineHeight: 1.2,
+                      fontWeight: 900,
+                    }}
+                  >
+                    {subjectDetails.subjectName}
+                  </Typography>
+
+                  <Typography sx={{ mt: 0.35, color: "#87939e", fontSize: "9px" }}>
+                    ملخص واضح لدرجاتك وتقدمك في المادة
+                  </Typography>
+                </Box>
+              </Stack>
+
+              <Stack direction="row" sx={{ mt: 1.4, flexWrap: "wrap", gap: 0.7 }}>
+                <InfoChip icon={SchoolRounded} label={subjectDetails.termLabel} />
+                <InfoChip
+                  icon={MenuBookRounded}
+                  label={`المعلم: ${subjectDetails.teacherName}`}
+                />
+                <InfoChip
+                  icon={FactCheckRounded}
+                  label={`${overallSummary.items} عناصر تقييم`}
+                />
+              </Stack>
+            </Box>
+
+            <Paper
+              elevation={0}
+              sx={{
+                width: { xs: "100%", md: 235 },
+                p: 1.5,
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1.3,
+                borderRadius: "19px",
+                backgroundColor: "rgba(255,255,255,.88)",
+                border: "1px solid rgba(36,74,112,.06)",
+              }}
+            >
+              <Box>
+                <Typography sx={{ color: "#8b97a2", fontSize: "8px", fontWeight: 700 }}>
+                  تقدمك الحالي
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.2,
+                    color: COLORS.deepNavy,
+                    fontSize: "22px",
+                    fontWeight: 900,
+                  }}
+                >
+                  {overallSummary.grade} / {overallSummary.max}
+                </Typography>
+
+                <Typography sx={{ mt: 0.15, color: "#98a2ac", fontSize: "8px" }}>
+                  مجموع الدرجات الحالية
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  position: "relative",
+                  width: 72,
+                  height: 72,
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                <CircularProgress
+                  variant="determinate"
+                  value={100}
+                  size={72}
+                  thickness={4}
+                  sx={{ position: "absolute", color: "#e8eef3" }}
+                />
+
+                <CircularProgress
+                  variant="determinate"
+                  value={overallPercentage}
+                  size={72}
+                  thickness={4}
+                  sx={{ position: "absolute", color: COLORS.blue }}
+                />
+
+                <Typography
+                  sx={{ color: COLORS.deepNavy, fontSize: "15px", fontWeight: 900 }}
+                >
+                  {overallPercentage}%
+                </Typography>
+              </Box>
+            </Paper>
+          </Stack>
+        </Paper>
+
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "repeat(3,minmax(0,1fr))",
+            },
+            gap: 1,
+            mb: 1.7,
+          }}
+        >
+          <SummaryCard
+            label="الدرجة الحالية"
+            value={`${overallSummary.grade}/${overallSummary.max}`}
+            note="مجموع درجاتك في المادة"
+            Icon={SchoolRounded}
+            color={COLORS.green}
+            background={COLORS.greenLight}
+          />
+
+          <SummaryCard
+            label="النسبة الكلية"
+            value={`${overallPercentage}%`}
+            note="أداؤك في عناصر التقييم"
+            Icon={TrendingUpRounded}
+            color={COLORS.blue}
+            background={COLORS.blueLight}
+          />
+
+          <SummaryCard
+            label="عناصر التقييم"
+            value={overallSummary.items}
+            note="عدد العناصر المسجلة"
+            Icon={FactCheckRounded}
+            color={COLORS.orange}
+            background={COLORS.orangeLight}
+          />
+        </Box>
+
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ mb: 1 }}
+        >
+          <Box>
+            <Typography
+              sx={{
+                color: COLORS.deepNavy,
+                fontSize: { xs: "14px", md: "16px" },
+                fontWeight: 900,
+              }}
+            >
+              تفاصيل الدرجات
+            </Typography>
+
+            <Typography sx={{ mt: 0.1, color: "#98a2ac", fontSize: "8px" }}>
+              تفاصيل كل عنصر تقييم في المادة
+            </Typography>
+          </Box>
+
+          <Chip
+            label={`${visibleSections.length} أقسام`}
+            size="small"
+            sx={{
+              height: 27,
+              color: COLORS.navy,
+              backgroundColor: "#f3f6f9",
+              fontSize: "8px",
+              fontWeight: 800,
+            }}
+          />
+        </Stack>
+
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              lg: "repeat(2,minmax(0,1fr))",
+            },
+            gap: 1.1,
+          }}
+        >
+          {visibleSections.map((section) => (
+            <GradeSectionCard key={section.key} section={section} />
           ))}
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-2">
-          {sectionSummaries.map((section) => (
-            <div key={section.key} className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm sm:rounded-[26px] sm:p-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-start gap-3">
-                  <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border ${section.border} ${section.softBg} sm:h-12 sm:w-12`}>
-                    <section.Icon className={`text-2xl ${section.accent}`} />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-[#1E293B]">{section.label}</h2>
-                    <p className="mt-1 text-sm leading-6 text-gray-500">{section.helperText}</p>
-                  </div>
-                </div>
-
-                <div className={`w-fit rounded-full px-3 py-1 text-sm font-bold ${section.softBg} ${section.accent}`}>
-                  {section.percentage}%
-                </div>
-              </div>
-
-              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl bg-gray-50 p-4">
-                  <p className="text-xs font-semibold text-gray-500">الدرجة الحالية</p>
-                  <p className="mt-2 text-lg font-bold text-[#1E293B]">{section.totalGrade}/{section.totalMax}</p>
-                </div>
-                <div className="rounded-2xl bg-gray-50 p-4">
-                  <p className="text-xs font-semibold text-gray-500">عدد العناصر</p>
-                  <p className="mt-2 text-lg font-bold text-[#1E293B]">{section.entries.length}</p>
-                </div>
-              </div>
-
-              <div className="mt-5 space-y-3">
-                {section.entries.map((entry) => (
-                  <div key={entry.title} className={`rounded-2xl border ${section.border} bg-white p-4`}>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm font-bold text-[#1E293B]">{entry.title}</p>
-                        <p className="mt-1 text-xs font-medium text-gray-500">الدرجة: {entry.grade} من {entry.max}</p>
-                      </div>
-                      <div className={`w-fit rounded-full px-3 py-1 text-sm font-bold ${section.softBg} ${section.accent}`}>
-                        {entry.percentage}%
-                      </div>
-                    </div>
-
-                    <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-gray-100">
-                      <div className={`h-full rounded-full ${section.fill}`} style={{ width: `${entry.percentage}%` }} />
-                    </div>
-
-                    <div className="mt-3 flex flex-col gap-1 text-xs font-medium text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-                      <span>الدرجة المحصّلة: {entry.grade}</span>
-                      <span>الحد الأعلى: {entry.max}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+        </Box>
+      </Box>
     </Container>
+  );
+};
+
+const InfoChip = ({ icon: Icon, label }) => (
+  <Chip
+    icon={<Icon />}
+    label={label}
+    sx={{
+      height: 31,
+      color: COLORS.navy,
+      backgroundColor: "rgba(255,255,255,.82)",
+      border: "1px solid rgba(36,74,112,.06)",
+      fontSize: "8px",
+      fontWeight: 800,
+      "& .MuiChip-icon": {
+        color: COLORS.gold,
+        fontSize: "15px",
+      },
+    }}
+  />
+);
+
+const SummaryCard = ({ label, value, note, Icon, color, background }) => (
+  <Paper
+    elevation={0}
+    sx={{
+      p: 1.3,
+      display: "flex",
+      alignItems: "center",
+      gap: 1,
+      borderRadius: "16px",
+      border: "1px solid rgba(18,47,77,.05)",
+      backgroundColor: "#fff",
+    }}
+  >
+    <Box
+      sx={{
+        width: 42,
+        height: 42,
+        display: "grid",
+        placeItems: "center",
+        flexShrink: 0,
+        borderRadius: "12px",
+        color,
+        backgroundColor: background,
+      }}
+    >
+      <Icon sx={{ fontSize: 21 }} />
+    </Box>
+
+    <Box sx={{ minWidth: 0 }}>
+      <Typography
+        sx={{
+          color: COLORS.deepNavy,
+          fontSize: "17px",
+          lineHeight: 1,
+          fontWeight: 900,
+        }}
+      >
+        {value}
+      </Typography>
+
+      <Typography sx={{ mt: 0.4, color: "#7f8b96", fontSize: "8px", fontWeight: 800 }}>
+        {label}
+      </Typography>
+
+      <Typography noWrap sx={{ mt: 0.1, color: "#a0a9b1", fontSize: "7px" }}>
+        {note}
+      </Typography>
+    </Box>
+  </Paper>
+);
+
+const GradeSectionCard = ({ section }) => {
+  const Icon = section.Icon;
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        p: 1.5,
+        borderRadius: "19px",
+        border: `1px solid ${section.border}`,
+        backgroundColor: "#fff",
+      }}
+    >
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={1}
+      >
+        <Stack direction="row" alignItems="center" spacing={0.9} sx={{ minWidth: 0 }}>
+          <Box
+            sx={{
+              width: 42,
+              height: 42,
+              display: "grid",
+              placeItems: "center",
+              flexShrink: 0,
+              borderRadius: "13px",
+              color: section.color,
+              backgroundColor: section.background,
+            }}
+          >
+            <Icon sx={{ fontSize: 21 }} />
+          </Box>
+
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              noWrap
+              sx={{ color: COLORS.deepNavy, fontSize: "11px", fontWeight: 900 }}
+            >
+              {section.label}
+            </Typography>
+
+            <Typography noWrap sx={{ mt: 0.15, color: "#929da7", fontSize: "7.5px" }}>
+              {section.helperText}
+            </Typography>
+          </Box>
+        </Stack>
+
+        <Chip
+          label={`${section.percentage}%`}
+          size="small"
+          sx={{
+            height: 26,
+            color: section.color,
+            backgroundColor: section.background,
+            fontSize: "8px",
+            fontWeight: 900,
+          }}
+        />
+      </Stack>
+
+      <Box sx={{ mt: 1.3 }}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ mb: 0.5 }}
+        >
+          <Typography sx={{ color: "#929da7", fontSize: "7.5px" }}>
+            الدرجة الحالية
+          </Typography>
+
+          <Typography sx={{ color: COLORS.deepNavy, fontSize: "8px", fontWeight: 900 }}>
+            {section.totalGrade} / {section.totalMax}
+          </Typography>
+        </Stack>
+
+        <Box
+          sx={{
+            height: 7,
+            overflow: "hidden",
+            borderRadius: "20px",
+            backgroundColor: "#eef1f4",
+          }}
+        >
+          <Box
+            sx={{
+              width: `${section.percentage}%`,
+              height: "100%",
+              borderRadius: "20px",
+              backgroundColor: section.color,
+              transition: "width .3s ease",
+            }}
+          />
+        </Box>
+      </Box>
+
+      <Stack spacing={0.7} sx={{ mt: 1.2 }}>
+        {section.entries.map((entry, index) => (
+          <Box
+            key={`${entry.title}-${index}`}
+            sx={{
+              p: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 1,
+              borderRadius: "12px",
+              backgroundColor: "#f8fafb",
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography
+                noWrap
+                sx={{ color: COLORS.deepNavy, fontSize: "8.5px", fontWeight: 800 }}
+              >
+                {entry.title}
+              </Typography>
+
+              <Typography sx={{ mt: 0.15, color: "#9aa4ae", fontSize: "7px" }}>
+                الدرجة {entry.grade} من {entry.max}
+              </Typography>
+            </Box>
+
+            <Typography
+              sx={{
+                minWidth: 40,
+                color: section.color,
+                textAlign: "left",
+                fontSize: "9px",
+                fontWeight: 900,
+              }}
+            >
+              {entry.percentage}%
+            </Typography>
+          </Box>
+        ))}
+      </Stack>
+    </Paper>
   );
 };
 

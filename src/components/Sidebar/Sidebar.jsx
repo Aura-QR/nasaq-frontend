@@ -11,6 +11,7 @@ import {
   AccountTreeRounded,
   AutoStoriesRounded,
   CalendarMonthRounded,
+  EventNoteRounded,
   Category as CategoryIcon,
   DashboardRounded,
   GroupsRounded,
@@ -258,6 +259,13 @@ const Sidebar = ({ active, setActive }) => {
             Icon: CalendarMonthRounded,
             iconType: "mui",
             to: "/school/academic-years",
+            show: canManageAcademicYears,
+          },
+          {
+            name: "إدارة الترمات",
+            Icon: EventNoteRounded,
+            iconType: "mui",
+            to: "/school/terms",
             show: canManageAcademicYears,
           },
           {

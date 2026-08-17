@@ -4,12 +4,18 @@ import {
   Routes,
 } from "react-router-dom";
 
+// =========================
+// Public Pages
+// =========================
 import Home from "@/pages/Home/Home";
 import Login from "@/pages/Login/Login";
 import Register from "@/pages/Register/Register";
 import Onboarding from "@/pages/Onboarding/Onboarding";
 import NoAccess from "@/pages/Others/NoAccess";
 
+// =========================
+// Teacher Pages
+// =========================
 import TeacherDashboard from "@/pages/TeacherDashboard/TeacherDashboard";
 import TeacherProjectGrading from "@/pages/TeacherProjectGrading/TeacherProjectGrading";
 import TeacherExamGrading from "@/pages/TeacherExamGrading/TeacherExamGrading";
@@ -22,39 +28,54 @@ import TeacherPreparations from "@/pages/TeacherPreparations/TeacherPreparations
 import TeacherLibrary from "@/pages/TeacherLibrary/TeacherLibrary";
 import TeacherProfile from "@/pages/TeacherProfile/TeacherProfile";
 import TeacherProjects from "@/pages/TeacherProjects/TeacherProjects";
-
-/* NEW: Teacher self check-in */
 import TeacherCheckIn from "@/pages/TeacherCheckIn/TeacherCheckIn";
 
-/* NEW: Admin teacher attendance management */
+// =========================
+// School Pages
+// =========================
 import TeacherAttendanceAdmin from "@/pages/School/TeacherAttendance/TeacherAttendanceAdmin";
 
 import PreparationAdd from "@/pages/School/Preparation/Add";
 import PreparationProfile from "@/pages/School/Preparation/Profile";
 import PreparationEdit from "@/pages/School/Preparation/Edit";
 
+import SchoolManagersList from "@/pages/SchoolManagers/List";
+import SchoolManagerAdd from "@/pages/SchoolManagers/Add";
+
+import SubjectOfferings from "@/pages/SubjectOfferings/SubjectOfferings";
+import SchoolSettings from "@/pages/SchoolSettings/SchoolSettings";
+import SchoolDashboard from "@/pages/SchoolDashboard/SchoolDashboard";
+import Terms from "@/pages/School/Terms/Terms";
+
+// =========================
+// Platform Pages
+// =========================
 import PlatformDashboard from "@/pages/PlatformDashboard/PlatformDashboard";
 import PlatformSchools from "@/pages/PlatformSchools/PlatformSchools";
 import PlatformSchoolDetails from "@/pages/PlatformSchoolDetails/PlatformSchoolDetails";
 
-import SchoolManagersList from "@/pages/SchoolManagers/List";
-import SchoolManagerAdd from "@/pages/SchoolManagers/Add";
-import SubjectOfferings from "@/pages/SubjectOfferings/SubjectOfferings";
-import SchoolSettings from "@/pages/SchoolSettings/SchoolSettings";
-import SchoolDashboard from "@/pages/SchoolDashboard/SchoolDashboard";
-
 import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
 
+// =========================
+// Guards
+// =========================
 import AuthenticatedRoute from "@/shared/guards/AuthenticatedRoute";
 import GuestRoute from "@/shared/guards/GuestRoute";
 import OwnerOnlyRoute from "@/shared/guards/OwnerOnlyRoute";
 import RoleRoute from "@/shared/guards/RoleRoute";
 
+// =========================
+// Roles
+// =========================
 import {
   ROLES,
   SCHOOL_ADMIN_ROLES,
 } from "@/shared/auth/roles";
 
+// =========================
+// Modular routes
+// Includes student routes
+// =========================
 import {
   appRoutes,
 } from "@/routes";
@@ -62,9 +83,9 @@ import {
 const AppRouter = () => {
   return (
     <Routes>
-      {/* =========================
-          Public routes
-      ========================= */}
+      {/* =========================================================
+          PUBLIC ROUTES
+      ========================================================= */}
 
       <Route
         path="/"
@@ -91,9 +112,9 @@ const AppRouter = () => {
         }
       />
 
-      {/* =========================
-          Guest routes
-      ========================= */}
+      {/* =========================================================
+          GUEST ROUTES
+      ========================================================= */}
 
       <Route element={<GuestRoute />}>
         <Route
@@ -107,18 +128,20 @@ const AppRouter = () => {
         />
       </Route>
 
-      {/* =========================
-          Authenticated routes
-      ========================= */}
+      {/* =========================================================
+          AUTHENTICATED ROUTES
+      ========================================================= */}
 
       <Route
         element={
-          <AuthenticatedRoute loginPath="/login" />
+          <AuthenticatedRoute
+            loginPath="/login"
+          />
         }
       >
-        {/* =========================
-            Platform admin routes
-        ========================= */}
+        {/* =====================================================
+            PLATFORM ADMIN
+        ===================================================== */}
 
         <Route
           element={
@@ -160,9 +183,9 @@ const AppRouter = () => {
           </Route>
         </Route>
 
-        {/* =========================
-            Owner-only routes
-        ========================= */}
+        {/* =====================================================
+            OWNER ONLY
+        ===================================================== */}
 
         <Route element={<OwnerOnlyRoute />}>
           <Route
@@ -176,10 +199,10 @@ const AppRouter = () => {
           />
         </Route>
 
-        {/* =========================
-            School administration
+        {/* =====================================================
+            SCHOOL ADMINISTRATION
             OWNER / MANAGER / SUPERVISOR
-        ========================= */}
+        ===================================================== */}
 
         <Route
           element={
@@ -201,22 +224,24 @@ const AppRouter = () => {
           />
 
           <Route
+            path="/school/terms"
+            element={<Terms />}
+          />
+
+          <Route
             path="/school/settings"
             element={<SchoolSettings />}
           />
 
-          {/* NEW:
-              Teacher attendance administration
-          */}
           <Route
             path="/school/teacher-attendance"
             element={<TeacherAttendanceAdmin />}
           />
         </Route>
 
-        {/* =========================
-            Teacher routes
-        ========================= */}
+        {/* =====================================================
+            TEACHER ROUTES
+        ===================================================== */}
 
         <Route
           element={
@@ -252,24 +277,18 @@ const AppRouter = () => {
             element={<TeacherClasses />}
           />
 
-          {/* Student attendance handled by teacher.
-              DON'T CHANGE THIS ROUTE.
-          */}
           <Route
             path="/teacher/attendance"
             element={<TeacherAttendance />}
           />
 
-          {/* NEW:
-              Teacher's own self check-in
-          */}
           <Route
             path="/teacher/check-in"
             element={<TeacherCheckIn />}
           />
 
           {/* =========================
-              Teacher exams
+              Exams
           ========================= */}
 
           <Route
@@ -288,7 +307,7 @@ const AppRouter = () => {
           />
 
           {/* =========================
-              Teacher projects
+              Projects
           ========================= */}
 
           <Route
@@ -302,7 +321,7 @@ const AppRouter = () => {
           />
 
           {/* =========================
-              Teacher preparations
+              Preparations
           ========================= */}
 
           <Route
@@ -315,7 +334,7 @@ const AppRouter = () => {
             element={<PreparationAdd />}
           />
 
-          {/* دعم المسار القديم */}
+          {/* old route support */}
           <Route
             path="/teacher/preparation/add"
             element={
@@ -337,7 +356,7 @@ const AppRouter = () => {
           />
 
           {/* =========================
-              Teacher library/profile
+              Library / Profile
           ========================= */}
 
           <Route
@@ -351,37 +370,19 @@ const AppRouter = () => {
           />
         </Route>
 
-        {/* =========================
-            Student routes
-        ========================= */}
+        {/* =====================================================
+            APPLICATION ROUTES
 
-        <Route
-          element={
-            <RoleRoute
-              allowedRoles={[
-                ROLES.STUDENT,
-              ]}
-            />
-          }
-        >
-          <Route
-            path="/student/dashboard"
-            element={
-              <Navigate
-                to="/student-dashboard"
-                replace
-              />
-            }
-          />
-        </Route>
+            Student routes موجودة هنا عن طريق appRoutes
+        ===================================================== */}
 
-        {/* Existing application routes */}
         {appRoutes}
+
       </Route>
 
-      {/* =========================
-          Unknown routes
-      ========================= */}
+      {/* =========================================================
+          UNKNOWN ROUTES
+      ========================================================= */}
 
       <Route
         path="*"

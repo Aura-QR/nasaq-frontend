@@ -297,7 +297,7 @@ const SectionHeading = () => (
           fontSize: "10px",
         }}
       >
-        راجع الفصل والترم والمادة المفعلة، ويمكن ترك المعلم بدون إسناد.
+        راجع الفصل والترم والمادة المفعلة والمعلم المسؤول.
       </Typography>
     </Box>
   </Stack>
@@ -927,7 +927,7 @@ const Edit = () => {
 
       if (mappedTeachers.length === 0) {
         setMessage(
-          "لا يوجد معلم مسند لهذه المادة حاليًا"
+          "لا يوجد معلم مسند لهذه المادة في الترم المختار"
         );
       }
 
@@ -1277,7 +1277,8 @@ const Edit = () => {
                 register={register}
                 registerName="teacherId"
                 error={errors.teacherId?.message}
-                label="المعلم (اختياري)"
+                label="المعلم"
+                required
                 data={teacherOptions}
                 name="name"
                 defaultValue={selectedTeacherId}

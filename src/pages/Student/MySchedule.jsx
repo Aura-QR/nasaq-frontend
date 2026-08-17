@@ -1,333 +1,1990 @@
-import { useEffect, useState } from "react";
-import Loading from "@/components/Loading";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import {
   Box,
+  Chip,
+  IconButton,
   Paper,
+  Skeleton,
   Stack,
   Typography,
+  useMediaQuery,
 } from "@mui/material";
+
+import {
+  ArrowForwardRounded,
+  CalendarMonthRounded,
+  MenuBookRounded,
+  PersonRounded,
+  ScheduleRounded,
+  SchoolRounded,
+} from "@mui/icons-material";
+
+import {
+  useNavigate,
+  useOutletContext,
+} from "react-router-dom";
+
+import Container from "@/components/Container/Container";
+
 import Slots from "@/utils/constants/Slots";
 import Days from "@/utils/constants/Days";
-import { translateGender } from "@/utils/helpers/translateGender";
-import { useStudentLectures } from "@/utils/hooks/apis/student/useStudent";
-import Container from "@/components/Container/Container";
-import Back from "@/components/Back/Back";
 
+import {
+  translateGender,
+} from "@/utils/helpers/translateGender";
 
-const MySchedule = ({ teacherData }) => {
+import {
+  useStudentLectures,
+} from "@/utils/hooks/apis/student/useStudent";
 
-  const [weeklySchedule, setWeeklySchedule] = useState([]);
+// =====================================================
+// COLORS
+// =====================================================
 
-  const { lectures, loading } = useStudentLectures();
+const COLORS = {
+  navy: "#244a70",
+  deepNavy: "#122f4d",
+  gold: "#d3a44f",
 
-  const myClass = lectures?.[0]?.class;
-  
-  useEffect(() => {
-    if (lectures) {
-      const schedule = mapLecturesToSchedule(lectures);
-      setWeeklySchedule(schedule);
-    }
-  }, [lectures]);
+  blue: "#4e8dcc",
+  blueLight: "#edf6ff",
 
-  // Transform lectures data to schedule
-  const mapLecturesToSchedule = (lectures) => {
-    // Initialize empty schedule using Slots
-    const schedule = Slots.map((slot) => {
-      const scheduleSlot = {
-        time: slot.name,
-      };
-      // Add empty object for each day
-      Days.forEach((day) => {
-        scheduleSlot[day.day] = {};
-      });
-      return scheduleSlot;
-    });
+  purple: "#8068c9",
+  purpleLight: "#f3efff",
 
-    // Fill schedule with lecture data
-    lectures.forEach((lecture) => {
-      // Find matching day in Arabic
-      const dayObj = Days.find(
-        (d) => d.id === lecture.dayOfWeek?.toLowerCase()
-      );
-      const slotIndex = lecture.slot - 1; // slot is 1-indexed
-      if (dayObj && slotIndex >= 0 && slotIndex < schedule.length) {
-        const teacherName = lecture.teacher.name;
-        schedule[slotIndex][dayObj.day] = {
-          id: lecture._id,
-          name: teacherName,
-          subject: lecture.subject?.subjectName,
-          info: `${lecture.class?.academicYear} - ${lecture.class?.roomNumber} - ${translateGender(lecture.class?.gender, "class")}`,
-        };
-      }
-    });
+  green: "#43a978",
+  greenLight: "#eaf8f1",
 
-    return schedule;
-  };
+  orange: "#e69a43",
+  orangeLight: "#fff3e4",
 
-  // showing loading state
-  if (loading) {
-    return <Loading />;
+  pink: "#d77993",
+  pinkLight: "#fff0f4",
+};
+
+// =====================================================
+// LESSON COLORS
+// =====================================================
+
+const LESSON_COLORS = [
+  {
+    bg: COLORS.blueLight,
+    color: COLORS.blue,
+    border: "#d9eafb",
+  },
+
+  {
+    bg: COLORS.purpleLight,
+    color: COLORS.purple,
+    border: "#e4ddfb",
+  },
+
+  {
+    bg: COLORS.greenLight,
+    color: COLORS.green,
+    border: "#d6eee2",
+  },
+
+  {
+    bg: COLORS.orangeLight,
+    color: COLORS.orange,
+    border: "#f5e1c7",
+  },
+
+  {
+    bg: COLORS.pinkLight,
+    color: COLORS.pink,
+    border: "#f2dce3",
+  },
+];
+
+// =====================================================
+// DAYS
+// =====================================================
+
+const JS_DAY_TO_ID = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+
+// =====================================================
+// HELPERS
+// =====================================================
+
+const getTeacherName = (
+  teacher
+) => {
+  if (!teacher) {
+    return "المعلم";
   }
 
-  if (!weeklySchedule.length) {
-    return (
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 3, md: 8, lg: 16 },
-          borderRadius: "16px",
-          border: "1px solid",
-          mt: 10,
-          borderColor: "primary.border",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "400px",
-        }}
-      >
-        <Typography color="text.secondary">
-          لا توجد محاضرات في الجدول الدراسي
-        </Typography>
-      </Paper>
-    );
+  if (
+    typeof teacher === "string"
+  ) {
+    return teacher;
+  }
+
+  const fullName = [
+    teacher?.firstName,
+    teacher?.fatherName,
+    teacher?.familyName,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    teacher?.name ||
+    teacher?.fullName ||
+    fullName ||
+    "المعلم"
+  );
+};
+
+const getSubjectName = (
+  subject
+) => {
+  if (!subject) {
+    return "مادة دراسية";
+  }
+
+  if (
+    typeof subject === "string"
+  ) {
+    return subject;
   }
 
   return (
-    <Container noSidebar={true}>
-      {/* Weekly Schedule Section */}
-      <Paper
-        elevation={0}
+    subject?.subjectName ||
+    subject?.name ||
+    "مادة دراسية"
+  );
+};
+
+const getClassLabel = (
+  classData
+) => {
+  if (!classData) {
+    return "";
+  }
+
+  if (
+    typeof classData ===
+    "string"
+  ) {
+    return "";
+  }
+
+  const values = [];
+
+  if (classData?.name) {
+    values.push(
+      classData.name
+    );
+  }
+
+  if (
+    classData?.roomNumber
+  ) {
+    values.push(
+      `فصل ${classData.roomNumber}`
+    );
+  }
+
+  if (classData?.gender) {
+    values.push(
+      translateGender(
+        classData.gender,
+        "class"
+      )
+    );
+  }
+
+  return values
+    .filter(Boolean)
+    .join(" • ");
+};
+
+const getOrdinalLabel = (
+  index
+) => {
+  const values = [
+    "الأولى",
+    "الثانية",
+    "الثالثة",
+    "الرابعة",
+    "الخامسة",
+    "السادسة",
+    "السابعة",
+    "الثامنة",
+    "التاسعة",
+    "العاشرة",
+  ];
+
+  return (
+    values[index] ||
+    `${index + 1}`
+  );
+};
+
+// =====================================================
+// MAIN COMPONENT
+// =====================================================
+
+const MySchedule = ({
+  teacherData,
+}) => {
+  const navigate = useNavigate();
+
+  const isMobile =
+    useMediaQuery(
+      "(max-width:700px)"
+    );
+
+  const outletContext =
+    useOutletContext() || {};
+
+  const studentProfile =
+    outletContext?.studentProfile ||
+    null;
+
+  const {
+    lectures = [],
+    loading,
+  } = useStudentLectures();
+
+  const [
+    weeklySchedule,
+    setWeeklySchedule,
+  ] = useState([]);
+
+  // ===================================================
+  // SAFE LECTURES
+  // ===================================================
+
+  const lectureList =
+    Array.isArray(lectures)
+      ? lectures
+      : [];
+
+  // ===================================================
+  // STUDENT CLASS
+  // ===================================================
+
+  const myClass =
+    lectureList?.[0]?.class ||
+    lectureList?.[0]?.classId ||
+    studentProfile?.class ||
+    studentProfile?.classId ||
+    null;
+
+  // ===================================================
+  // CURRENT DAY
+  // ===================================================
+
+  const currentDayId =
+    JS_DAY_TO_ID[
+      new Date().getDay()
+    ];
+
+  const currentDayObject =
+    Days.find(
+      (day) =>
+        String(
+          day?.id || ""
+        ).toLowerCase() ===
+        currentDayId
+    );
+
+  const initialDay =
+    currentDayObject?.id ||
+    Days?.[0]?.id ||
+    "";
+
+  const [
+    selectedDayId,
+    setSelectedDayId,
+  ] = useState(initialDay);
+
+  useEffect(() => {
+    if (
+      currentDayObject?.id
+    ) {
+      setSelectedDayId(
+        currentDayObject.id
+      );
+    }
+  }, [
+    currentDayObject?.id,
+  ]);
+
+  // ===================================================
+  // BUILD WEEKLY SCHEDULE
+  // ===================================================
+
+  useEffect(() => {
+    const schedule =
+      Slots.map(
+        (
+          slot,
+          index
+        ) => {
+          const item = {
+            slot:
+              slot?.id ||
+              index + 1,
+
+            time:
+              slot?.name ||
+              `الحصة ${
+                index + 1
+              }`,
+          };
+
+          Days.forEach(
+            (day) => {
+              item[day.day] =
+                null;
+            }
+          );
+
+          return item;
+        }
+      );
+
+    lectureList.forEach(
+      (lecture) => {
+        const lectureDay =
+          String(
+            lecture?.dayOfWeek ||
+              ""
+          ).toLowerCase();
+
+        const dayObject =
+          Days.find(
+            (day) =>
+              String(
+                day?.id || ""
+              ).toLowerCase() ===
+              lectureDay
+          );
+
+        const slotNumber =
+          Number(
+            lecture?.slot
+          );
+
+        const slotIndex =
+          slotNumber - 1;
+
+        if (
+          !dayObject ||
+          Number.isNaN(
+            slotIndex
+          ) ||
+          slotIndex < 0 ||
+          slotIndex >=
+            schedule.length
+        ) {
+          return;
+        }
+
+        schedule[
+          slotIndex
+        ][dayObject.day] = {
+          id:
+            lecture?._id ||
+            lecture?.id,
+
+          teacher:
+            getTeacherName(
+              lecture?.teacher ||
+                lecture?.teacherId
+            ),
+
+          subject:
+            getSubjectName(
+              lecture?.subject ||
+                lecture?.subjectId ||
+                lecture
+                  ?.subjectOfferingId
+                  ?.subjectId
+            ),
+
+          class:
+            lecture?.class ||
+            lecture?.classId,
+
+          term:
+            lecture?.term ||
+            lecture?.termId,
+
+          slot:
+            lecture?.slot,
+
+          dayOfWeek:
+            lecture?.dayOfWeek,
+
+          raw: lecture,
+        };
+      }
+    );
+
+    setWeeklySchedule(
+      schedule
+    );
+  }, [lectureList]);
+
+  // ===================================================
+  // STATS
+  // ===================================================
+
+  const totalLectures =
+    lectureList.length;
+
+  const todayLectures =
+    useMemo(() => {
+      return lectureList.filter(
+        (lecture) =>
+          String(
+            lecture?.dayOfWeek ||
+              ""
+          ).toLowerCase() ===
+          currentDayId
+      );
+    }, [
+      lectureList,
+      currentDayId,
+    ]);
+
+  // ===================================================
+  // SELECTED DAY
+  // ===================================================
+
+  const selectedDay =
+    Days.find(
+      (day) =>
+        day.id ===
+        selectedDayId
+    ) || Days?.[0];
+
+  const selectedDaySchedule =
+    useMemo(() => {
+      if (!selectedDay) {
+        return [];
+      }
+
+      return weeklySchedule.map(
+        (
+          slot,
+          index
+        ) => ({
+          ...slot,
+
+          slotIndex: index,
+
+          lesson:
+            slot[
+              selectedDay.day
+            ] || null,
+        })
+      );
+    }, [
+      weeklySchedule,
+      selectedDay,
+    ]);
+
+  const hasAnyLectures =
+    totalLectures > 0;
+
+  // ===================================================
+  // LOADING
+  // ===================================================
+
+  if (loading) {
+    return (
+      <Container
+        noSidebar={true}
+      >
+        <Stack spacing={1.5}>
+          <Skeleton
+            variant="rounded"
+            height={105}
+            sx={{
+              borderRadius:
+                "22px",
+            }}
+          />
+
+          <Skeleton
+            variant="rounded"
+            height={440}
+            sx={{
+              borderRadius:
+                "24px",
+            }}
+          />
+        </Stack>
+      </Container>
+    );
+  }
+
+  // ===================================================
+  // RENDER
+  // ===================================================
+
+  return (
+    <Container
+      noSidebar={true}
+    >
+      <Box
+        dir="rtl"
         sx={{
-          p: { xs: 3, md: 8, lg: 16 },
-          borderRadius: "16px",
-          border: "1px solid",
-          mt: 10,
-          borderColor: "primary.border",
+          width: "100%",
         }}
       >
-        <Stack
-          direction={"row"}
-          justifyContent={"space-between"}
-          alignItems={"center"}
-          mb={{ xs: 8, md: 16 }}
-        >
-          {/* Title */}
-          <Back title={"الجدول الدراسي الاسبوعي"} />
-          {/* Class */}
-          <Typography variant="subtitle1" color={"text.secondary"}>
-            {myClass?.academicYear} - {myClass?.roomNumber} - {translateGender(myClass?.gender, "class")}
-          </Typography>
-        </Stack>
+        {/* =============================================
+            HEADER
+        ============================================= */}
 
-        <Box
+        <Paper
+          elevation={0}
           sx={{
-            overflowX: "auto",
+            mb: 1.6,
+
+            px: {
+              xs: 1.4,
+              sm: 1.8,
+              md: 2.2,
+            },
+
+            py: {
+              xs: 1.3,
+              md: 1.5,
+            },
+
+            display: "flex",
+
+            alignItems: {
+              xs: "flex-start",
+              lg: "center",
+            },
+
+            justifyContent:
+              "space-between",
+
+            flexDirection: {
+              xs: "column",
+              lg: "row",
+            },
+
+            gap: 1.3,
+
+            borderRadius:
+              "22px",
+
+            border:
+              "1px solid rgba(18,47,77,.055)",
+
+            background:
+              "linear-gradient(120deg,#ffffff 0%,#fbfdff 65%,#edf6ff 100%)",
+
+            boxShadow:
+              "0 10px 28px rgba(18,47,77,.045)",
           }}
         >
+          {/* ===========================================
+              TITLE
+          =========================================== */}
+
           <Stack
-            direction={"row"}
-            sx={{
-              "& > *": {
-                minWidth: { xs: "100px", sm: "110px", md: "130px" },
-              },
-            }}
+            direction="row"
+            alignItems="center"
+            spacing={1}
           >
-            {/* Time Column */}
-            <Stack
-              flex={1}
-              borderRight={"1px solid"}
-              borderColor={"primary.border"}
+            <IconButton
+              onClick={() =>
+                navigate(
+                  "/student-dashboard"
+                )
+              }
+              sx={{
+                width: 41,
+                height: 41,
+
+                flexShrink: 0,
+
+                borderRadius:
+                  "13px",
+
+                color:
+                  COLORS.navy,
+
+                backgroundColor:
+                  "#f2f6fa",
+
+                border:
+                  "1px solid rgba(36,74,112,.06)",
+
+                "&:hover": {
+                  backgroundColor:
+                    "#e8f0f7",
+                },
+              }}
             >
-              <Box
+              <ArrowForwardRounded
                 sx={{
-                  position: "relative",
-                  height: "60px",
-                  bgcolor: "#F6F8F9",
-                  borderRadius: "8px 0 0 0",
-                  overflow: "hidden",
+                  fontSize: 21,
+                }}
+              />
+            </IconButton>
+
+            <Box
+              sx={{
+                width: 45,
+                height: 45,
+
+                display: {
+                  xs: "none",
+                  sm: "grid",
+                },
+
+                flexShrink: 0,
+
+                placeItems:
+                  "center",
+
+                borderRadius:
+                  "14px",
+
+                color:
+                  COLORS.blue,
+
+                backgroundColor:
+                  COLORS.blueLight,
+              }}
+            >
+              <CalendarMonthRounded
+                sx={{
+                  fontSize: 22,
+                }}
+              />
+            </Box>
+
+            <Box>
+              <Typography
+                component="h1"
+                sx={{
+                  color:
+                    COLORS.deepNavy,
+
+                  fontSize: {
+                    xs: "18px",
+                    md: "21px",
+                  },
+
+                  lineHeight: 1.15,
+
+                  fontWeight: 900,
                 }}
               >
-                {/* Diagonal Line */}
-                <Box
-                  sx={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    "&::before": {
-                      content: '""',
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      background:
-                        "linear-gradient(to top right, transparent calc(50% - .5px), #DEE3E2 calc(50% - .5px), #d1d5db calc(50% + .5px), transparent calc(50% + .5px))",
-                    },
-                  }}
-                />
-                {/* الوقت*/}
-                <Typography
-                  sx={{
-                    position: "absolute",
-                    bottom: 8,
-                    left: { xs: 6, md: 12 },
-                    fontWeight: 600,
-                    fontSize: { xs: "12px", md: "14px" },
-                    color: "text.primary",
-                  }}
-                >
-                  الوقت
-                </Typography>
-                {/* اليوم  */}
-                <Typography
-                  sx={{
-                    position: "absolute",
-                    top: 8,
-                    right: { xs: 6, md: 12 },
-                    fontWeight: 600,
-                    fontSize: { xs: "12px", md: "14px" },
-                    color: "text.primary",
-                  }}
-                >
-                  اليوم
-                </Typography>
-              </Box>
-              {weeklySchedule.map((slot, index) => (
-                <Box
-                  key={index}
-                  sx={{
-                    p: { xs: 6, md: 7 },
-                    minHeight: "120px",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    bgcolor: "#F6F8F9",
-                    borderBottom: "1px solid #e8ebf0",
-                    fontWeight: 600,
-                    color: "text.secondary",
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      fontSize: { xs: "11px", md: "14px" },
-                      fontWeight: 600,
-                      mb: 1,
-                      textAlign: "center",
-                    }}
-                  >
-                    {slot.time}
-                  </Typography>
-                </Box>
-              ))}
-            </Stack>
+                جدولي الدراسي
+              </Typography>
 
-            {/* Day Columns */}
-            {Days.map((dayObj) => {
-              return (
-                <Stack key={dayObj.id} flex={2}>
-                  <Box
-                    sx={{
-                      p: { xs: 2, md: 8 },
-                      height: "60px",
-                      bgcolor: "#F6F8F9",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textAlign: "center",
-                      fontWeight: 600,
-                      fontSize: { xs: "12px", md: "14px" },
-                      color: "text.primary",
-                      borderBottom: "1px solid",
-                      borderColor: "primary.border",
-                      position: "relative",
-                      flexDirection: "column",
-                    }}
-                  >
-                    {dayObj.day}
-                  </Box>
-                  {weeklySchedule.map((slot, slotIndex) => {
-                    const lesson = slot[dayObj.day];
-                    const hasLesson =
-                      lesson?.name && lesson.name !== "غير محدد";
+              <Typography
+                sx={{
+                  mt: 0.25,
 
-                    return (
-                      <Box
-                        key={slotIndex}
-                        sx={{
-                          position: "relative",
-                          textAlign: "center",
-                          p: { xs: 4, md: 8 },
-                          minHeight: "120px",
-                          bgcolor: hasLesson ? "white" : "#F6F8F9",
-                          borderBottom: "1px solid #e8ebf0",
-                          borderRight: "1px solid #e8ebf0",
-                          transition: "0.2s",
-                        }}
-                      >
-                        {hasLesson && (
-                          <Stack
-                            spacing={{ xs: 2, md: 4 }}
-                            alignItems="center"
-                            justifyContent={"center"}
-                            height={"100%"}
-                          >
-                            <Typography
-                              fontWeight={600}
-                              fontSize={{ xs: "12px", md: "14px" }}
-                              color={"text.primary"}
-                              noWrap
-                            >
-                              {lesson.subject}
-                            </Typography>
-                            {!teacherData && (
-                              <Typography
-                                fontWeight={600}
-                                fontSize={{ xs: "11px", md: "13px" }}
-                                color={"primary.main"}
-                              >
-                                {lesson.name}
-                              </Typography>
-                            )}
-                            {teacherData && (
-                              <Typography
-                                fontSize={
-                                  !teacherData
-                                    ? { xs: "10px", md: "11px" }
-                                    : { xs: "11px", md: "12px" }
-                                }
-                                color={
-                                  !teacherData
-                                    ? "text.secondary"
-                                    : "primary.main"
-                                }
-                                sx={{
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  display: "-webkit-box",
-                                  WebkitLineClamp: 2,
-                                  WebkitBoxOrient: "vertical",
-                                }}
-                              >
-                                {lesson.info}
-                              </Typography>
-                            )}
-                          </Stack>
-                        )}
-                      </Box>
-                    );
-                  })}
-                </Stack>
-              );
-            })}
+                  color:
+                    "#909ba6",
+
+                  fontSize: {
+                    xs: "8px",
+                    md: "9px",
+                  },
+                }}
+              >
+                تابع حصصك
+                الأسبوعية
+                ومواعيدك بسهولة
+              </Typography>
+            </Box>
           </Stack>
-        </Box>
-      </Paper>
+
+          {/* ===========================================
+              INFO BADGES
+          =========================================== */}
+
+          <Stack
+            direction="row"
+            alignItems="center"
+            sx={{
+              width: {
+                xs: "100%",
+                lg: "auto",
+              },
+
+              flexWrap: "wrap",
+
+              gap: 0.65,
+            }}
+          >
+            {/* WEEK */}
+
+            <Chip
+              icon={
+                <MenuBookRounded />
+              }
+              label={`${totalLectures} حصص الأسبوع`}
+              sx={{
+                height: 33,
+
+                color:
+                  COLORS.blue,
+
+                backgroundColor:
+                  COLORS.blueLight,
+
+                border:
+                  "1px solid rgba(78,141,204,.10)",
+
+                fontSize:
+                  "8px",
+
+                fontWeight: 900,
+
+                "& .MuiChip-label":
+                  {
+                    px: 1,
+                  },
+
+                "& .MuiChip-icon":
+                  {
+                    mr: 0.6,
+
+                    ml: -0.1,
+
+                    color:
+                      COLORS.blue,
+
+                    fontSize:
+                      "16px",
+                  },
+              }}
+            />
+
+            {/* TODAY COUNT */}
+
+            <Chip
+              icon={
+                <ScheduleRounded />
+              }
+              label={`${todayLectures.length} حصص اليوم`}
+              sx={{
+                height: 33,
+
+                color:
+                  COLORS.purple,
+
+                backgroundColor:
+                  COLORS.purpleLight,
+
+                border:
+                  "1px solid rgba(128,104,201,.10)",
+
+                fontSize:
+                  "8px",
+
+                fontWeight: 900,
+
+                "& .MuiChip-label":
+                  {
+                    px: 1,
+                  },
+
+                "& .MuiChip-icon":
+                  {
+                    mr: 0.6,
+
+                    ml: -0.1,
+
+                    color:
+                      COLORS.purple,
+
+                    fontSize:
+                      "16px",
+                  },
+              }}
+            />
+
+            {/* TODAY */}
+
+            <Chip
+              icon={
+                <CalendarMonthRounded />
+              }
+              label={`${
+                currentDayObject?.day ||
+                "اليوم"
+              } • اليوم`}
+              sx={{
+                height: 33,
+
+                color:
+                  COLORS.green,
+
+                backgroundColor:
+                  COLORS.greenLight,
+
+                border:
+                  "1px solid rgba(67,169,120,.10)",
+
+                fontSize:
+                  "8px",
+
+                fontWeight: 900,
+
+                "& .MuiChip-label":
+                  {
+                    px: 1,
+                  },
+
+                "& .MuiChip-icon":
+                  {
+                    mr: 0.6,
+
+                    ml: -0.1,
+
+                    color:
+                      COLORS.green,
+
+                    fontSize:
+                      "16px",
+                  },
+              }}
+            />
+
+            {/* CLASS */}
+
+            {getClassLabel(
+              myClass
+            ) && (
+              <Chip
+                icon={
+                  <SchoolRounded />
+                }
+                label={getClassLabel(
+                  myClass
+                )}
+                sx={{
+                  height: 33,
+
+                  color:
+                    COLORS.navy,
+
+                  backgroundColor:
+                    "#f5f7f9",
+
+                  border:
+                    "1px solid rgba(36,74,112,.08)",
+
+                  fontSize:
+                    "8px",
+
+                  fontWeight:
+                    900,
+
+                  "& .MuiChip-label":
+                    {
+                      px: 1,
+                    },
+
+                  "& .MuiChip-icon":
+                    {
+                      mr: 0.6,
+
+                      ml: -0.1,
+
+                      color:
+                        COLORS.gold,
+
+                      fontSize:
+                        "16px",
+                    },
+                }}
+              />
+            )}
+          </Stack>
+        </Paper>
+
+        {/* =============================================
+            NO SCHEDULE
+        ============================================= */}
+
+        {!hasAnyLectures ? (
+          <EmptySchedule />
+        ) : isMobile ? (
+          /* ===========================================
+             MOBILE
+          =========================================== */
+
+          <MobileSchedule
+            selectedDayId={
+              selectedDayId
+            }
+            setSelectedDayId={
+              setSelectedDayId
+            }
+            selectedDay={
+              selectedDay
+            }
+            schedule={
+              selectedDaySchedule
+            }
+            currentDayId={
+              currentDayId
+            }
+            teacherData={
+              teacherData
+            }
+          />
+        ) : (
+          /* ===========================================
+             DESKTOP
+          =========================================== */
+
+          <DesktopSchedule
+            weeklySchedule={
+              weeklySchedule
+            }
+            currentDayId={
+              currentDayId
+            }
+            teacherData={
+              teacherData
+            }
+          />
+        )}
+      </Box>
     </Container>
   );
 };
 
-export default MySchedule;
+// =====================================================
+// EMPTY STATE
+// =====================================================
 
+const EmptySchedule = () => {
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        minHeight: {
+          xs: 290,
+          md: 340,
+        },
+
+        px: 2,
+        py: 4,
+
+        display: "grid",
+
+        placeItems:
+          "center",
+
+        textAlign:
+          "center",
+
+        borderRadius:
+          "24px",
+
+        border:
+          "1px dashed rgba(36,74,112,.14)",
+
+        background:
+          "linear-gradient(145deg,#ffffff,#f8fbfd)",
+      }}
+    >
+      <Box>
+        <Box
+          sx={{
+            width: 78,
+            height: 78,
+
+            mx: "auto",
+            mb: 1.4,
+
+            display: "grid",
+
+            placeItems:
+              "center",
+
+            borderRadius:
+              "23px",
+
+            color:
+              COLORS.blue,
+
+            backgroundColor:
+              COLORS.blueLight,
+          }}
+        >
+          <CalendarMonthRounded
+            sx={{
+              fontSize: 38,
+            }}
+          />
+        </Box>
+
+        <Typography
+          sx={{
+            color:
+              COLORS.deepNavy,
+
+            fontSize: {
+              xs: "15px",
+              md: "17px",
+            },
+
+            fontWeight: 900,
+          }}
+        >
+          لم يتم تحديد
+          جدولك الدراسي بعد
+        </Typography>
+
+        <Typography
+          sx={{
+            maxWidth: 390,
+
+            mt: 0.55,
+
+            color:
+              "#8d99a5",
+
+            fontSize: {
+              xs: "9px",
+              md: "10px",
+            },
+
+            lineHeight: 1.8,
+          }}
+        >
+          سيظهر جدولك هنا
+          تلقائيًا بمجرد إضافة
+          الحصص الدراسية إلى
+          فصلك.
+        </Typography>
+      </Box>
+    </Paper>
+  );
+};
+
+// =====================================================
+// DESKTOP SCHEDULE
+// =====================================================
+
+const DesktopSchedule = ({
+  weeklySchedule,
+  currentDayId,
+  teacherData,
+}) => {
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        overflow: "hidden",
+
+        borderRadius:
+          "22px",
+
+        border:
+          "1px solid rgba(18,47,77,.06)",
+
+        backgroundColor:
+          "#fff",
+
+        boxShadow:
+          "0 8px 24px rgba(18,47,77,.035)",
+      }}
+    >
+      <Box
+        sx={{
+          overflowX: "auto",
+
+          "&::-webkit-scrollbar":
+            {
+              height: 6,
+            },
+
+          "&::-webkit-scrollbar-thumb":
+            {
+              backgroundColor:
+                "#dce3e8",
+
+              borderRadius: 20,
+            },
+        }}
+      >
+        <Box
+          sx={{
+            minWidth: 900,
+
+            display: "grid",
+
+            gridTemplateColumns: `120px repeat(${Days.length}, minmax(145px,1fr))`,
+          }}
+        >
+          {/* ===========================================
+              SLOT HEADER
+          =========================================== */}
+
+          <Box
+            sx={{
+              minHeight: 70,
+
+              p: 1,
+
+              display: "grid",
+
+              placeItems:
+                "center",
+
+              borderLeft:
+                "1px solid #edf0f3",
+
+              borderBottom:
+                "1px solid #e7ecf0",
+
+              backgroundColor:
+                "#f5f8fa",
+            }}
+          >
+            <Stack
+              alignItems="center"
+              spacing={0.25}
+            >
+              <ScheduleRounded
+                sx={{
+                  color:
+                    COLORS.gold,
+
+                  fontSize: 19,
+                }}
+              />
+
+              <Typography
+                sx={{
+                  color:
+                    COLORS.deepNavy,
+
+                  fontSize:
+                    "9px",
+
+                  fontWeight: 900,
+                }}
+              >
+                الحصة
+              </Typography>
+            </Stack>
+          </Box>
+
+          {/* ===========================================
+              DAYS HEADER
+          =========================================== */}
+
+          {Days.map(
+            (day) => {
+              const isToday =
+                String(
+                  day?.id || ""
+                ).toLowerCase() ===
+                currentDayId;
+
+              return (
+                <Box
+                  key={
+                    day.id
+                  }
+                  sx={{
+                    minHeight:
+                      70,
+
+                    px: 1,
+                    py: 0.8,
+
+                    display:
+                      "flex",
+
+                    alignItems:
+                      "center",
+
+                    justifyContent:
+                      "center",
+
+                    gap: 0.6,
+
+                    borderLeft:
+                      "1px solid #edf0f3",
+
+                    borderBottom:
+                      "1px solid #e7ecf0",
+
+                    backgroundColor:
+                      isToday
+                        ? "#eaf4fd"
+                        : "#f9fbfc",
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color:
+                        COLORS.deepNavy,
+
+                      fontSize:
+                        "10px",
+
+                      fontWeight:
+                        900,
+                    }}
+                  >
+                    {day.day}
+                  </Typography>
+
+                  {isToday && (
+                    <Chip
+                      label="اليوم"
+                      size="small"
+                      sx={{
+                        height: 20,
+
+                        color:
+                          COLORS.blue,
+
+                        backgroundColor:
+                          "#fff",
+
+                        fontSize:
+                          "6.5px",
+
+                        fontWeight:
+                          900,
+
+                        "& .MuiChip-label":
+                          {
+                            px: 0.8,
+                          },
+                      }}
+                    />
+                  )}
+                </Box>
+              );
+            }
+          )}
+
+          {/* ===========================================
+              ROWS
+          =========================================== */}
+
+          {weeklySchedule.map(
+            (
+              slot,
+              rowIndex
+            ) => (
+              <ScheduleRow
+                key={
+                  slot.slot ||
+                  rowIndex
+                }
+                slot={slot}
+                rowIndex={
+                  rowIndex
+                }
+                currentDayId={
+                  currentDayId
+                }
+                teacherData={
+                  teacherData
+                }
+              />
+            )
+          )}
+        </Box>
+      </Box>
+    </Paper>
+  );
+};
+
+// =====================================================
+// DESKTOP ROW
+// =====================================================
+
+const ScheduleRow = ({
+  slot,
+  rowIndex,
+  currentDayId,
+  teacherData,
+}) => {
+  return (
+    <>
+      {/* ===============================================
+          SLOT
+      =============================================== */}
+
+      <Box
+        sx={{
+          minHeight: 94,
+
+          p: 0.8,
+
+          display: "flex",
+
+          alignItems:
+            "center",
+
+          justifyContent:
+            "center",
+
+          textAlign:
+            "center",
+
+          borderLeft:
+            "1px solid #edf0f3",
+
+          borderBottom:
+            "1px solid #edf0f3",
+
+          backgroundColor:
+            "#fafcfd",
+        }}
+      >
+        <Box>
+          <Typography
+            sx={{
+              color:
+                COLORS.deepNavy,
+
+              fontSize: "9px",
+
+              fontWeight: 900,
+            }}
+          >
+            الحصة{" "}
+            {getOrdinalLabel(
+              rowIndex
+            )}
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.3,
+
+              color:
+                "#9aa5af",
+
+              fontSize: "7px",
+            }}
+          >
+            {slot.time}
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* ===============================================
+          LESSONS
+      =============================================== */}
+
+      {Days.map(
+        (
+          day,
+          dayIndex
+        ) => {
+          const lesson =
+            slot[
+              day.day
+            ];
+
+          const isToday =
+            String(
+              day?.id || ""
+            ).toLowerCase() ===
+            currentDayId;
+
+          return (
+            <LessonCell
+              key={day.id}
+              lesson={lesson}
+              rowIndex={
+                rowIndex
+              }
+              dayIndex={
+                dayIndex
+              }
+              isToday={
+                isToday
+              }
+              teacherData={
+                teacherData
+              }
+            />
+          );
+        }
+      )}
+    </>
+  );
+};
+
+// =====================================================
+// LESSON CELL
+// =====================================================
+
+const LessonCell = ({
+  lesson,
+  rowIndex,
+  dayIndex,
+  isToday,
+  teacherData,
+}) => {
+  const style =
+    LESSON_COLORS[
+      (rowIndex +
+        dayIndex) %
+        LESSON_COLORS.length
+    ];
+
+  return (
+    <Box
+      sx={{
+        minHeight: 94,
+
+        p: 0.65,
+
+        display: "flex",
+
+        alignItems:
+          "center",
+
+        borderLeft:
+          "1px solid #edf0f3",
+
+        borderBottom:
+          "1px solid #edf0f3",
+
+        backgroundColor:
+          isToday
+            ? "#fbfdff"
+            : "#fff",
+      }}
+    >
+      {lesson ? (
+        <Paper
+          elevation={0}
+          sx={{
+            width: "100%",
+
+            minHeight: 75,
+
+            p: 0.9,
+
+            display: "flex",
+
+            flexDirection:
+              "column",
+
+            justifyContent:
+              "center",
+
+            borderRadius:
+              "13px",
+
+            border: `1px solid ${style.border}`,
+
+            backgroundColor:
+              style.bg,
+
+            transition:
+              "transform .18s ease, box-shadow .18s ease",
+
+            "&:hover": {
+              transform:
+                "translateY(-2px)",
+
+              boxShadow:
+                "0 7px 17px rgba(18,47,77,.07)",
+            },
+          }}
+        >
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.45}
+          >
+            <MenuBookRounded
+              sx={{
+                flexShrink: 0,
+
+                color:
+                  style.color,
+
+                fontSize: 14,
+              }}
+            />
+
+            <Typography
+              noWrap
+              sx={{
+                color:
+                  COLORS.deepNavy,
+
+                fontSize:
+                  "8.5px",
+
+                fontWeight: 900,
+              }}
+            >
+              {
+                lesson.subject
+              }
+            </Typography>
+          </Stack>
+
+          {!teacherData && (
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={0.35}
+              sx={{
+                mt: 0.55,
+              }}
+            >
+              <PersonRounded
+                sx={{
+                  flexShrink: 0,
+
+                  color:
+                    "#8c98a3",
+
+                  fontSize: 12,
+                }}
+              />
+
+              <Typography
+                noWrap
+                sx={{
+                  color:
+                    "#7e8c98",
+
+                  fontSize:
+                    "7px",
+                }}
+              >
+                {
+                  lesson.teacher
+                }
+              </Typography>
+            </Stack>
+          )}
+        </Paper>
+      ) : (
+        <Typography
+          sx={{
+            width: "100%",
+
+            textAlign:
+              "center",
+
+            color:
+              "#c6cdd3",
+
+            fontSize: "12px",
+          }}
+        >
+          —
+        </Typography>
+      )}
+    </Box>
+  );
+};
+
+// =====================================================
+// MOBILE SCHEDULE
+// =====================================================
+
+const MobileSchedule = ({
+  selectedDayId,
+  setSelectedDayId,
+  selectedDay,
+  schedule,
+  currentDayId,
+  teacherData,
+}) => {
+  return (
+    <Box>
+      {/* ===============================================
+          DAY TABS
+      =============================================== */}
+
+      <Box
+        sx={{
+          mb: 1.1,
+
+          overflowX: "auto",
+
+          pb: 0.3,
+
+          "&::-webkit-scrollbar":
+            {
+              display:
+                "none",
+            },
+        }}
+      >
+        <Stack
+          direction="row"
+          spacing={0.6}
+          sx={{
+            minWidth:
+              "max-content",
+          }}
+        >
+          {Days.map(
+            (day) => {
+              const selected =
+                day.id ===
+                selectedDayId;
+
+              const isToday =
+                String(
+                  day.id
+                ).toLowerCase() ===
+                currentDayId;
+
+              return (
+                <Chip
+                  key={
+                    day.id
+                  }
+                  label={
+                    isToday
+                      ? `${day.day} • اليوم`
+                      : day.day
+                  }
+                  onClick={() =>
+                    setSelectedDayId(
+                      day.id
+                    )
+                  }
+                  sx={{
+                    height: 34,
+
+                    px: 0.2,
+
+                    cursor:
+                      "pointer",
+
+                    color:
+                      selected
+                        ? "#fff"
+                        : COLORS.navy,
+
+                    backgroundColor:
+                      selected
+                        ? COLORS.navy
+                        : "#fff",
+
+                    border:
+                      "1px solid rgba(36,74,112,.08)",
+
+                    fontSize:
+                      "8px",
+
+                    fontWeight:
+                      800,
+
+                    "&:hover": {
+                      backgroundColor:
+                        selected
+                          ? COLORS.navy
+                          : "#f4f7fa",
+                    },
+                  }}
+                />
+              );
+            }
+          )}
+        </Stack>
+      </Box>
+
+      {/* ===============================================
+          DAY SCHEDULE
+      =============================================== */}
+
+      <Paper
+        elevation={0}
+        sx={{
+          p: 1.3,
+
+          borderRadius:
+            "19px",
+
+          border:
+            "1px solid rgba(18,47,77,.055)",
+
+          backgroundColor:
+            "#fff",
+        }}
+      >
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{
+            mb: 1,
+          }}
+        >
+          <Box>
+            <Typography
+              sx={{
+                color:
+                  COLORS.deepNavy,
+
+                fontSize:
+                  "12px",
+
+                fontWeight: 900,
+              }}
+            >
+              {
+                selectedDay?.day
+              }
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.15,
+
+                color:
+                  "#9aa4ad",
+
+                fontSize: "7px",
+              }}
+            >
+              حصص اليوم
+              الدراسي
+            </Typography>
+          </Box>
+
+          <CalendarMonthRounded
+            sx={{
+              color:
+                COLORS.gold,
+
+              fontSize: 19,
+            }}
+          />
+        </Stack>
+
+        <Stack spacing={0.7}>
+          {schedule.map(
+            (slot) => {
+              const lesson =
+                slot.lesson;
+
+              const style =
+                LESSON_COLORS[
+                  slot.slotIndex %
+                    LESSON_COLORS.length
+                ];
+
+              return (
+                <Box
+                  key={
+                    slot.slot ||
+                    slot.slotIndex
+                  }
+                  sx={{
+                    p: 0.9,
+
+                    display: "flex",
+
+                    alignItems:
+                      "center",
+
+                    gap: 0.9,
+
+                    borderRadius:
+                      "13px",
+
+                    backgroundColor:
+                      lesson
+                        ? style.bg
+                        : "#f8fafb",
+
+                    border: lesson
+                      ? `1px solid ${style.border}`
+                      : "1px solid #eef1f3",
+                  }}
+                >
+                  {/* SLOT */}
+
+                  <Box
+                    sx={{
+                      minWidth: 70,
+
+                      py: 0.65,
+
+                      textAlign:
+                        "center",
+
+                      borderRadius:
+                        "10px",
+
+                      backgroundColor:
+                        "#fff",
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color:
+                          COLORS.deepNavy,
+
+                        fontSize:
+                          "7.5px",
+
+                        fontWeight:
+                          900,
+                      }}
+                    >
+                      الحصة{" "}
+                      {getOrdinalLabel(
+                        slot.slotIndex
+                      )}
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.15,
+
+                        color:
+                          "#9aa5af",
+
+                        fontSize:
+                          "6.5px",
+                      }}
+                    >
+                      {slot.time}
+                    </Typography>
+                  </Box>
+
+                  {/* LESSON */}
+
+                  {lesson ? (
+                    <Box
+                      sx={{
+                        flex: 1,
+                        minWidth: 0,
+                      }}
+                    >
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={0.4}
+                      >
+                        <MenuBookRounded
+                          sx={{
+                            color:
+                              style.color,
+
+                            fontSize:
+                              14,
+                          }}
+                        />
+
+                        <Typography
+                          noWrap
+                          sx={{
+                            color:
+                              COLORS.deepNavy,
+
+                            fontSize:
+                              "9px",
+
+                            fontWeight:
+                              900,
+                          }}
+                        >
+                          {
+                            lesson.subject
+                          }
+                        </Typography>
+                      </Stack>
+
+                      {!teacherData && (
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          spacing={0.3}
+                          sx={{
+                            mt: 0.3,
+                          }}
+                        >
+                          <PersonRounded
+                            sx={{
+                              color:
+                                "#87939e",
+
+                              fontSize:
+                                11,
+                            }}
+                          />
+
+                          <Typography
+                            noWrap
+                            sx={{
+                              color:
+                                "#84919c",
+
+                              fontSize:
+                                "7px",
+                            }}
+                          >
+                            {
+                              lesson.teacher
+                            }
+                          </Typography>
+                        </Stack>
+                      )}
+                    </Box>
+                  ) : (
+                    <Typography
+                      sx={{
+                        color:
+                          "#aab4bd",
+
+                        fontSize:
+                          "8px",
+                      }}
+                    >
+                      لا توجد حصة
+                    </Typography>
+                  )}
+                </Box>
+              );
+            }
+          )}
+        </Stack>
+      </Paper>
+    </Box>
+  );
+};
+
+export default MySchedule;

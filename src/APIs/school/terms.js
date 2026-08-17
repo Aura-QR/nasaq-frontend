@@ -1,16 +1,16 @@
 import { api } from "../Axios";
-import { getApiError } from "../helpers/getApiError";
 
 const ENDPOINT = "/terms";
-const CACHE_TTL = 15000;
-const cache = new Map();
-const pending = new Map();
 
-const normalizeId = (value) =>
-  String(value?._id || value?.id || value || "").trim();
+const messageOf = (error, fallback = "حدث خطأ ما") =>
+  error?.response?.data?.message ||
+  error?.response?.data?.error ||
+  error?.message ||
+  fallback;
 
-const normalizeResponse = (response) => {
+const ok = (response) => {
   const payload = response?.data;
+
   if (payload?.status === false) {
     return {
       status: false,
@@ -18,201 +18,261 @@ const normalizeResponse = (response) => {
       data: payload?.data,
     };
   }
+
   return {
     status: true,
     message: payload?.message || "Success",
     data: payload?.data ?? payload,
-    pagination: payload?.pagination,
   };
 };
 
-const normalizeError = (error, fallback) => {
-  const parsed = getApiError(error, fallback);
-  return {
-    status: false,
-    message:
-      parsed?.message ||
-      (typeof parsed === "string" ? parsed : fallback),
-    statusCode: error?.response?.status,
-  };
-};
+const fail = (error, fallback) => ({
+  status: false,
+  message: messageOf(error, fallback),
+  statusCode: error?.response?.status,
+  error,
+});
 
-const cachedRequest = async (key, request, { force = false } = {}) => {
-  const saved = cache.get(key);
-  if (!force && saved && Date.now() - saved.createdAt < CACHE_TTL) {
-    return saved.value;
-  }
-  if (!force && pending.has(key)) return pending.get(key);
+const cleanId = (value) =>
+  String(value?._id || value?.id || value || "").trim();
 
-  const promise = request()
-    .then((value) => {
-      cache.set(key, { value, createdAt: Date.now() });
-      return value;
-    })
-    .finally(() => pending.delete(key));
+export const fetchTerms = async (academicYearId) => {
+  const yearId = cleanId(academicYearId);
 
-  pending.set(key, promise);
-  return promise;
-};
-
-export const invalidateTermsCache = () => cache.clear();
-
-export const fetchTermsByAcademicYear = async (
-  academicYearId,
-  { force = false } = {}
-) => {
-  const yearId = normalizeId(academicYearId);
   if (!yearId) {
-    return { status: false, message: "معرّف السنة الدراسية غير موجود" };
+    return {
+      status: true,
+      data: [],
+      message: "اختر السنة الدراسية",
+    };
   }
-
-  return cachedRequest(
-    `terms:year:${yearId}`,
-    async () => {
-      try {
-        return normalizeResponse(
-          await api.get(`${ENDPOINT}/by-year/${yearId}`)
-        );
-      } catch (firstError) {
-        if (firstError?.response?.status !== 404) {
-          return normalizeError(firstError, "تعذر تحميل الترمات");
-        }
-
-        try {
-          return normalizeResponse(
-            await api.get(ENDPOINT, {
-              params: { academicYearId: yearId },
-            })
-          );
-        } catch (secondError) {
-          return normalizeError(secondError, "تعذر تحميل الترمات");
-        }
-      }
-    },
-    { force }
-  );
-};
-
-export const createTerm = async (payload) => {
-  try {
-    const response = await api.post(ENDPOINT, {
-      academicYearId: normalizeId(payload?.academicYearId),
-      name: String(payload?.name || "").trim(),
-      order: Number(payload?.order),
-      startDate: payload?.startDate,
-      endDate: payload?.endDate,
-    });
-    invalidateTermsCache();
-    return normalizeResponse(response);
-  } catch (error) {
-    return normalizeError(error, "تعذر إضافة الترم");
-  }
-};
-
-export const createTermsBulk = async (academicYearId, terms) => {
-  const yearId = normalizeId(academicYearId);
-  if (!yearId) {
-    return { status: false, message: "معرّف السنة الدراسية غير موجود" };
-  }
-
-  const normalizedTerms = (Array.isArray(terms) ? terms : []).map(
-    (term) => ({
-      name: String(term?.name || "").trim(),
-      order: Number(term?.order),
-      startDate: term?.startDate,
-      endDate: term?.endDate,
-    })
-  );
 
   try {
-    /* Preferred documented shape: academicYearId in the body. */
-    const response = await api.post(`${ENDPOINT}/bulk`, {
-      academicYearId: yearId,
-      terms: normalizedTerms,
-    });
-    invalidateTermsCache();
-    return normalizeResponse(response);
-  } catch (firstError) {
-    /*
-     * Latest Postman also exposes /terms/bulk/:academicYearId.
-     * Fall back only when the body route is not available or rejected.
-     */
-    if (![400, 404, 405, 422].includes(firstError?.response?.status)) {
-      return normalizeError(firstError, "تعذر إنشاء الترمات");
-    }
-
     try {
-      const response = await api.post(`${ENDPOINT}/bulk/${yearId}`, {
-        terms: normalizedTerms,
-      });
-      invalidateTermsCache();
-      return normalizeResponse(response);
-    } catch (secondError) {
-      return normalizeError(secondError, "تعذر إنشاء الترمات");
+      return ok(
+        await api.get(`${ENDPOINT}/by-year/${yearId}`)
+      );
+    } catch (error) {
+      if (error?.response?.status !== 404) {
+        throw error;
+      }
     }
+
+    return ok(
+      await api.get(ENDPOINT, {
+        params: { academicYearId: yearId },
+      })
+    );
+  } catch (error) {
+    return fail(error, "تعذر تحميل الترمات");
+  }
+};
+
+export const addTerm = async (payload = {}) => {
+  const body = {
+    academicYearId: cleanId(payload.academicYearId),
+    name: String(payload.name || "").trim(),
+    order: Number(payload.order),
+    startDate: payload.startDate,
+    endDate: payload.endDate,
+  };
+
+  if (
+    !body.academicYearId ||
+    !body.name ||
+    !body.order ||
+    !body.startDate ||
+    !body.endDate
+  ) {
+    return {
+      status: false,
+      message: "أكمل بيانات الترم المطلوبة",
+    };
+  }
+
+  try {
+    return ok(await api.post(ENDPOINT, body));
+  } catch (error) {
+    return fail(error, "تعذر إضافة الترم");
+  }
+};
+
+export const updateTerm = async (id, payload = {}) => {
+  const termId = cleanId(id);
+
+  if (!termId) {
+    return {
+      status: false,
+      message: "معرّف الترم غير موجود",
+    };
+  }
+
+  const body = {
+    ...(payload.name !== undefined
+      ? { name: String(payload.name || "").trim() }
+      : {}),
+    ...(payload.order !== undefined
+      ? { order: Number(payload.order) }
+      : {}),
+    ...(payload.startDate !== undefined
+      ? { startDate: payload.startDate }
+      : {}),
+    ...(payload.endDate !== undefined
+      ? { endDate: payload.endDate }
+      : {}),
+    ...(payload.status
+      ? { status: payload.status }
+      : {}),
+  };
+
+  try {
+    return ok(await api.patch(`${ENDPOINT}/${termId}`, body));
+  } catch (error) {
+    return fail(error, "تعذر تعديل الترم");
+  }
+};
+
+export const deleteTerm = async (id) => {
+  const termId = cleanId(id);
+
+  if (!termId) {
+    return {
+      status: false,
+      message: "معرّف الترم غير موجود",
+    };
+  }
+
+  try {
+    return ok(await api.delete(`${ENDPOINT}/${termId}`));
+  } catch (error) {
+    return fail(error, "تعذر حذف الترم");
   }
 };
 
 export const copyTermsFromYear = async (
   targetYearId,
-  sourceYearId,
-  termOverrides = []
+  sourceYearId
 ) => {
-  const targetId = normalizeId(targetYearId);
-  const sourceId = normalizeId(sourceYearId);
+  const targetId = cleanId(targetYearId);
+  const sourceId = cleanId(sourceYearId);
+
   if (!targetId || !sourceId) {
-    return { status: false, message: "اختر السنة المصدر والمستهدفة" };
+    return {
+      status: false,
+      message: "اختر السنة الحالية والسنة المصدر",
+    };
   }
 
-  const body =
-    Array.isArray(termOverrides) && termOverrides.length > 0
-      ? { termOverrides }
-      : {};
+  if (targetId === sourceId) {
+    return {
+      status: false,
+      message: "لا يمكن النسخ من نفس السنة",
+    };
+  }
 
   try {
-    const response = await api.post(
-      `${ENDPOINT}/copy-from/${targetId}/${sourceId}`,
-      body
+    return ok(
+      await api.post(
+        `${ENDPOINT}/copy-from/${targetId}/${sourceId}`,
+        {}
+      )
     );
-    invalidateTermsCache();
-    return normalizeResponse(response);
   } catch (error) {
-    return normalizeError(error, "تعذر نسخ هيكل الترمات");
+    return fail(error, "تعذر نسخ الترمات من السنة السابقة");
   }
 };
 
-export const updateTerm = async (id, payload) => {
-  const termId = normalizeId(id);
+
+// -----------------------------------------------------------------------------
+// Compatibility aliases for existing project pages (e.g. TermsManager.jsx)
+// -----------------------------------------------------------------------------
+export const fetchTermsByAcademicYear = fetchTerms;
+export const getTermsByAcademicYear = fetchTerms;
+
+export const createTerm = addTerm;
+export const editTerm = updateTerm;
+export const removeTerm = deleteTerm;
+
+export const copyTerms = copyTermsFromYear;
+export const copyTermsFromPreviousYear = copyTermsFromYear;
+
+export const fetchSingleTerm = async (id) => {
+  const termId = cleanId(id);
+
   if (!termId) {
-    return { status: false, message: "معرّف الترم غير موجود" };
+    return {
+      status: false,
+      message: "معرّف الترم غير موجود",
+    };
   }
 
   try {
-    const response = await api.patch(`${ENDPOINT}/${termId}`, {
-      name: String(payload?.name || "").trim(),
-      order: Number(payload?.order),
-      startDate: payload?.startDate,
-      endDate: payload?.endDate,
-      status: payload?.status,
-    });
-    invalidateTermsCache();
-    return normalizeResponse(response);
+    return ok(await api.get(`${ENDPOINT}/${termId}`));
   } catch (error) {
-    return normalizeError(error, "تعذر تعديل الترم");
+    return fail(error, "تعذر تحميل بيانات الترم");
   }
 };
 
-export const deleteTerm = async (id) => {
-  const termId = normalizeId(id);
-  if (!termId) {
-    return { status: false, message: "معرّف الترم غير موجود" };
+export const createTermsBulk = async (
+  academicYearId,
+  terms = []
+) => {
+  const yearId = cleanId(academicYearId);
+
+  const cleanTerms = Array.isArray(terms)
+    ? terms
+        .map((term) => ({
+          name: String(term?.name || "").trim(),
+          order: Number(term?.order),
+          startDate: term?.startDate,
+          endDate: term?.endDate,
+        }))
+        .filter(
+          (term) =>
+            term.name &&
+            term.order &&
+            term.startDate &&
+            term.endDate
+        )
+    : [];
+
+  if (!yearId || cleanTerms.length === 0) {
+    return {
+      status: false,
+      message: "اختر السنة وأضف ترمًا واحدًا على الأقل",
+    };
   }
 
   try {
-    const response = await api.delete(`${ENDPOINT}/${termId}`);
-    invalidateTermsCache();
-    return normalizeResponse(response);
+    return ok(
+      await api.post(`${ENDPOINT}/bulk`, {
+        academicYearId: yearId,
+        terms: cleanTerms,
+      })
+    );
   } catch (error) {
-    return normalizeError(error, "تعذر حذف الترم");
+    return fail(error, "تعذر إضافة الترمات");
   }
+};
+
+export const bulkCreateTerms = createTermsBulk;
+export const addTermsBulk = createTermsBulk;
+
+export default {
+  fetchTerms,
+  fetchTermsByAcademicYear,
+  getTermsByAcademicYear,
+  fetchSingleTerm,
+  addTerm,
+  createTerm,
+  createTermsBulk,
+  bulkCreateTerms,
+  addTermsBulk,
+  updateTerm,
+  editTerm,
+  deleteTerm,
+  removeTerm,
+  copyTermsFromYear,
+  copyTerms,
+  copyTermsFromPreviousYear,
 };

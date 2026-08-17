@@ -1371,46 +1371,59 @@ const TermsManager = ({
               تحديث
             </Button>
 
-            <Button
-              type="button"
-              variant="outlined"
-              startIcon={
-                <ContentCopyRounded />
+            <Tooltip
+              title={
+                terms.length > 0
+                  ? "يوجد ترمات بالفعل لهذه السنة. استخدم إضافة ترم/إنشاء دفعة، أو احذف الترمات الحالية أولًا إذا أردت النسخ من سنة سابقة."
+                  : !previousYears.length
+                  ? "لا توجد سنوات سابقة متاحة للنسخ."
+                  : "نسخ هيكل الترمات من سنة سابقة"
               }
-              disabled={
-                !previousYears.length
-              }
-              onClick={() =>
-                setCopyOpen(
-                  true
-                )
-              }
-              sx={{
-                minHeight: 40,
-
-                borderRadius:
-                  "11px",
-
-                color:
-                  "#244a70",
-
-                borderColor:
-                  "rgba(36,74,112,0.18)",
-
-                fontSize:
-                  "9px",
-
-                fontWeight: 800,
-
-                "& .MuiButton-startIcon":
-                  {
-                    ml: 0.55,
-                    mr: 0,
-                  },
-              }}
             >
-              نسخ من سنة سابقة
-            </Button>
+              <span>
+                <Button
+                  type="button"
+                  variant="outlined"
+                  startIcon={
+                    <ContentCopyRounded />
+                  }
+                  disabled={
+                    !previousYears.length ||
+                    terms.length > 0
+                  }
+                  onClick={() =>
+                    setCopyOpen(
+                      true
+                    )
+                  }
+                  sx={{
+                    minHeight: 40,
+
+                    borderRadius:
+                      "11px",
+
+                    color:
+                      "#244a70",
+
+                    borderColor:
+                      "rgba(36,74,112,0.18)",
+
+                    fontSize:
+                      "9px",
+
+                    fontWeight: 800,
+
+                    "& .MuiButton-startIcon":
+                      {
+                        ml: 0.55,
+                        mr: 0,
+                      },
+                  }}
+                >
+                  نسخ من سنة سابقة
+                </Button>
+              </span>
+            </Tooltip>
 
             <Button
               type="button"
@@ -1630,6 +1643,22 @@ const TermsManager = ({
           </Stack>
         </Stack>
       </Box>
+
+      {terms.length > 0 && (
+        <Alert
+          severity="info"
+          sx={{
+            mx: 1.1,
+            mt: 1.1,
+            mb: 0,
+            borderRadius: "12px",
+            fontSize: "9.5px",
+          }}
+        >
+          هذه السنة تحتوي على ترمات بالفعل، لذلك تم تعطيل النسخ من سنة سابقة.
+          استخدم "إضافة ترم" أو "إنشاء دفعة"، أو احذف الترمات الحالية أولًا إذا أردت نسخ هيكل سنة أخرى بالكامل.
+        </Alert>
+      )}
 
       {error && (
         <Alert

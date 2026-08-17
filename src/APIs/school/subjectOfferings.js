@@ -2,11 +2,33 @@ import { api } from "../Axios";
 
 const ENDPOINT = "/subject-offerings";
 
+const normalizeSubjectOfferingMessage = (message, fallback = "حدث خطأ ما") => {
+  const value = String(message || "").trim();
+
+  if (!value) return fallback;
+
+  if (/source or target academic year has no terms configured/i.test(value)) {
+    return "لا يمكن نسخ عروض المواد لأن السنة المصدر أو السنة المستهدفة لا تحتوي على ترمات. أضف الترمات للسنتين أولًا ثم أعد المحاولة.";
+  }
+
+  if (/source academic year has no terms configured/i.test(value)) {
+    return "السنة المصدر لا تحتوي على ترمات. أضف الترمات أولًا ثم أعد المحاولة.";
+  }
+
+  if (/target academic year has no terms configured/i.test(value)) {
+    return "السنة المستهدفة لا تحتوي على ترمات. أضف الترمات أولًا ثم أعد المحاولة.";
+  }
+
+  return value;
+};
+
 const messageOf = (error, fallback = "حدث خطأ ما") =>
-  error?.response?.data?.message ||
-  error?.response?.data?.error ||
-  error?.message ||
-  fallback;
+  normalizeSubjectOfferingMessage(
+    error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      error?.message,
+    fallback
+  );
 
 const ok = (response) => {
   const payload = response?.data;
@@ -14,7 +36,10 @@ const ok = (response) => {
   if (payload?.status === false) {
     return {
       status: false,
-      message: payload?.message || "فشلت العملية",
+      message: normalizeSubjectOfferingMessage(
+        payload?.message,
+        "فشلت العملية"
+      ),
       data: payload?.data,
       pagination: payload?.pagination,
     };
@@ -22,12 +47,9 @@ const ok = (response) => {
 
   return {
     status: true,
-    message: payload?.message || "Success",
+    message: normalizeSubjectOfferingMessage(payload?.message, "Success"),
     data: payload?.data ?? payload,
-    pagination:
-      payload?.pagination ||
-      payload?.meta ||
-      payload?.paging,
+    pagination: payload?.pagination || payload?.meta || payload?.paging,
   };
 };
 
@@ -149,12 +171,15 @@ export const copySubjectOfferingsFromYear = async (
     };
   }
 
+  if (targetId === sourceId) {
+    return {
+      status: false,
+      message: "لا يمكن النسخ من نفس السنة الدراسية",
+    };
+  }
+
   try {
-    return ok(
-      await api.post(
-        `${ENDPOINT}/copy-from/${targetId}/${sourceId}`
-      )
-    );
+    return ok(await api.post(`${ENDPOINT}/copy-from/${targetId}/${sourceId}`));
   } catch (error) {
     return fail(error, "تعذر نسخ عروض المواد");
   }

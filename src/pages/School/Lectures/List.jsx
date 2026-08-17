@@ -314,7 +314,13 @@ const List = () => {
   const [termOptions, setTermOptions] =
     useState([]);
   const [termsLoading, setTermsLoading] =
+    useState(false);
+
+  const [classRows, setClassRows] =
+    useState([]);
+  const [classesLoading, setClassesLoading] =
     useState(true);
+
   const [page, setPage] =
     useState(1);
   const [limit, setLimit] =
@@ -339,95 +345,148 @@ const List = () => {
   useEffect(() => {
     let mounted = true;
 
-    const loadTerms = async () => {
-      setTermsLoading(true);
+    const loadClasses = async () => {
+      setClassesLoading(true);
 
-      const classesResponse = await fetchClassesList();
+      const classesResponse =
+        await fetchClassesList();
 
       if (!mounted) {
         return;
       }
 
       if (classesResponse?.status === false) {
-        setTermOptions([]);
-        setDefaultTermId("");
-        setTermId("");
-        setTermsLoading(false);
+        setClassRows([]);
+        setClassesLoading(false);
         return;
       }
 
-      const classes = extractList(classesResponse);
-      const yearValues = classes
-        .map(getAcademicYear)
-        .filter(Boolean);
-
-      const activeYear =
-        yearValues.find(
-          (year) =>
-            year &&
-            typeof year === "object" &&
-            year.status === "active"
-        ) || yearValues[0];
-
-      const academicYearId = getId(activeYear);
-
-      if (!academicYearId) {
-        setTermOptions([]);
-        setDefaultTermId("");
-        setTermId("");
-        setTermsLoading(false);
-        return;
-      }
-
-      const termsResponse =
-        await fetchTermsByAcademicYear(
-          academicYearId
-        );
-
-      if (!mounted) {
-        return;
-      }
-
-      if (termsResponse?.status === false) {
-        setTermOptions([]);
-        setDefaultTermId("");
-        setTermId("");
-        setTermsLoading(false);
-        return;
-      }
-
-      const options = extractList(termsResponse)
-        .map(mapTermOption)
-        .filter((item) => item.value)
-        .sort((a, b) => a.order - b.order);
-
-      setTermOptions(options);
-
-      const defaultTerm =
-        options.find(
-          (item) => item.status === "active"
-        ) ||
-        options.find(
-          (item) => item.status === "upcoming"
-        ) ||
-        options[0];
-
-      const nextDefaultTermId =
-        defaultTerm?.value || "";
-
-      setDefaultTermId(nextDefaultTermId);
-      setTermId((current) =>
-        current || nextDefaultTermId
+      setClassRows(
+        extractList(classesResponse)
       );
-      setTermsLoading(false);
+      setClassesLoading(false);
     };
 
-    loadTerms();
+    loadClasses();
 
     return () => {
       mounted = false;
     };
   }, []);
+
+  const selectedClassAcademicYearId =
+    useMemo(() => {
+      if (!classFilter) {
+        return "";
+      }
+
+      const selectedClass =
+        classRows.find(
+          (item) =>
+            getId(item) === classFilter
+        );
+
+      return getId(
+        getAcademicYear(selectedClass)
+      );
+    }, [classRows, classFilter]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTermsForSelectedClass =
+      async () => {
+        // لا نستخدم ترم سنة عامة هنا.
+        // لازم ترمات نفس السنة المرتبط بها الفصل المختار.
+        if (!classFilter) {
+          setTermOptions([]);
+          setDefaultTermId("");
+          setTermId("");
+          setTermsLoading(false);
+          return;
+        }
+
+        if (
+          classesLoading ||
+          !selectedClassAcademicYearId
+        ) {
+          setTermOptions([]);
+          setDefaultTermId("");
+          setTermId("");
+          setTermsLoading(
+            classesLoading
+          );
+          return;
+        }
+
+        setTermsLoading(true);
+        setTermId("");
+
+        const termsResponse =
+          await fetchTermsByAcademicYear(
+            selectedClassAcademicYearId
+          );
+
+        if (!mounted) {
+          return;
+        }
+
+        if (
+          termsResponse?.status === false
+        ) {
+          setTermOptions([]);
+          setDefaultTermId("");
+          setTermId("");
+          setTermsLoading(false);
+          return;
+        }
+
+        const options =
+          extractList(termsResponse)
+            .map(mapTermOption)
+            .filter(
+              (item) => item.value
+            )
+            .sort(
+              (a, b) =>
+                a.order - b.order
+            );
+
+        setTermOptions(options);
+
+        const defaultTerm =
+          options.find(
+            (item) =>
+              item.status === "active"
+          ) ||
+          options.find(
+            (item) =>
+              item.status === "upcoming"
+          ) ||
+          options[0];
+
+        const nextDefaultTermId =
+          defaultTerm?.value || "";
+
+        setDefaultTermId(
+          nextDefaultTermId
+        );
+        setTermId(
+          nextDefaultTermId
+        );
+        setTermsLoading(false);
+      };
+
+    loadTermsForSelectedClass();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    classFilter,
+    classesLoading,
+    selectedClassAcademicYearId,
+  ]);
 
   const filters = useMemo(
     () => ({
@@ -459,7 +518,10 @@ const List = () => {
     loading,
     pagination,
   } = useLectures(filters, {
-    enabled: !termsLoading,
+    enabled:
+      Boolean(classFilter) &&
+      !classesLoading &&
+      !termsLoading,
   });
 
   const permissions =
@@ -665,7 +727,11 @@ const List = () => {
     }
   };
 
+  const waitingForClass =
+    !classFilter;
+
   const showEmptyState =
+    Boolean(classFilter) &&
     !loading &&
     items.length === 0;
 
@@ -1192,6 +1258,22 @@ const List = () => {
               },
             }}
           >
+            <ClassFilter
+              classId={
+                classFilter
+              }
+              setClassId={(value) => {
+                setClassFilter(value);
+                setTermId("");
+                setDefaultTermId("");
+                setTeacher("");
+                setSubject("");
+                setSlot("");
+                setDayOfWeek("");
+                setPage(1);
+              }}
+            />
+
             <SelectFilter
               value={termId}
               onChange={setTermId}
@@ -1199,7 +1281,11 @@ const List = () => {
               icon={CalendarMonthIcon}
               allLabel="جميع الترمات"
               options={termOptions}
-              disabled={termsLoading}
+              disabled={
+                classesLoading ||
+                termsLoading ||
+                !classFilter
+              }
             />
 
             <SelectFilter
@@ -1211,15 +1297,7 @@ const List = () => {
               options={
                 teacherOptions
               }
-            />
-
-            <ClassFilter
-              classId={
-                classFilter
-              }
-              setClassId={
-                setClassFilter
-              }
+              disabled={!classFilter}
             />
 
             <SelectFilter
@@ -1231,6 +1309,7 @@ const List = () => {
               options={
                 subjectOptions
               }
+              disabled={!classFilter}
             />
 
             <SelectFilter
@@ -1245,6 +1324,7 @@ const List = () => {
                   label: item.name,
                 })
               )}
+              disabled={!classFilter}
             />
 
             <SelectFilter
@@ -1263,6 +1343,7 @@ const List = () => {
                   label: item.day,
                 })
               )}
+              disabled={!classFilter}
             />
           </Box>
         </Paper>

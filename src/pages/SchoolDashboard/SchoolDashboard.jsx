@@ -1324,32 +1324,7 @@ const SchoolDashboard = () => {
               </Grid>
             </Grid>
 
-            <Section
-              title="إجراءات سريعة"
-              description="أكثر العمليات استخدامًا من مكان واحد."
-            >
-              <Grid
-                container
-                spacing={1}
-              >
-                {ownerQuickActions.map(
-                  (action) => (
-                    <Grid
-                      item
-                      xs={12}
-                      sm={6}
-                      md={4}
-                      lg={3}
-                      key={action.to}
-                    >
-                      <QuickAction
-                        {...action}
-                      />
-                    </Grid>
-                  )
-                )}
-              </Grid>
-            </Section>
+        
 
             <Section
               title="حالة المدرسة"
