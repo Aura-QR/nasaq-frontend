@@ -23,13 +23,12 @@ import {
 } from "@mui/icons-material";
 
 import {
+  useLocation,
   useNavigate,
   useParams,
 } from "react-router-dom";
 
 import Container from "@/components/Container/Container";
-import SUBJECT_PALETTES from "@/utils/constants/SubjectPalettes";
-
 import {
   useGradesCriteria,
   useStudentSubjects,
@@ -116,6 +115,162 @@ const getPercentage = (grade, max) => {
   return Math.min(100, Math.max(0, Math.round((grade / max) * 100)));
 };
 
+const getSubjectOfferingId = (item) => {
+  if (!item) return "";
+
+  const offering =
+    item?.subjectOfferingId ||
+    item?.subjectOffering ||
+    item?.offering ||
+    null;
+
+  if (typeof offering === "string") {
+    return offering;
+  }
+
+  if (offering && typeof offering === "object") {
+    return String(
+      offering?._id ||
+        offering?.id ||
+        ""
+    );
+  }
+
+  const looksLikeOffering =
+    Boolean(item?.subjectId) &&
+    Boolean(
+      item?.termId ||
+        item?.gradeLevelId ||
+        item?.academicYearId
+    );
+
+  if (looksLikeOffering) {
+    return String(
+      item?._id ||
+        item?.id ||
+        ""
+    );
+  }
+
+  return "";
+};
+
+const unwrapObject = (value) => {
+  let current = value;
+
+  for (let index = 0; index < 4; index += 1) {
+    if (
+      current &&
+      typeof current === "object" &&
+      !Array.isArray(current) &&
+      current?.data !== undefined
+    ) {
+      current = current.data;
+      continue;
+    }
+
+    break;
+  }
+
+  return current;
+};
+
+const getGradesBreakdown = (payload) => {
+  const normalized = unwrapObject(payload);
+
+  if (
+    !normalized ||
+    typeof normalized !== "object" ||
+    Array.isArray(normalized)
+  ) {
+    return null;
+  }
+
+  const nested =
+    normalized?.grades ||
+    normalized?.breakdown ||
+    normalized?.gradeBreakdown ||
+    null;
+
+  if (
+    nested &&
+    typeof nested === "object" &&
+    !Array.isArray(nested)
+  ) {
+    return nested;
+  }
+
+  const hasGradeSections = sectionConfigs.some(
+    (section) =>
+      normalized?.[section.key] !== undefined &&
+      normalized?.[section.key] !== null
+  );
+
+  return hasGradeSections
+    ? normalized
+    : null;
+};
+
+const getCriteriaData = (criteria) => {
+  const normalized = unwrapObject(criteria);
+
+  if (Array.isArray(normalized)) {
+    return normalized[0] || null;
+  }
+
+  if (
+    normalized &&
+    typeof normalized === "object"
+  ) {
+    return normalized;
+  }
+
+  return null;
+};
+
+const getCriteriaMax = (
+  criteriaData,
+  key
+) => {
+  const raw =
+    criteriaData?.[key];
+
+  if (
+    raw === undefined ||
+    raw === null
+  ) {
+    return 0;
+  }
+
+  if (typeof raw === "number") {
+    return raw;
+  }
+
+  if (typeof raw === "string") {
+    const parsed = Number(raw);
+    return Number.isFinite(parsed)
+      ? parsed
+      : 0;
+  }
+
+  if (
+    typeof raw === "object"
+  ) {
+    const parsed = Number(
+      raw?.total ??
+        raw?.max ??
+        raw?.weight ??
+        raw?.percentage
+    );
+
+    return Number.isFinite(parsed)
+      ? parsed
+      : 0;
+  }
+
+  return 0;
+};
+
 const getTeacherName = (grades, selectedSubject) => {
   const teacher =
     grades?.teacher ||
@@ -178,14 +333,55 @@ const getTermLabel = (grades, selectedSubject) => {
 
 const SubjectGrades = () => {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
 
-  const { subjects } = useStudentSubjects();
-  const { grades } = useGradesCriteria({ subjectId: id });
-  const gradesData = grades?.grades || null;
+  /*
+   * Route id = subjectOfferingId.
+   * MySubjects also sends it in navigation state as an extra safeguard.
+   */
+  const subjectOfferingId = String(
+    location?.state?.subjectOfferingId ||
+      id ||
+      ""
+  );
+
+  const {
+    subjects,
+    loading: subjectsLoading,
+  } = useStudentSubjects();
+
+  const {
+    grades,
+    criteria,
+    loading: gradesLoading,
+  } = useGradesCriteria({
+    subjectOfferingId,
+  });
+
+  const gradesData =
+    useMemo(
+      () =>
+        getGradesBreakdown(
+          grades
+        ),
+      [grades]
+    );
+
+  const criteriaData =
+    useMemo(
+      () =>
+        getCriteriaData(
+          criteria
+        ),
+      [criteria]
+    );
 
   const subjectsList = useMemo(
-    () => (Array.isArray(subjects) ? subjects : []),
+    () =>
+      Array.isArray(subjects)
+        ? subjects
+        : [],
     [subjects]
   );
 
@@ -193,118 +389,281 @@ const SubjectGrades = () => {
     () =>
       subjectsList.find(
         (subject) =>
-          String(
-            subject?._id ||
-              subject?.id ||
-              subject?.subjectOfferingId?._id ||
-              subject?.subjectOfferingId?.id ||
-              ""
-          ) === String(id)
-      ),
-    [subjectsList, id]
+          getSubjectOfferingId(
+            subject
+          ) ===
+          subjectOfferingId
+      ) ||
+      location?.state?.subject ||
+      null,
+    [
+      subjectsList,
+      subjectOfferingId,
+      location?.state?.subject,
+    ]
   );
-
-  const subjectIndex = useMemo(
-    () =>
-      subjectsList.findIndex(
-        (subject) =>
-          String(
-            subject?._id ||
-              subject?.id ||
-              subject?.subjectOfferingId?._id ||
-              subject?.subjectOfferingId?.id ||
-              ""
-          ) === String(id)
-      ),
-    [subjectsList, id]
-  );
-
-  const palette =
-    subjectIndex >= 0
-      ? SUBJECT_PALETTES[subjectIndex % SUBJECT_PALETTES.length]
-      : SUBJECT_PALETTES[0];
 
   const subjectDetails = {
-    subjectName: getSubjectName(grades, selectedSubject),
-    subjectCode: getSubjectCode(grades, selectedSubject),
-    teacherName: getTeacherName(grades, selectedSubject),
-    termLabel: getTermLabel(grades, selectedSubject),
+    subjectName: getSubjectName(
+      unwrapObject(grades) ||
+        criteriaData,
+      selectedSubject
+    ),
+    subjectCode: getSubjectCode(
+      unwrapObject(grades) ||
+        criteriaData,
+      selectedSubject
+    ),
+    teacherName: getTeacherName(
+      unwrapObject(grades) ||
+        criteriaData,
+      selectedSubject
+    ),
+    termLabel: getTermLabel(
+      unwrapObject(grades) ||
+        criteriaData,
+      selectedSubject
+    ),
   };
 
-  const sectionSummaries = useMemo(() => {
-    return sectionConfigs.map((section) => {
-      const rawValue = gradesData?.[section.key];
-      const fallbackValue =
-        section.key === "final" || section.key === "activities"
-          ? { grade: 0, total: 0 }
-          : [];
+  const sectionSummaries =
+    useMemo(() => {
+      if (!gradesData) {
+        return [];
+      }
 
-      const resolvedValue = rawValue ?? fallbackValue;
-      const rawEntries = Array.isArray(resolvedValue)
-        ? resolvedValue
-        : [resolvedValue];
+      return sectionConfigs
+        .map((section) => {
+          const rawValue =
+            gradesData?.[section.key];
 
-      const entries = rawEntries.map((entry, index) => {
-        const grade = Number(entry?.grade) || 0;
-        const max = Number(entry?.total ?? entry?.max) || 0;
+          /*
+           * لو الـ API لم يرجع القسم أصلًا،
+           * لا ننشئ 0/0 من عندنا.
+           */
+          if (
+            rawValue === undefined ||
+            rawValue === null
+          ) {
+            return null;
+          }
 
-        return {
-          grade,
-          max,
-          title: Array.isArray(resolvedValue)
-            ? `${section.entryLabel} ${entry?.number || index + 1}`
-            : section.entryLabel,
-          percentage: getPercentage(grade, max),
-        };
-      });
+          const rawEntries =
+            Array.isArray(rawValue)
+              ? rawValue
+              : [rawValue];
 
-      const totals = entries.reduce(
-        (summary, entry) => ({
-          grade: summary.grade + entry.grade,
-          max: summary.max + entry.max,
+          const entries =
+            rawEntries
+              .map(
+                (entry, index) => {
+                  if (
+                    entry === null ||
+                    entry === undefined
+                  ) {
+                    return null;
+                  }
+
+                  const entryObject =
+                    typeof entry ===
+                    "object"
+                      ? entry
+                      : {
+                          grade:
+                            entry,
+                        };
+
+                  const grade =
+                    Number(
+                      entryObject
+                        ?.grade ??
+                        entryObject
+                          ?.score ??
+                        entryObject
+                          ?.value ??
+                        0
+                    ) || 0;
+
+                  const explicitMax =
+                    Number(
+                      entryObject
+                        ?.total ??
+                        entryObject
+                          ?.max ??
+                        entryObject
+                          ?.maxGrade
+                    );
+
+                  const criteriaMax =
+                    getCriteriaMax(
+                      criteriaData,
+                      section.key
+                    );
+
+                  const max =
+                    Number.isFinite(
+                      explicitMax
+                    ) &&
+                    explicitMax > 0
+                      ? explicitMax
+                      : criteriaMax;
+
+                  return {
+                    grade,
+                    max,
+
+                    title:
+                      Array.isArray(
+                        rawValue
+                      )
+                        ? entryObject
+                            ?.title ||
+                          entryObject
+                            ?.name ||
+                          `${section.entryLabel} ${
+                            entryObject
+                              ?.number ||
+                            index + 1
+                          }`
+                        : section.entryLabel,
+
+                    percentage:
+                      getPercentage(
+                        grade,
+                        max
+                      ),
+                  };
+                }
+              )
+              .filter(Boolean);
+
+          if (
+            entries.length === 0
+          ) {
+            return null;
+          }
+
+          const totals =
+            entries.reduce(
+              (
+                summary,
+                entry
+              ) => ({
+                grade:
+                  summary.grade +
+                  entry.grade,
+
+                max:
+                  summary.max +
+                  entry.max,
+              }),
+              {
+                grade: 0,
+                max: 0,
+              }
+            );
+
+          return {
+            ...section,
+            entries,
+
+            totalGrade:
+              totals.grade,
+
+            totalMax:
+              totals.max,
+
+            percentage:
+              getPercentage(
+                totals.grade,
+                totals.max
+              ),
+          };
+        })
+        .filter(Boolean);
+    }, [
+      gradesData,
+      criteriaData,
+    ]);
+
+  const overallSummary =
+    useMemo(() => {
+      return sectionSummaries.reduce(
+        (
+          summary,
+          section
+        ) => ({
+          grade:
+            summary.grade +
+            section.totalGrade,
+
+          max:
+            summary.max +
+            section.totalMax,
+
+          items:
+            summary.items +
+            section.entries.length,
         }),
-        { grade: 0, max: 0 }
+        {
+          grade: 0,
+          max: 0,
+          items: 0,
+        }
       );
+    }, [sectionSummaries]);
 
-      return {
-        ...section,
-        entries,
-        totalGrade: totals.grade,
-        totalMax: totals.max,
-        percentage: getPercentage(totals.grade, totals.max),
-        hasBackendValue: rawValue !== undefined,
-      };
-    });
-  }, [gradesData]);
-
-  const overallSummary = useMemo(() => {
-    return sectionSummaries.reduce(
-      (summary, section) => ({
-        grade: summary.grade + section.totalGrade,
-        max: summary.max + section.totalMax,
-        items: summary.items + section.entries.length,
-      }),
-      { grade: 0, max: 0, items: 0 }
-    );
-  }, [sectionSummaries]);
-
-  const overallPercentage = getPercentage(
-    overallSummary.grade,
-    overallSummary.max
-  );
-
-  const visibleSections = useMemo(() => {
-    const actual = sectionSummaries.filter(
-      (section) =>
-        section.hasBackendValue ||
-        section.totalMax > 0 ||
-        section.totalGrade > 0
+  const overallPercentage =
+    getPercentage(
+      overallSummary.grade,
+      overallSummary.max
     );
 
-    return actual.length
-      ? actual
-      : sectionSummaries.filter((section) => section.entries.length > 0);
-  }, [sectionSummaries]);
+  const visibleSections =
+    sectionSummaries;
+
+  const hasGrades =
+    visibleSections.length > 0;
+
+  const loading =
+    subjectsLoading ||
+    gradesLoading;
+
+  if (loading) {
+    return (
+      <Container noSidebar={true}>
+        <Paper
+          elevation={0}
+          sx={{
+            minHeight: 360,
+            display: "grid",
+            placeItems: "center",
+            borderRadius: "22px",
+            border:
+              "1px solid rgba(18,47,77,.055)",
+          }}
+        >
+          <Stack
+            alignItems="center"
+            spacing={1}
+          >
+            <CircularProgress
+              size={34}
+            />
+
+            <Typography
+              sx={{
+                color: "#8f9aa4",
+                fontSize: "9px",
+              }}
+            >
+              جاري تحميل بيانات الدرجات...
+            </Typography>
+          </Stack>
+        </Paper>
+      </Container>
+    );
+  }
 
   return (
     <Container noSidebar={true}>
@@ -456,12 +815,12 @@ const SubjectGrades = () => {
                     )}
 
                     <Chip
-                      label={gradesData ? "بيانات الدرجات" : "لا توجد درجات بعد"}
+                      label={hasGrades ? "بيانات الدرجات" : "لا توجد درجات بعد"}
                       size="small"
                       sx={{
                         height: 24,
-                        color: gradesData ? COLORS.green : COLORS.orange,
-                        backgroundColor: gradesData
+                        color: hasGrades ? COLORS.green : COLORS.orange,
+                        backgroundColor: hasGrades
                           ? COLORS.greenLight
                           : COLORS.orangeLight,
                         fontSize: "8px",
@@ -529,7 +888,7 @@ const SubjectGrades = () => {
                     fontWeight: 900,
                   }}
                 >
-                  {overallSummary.grade} / {overallSummary.max}
+                  {hasGrades ? `${overallSummary.grade} / ${overallSummary.max}` : "—"}
                 </Typography>
 
                 <Typography sx={{ mt: 0.15, color: "#98a2ac", fontSize: "8px" }}>
@@ -556,7 +915,7 @@ const SubjectGrades = () => {
 
                 <CircularProgress
                   variant="determinate"
-                  value={overallPercentage}
+                  value={hasGrades ? overallPercentage : 0}
                   size={72}
                   thickness={4}
                   sx={{ position: "absolute", color: COLORS.blue }}
@@ -565,7 +924,7 @@ const SubjectGrades = () => {
                 <Typography
                   sx={{ color: COLORS.deepNavy, fontSize: "15px", fontWeight: 900 }}
                 >
-                  {overallPercentage}%
+                  {hasGrades ? `${overallPercentage}%` : "—"}
                 </Typography>
               </Box>
             </Paper>
@@ -585,7 +944,7 @@ const SubjectGrades = () => {
         >
           <SummaryCard
             label="الدرجة الحالية"
-            value={`${overallSummary.grade}/${overallSummary.max}`}
+            value={hasGrades ? `${overallSummary.grade}/${overallSummary.max}` : "—"}
             note="مجموع درجاتك في المادة"
             Icon={SchoolRounded}
             color={COLORS.green}
@@ -594,7 +953,7 @@ const SubjectGrades = () => {
 
           <SummaryCard
             label="النسبة الكلية"
-            value={`${overallPercentage}%`}
+            value={hasGrades ? `${overallPercentage}%` : "—"}
             note="أداؤك في عناصر التقييم"
             Icon={TrendingUpRounded}
             color={COLORS.blue}
@@ -603,7 +962,7 @@ const SubjectGrades = () => {
 
           <SummaryCard
             label="عناصر التقييم"
-            value={overallSummary.items}
+            value={hasGrades ? overallSummary.items : "—"}
             note="عدد العناصر المسجلة"
             Icon={FactCheckRounded}
             color={COLORS.orange}
@@ -634,7 +993,7 @@ const SubjectGrades = () => {
           </Box>
 
           <Chip
-            label={`${visibleSections.length} أقسام`}
+            label={hasGrades ? `${visibleSections.length} أقسام` : "لا توجد درجات"}
             size="small"
             sx={{
               height: 27,
@@ -646,20 +1005,82 @@ const SubjectGrades = () => {
           />
         </Stack>
 
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              lg: "repeat(2,minmax(0,1fr))",
-            },
-            gap: 1.1,
-          }}
-        >
-          {visibleSections.map((section) => (
-            <GradeSectionCard key={section.key} section={section} />
-          ))}
-        </Box>
+        {hasGrades ? (
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                lg: "repeat(2,minmax(0,1fr))",
+              },
+              gap: 1.1,
+            }}
+          >
+            {visibleSections.map((section) => (
+              <GradeSectionCard
+                key={section.key}
+                section={section}
+              />
+            ))}
+          </Box>
+        ) : (
+          <Paper
+            elevation={0}
+            sx={{
+              minHeight: 190,
+              px: 2,
+              py: 4,
+              display: "grid",
+              placeItems: "center",
+              textAlign: "center",
+              borderRadius: "20px",
+              border: "1px dashed rgba(36,74,112,.14)",
+              background:
+                "linear-gradient(145deg,#ffffff,#f8fbfd)",
+            }}
+          >
+            <Box>
+              <Box
+                sx={{
+                  width: 64,
+                  height: 64,
+                  mx: "auto",
+                  mb: 1.2,
+                  display: "grid",
+                  placeItems: "center",
+                  borderRadius: "18px",
+                  color: COLORS.orange,
+                  backgroundColor:
+                    COLORS.orangeLight,
+                }}
+              >
+                <FactCheckRounded
+                  sx={{ fontSize: 30 }}
+                />
+              </Box>
+
+              <Typography
+                sx={{
+                  color: COLORS.deepNavy,
+                  fontSize: "14px",
+                  fontWeight: 900,
+                }}
+              >
+                لا توجد درجات مسجلة لهذه المادة
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.45,
+                  color: "#929da7",
+                  fontSize: "9px",
+                }}
+              >
+                ستظهر الدرجات هنا فور تسجيلها في النظام.
+              </Typography>
+            </Box>
+          </Paper>
+        )}
       </Box>
     </Container>
   );

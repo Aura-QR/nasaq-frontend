@@ -328,6 +328,9 @@ const Add = () => {
   const querySlot =
     searchParams.get("slot") || "";
 
+  const queryTermId =
+    searchParams.get("termId") || "";
+
   const [saving, setSaving] = useState(false);
   const [setupLoading, setSetupLoading] =
     useState(true);
@@ -344,7 +347,7 @@ const Add = () => {
     useState(queryClassId);
 
   const [selectedTermId, setSelectedTermId] =
-    useState("");
+    useState(queryTermId);
 
   const [
     selectedOfferingId,
@@ -374,11 +377,16 @@ const Add = () => {
     if (queryTeacherId) {
       setValue("teacherId", queryTeacherId);
     }
+
+    if (queryTermId) {
+      setValue("termId", queryTermId);
+    }
   }, [
     queryClassId,
     queryDay,
     querySlot,
     queryTeacherId,
+    queryTermId,
     setValue,
   ]);
 
@@ -452,9 +460,9 @@ const Add = () => {
       setClassDetails(null);
       setTerms([]);
       setOfferings([]);
-      setSelectedTermId("");
+      setSelectedTermId(queryTermId);
       setSelectedOfferingId("");
-      setValue("termId", "");
+      setValue("termId", queryTermId || "");
       setValue("subjectOfferingId", "");
 
       if (!selectedClassId) {
@@ -523,6 +531,9 @@ const Add = () => {
 
       const defaultTerm =
         mappedTerms.find(
+          (item) => item.id === queryTermId
+        ) ||
+        mappedTerms.find(
           (item) => item.status === "active"
         ) ||
         mappedTerms.find(
@@ -550,7 +561,11 @@ const Add = () => {
     return () => {
       mounted = false;
     };
-  }, [selectedClassId, setValue]);
+  }, [
+    selectedClassId,
+    queryTermId,
+    setValue,
+  ]);
 
   useEffect(() => {
     let mounted = true;
@@ -969,7 +984,8 @@ const Add = () => {
                 disabled={
                   setupLoading ||
                   !selectedClassId ||
-                  termOptions.length === 0
+                  termOptions.length === 0 ||
+                  Boolean(queryTermId)
                 }
                 onChange={(value) => {
                   setSelectedTermId(value || "");

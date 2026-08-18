@@ -1,18 +1,77 @@
-import { useMemo, useState } from "react";
+import {
+  Box,
+  Chip,
+  IconButton,
+  Paper,
+  Skeleton,
+  Stack,
+  Typography,
+} from "@mui/material";
+
+import {
+  ArrowBackRounded,
+  ArrowForwardRounded,
+  CalendarMonthRounded,
+  CheckCircleRounded,
+  EventBusyRounded,
+  SchoolRounded,
+} from "@mui/icons-material";
+
 import {
   addMonths,
   eachDayOfInterval,
   endOfMonth,
   format,
   getDay,
+  isAfter,
+  isSameMonth,
   isToday,
+  startOfDay,
   startOfMonth,
   subMonths,
 } from "date-fns";
+
+import {
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  useNavigate,
+} from "react-router-dom";
+
 import Container from "@/components/Container/Container";
-import Back from "@/components/Back/Back";
-import { useStudentAttendance } from "@/utils/hooks/apis/student/useStudent";
-import Loading from "@/components/Loading";
+
+import {
+  useStudentAttendance,
+} from "@/utils/hooks/apis/student/useStudent";
+
+// =====================================================
+// COLORS
+// =====================================================
+
+const COLORS = {
+  navy: "#244a70",
+  deepNavy: "#122f4d",
+
+  blue: "#4e8dcc",
+  blueLight: "#edf6ff",
+
+  green: "#43a978",
+  greenLight: "#eaf8f1",
+
+  red: "#d76760",
+  redLight: "#fff0ef",
+
+  gold: "#d3a44f",
+
+  gray: "#8c98a3",
+  grayLight: "#f7f9fb",
+};
+
+// =====================================================
+// WEEK
+// =====================================================
 
 const WEEK_DAYS_AR = [
   "الأحد",
@@ -22,197 +81,1214 @@ const WEEK_DAYS_AR = [
   "الخميس",
 ];
 
-const arabicWithEnglishNumbers = new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
-  month: "long",
-  year: "numeric",
-});
+const monthFormatter =
+  new Intl.DateTimeFormat(
+    "ar-EG-u-nu-latn",
+    {
+      month: "long",
+      year: "numeric",
+    }
+  );
 
-const dayNumberFormatter = new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
-  day: "numeric",
-});
+const dayFormatter =
+  new Intl.DateTimeFormat(
+    "ar-EG-u-nu-latn",
+    {
+      day: "numeric",
+    }
+  );
+
+// =====================================================
+// HELPERS
+// =====================================================
 
 const isSchoolDay = (date) => {
-  const weekDay = getDay(date);
-  return weekDay !== 5 && weekDay !== 6;
+  const day = getDay(date);
+
+  // Friday / Saturday
+  return (
+    day !== 5 &&
+    day !== 6
+  );
 };
 
-const getStatusStyles = (status) => {
-  if (status === "present") {
+const normalizeAttendanceDate = (
+  value
+) => {
+  if (!value) {
+    return "";
+  }
+
+  if (
+    typeof value === "string"
+  ) {
+    return value.slice(
+      0,
+      10
+    );
+  }
+
+  try {
+    return format(
+      new Date(value),
+      "yyyy-MM-dd"
+    );
+  } catch {
+    return "";
+  }
+};
+
+const getDayStatus = ({
+  day,
+  absenceDates,
+  today,
+}) => {
+  const key = format(
+    day,
+    "yyyy-MM-dd"
+  );
+
+  /*
+   * API contract:
+   * وجود record = غياب.
+   */
+  if (
+    absenceDates.has(key)
+  ) {
+    return "absent";
+  }
+
+  /*
+   * المستقبل لا يُحسب حضور.
+   */
+  if (
+    isAfter(
+      startOfDay(day),
+      today
+    )
+  ) {
+    return "future";
+  }
+
+  /*
+   * Derived state:
+   * يوم مضى ولا يوجد غياب مسجل.
+   */
+  return "clear";
+};
+
+const getDayTheme = (
+  status
+) => {
+  if (
+    status === "absent"
+  ) {
     return {
-      label: "حاضر",
-      color: "#0E9F6E",
-      bg: "#E7F8F1",
-      border: "#9DE2C6",
+      label: "غياب",
+      color: COLORS.red,
+      background:
+        COLORS.redLight,
+      border:
+        "rgba(215,103,96,.24)",
     };
   }
 
-  if (status === "absent") {
+  if (
+    status === "future"
+  ) {
     return {
-      label: "غائب",
-      color: "#D14343",
-      bg: "#FDECEC",
-      border: "#F4B5B5",
+      label: "قادم",
+      color: "#9aa4ae",
+      background:
+        "#fafbfc",
+      border:
+        "rgba(36,74,112,.065)",
     };
   }
 
   return {
-    label: "حاضر",
-    color: "#0E9F6E",
-    bg: "#E7F8F1",
-    border: "#9DE2C6",
+    label:
+      "بدون غياب",
+    color:
+      COLORS.green,
+    background:
+      COLORS.greenLight,
+    border:
+      "rgba(67,169,120,.20)",
   };
 };
 
-const Attendance = () => {
-  const [monthCursor, setMonthCursor] = useState(new Date());
-  const { attendance, loading } = useStudentAttendance();
+// =====================================================
+// MAIN
+// =====================================================
 
-  const absentDays = useMemo(
-    () =>
-      new Set(
-        (attendance || [])
-          .map((item) => item?.date?.slice(0, 10))
-          .filter(Boolean)
-      ),
-    [attendance]
+const Attendance = () => {
+  const navigate =
+    useNavigate();
+
+  const [
+    monthCursor,
+    setMonthCursor,
+  ] = useState(
+    new Date()
   );
 
-  const monthStart = startOfMonth(monthCursor);
-  const monthEnd = endOfMonth(monthCursor);
-  const schoolDays = eachDayOfInterval({ start: monthStart, end: monthEnd }).filter(isSchoolDay);
+  const {
+    attendance = [],
+    attendanceTotal = 0,
+    loading,
+  } =
+    useStudentAttendance();
 
-  const monthlyStats = useMemo(() => {
-    const absent = schoolDays.filter((day) => absentDays.has(format(day, "yyyy-MM-dd"))).length;
-    const recorded = schoolDays.length;
-    const present = recorded - absent;
+  const today =
+    useMemo(
+      () =>
+        startOfDay(
+          new Date()
+        ),
+      []
+    );
 
-    return {
-      present,
-      absent,
-      recorded,
-    };
-  }, [absentDays, schoolDays]);
+  // ===================================================
+  // ABSENCE SET
+  // ===================================================
 
-  const attendanceRate = monthlyStats.recorded
-    ? Math.round((monthlyStats.present / monthlyStats.recorded) * 100)
-    : 0;
+  const absenceDates =
+    useMemo(() => {
+      const list =
+        Array.isArray(
+          attendance
+        )
+          ? attendance
+          : [];
+
+      return new Set(
+        list
+          .map((item) =>
+            normalizeAttendanceDate(
+              item?.date
+            )
+          )
+          .filter(Boolean)
+      );
+    }, [attendance]);
+
+  // ===================================================
+  // MONTH
+  // ===================================================
+
+  const monthStart =
+    startOfMonth(
+      monthCursor
+    );
+
+  const monthEnd =
+    endOfMonth(
+      monthCursor
+    );
+
+  const schoolDays =
+    useMemo(() => {
+      return eachDayOfInterval({
+        start:
+          monthStart,
+        end:
+          monthEnd,
+      }).filter(
+        isSchoolDay
+      );
+    }, [
+      monthStart,
+      monthEnd,
+    ]);
+
+  // ===================================================
+  // CALENDAR LEADING CELLS
+  // ===================================================
+
+  const leadingEmptyCells =
+    useMemo(() => {
+      if (
+        schoolDays.length ===
+        0
+      ) {
+        return [];
+      }
+
+      const firstDay =
+        getDay(
+          schoolDays[0]
+        );
+
+      /*
+       * Sunday = 0
+       * Monday = 1
+       * ...
+       * Thursday = 4
+       */
+      return Array.from(
+        {
+          length:
+            Math.min(
+              firstDay,
+              4
+            ),
+        },
+        (_, index) =>
+          index
+      );
+    }, [schoolDays]);
+
+  // ===================================================
+  // MONTH ATTENDANCE RECORDS
+  // ===================================================
+
+  const monthAbsenceDates =
+    useMemo(() => {
+      const set =
+        new Set();
+
+      (
+        Array.isArray(
+          attendance
+        )
+          ? attendance
+          : []
+      ).forEach(
+        (item) => {
+          const normalized =
+            normalizeAttendanceDate(
+              item?.date
+            );
+
+          if (!normalized) {
+            return;
+          }
+
+          const date =
+            new Date(
+              `${normalized}T00:00:00`
+            );
+
+          if (
+            isSameMonth(
+              date,
+              monthCursor
+            ) &&
+            !isAfter(
+              startOfDay(
+                date
+              ),
+              today
+            )
+          ) {
+            set.add(
+              normalized
+            );
+          }
+        }
+      );
+
+      return set;
+    }, [
+      attendance,
+      monthCursor,
+      today,
+    ]);
+
+  // ===================================================
+  // ELAPSED SCHOOL DAYS
+  // ===================================================
+
+  const elapsedSchoolDays =
+    useMemo(() => {
+      return schoolDays.filter(
+        (day) =>
+          !isAfter(
+            startOfDay(day),
+            today
+          )
+      );
+    }, [
+      schoolDays,
+      today,
+    ]);
+
+  // ===================================================
+  // STATS
+  // ===================================================
+
+  const stats =
+    useMemo(() => {
+      const absent =
+        monthAbsenceDates.size;
+
+      const elapsed =
+        elapsedSchoolDays.length;
+
+      const withoutAbsence =
+        Math.max(
+          elapsed -
+            absent,
+          0
+        );
+
+      const rate =
+        elapsed > 0
+          ? Math.round(
+              (withoutAbsence /
+                elapsed) *
+                100
+            )
+          : 0;
+
+      const future =
+        schoolDays.filter(
+          (day) =>
+            isAfter(
+              startOfDay(
+                day
+              ),
+              today
+            )
+        ).length;
+
+      return {
+        absent,
+        elapsed,
+        withoutAbsence,
+        rate,
+        future,
+      };
+    }, [
+      monthAbsenceDates,
+      elapsedSchoolDays,
+      schoolDays,
+      today,
+    ]);
+
+  // ===================================================
+  // LOADING
+  // ===================================================
 
   if (loading) {
-    return <Loading />;
+    return (
+      <Container
+        noSidebar={true}
+      >
+        <Stack spacing={1.25}>
+          <Skeleton
+            variant="rounded"
+            height={92}
+            sx={{
+              borderRadius:
+                "20px",
+            }}
+          />
+
+          <Skeleton
+            variant="rounded"
+            height={58}
+            sx={{
+              borderRadius:
+                "16px",
+            }}
+          />
+
+          <Skeleton
+            variant="rounded"
+            height={430}
+            sx={{
+              borderRadius:
+                "20px",
+            }}
+          />
+        </Stack>
+      </Container>
+    );
   }
 
+  // ===================================================
+  // RENDER
+  // ===================================================
+
   return (
-    <Container noSidebar={true}>
-      <Back title={"تقويم الحضور"} />
+    <Container
+      noSidebar={true}
+    >
+      <Box
+        dir="rtl"
+        sx={{
+          width: "100%",
+        }}
+      >
+        {/* =============================================
+            HEADER
+        ============================================= */}
 
-      <div className="mt-4 min-h-[calc(100vh-220px)] rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-sm sm:p-6 lg:p-12">
-        <div className="mb-6 flex flex-col gap-4 lg:mb-8 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-[#323449] sm:text-xl">عرض شهري لحالة الحضور</h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-[#35413E]">
-              تم استبعاد يومي الجمعة والسبت كعطلة، وباقي الأيام تعتبر حضور ما لم تسجل كغياب.
-            </p>
-          </div>
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 1.25,
 
-          <div className="flex w-full items-center justify-between gap-2 self-start sm:w-auto sm:justify-start md:self-auto">
-            <button
-              type="button"
-              onClick={() => setMonthCursor((prev) => addMonths(prev, 1))}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#DEE3E2] bg-[#F9FAFB] text-[#323449] transition hover:border-[#318dce] hover:text-[#318dce]"
+            px: {
+              xs: 1.25,
+              sm: 1.6,
+              md: 2,
+            },
+
+            py: 1.2,
+
+            display: "flex",
+
+            alignItems: {
+              xs: "flex-start",
+              md: "center",
+            },
+
+            justifyContent:
+              "space-between",
+
+            flexDirection: {
+              xs: "column",
+              md: "row",
+            },
+
+            gap: 1,
+
+            borderRadius:
+              "20px",
+
+            border:
+              "1px solid rgba(18,47,77,.055)",
+
+            background:
+              "linear-gradient(120deg,#ffffff 0%,#fbfdff 62%,#eaf8f1 100%)",
+
+            boxShadow:
+              "0 8px 24px rgba(18,47,77,.04)",
+          }}
+        >
+          {/* TITLE */}
+
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.85}
+          >
+            <IconButton
+              onClick={() =>
+                navigate(
+                  "/student-dashboard"
+                )
+              }
+              sx={{
+                width: 39,
+                height: 39,
+
+                borderRadius:
+                  "12px",
+
+                color:
+                  COLORS.navy,
+
+                backgroundColor:
+                  "#f2f6fa",
+
+                border:
+                  "1px solid rgba(36,74,112,.06)",
+              }}
             >
-              →
-            </button>
+              <ArrowForwardRounded
+                sx={{
+                  fontSize: 20,
+                }}
+              />
+            </IconButton>
 
-            <div className="flex-1 text-center text-sm font-bold text-[#323449] sm:min-w-[170px] sm:flex-none sm:text-base">
-              {arabicWithEnglishNumbers.format(monthCursor)}
-            </div>
+            <Box
+              sx={{
+                width: 42,
+                height: 42,
 
-            <button
-              type="button"
-              onClick={() => setMonthCursor((prev) => subMonths(prev, 1))}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#DEE3E2] bg-[#F9FAFB] text-[#323449] transition hover:border-[#318dce] hover:text-[#318dce]"
+                display: {
+                  xs: "none",
+                  sm: "grid",
+                },
+
+                placeItems:
+                  "center",
+
+                borderRadius:
+                  "13px",
+
+                color:
+                  COLORS.green,
+
+                backgroundColor:
+                  COLORS.greenLight,
+              }}
             >
-              ←
-            </button>
-          </div>
-        </div>
+              <CalendarMonthRounded
+                sx={{
+                  fontSize: 21,
+                }}
+              />
+            </Box>
 
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 md:mb-8 md:grid-cols-3">
-          <div className="rounded-[10px] border border-[#9DE2C6] bg-[#E7F8F1] p-4">
-            <p className="text-xs font-bold text-[#0E9F6E]">أيام الحضور</p>
-            <p className="mt-1 text-2xl font-bold text-[#065F46]">{monthlyStats.present}</p>
-          </div>
+            <Box>
+              <Typography
+                sx={{
+                  color:
+                    COLORS.deepNavy,
 
-          <div className="rounded-[10px] border border-[#F4B5B5] bg-[#FDECEC] p-4">
-            <p className="text-xs font-bold text-[#D14343]">أيام الغياب</p>
-            <p className="mt-1 text-2xl font-bold text-[#991B1B]">{monthlyStats.absent}</p>
-          </div>
+                  fontSize: {
+                    xs: "17px",
+                    md: "20px",
+                  },
 
-          <div className="rounded-[10px] border border-[#BCD7FF] bg-[#EEF5FF] p-4">
-            <p className="text-xs font-bold text-[#0F4C81]">نسبة الالتزام</p>
-            <p className="mt-1 text-2xl font-bold text-[#0B3558]">{attendanceRate}%</p>
-          </div>
-        </div>
+                  fontWeight:
+                    900,
 
-        <div className="mb-6 flex flex-wrap gap-2">
-          <span className="rounded-full bg-[#E7F8F1] px-3 py-1 text-xs font-semibold text-[#0E9F6E]">
-            حاضر
-          </span>
-          <span className="rounded-full bg-[#FDECEC] px-3 py-1 text-xs font-semibold text-[#D14343]">
-            غائب
-          </span>
-          <span className="rounded-full bg-[#F3F6FB] px-3 py-1 text-xs font-semibold text-[#38506B]">
-            إجمالي الأيام المسجلة: {monthlyStats.recorded}
-          </span>
-          <span className="rounded-full bg-[#F3F4F6] px-3 py-1 text-xs font-semibold text-[#6B7280]">
-            الجمعة والسبت عطلة
-          </span>
-        </div>
-
-        <div className="mb-6 h-px w-full bg-[#E5E7EB]" />
-
-        <div className="overflow-x-auto pb-2">
-          <div className="grid min-w-[640px] grid-cols-5 gap-2 xl:gap-3">
-            {WEEK_DAYS_AR.map((day) => (
-              <div
-                key={day}
-                className="rounded-[10px] border border-[#E5E7EB] bg-[#F9FAFB] py-2 text-center text-xs font-bold text-[#35413E] sm:py-3"
+                  lineHeight: 1.2,
+                }}
               >
-                {day}
-              </div>
-            ))}
+                سجل الغياب
+              </Typography>
 
-            {schoolDays.map((day) => {
-              const key = format(day, "yyyy-MM-dd");
-              const status = absentDays.has(key) ? "absent" : "present";
-              const statusStyles = getStatusStyles(status);
-              const dayIsToday = isToday(day);
+              <Typography
+                sx={{
+                  mt: 0.15,
 
-              return (
-                <div
-                  key={key}
-                  className="min-h-[72px] rounded-[10px] border p-2 sm:min-h-[82px] sm:p-3 md:min-h-[96px]"
-                  style={{
-                    borderColor: dayIsToday ? "#318dce" : statusStyles.border,
-                    borderWidth: dayIsToday ? 2 : 1,
-                    backgroundColor: statusStyles.bg,
-                  }}
-                >
-                  <div className="text-sm font-bold text-[#050F0D] sm:text-base">
-                    {dayNumberFormatter.format(day)}
-                  </div>
+                  color:
+                    "#929da7",
 
-                  {dayIsToday && (
-                    <div className="mt-2 text-xs font-bold text-[#1D4ED8]">اليوم</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+                  fontSize:
+                    "8px",
+                }}
+              >
+                تابع أيام الغياب المسجلة خلال الشهر
+              </Typography>
+            </Box>
+          </Stack>
+
+          {/* BADGES */}
+
+          <Stack
+            direction="row"
+            flexWrap="wrap"
+            sx={{
+              gap: 0.5,
+
+              width: {
+                xs: "100%",
+                md: "auto",
+              },
+            }}
+          >
+            <HeaderBadge
+              icon={
+                EventBusyRounded
+              }
+              label={`${stats.absent} غياب`}
+              color={
+                COLORS.red
+              }
+              background={
+                COLORS.redLight
+              }
+            />
+
+            <HeaderBadge
+              icon={
+                CheckCircleRounded
+              }
+              label={`${stats.withoutAbsence} بدون غياب`}
+              color={
+                COLORS.green
+              }
+              background={
+                COLORS.greenLight
+              }
+            />
+
+            <HeaderBadge
+              icon={
+                SchoolRounded
+              }
+              label={`${stats.rate}%`}
+              color={
+                COLORS.blue
+              }
+              background={
+                COLORS.blueLight
+              }
+            />
+          </Stack>
+        </Paper>
+
+        {/* =============================================
+            MONTH BAR
+        ============================================= */}
+
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 1.15,
+
+            px: 1.25,
+            py: 0.9,
+
+            display: "flex",
+
+            alignItems:
+              "center",
+
+            justifyContent:
+              "space-between",
+
+            flexWrap: "wrap",
+
+            gap: 1,
+
+            borderRadius:
+              "16px",
+
+            border:
+              "1px solid rgba(18,47,77,.055)",
+
+            backgroundColor:
+              "#fff",
+          }}
+        >
+          <Box>
+            <Typography
+              sx={{
+                color:
+                  COLORS.deepNavy,
+
+                fontSize:
+                  "12px",
+
+                fontWeight:
+                  900,
+              }}
+            >
+              التقويم الشهري
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.1,
+
+                color:
+                  "#9aa4ae",
+
+                fontSize:
+                  "7px",
+              }}
+            >
+              الجمعة والسبت عطلة، وأيام المستقبل لا تدخل في الإحصائيات
+            </Typography>
+          </Box>
+
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.6}
+          >
+            <IconButton
+              onClick={() =>
+                setMonthCursor(
+                  (prev) =>
+                    addMonths(
+                      prev,
+                      1
+                    )
+                )
+              }
+              sx={{
+                width: 34,
+                height: 34,
+
+                borderRadius:
+                  "10px",
+
+                color:
+                  COLORS.navy,
+
+                backgroundColor:
+                  COLORS.grayLight,
+
+                border:
+                  "1px solid rgba(36,74,112,.06)",
+              }}
+            >
+              <ArrowForwardRounded
+                sx={{
+                  fontSize: 17,
+                }}
+              />
+            </IconButton>
+
+            <Box
+              sx={{
+                minWidth: 145,
+
+                px: 1.2,
+                py: 0.75,
+
+                textAlign:
+                  "center",
+
+                borderRadius:
+                  "10px",
+
+                backgroundColor:
+                  "#f8fafb",
+
+                border:
+                  "1px solid rgba(36,74,112,.06)",
+              }}
+            >
+              <Typography
+                sx={{
+                  color:
+                    COLORS.deepNavy,
+
+                  fontSize:
+                    "10px",
+
+                  fontWeight:
+                    900,
+                }}
+              >
+                {monthFormatter.format(
+                  monthCursor
+                )}
+              </Typography>
+            </Box>
+
+            <IconButton
+              onClick={() =>
+                setMonthCursor(
+                  (prev) =>
+                    subMonths(
+                      prev,
+                      1
+                    )
+                )
+              }
+              sx={{
+                width: 34,
+                height: 34,
+
+                borderRadius:
+                  "10px",
+
+                color:
+                  COLORS.navy,
+
+                backgroundColor:
+                  COLORS.grayLight,
+
+                border:
+                  "1px solid rgba(36,74,112,.06)",
+              }}
+            >
+              <ArrowBackRounded
+                sx={{
+                  fontSize: 17,
+                }}
+              />
+            </IconButton>
+          </Stack>
+        </Paper>
+
+        {/* =============================================
+            CALENDAR
+        ============================================= */}
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: {
+              xs: 1,
+              sm: 1.25,
+              md: 1.5,
+            },
+
+            borderRadius:
+              "20px",
+
+            border:
+              "1px solid rgba(18,47,77,.055)",
+
+            backgroundColor:
+              "#fff",
+
+            boxShadow:
+              "0 6px 20px rgba(18,47,77,.025)",
+          }}
+        >
+          {/* MINI INFO */}
+
+          <Stack
+            direction="row"
+            flexWrap="wrap"
+            sx={{
+              gap: 0.45,
+              mb: 1,
+            }}
+          >
+            <Legend
+              label="غياب مسجل"
+              color={
+                COLORS.red
+              }
+              background={
+                COLORS.redLight
+              }
+            />
+
+            <Legend
+              label="بدون غياب"
+              color={
+                COLORS.green
+              }
+              background={
+                COLORS.greenLight
+              }
+            />
+
+            <Legend
+              label="قادم"
+              color="#939da6"
+              background="#f5f7f9"
+            />
+
+            <Legend
+              label={`أيام مضت: ${stats.elapsed}`}
+              color={
+                COLORS.blue
+              }
+              background={
+                COLORS.blueLight
+              }
+            />
+
+            {attendanceTotal >
+              0 && (
+              <Legend
+                label={`إجمالي سجلات API: ${attendanceTotal}`}
+                color={
+                  COLORS.navy
+                }
+                background="#f5f7f9"
+              />
+            )}
+          </Stack>
+
+          {/* GRID */}
+
+          <Box
+            sx={{
+              overflowX:
+                "auto",
+
+              pb: 0.3,
+            }}
+          >
+            <Box
+              sx={{
+                minWidth: 620,
+
+                display: "grid",
+
+                gridTemplateColumns:
+                  "repeat(5,minmax(0,1fr))",
+
+                gap: 0.55,
+              }}
+            >
+              {/* WEEK HEADER */}
+
+              {WEEK_DAYS_AR.map(
+                (day) => (
+                  <Box
+                    key={day}
+                    sx={{
+                      py: 0.8,
+
+                      textAlign:
+                        "center",
+
+                      borderRadius:
+                        "9px",
+
+                      color:
+                        COLORS.deepNavy,
+
+                      backgroundColor:
+                        "#f7f9fb",
+
+                      border:
+                        "1px solid rgba(36,74,112,.065)",
+
+                      fontSize:
+                        "8px",
+
+                      fontWeight:
+                        900,
+                    }}
+                  >
+                    {day}
+                  </Box>
+                )
+              )}
+
+              {/* LEADING CELLS */}
+
+              {leadingEmptyCells.map(
+                (item) => (
+                  <Box
+                    key={`empty-${item}`}
+                    sx={{
+                      minHeight:
+                        62,
+
+                      borderRadius:
+                        "10px",
+
+                      backgroundColor:
+                        "#fbfcfd",
+                    }}
+                  />
+                )
+              )}
+
+              {/* DAYS */}
+
+              {schoolDays.map(
+                (day) => {
+                  const key =
+                    format(
+                      day,
+                      "yyyy-MM-dd"
+                    );
+
+                  const status =
+                    getDayStatus({
+                      day,
+                      absenceDates,
+                      today,
+                    });
+
+                  const theme =
+                    getDayTheme(
+                      status
+                    );
+
+                  const current =
+                    isToday(day);
+
+                  return (
+                    <Box
+                      key={key}
+                      sx={{
+                        minHeight:
+                          62,
+
+                        px: 0.8,
+                        py: 0.7,
+
+                        display:
+                          "flex",
+
+                        flexDirection:
+                          "column",
+
+                        justifyContent:
+                          "space-between",
+
+                        borderRadius:
+                          "10px",
+
+                        backgroundColor:
+                          theme.background,
+
+                        border:
+                          current
+                            ? `2px solid ${COLORS.blue}`
+                            : `1px solid ${theme.border}`,
+
+                        transition:
+                          "transform .15s ease, box-shadow .15s ease",
+
+                        "&:hover":
+                          {
+                            transform:
+                              "translateY(-1px)",
+
+                            boxShadow:
+                              "0 5px 12px rgba(18,47,77,.04)",
+                          },
+                      }}
+                    >
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                      >
+                        <Typography
+                          sx={{
+                            color:
+                              COLORS.deepNavy,
+
+                            fontSize:
+                              "9px",
+
+                            fontWeight:
+                              900,
+                          }}
+                        >
+                          {dayFormatter.format(
+                            day
+                          )}
+                        </Typography>
+
+                        {current && (
+                          <Chip
+                            label="اليوم"
+                            sx={{
+                              height:
+                                17,
+
+                              color:
+                                COLORS.blue,
+
+                              backgroundColor:
+                                "#fff",
+
+                              fontSize:
+                                "5.5px",
+
+                              fontWeight:
+                                900,
+
+                              "& .MuiChip-label":
+                                {
+                                  px: 0.6,
+                                },
+                            }}
+                          />
+                        )}
+                      </Stack>
+
+                      <Typography
+                        sx={{
+                          mt: 0.7,
+
+                          color:
+                            theme.color,
+
+                          fontSize:
+                            "6.5px",
+
+                          fontWeight:
+                            800,
+                        }}
+                      >
+                        {theme.label}
+                      </Typography>
+                    </Box>
+                  );
+                }
+              )}
+            </Box>
+          </Box>
+        </Paper>
+      </Box>
     </Container>
   );
 };
+
+// =====================================================
+// HEADER BADGE
+// =====================================================
+
+const HeaderBadge = ({
+  icon: Icon,
+  label,
+  color,
+  background,
+}) => (
+  <Chip
+    icon={<Icon />}
+    label={label}
+    sx={{
+      height: 29,
+
+      color,
+
+      backgroundColor:
+        background,
+
+      border:
+        "1px solid rgba(36,74,112,.05)",
+
+      fontSize: "7px",
+
+      fontWeight: 900,
+
+      "& .MuiChip-label":
+        {
+          px: 0.8,
+        },
+
+      "& .MuiChip-icon":
+        {
+          mr: 0.45,
+          ml: -0.1,
+
+          color,
+
+          fontSize:
+            "14px",
+        },
+    }}
+  />
+);
+
+// =====================================================
+// LEGEND
+// =====================================================
+
+const Legend = ({
+  label,
+  color,
+  background,
+}) => (
+  <Chip
+    label={label}
+    sx={{
+      height: 24,
+
+      color,
+
+      backgroundColor:
+        background,
+
+      fontSize: "6.5px",
+
+      fontWeight: 800,
+
+      "& .MuiChip-label":
+        {
+          px: 0.8,
+        },
+    }}
+  />
+);
 
 export default Attendance;

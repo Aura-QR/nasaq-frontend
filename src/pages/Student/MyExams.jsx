@@ -435,63 +435,39 @@ const MyExams = () => {
   } = useStudentSubjects();
 
   const {
-    exams: quizExamsRaw,
-    loading:
-      loadingQuizExams,
-  } = useStudentExams({
-    examType: "quiz",
-  });
-
-  const {
-    exams: finalExamsRaw,
-    loading:
-      loadingFinalExams,
-  } = useStudentExams({
-    examType: "final",
-  });
+    exams: allExamsRaw,
+    loading: loadingExams,
+  } = useStudentExams();
 
   // ===================================================
-  // MERGE
+  // EXAMS PAGE ITEMS
+  //
+  // GET /exams/student/me مرة واحدة فقط.
+  // صفحة "اختباراتي" تعرض quiz + final فقط.
+  // assignment له صفحة الواجبات.
   // ===================================================
 
   const exams = useMemo(() => {
-    const quizList =
-      Array.isArray(
-        quizExamsRaw
-      )
-        ? quizExamsRaw
+    const list =
+      Array.isArray(allExamsRaw)
+        ? allExamsRaw
         : [];
 
-    const finalList =
-      Array.isArray(
-        finalExamsRaw
+    return list.filter((exam) => {
+      const examType = String(
+        exam?.examType ||
+          exam?.type ||
+          ""
       )
-        ? finalExamsRaw
-        : [];
+        .trim()
+        .toLowerCase();
 
-    const map = new Map();
-
-    [
-      ...finalList,
-      ...quizList,
-    ].forEach((exam) => {
-      const id =
-        normalizeId(exam);
-
-      if (!id) {
-        return;
-      }
-
-      map.set(id, exam);
+      return (
+        examType === "quiz" ||
+        examType === "final"
+      );
     });
-
-    return Array.from(
-      map.values()
-    );
-  }, [
-    quizExamsRaw,
-    finalExamsRaw,
-  ]);
+  }, [allExamsRaw]);
 
   // ===================================================
   // SUBJECT MAP
@@ -554,9 +530,13 @@ const MyExams = () => {
             getSubjectName(exam);
 
           const examType =
-            exam?.examType ||
-            exam?.type ||
-            "quiz";
+            String(
+              exam?.examType ||
+                exam?.type ||
+                "quiz"
+            )
+              .trim()
+              .toLowerCase();
 
           const status =
             getStudentExamStatus(
@@ -757,8 +737,7 @@ const MyExams = () => {
 
   if (
     loadingSubjects ||
-    loadingQuizExams ||
-    loadingFinalExams
+    loadingExams
   ) {
     return (
       <Container

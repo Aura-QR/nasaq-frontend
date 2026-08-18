@@ -2,8 +2,10 @@ import {
   Box,
   Button,
   Chip,
+  Collapse,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 
@@ -17,6 +19,7 @@ import {
   SchoolRounded,
   SearchOffRounded,
   TaskAltRounded,
+  TuneRounded,
   VisibilityRounded,
 } from "@mui/icons-material";
 
@@ -35,11 +38,14 @@ import Table from "@/components/Table/Table";
 import SelectFilter from "@/components/Filters/SelectFilter";
 import PaginationControls from "@/components/Pagination";
 
-import { useSubjects } from "@/utils/hooks/apis/useSubjects";
 import { useExams } from "@/utils/hooks/apis/useExams";
+import { useTeachers } from "@/utils/hooks/apis/useTeachers";
 import usePermissions from "@/utils/hooks/usePermissions";
 
 import { deleteExam, fetchSingleExam } from "@/APIs/school/exams";
+import { fetchClassesList } from "@/APIs/school/classes";
+import { fetchSubjectOfferings } from "@/APIs/school/subjectOfferings";
+import { fetchGradesCriteria } from "@/APIs/school/gradesCriteria";
 import { fetchAcademicYears } from "@/APIs/school/academicYears";
 import { fetchTermsByAcademicYear } from "@/APIs/school/lectures";
 
@@ -48,6 +54,8 @@ import MCQExams from "@/utils/constants/MCQExams";
 import SchoolIcon from "@mui/icons-material/School";
 import SubjectIcon from "@mui/icons-material/Subject";
 import TaskIcon from "@mui/icons-material/Task";
+import Person2Icon from "@mui/icons-material/Person2";
+import GradeIcon from "@mui/icons-material/Grade";
 
 const TABLE_HEADERS = [
   "المادة",
@@ -141,6 +149,11 @@ const extractList = (response) => {
       payload?.academicYears,
       payload?.years,
       payload?.terms,
+      payload?.classes,
+      payload?.offerings,
+      payload?.subjectOfferings,
+      payload?.gradesCriteria,
+      payload?.criteria,
       payload?.data,
     ].find(Array.isArray) || []
   );
@@ -177,6 +190,7 @@ const formatDate = (value) => {
 
 const getOfferingData = (item) => {
   const candidates = [
+    item?.subjectOfferingId,
     item?.subjectOffering,
     item?.gradesCriteria
       ?.subjectOfferingId,
@@ -355,6 +369,92 @@ const getClassLabel = (classItem) => {
     .join(" - ");
 };
 
+
+const getOfferingLabel = (item) => {
+  if (!item) return "عرض مادة";
+
+  const subject =
+    item?.subjectId && typeof item.subjectId === "object"
+      ? item.subjectId
+      : item?.subject && typeof item.subject === "object"
+      ? item.subject
+      : null;
+
+  const gradeLevel =
+    item?.gradeLevelId && typeof item.gradeLevelId === "object"
+      ? item.gradeLevelId
+      : item?.gradeLevel && typeof item.gradeLevel === "object"
+      ? item.gradeLevel
+      : null;
+
+  const term =
+    item?.termId && typeof item.termId === "object"
+      ? item.termId
+      : item?.term && typeof item.term === "object"
+      ? item.term
+      : null;
+
+  const subjectName =
+    subject?.subjectName ||
+    subject?.name ||
+    item?.subjectName ||
+    item?.name ||
+    "مادة";
+
+  const subjectCode =
+    subject?.subjectCode ||
+    subject?.code ||
+    item?.subjectCode ||
+    "";
+
+  const gradeName =
+    gradeLevel?.name ||
+    gradeLevel?.label ||
+    "";
+
+  const termName =
+    term?.name ||
+    term?.label ||
+    "";
+
+  return [
+    subjectCode
+      ? `${subjectName} - \u2066${subjectCode}\u2069`
+      : subjectName,
+    gradeName,
+    termName,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+};
+
+const getCriteriaLabel = (item) => {
+  if (!item) return "معيار درجات";
+
+  const offering =
+    item?.subjectOfferingId && typeof item.subjectOfferingId === "object"
+      ? item.subjectOfferingId
+      : item?.subjectOffering && typeof item.subjectOffering === "object"
+      ? item.subjectOffering
+      : null;
+
+  const subject =
+    offering?.subjectId ||
+    offering?.subject ||
+    item?.subjectId ||
+    item?.subject ||
+    null;
+
+  const subjectName =
+    subject && typeof subject === "object"
+      ? subject?.subjectName ||
+        subject?.name ||
+        "مادة"
+      : "مادة";
+
+  return `${subjectName} · معيار الدرجات`;
+};
+
 const mapExams = (
   data = [],
   detailsMap = new Map(),
@@ -402,13 +502,27 @@ const mapExams = (
       subjectId:
         getSubjectId(item),
       subject: subjectCode
-        ? `${subjectName} - ${subjectCode}`
+        ? `${subjectName} - \u2066${subjectCode}\u2069`
         : subjectName,
+      createdById:
+        normalizeId(item?.createdBy),
       createdBy:
         item?.createdBy?.name ||
         item?.createdBy?.username ||
         item?.createdByName ||
         "—",
+      gradesCriteriaId:
+        normalizeId(
+          item?.gradesCriteriaId ||
+          item?.gradesCriteria
+        ),
+      grade:
+        item?.grade ??
+        item?.totalGrade ??
+        item?.maxGrade ??
+        "—",
+      questionsCount:
+        getArray(item?.questions).length,
       academicYearId:
         getAcademicYearId(
           item,
@@ -458,12 +572,13 @@ const List = () => {
   const [page, setPage] =
     useState(1);
 
-  const [subject, setSubject] =
-    useState("");
+  // ============================================
+  // API-aligned filters
+  // ============================================
 
   const [
-    academicYear,
-    setAcademicYear,
+    subjectOfferingId,
+    setSubjectOfferingId,
   ] = useState("");
 
   const [
@@ -476,6 +591,39 @@ const List = () => {
     setExamType,
   ] = useState("");
 
+  const [
+    createdBy,
+    setCreatedBy,
+  ] = useState("");
+
+  const [grade, setGrade] =
+    useState("");
+
+  const [
+    gradesCriteriaId,
+    setGradesCriteriaId,
+  ] = useState("");
+
+  const [
+    startDate,
+    setStartDate,
+  ] = useState("");
+
+  const [
+    endDate,
+    setEndDate,
+  ] = useState("");
+
+  const [
+    duration,
+    setDuration,
+  ] = useState("");
+
+  const [
+    showAdvancedFilters,
+    setShowAdvancedFilters,
+  ] = useState(false);
+
   const [limit, setLimit] =
     useState(10);
 
@@ -484,6 +632,8 @@ const List = () => {
     setLocalPagination,
   ] = useState(null);
 
+  // These are used only to resolve readable labels in the table,
+  // not as filters for GET /exams.
   const [
     academicYears,
     setAcademicYears,
@@ -499,26 +649,80 @@ const List = () => {
     setExamDetailsMap,
   ] = useState(new Map());
 
+  const [
+    subjectOfferingOptions,
+    setSubjectOfferingOptions,
+  ] = useState([]);
+
+  const [
+    classOptions,
+    setClassOptions,
+  ] = useState([]);
+
+  const [
+    criteriaOptions,
+    setCriteriaOptions,
+  ] = useState([]);
+
+  const [
+    loadingFilterOptions,
+    setLoadingFilterOptions,
+  ] = useState(true);
+
+  const [
+    loadingSubjectOfferings,
+    setLoadingSubjectOfferings,
+  ] = useState(true);
+
   const filters = useMemo(
     () => ({
       page,
       limit,
-      academicYearId:
-        academicYear || undefined,
-      subjectId:
-        subject || undefined,
-      classId:
+      subjectOfferingId:
+        subjectOfferingId || undefined,
+
+      // The schema field is classIds, not classId.
+      // We send the selected id using the exact API key.
+      classIds:
         classFilter || undefined,
+
       examType:
         examType || undefined,
+
+      createdBy:
+        createdBy || undefined,
+
+      grade:
+        grade === ""
+          ? undefined
+          : Number(grade),
+
+      gradesCriteriaId:
+        gradesCriteriaId || undefined,
+
+      startDate:
+        startDate || undefined,
+
+      endDate:
+        endDate || undefined,
+
+      duration:
+        duration === ""
+          ? undefined
+          : Number(duration),
     }),
     [
       page,
       limit,
-      subject,
-      academicYear,
+      subjectOfferingId,
       classFilter,
       examType,
+      createdBy,
+      grade,
+      gradesCriteriaId,
+      startDate,
+      endDate,
+      duration,
     ]
   );
 
@@ -529,9 +733,9 @@ const List = () => {
   } = useExams(filters);
 
   const {
-    subjects = [],
-    loading: loadingSubjects,
-  } = useSubjects({
+    teachers = [],
+    loading: loadingTeachers,
+  } = useTeachers({
     page: 1,
     limit: 1000,
   });
@@ -553,85 +757,216 @@ const List = () => {
   const permissions =
     usePermissions("exams");
 
+  // Load filters that have a direct list endpoint.
+  // Subject offerings are loaded separately after resolving academic terms,
+  // because the documented backend endpoint is /subject-offerings/by-term/:termId.
   useEffect(() => {
     let active = true;
 
-    const loadAcademicStructure =
-      async () => {
-        try {
-          const response =
-            await fetchAcademicYears();
+    const loadFilterOptions = async () => {
+      setLoadingFilterOptions(true);
 
-          if (
-            !active ||
-            response?.status === false
-          ) {
-            return;
-          }
+      try {
+        const [
+          classesResponse,
+          criteriaResponse,
+        ] = await Promise.allSettled([
+          fetchClassesList(),
+          fetchGradesCriteria({
+            page: 1,
+            limit: 1000,
+          }),
+        ]);
 
-          const years =
-            extractList(response)
-              .map((year) => ({
-                id: normalizeId(year),
-                name:
-                  year?.name ||
-                  year?.label ||
-                  year?.title ||
-                  "سنة دراسية",
-              }))
-              .filter(
-                (year) => year.id
-              );
-
-          setAcademicYears(years);
-
-          const termPairs =
-            await Promise.all(
-              years.map(async (year) => {
-                const termsResponse =
-                  await fetchTermsByAcademicYear(
-                    year.id
-                  );
-
-                if (
-                  termsResponse?.status ===
-                  false
-                ) {
-                  return [];
-                }
-
-                return extractList(
-                  termsResponse
-                )
-                  .map((term) => [
-                    normalizeId(term),
-                    year,
-                  ])
-                  .filter(
-                    ([termId]) =>
-                      Boolean(termId)
-                  );
-              })
-            );
-
-          if (!active) {
-            return;
-          }
-
-          setTermYearMap(
-            new Map(
-              termPairs.flat()
-            )
-          );
-        } catch {
-          if (active) {
-            setAcademicYears([]);
-            setTermYearMap(
-              new Map()
-            );
-          }
+        if (!active) {
+          return;
         }
-      };
+
+        const classes =
+          classesResponse.status === "fulfilled"
+            ? extractList(classesResponse.value)
+            : [];
+
+        setClassOptions(
+          classes
+            .map((item) => ({
+              value: normalizeId(item),
+              label:
+                getClassLabel(item) ||
+                item?.name ||
+                item?.roomNumber ||
+                normalizeId(item),
+            }))
+            .filter((item) => item.value)
+        );
+
+        const criteria =
+          criteriaResponse.status === "fulfilled"
+            ? extractList(criteriaResponse.value)
+            : [];
+
+        setCriteriaOptions(
+          criteria
+            .map((item) => ({
+              value: normalizeId(item),
+              label: getCriteriaLabel(item),
+            }))
+            .filter((item) => item.value)
+        );
+      } finally {
+        if (active) {
+          setLoadingFilterOptions(false);
+        }
+      }
+    };
+
+    loadFilterOptions();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadAcademicStructure = async () => {
+      setLoadingSubjectOfferings(true);
+
+      try {
+        const response = await fetchAcademicYears();
+
+        if (
+          !active ||
+          response?.status === false
+        ) {
+          return;
+        }
+
+        const years = extractList(response)
+          .map((year) => ({
+            id: normalizeId(year),
+            name:
+              year?.name ||
+              year?.label ||
+              year?.title ||
+              "سنة دراسية",
+          }))
+          .filter((year) => year.id);
+
+        setAcademicYears(years);
+
+        const termPairs = await Promise.all(
+          years.map(async (year) => {
+            const termsResponse =
+              await fetchTermsByAcademicYear(year.id);
+
+            if (
+              termsResponse?.status === false
+            ) {
+              return [];
+            }
+
+            return extractList(termsResponse)
+              .map((term) => [
+                normalizeId(term),
+                year,
+              ])
+              .filter(([termId]) => Boolean(termId));
+          })
+        );
+
+        if (!active) {
+          return;
+        }
+
+        const flatTermPairs = termPairs.flat();
+        const nextTermYearMap = new Map(flatTermPairs);
+        setTermYearMap(nextTermYearMap);
+
+        const termIds = [
+          ...new Set(
+            flatTermPairs
+              .map(([termId]) => termId)
+              .filter(Boolean)
+          ),
+        ];
+
+        let offerings = [];
+
+        // First try the legacy all-offerings endpoint when it exists.
+        // If the backend does not expose it (the documented API usually doesn't),
+        // fall back to the supported by-term endpoint for every available term.
+        const listResponse =
+          await fetchSubjectOfferings(
+            {},
+            { forceListEndpoint: true }
+          );
+
+        if (
+          listResponse?.status !== false
+        ) {
+          offerings = extractList(listResponse);
+        }
+
+        if (
+          offerings.length === 0 &&
+          termIds.length > 0
+        ) {
+          const offeringResponses =
+            await Promise.allSettled(
+              termIds.map((termId) =>
+                fetchSubjectOfferings({ termId })
+              )
+            );
+
+          offerings = offeringResponses.flatMap(
+            (result) =>
+              result.status === "fulfilled" &&
+              result.value?.status !== false
+                ? extractList(result.value)
+                : []
+          );
+        }
+
+        if (!active) {
+          return;
+        }
+
+        const uniqueOfferings = Array.from(
+          new Map(
+            offerings
+              .map((item) => [
+                normalizeId(item),
+                item,
+              ])
+              .filter(([id]) => Boolean(id))
+          ).values()
+        );
+
+        setSubjectOfferingOptions(
+          uniqueOfferings.map((item) => ({
+            value: normalizeId(item),
+            label: getOfferingLabel(item),
+          }))
+        );
+      } catch (error) {
+        if (active) {
+          setAcademicYears([]);
+          setTermYearMap(new Map());
+          setSubjectOfferingOptions([]);
+
+          console.error(
+            "Failed to load academic structure / subject offerings:",
+            error
+          );
+        }
+      } finally {
+        if (active) {
+          setLoadingSubjectOfferings(false);
+        }
+      }
+    };
 
     loadAcademicStructure();
 
@@ -767,10 +1102,15 @@ const List = () => {
     setPage(1);
   }, [
     limit,
-    academicYear,
-    subject,
+    subjectOfferingId,
     classFilter,
     examType,
+    createdBy,
+    grade,
+    gradesCriteriaId,
+    startDate,
+    endDate,
+    duration,
   ]);
 
   const currentPagination =
@@ -778,11 +1118,21 @@ const List = () => {
     pagination;
 
   const activeFiltersCount = [
-    subject,
-    academicYear,
+    subjectOfferingId,
     classFilter,
     examType,
-  ].filter(Boolean).length;
+    createdBy,
+    grade,
+    gradesCriteriaId,
+    startDate,
+    endDate,
+    duration,
+  ].filter(
+    (value) =>
+      value !== "" &&
+      value !== null &&
+      value !== undefined
+  ).length;
 
   const stats = useMemo(
     () => ({
@@ -795,6 +1145,7 @@ const List = () => {
         items
           .map(
             (item) =>
+              item.subjectOfferingId ||
               item.subjectId
           )
           .filter(Boolean)
@@ -812,61 +1163,54 @@ const List = () => {
     ]
   );
 
-  const subjectOptions =
-    getArray(subjects).map(
-      (item) => {
-        const id =
-          item?._id ||
-          item?.id;
-
-        const name =
-          item?.subjectName ||
-          item?.name ||
-          "—";
-
-        const code =
-          item?.subjectCode ||
-          item?.code ||
-          "";
-
-        return {
-          value: id,
-          label: code
-            ? `${name} - ${code}`
-            : name,
-        };
-      }
-    );
-
-  const classOptions =
+  const creatorOptions =
     useMemo(() => {
       const map = new Map();
 
-      items.forEach((item) => {
-        getArray(
-          item.classOptions
-        ).forEach((classItem) => {
-          if (
-            classItem.id &&
-            !map.has(classItem.id)
-          ) {
-            map.set(
-              classItem.id,
-              {
-                value: classItem.id,
-                label:
-                  classItem.label ||
-                  classItem.id,
-              }
+      getArray(teachers).forEach(
+        (teacherItem) => {
+          const id =
+            normalizeId(
+              teacherItem
             );
-          }
-        });
+
+          if (!id) return;
+
+          map.set(id, {
+            value: id,
+            label:
+              teacherItem?.name ||
+              teacherItem?.username ||
+              teacherItem?.email ||
+              id,
+          });
+        }
+      );
+
+      items.forEach((item) => {
+        if (
+          item.createdById &&
+          !map.has(
+            item.createdById
+          )
+        ) {
+          map.set(
+            item.createdById,
+            {
+              value:
+                item.createdById,
+              label:
+                item.createdBy ||
+                item.createdById,
+            }
+          );
+        }
       });
 
       return Array.from(
         map.values()
       );
-    }, [items]);
+    }, [teachers, items]);
 
   const csvData = useMemo(
     () =>
@@ -878,6 +1222,10 @@ const List = () => {
           item.academicYear,
         "نوع الاختبار":
           item.examType,
+        الدرجة:
+          item.grade,
+        "عدد الأسئلة":
+          item.questionsCount,
         "تاريخ البدء":
           item.startDate,
         "تاريخ الانتهاء":
@@ -889,10 +1237,15 @@ const List = () => {
   );
 
   const resetFilters = () => {
-    setSubject("");
-    setAcademicYear("");
+    setSubjectOfferingId("");
     setClassFilter("");
     setExamType("");
+    setCreatedBy("");
+    setGrade("");
+    setGradesCriteriaId("");
+    setStartDate("");
+    setEndDate("");
+    setDuration("");
     setPage(1);
   };
 
@@ -1273,45 +1626,43 @@ const List = () => {
         <Paper
           elevation={0}
           sx={{
-            mb: 1.25,
+            mb: 1.1,
             px: {
-              xs: 1.5,
-              md: 1.9,
+              xs: 1.15,
+              md: 1.4,
             },
-            py: {
-              xs: 1.45,
-              md: 1.65,
-            },
+            py: 1,
             border:
               "1px solid rgba(36,74,112,0.08)",
-            borderRadius: "18px",
+            borderRadius: "15px",
             backgroundColor:
               "var(--color-cream)",
             boxShadow:
-              "0 9px 22px rgba(18,47,77,0.05)",
+              "0 7px 18px rgba(18,47,77,0.04)",
 
             "& .MuiFormControl-root":
               {
                 width: "100%",
                 minWidth: 0,
-                margin: 0,
+                m: 0,
               },
 
             "& .MuiInputBase-root, & .MuiOutlinedInput-root":
               {
-                minHeight: 50,
-                height: 50,
+                minHeight: 42,
+                height: 42,
                 backgroundColor:
                   "var(--color-white)",
-                borderRadius: "12px",
+                borderRadius: "10px",
+                fontSize: "9.5px",
               },
 
             "& .MuiInputLabel-root":
               {
-                px: 0.65,
+                px: 0.5,
                 backgroundColor:
                   "var(--color-cream)",
-                fontSize: "10.5px",
+                fontSize: "9px",
                 fontWeight: 700,
               },
           }}
@@ -1319,79 +1670,162 @@ const List = () => {
           <Stack
             direction={{
               xs: "column",
-              sm: "row",
+              md: "row",
             }}
             alignItems={{
               xs: "stretch",
-              sm: "flex-start",
+              md: "center",
             }}
             justifyContent="space-between"
-            gap={1}
-            sx={{ mb: 1.5 }}
+            gap={0.9}
+            sx={{ mb: 0.9 }}
           >
-            <Box>
-              <Typography
-                sx={{
-                  color:
-                    "var(--color-navy-deep)",
-                  fontSize: "15px",
-                  fontWeight: 800,
-                }}
-              >
-                البحث والتصفية
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 0.2,
-                  color:
-                    "var(--color-muted)",
-                  fontSize: "9.5px",
-                }}
-              >
-                استخدم المادة والسنة
-                والفصل والنوع للوصول
-                إلى الاختبار المطلوب.
-              </Typography>
-            </Box>
-
-            <Button
-              type="button"
-              disabled={
-                activeFiltersCount ===
-                0
-              }
-              onClick={resetFilters}
-              variant="text"
-              startIcon={
-                <RestartAltRounded />
-              }
-              sx={{
-                minHeight: 36,
-                px: 1.2,
-                color:
-                  "var(--color-navy)",
-                backgroundColor:
-                  "rgba(36,74,112,0.055)",
-                border:
-                  "1px solid rgba(36,74,112,0.075)",
-                borderRadius: "11px",
-                fontSize: "10px",
-                fontWeight: 800,
-                textTransform: "none",
-
-                "& .MuiButton-startIcon":
-                  {
-                    marginLeft:
-                      "5px",
-                    marginRight: 0,
-                  },
-              }}
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={0.7}
             >
-              مسح الفلاتر
-            </Button>
+              <Box
+                sx={{
+                  width: 32,
+                  height: 32,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                  color:
+                    "var(--color-navy)",
+                  backgroundColor:
+                    "rgba(36,74,112,0.055)",
+                  borderRadius: "9px",
+                }}
+              >
+                <TuneRounded
+                  sx={{ fontSize: 17 }}
+                />
+              </Box>
+
+              <Box>
+                <Typography
+                  sx={{
+                    color:
+                      "var(--color-navy-deep)",
+                    fontSize: "11px",
+                    fontWeight: 900,
+                  }}
+                >
+                  تصفية الاختبارات
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.05,
+                    color:
+                      "var(--color-muted)",
+                    fontSize: "7.5px",
+                  }}
+                >
+                  الفلاتر مرتبطة مباشرة
+                  بحقول الاختبار في الـ API.
+                </Typography>
+              </Box>
+
+              {activeFiltersCount > 0 && (
+                <Chip
+                  label={
+                    activeFiltersCount
+                  }
+                  size="small"
+                  sx={{
+                    height: 22,
+                    minWidth: 22,
+                    color:
+                      "var(--color-gold-dark)",
+                    backgroundColor:
+                      "var(--color-gold-soft)",
+                    fontSize: "7px",
+                    fontWeight: 900,
+                  }}
+                />
+              )}
+            </Stack>
+
+            <Stack
+              direction="row"
+              spacing={0.6}
+              useFlexGap
+              flexWrap="wrap"
+            >
+              <Button
+                type="button"
+                onClick={() =>
+                  setShowAdvancedFilters(
+                    (value) => !value
+                  )
+                }
+                variant="text"
+                startIcon={
+                  <TuneRounded />
+                }
+                sx={{
+                  minHeight: 32,
+                  px: 1,
+                  color:
+                    "var(--color-navy)",
+                  backgroundColor:
+                    showAdvancedFilters
+                      ? "rgba(36,74,112,0.09)"
+                      : "rgba(36,74,112,0.045)",
+                  borderRadius: "9px",
+                  fontSize: "8px",
+                  fontWeight: 800,
+                  textTransform: "none",
+                  "& .MuiButton-startIcon":
+                    {
+                      marginLeft: "4px",
+                      marginRight: 0,
+                    },
+                }}
+              >
+                {showAdvancedFilters
+                  ? "إخفاء المتقدم"
+                  : "فلاتر متقدمة"}
+              </Button>
+
+              <Button
+                type="button"
+                disabled={
+                  activeFiltersCount ===
+                  0
+                }
+                onClick={resetFilters}
+                variant="text"
+                startIcon={
+                  <RestartAltRounded />
+                }
+                sx={{
+                  minHeight: 32,
+                  px: 1,
+                  color:
+                    "var(--color-navy)",
+                  backgroundColor:
+                    "rgba(36,74,112,0.045)",
+                  borderRadius: "9px",
+                  fontSize: "8px",
+                  fontWeight: 800,
+                  textTransform: "none",
+                  "& .MuiButton-startIcon":
+                    {
+                      marginLeft: "4px",
+                      marginRight: 0,
+                    },
+                }}
+              >
+                مسح
+              </Button>
+            </Stack>
           </Stack>
 
+          {/* Primary API fields */}
           <Box
             sx={{
               display: "grid",
@@ -1402,42 +1836,26 @@ const List = () => {
                 xl:
                   "repeat(4, minmax(0, 1fr))",
               },
-              gap: 1.5,
+              gap: 0.8,
               minWidth: 0,
-
               "& > *": {
                 minWidth: 0,
               },
             }}
           >
             <SelectFilter
-              value={subject}
-              onChange={setSubject}
-              label="المادة"
-              icon={SubjectIcon}
-              allLabel="جميع المواد"
-              disabled={
-                loadingSubjects
+              value={
+                subjectOfferingId
               }
-              options={
-                subjectOptions
-              }
-            />
-
-            <SelectFilter
-              value={academicYear}
               onChange={
-                setAcademicYear
+                setSubjectOfferingId
               }
-              label="السنة الدراسية"
-              icon={SchoolIcon}
-              allLabel="جميع السنين"
-              options={academicYears.map(
-                (year) => ({
-                  value: year.id,
-                  label: year.name,
-                })
-              )}
+              label="عرض المادة"
+              icon={SubjectIcon}
+              allLabel="كل عروض المواد"
+              options={
+                subjectOfferingOptions
+              }
             />
 
             <SelectFilter
@@ -1445,7 +1863,10 @@ const List = () => {
               onChange={setClassFilter}
               label="الفصل"
               icon={SchoolIcon}
-              allLabel="جميع الفصول"
+              allLabel="كل الفصول"
+              disabled={
+                loadingFilterOptions
+              }
               options={classOptions}
             />
 
@@ -1454,7 +1875,7 @@ const List = () => {
               onChange={setExamType}
               label="نوع الاختبار"
               icon={TaskIcon}
-              allLabel="جميع الاختبارات"
+              allLabel="كل الأنواع"
               options={MCQExams.map(
                 (item) => ({
                   value: item.id,
@@ -1462,7 +1883,121 @@ const List = () => {
                 })
               )}
             />
+
+            <SelectFilter
+              value={createdBy}
+              onChange={setCreatedBy}
+              label="أنشأه"
+              icon={Person2Icon}
+              allLabel="كل المعلمين"
+              disabled={
+                loadingTeachers
+              }
+              options={creatorOptions}
+            />
           </Box>
+
+          <Collapse
+            in={showAdvancedFilters}
+            timeout="auto"
+            unmountOnExit
+          >
+            <Box
+              sx={{
+                mt: 0.9,
+                pt: 0.9,
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  sm:
+                    "repeat(2, minmax(0, 1fr))",
+                  lg:
+                    "repeat(5, minmax(0, 1fr))",
+                },
+                gap: 0.8,
+                borderTop:
+                  "1px solid rgba(36,74,112,0.07)",
+                minWidth: 0,
+                "& > *": {
+                  minWidth: 0,
+                },
+              }}
+            >
+              <TextField
+                type="date"
+                label="من تاريخ"
+                value={startDate}
+                onChange={(event) =>
+                  setStartDate(
+                    event.target.value
+                  )
+                }
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+
+              <TextField
+                type="date"
+                label="إلى تاريخ"
+                value={endDate}
+                onChange={(event) =>
+                  setEndDate(
+                    event.target.value
+                  )
+                }
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+
+              <TextField
+                type="number"
+                label="المدة بالدقائق"
+                value={duration}
+                onChange={(event) =>
+                  setDuration(
+                    event.target.value
+                  )
+                }
+                inputProps={{
+                  min: 1,
+                }}
+              />
+
+              <TextField
+                type="number"
+                label="الدرجة"
+                value={grade}
+                onChange={(event) =>
+                  setGrade(
+                    event.target.value
+                  )
+                }
+                inputProps={{
+                  min: 0,
+                }}
+              />
+
+              <SelectFilter
+                value={
+                  gradesCriteriaId
+                }
+                onChange={
+                  setGradesCriteriaId
+                }
+                label="معيار الدرجات"
+                icon={GradeIcon}
+                allLabel="كل المعايير"
+                disabled={
+                  loadingFilterOptions
+                }
+                options={
+                  criteriaOptions
+                }
+              />
+            </Box>
+          </Collapse>
         </Paper>
 
         <Paper

@@ -45,23 +45,87 @@ const QuizPage = () => {
 	}, [startedExam]);
 
 	useEffect(() => {
-		const fetchStarterExam = async () => {
-			setLoadingStarter(true);
-			const response = await fetchStudentExams();
-			console.log("starterExam response:", response);
+		let mounted = true;
 
-			if (response?.status) {
-				const exams = response?.data || [];
-				const exam = exams.find((item) => item?._id === examId) || null;
-				setPreStartExam(exam);
-			} else {
-				toast.error(response || "حدث خطأ ما أثناء جلب بيانات الاختبار");
-			}
+		const rawFromState =
+			location.state?.rawExam ||
+			location.state?.exam?.rawExam ||
+			location.state?.quiz?.rawExam ||
+			location.state?.exam ||
+			location.state?.quiz ||
+			null;
+
+		if (rawFromState) {
+			setPreStartExam(rawFromState);
 			setLoadingStarter(false);
+			return () => {
+				mounted = false;
+			};
+		}
+
+		const fetchStarterExam = async () => {
+			try {
+				setLoadingStarter(true);
+
+				const response =
+					await fetchStudentExams();
+
+				if (!mounted) return;
+
+				if (response?.status) {
+					const exams =
+						Array.isArray(response?.data)
+							? response.data
+							: [];
+
+					const exam =
+						exams.find(
+							(item) =>
+								String(
+									item?._id ||
+										item?.id ||
+										""
+								) ===
+								String(examId)
+						) || null;
+
+					setPreStartExam(exam);
+				} else {
+					setPreStartExam(null);
+
+					toast.error(
+						response?.message ||
+							"تعذر تحميل بيانات الاختبار"
+					);
+				}
+			} catch (error) {
+				if (!mounted) return;
+
+				console.error(
+					"[Quiz] load exam:",
+					error
+				);
+
+				setPreStartExam(null);
+
+				toast.error(
+					error?.response?.data?.message ||
+						error?.message ||
+						"تعذر تحميل بيانات الاختبار"
+				);
+			} finally {
+				if (mounted) {
+					setLoadingStarter(false);
+				}
+			}
 		};
 
 		fetchStarterExam();
-	}, [examId]);
+
+		return () => {
+			mounted = false;
+		};
+	}, [examId, location.state]);
 
 	const resolvedDurationMinutes = useMemo(() => {
 		if (typeof startedExam?.duration === "number") return startedExam.duration;
@@ -142,14 +206,16 @@ const QuizPage = () => {
 
 	useEffect(() => {
 		if (!isStarted || isSubmitted) return;
-		if (remainingSeconds <= 0) return;
 
 		const interval = window.setInterval(() => {
-			setRemainingSeconds((prev) => prev - 1);
+			setRemainingSeconds((prev) =>
+				prev <= 1 ? 0 : prev - 1
+			);
 		}, 1000);
 
-		return () => window.clearInterval(interval);
-	}, [isStarted, isSubmitted, remainingSeconds]);
+		return () =>
+			window.clearInterval(interval);
+	}, [isStarted, isSubmitted]);
 
 	useEffect(() => {
 		if (!isStarted || isSubmitted || remainingSeconds > 0) return;

@@ -160,7 +160,7 @@ const getSubjectCode = (item) => {
   );
 };
 
-const getSubjectId = (item) => {
+const getSubjectOfferingId = (item) => {
   if (!item) {
     return "";
   }
@@ -168,23 +168,55 @@ const getSubjectId = (item) => {
   const offering =
     item?.subjectOfferingId ||
     item?.subjectOffering ||
-    item?.offering;
+    item?.offering ||
+    null;
 
-  if (
-    typeof offering === "string"
-  ) {
+  // API may return subjectOfferingId as a string.
+  if (typeof offering === "string") {
     return offering;
   }
 
-  return (
-    offering?._id ||
-    offering?.id ||
-    item?.subjectOfferingId?._id ||
-    item?.subjectOfferingId?.id ||
-    item?._id ||
-    item?.id ||
-    ""
-  );
+  // Or populated object.
+  if (
+    offering &&
+    typeof offering === "object"
+  ) {
+    return (
+      offering?._id ||
+      offering?.id ||
+      ""
+    );
+  }
+
+  /*
+   * Some responses may return the offering itself as the row:
+   * {
+   *   _id,
+   *   subjectId,
+   *   termId / gradeLevelId / academicYearId
+   * }
+   *
+   * We only accept item._id when the object clearly looks like
+   * a SubjectOffering. We do NOT fall back to a plain subject _id,
+   * because the grades API expects subjectOfferingId.
+   */
+  const looksLikeOffering =
+    Boolean(item?.subjectId) &&
+    Boolean(
+      item?.termId ||
+        item?.gradeLevelId ||
+        item?.academicYearId
+    );
+
+  if (looksLikeOffering) {
+    return (
+      item?._id ||
+      item?.id ||
+      ""
+    );
+  }
+
+  return "";
 };
 
 const getClassName = (
@@ -782,8 +814,8 @@ const MySubjects = () => {
                         SUBJECT_STYLES.length
                     ];
 
-                  const id =
-                    getSubjectId(
+                  const subjectOfferingId =
+                    getSubjectOfferingId(
                       subject,
                     );
 
@@ -800,17 +832,23 @@ const MySubjects = () => {
                   return (
                     <Paper
                       key={
-                        id ||
+                        subjectOfferingId ||
                         `${name}-${index}`
                       }
                       elevation={0}
                       onClick={() => {
-                        if (!id) {
+                        if (!subjectOfferingId) {
                           return;
                         }
 
                         navigate(
-                          `/student-dashboard/subjects/${id}`,
+                          `/student-dashboard/subjects/${subjectOfferingId}`,
+                          {
+                            state: {
+                              subjectOfferingId,
+                              subject,
+                            },
+                          },
                         );
                       }}
                       sx={{
@@ -825,7 +863,7 @@ const MySubjects = () => {
 
                         p: 1.6,
 
-                        cursor: id
+                        cursor: subjectOfferingId
                           ? "pointer"
                           : "default",
 
@@ -841,7 +879,7 @@ const MySubjects = () => {
                           "transform .2s ease, box-shadow .2s ease",
 
                         "&:hover":
-                          id
+                          subjectOfferingId
                             ? {
                                 transform:
                                   "translateY(-4px)",

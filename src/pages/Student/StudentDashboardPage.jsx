@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   Box,
   Button,
@@ -10,28 +10,31 @@ import {
 } from "@mui/material";
 import {
   AccessTimeRounded,
+  AccountBalanceWalletRounded,
   AssignmentRounded,
   AutoStoriesRounded,
   CalendarMonthRounded,
   CelebrationRounded,
   ChevronLeftRounded,
+  DirectionsBusRounded,
   FolderRounded,
   HowToRegRounded,
   LibraryBooksRounded,
   MenuBookRounded,
+  PaymentsRounded,
+  RouteRounded,
   ScheduleRounded,
+  SchoolRounded,
   TaskAltRounded,
 } from "@mui/icons-material";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { useAuthUser } from "react-auth-kit";
 import {
-  getStudentAttendance,
-  getStudentExams,
-  getStudentLectures,
-  getStudentSubjects,
-  unwrapData,
-  unwrapList,
-} from "@/APIs/student/dashboard";
+  useStudentAttendance,
+  useStudentExams,
+  useStudentLectures,
+  useStudentSubjects,
+} from "@/utils/hooks/apis/student/useStudent";
 
 const COLORS = {
   navy: "#244a70",
@@ -91,7 +94,6 @@ const buildFullName = (value) => {
   );
 };
 
-const getArray = (payload) => unwrapList(payload);
 
 const getClassName = (student) => {
   if (!student) return "";
@@ -260,6 +262,14 @@ const QUICK_ACTIONS = [
     background: COLORS.greenLight,
     color: COLORS.green,
   },
+  {
+    title: "صفي",
+    description: "بيانات فصلك الدراسي",
+    icon: SchoolRounded,
+    path: "/student-dashboard/my-class",
+    background: "#fff7e8",
+    color: COLORS.gold,
+  },
 ];
 
 const MORE_ACTIONS = [
@@ -277,6 +287,26 @@ const MORE_ACTIONS = [
     title: "الحضور",
     icon: HowToRegRounded,
     path: "/student-dashboard/attendance",
+  },
+  {
+    title: "سجلي المالي",
+    icon: AccountBalanceWalletRounded,
+    path: "/student-dashboard/financials/my-record",
+  },
+  {
+    title: "الملخص المالي",
+    icon: PaymentsRounded,
+    path: "/student-dashboard/financials/my-summary",
+  },
+  {
+    title: "خطة الباص",
+    icon: DirectionsBusRounded,
+    path: "/student-dashboard/financials/my-bus",
+  },
+  {
+    title: "رحلاتي",
+    icon: RouteRounded,
+    path: "/student-dashboard/financials/my-trips",
   },
 ];
 
@@ -335,78 +365,33 @@ const StudentDashboardPage = () => {
   const authUser = getAuthUser?.() || null;
   const storedUser = useMemo(() => getStoredUser(), []);
 
+  // كل بيانات الـ Dashboard تأتي من نفس Student hooks
+  // المستخدمة في صفحات الطالب نفسها.
+  const {
+    subjects: studentSubjects = [],
+    loading: loadingSubjects,
+  } = useStudentSubjects();
+
+  const {
+    lectures: studentLectures = [],
+    loading: loadingLectures,
+  } = useStudentLectures();
+
+  const {
+    exams: studentExams = [],
+    loading: loadingExams,
+  } = useStudentExams();
+
+  const {
+    attendance: studentAttendance = [],
+    attendanceTotal: apiAttendanceTotal = 0,
+    loading: loadingAttendance,
+  } = useStudentAttendance();
+
   const loginUserName = useMemo(
     () => buildFullName(authUser) || buildFullName(storedUser),
     [authUser, storedUser]
   );
-
-  const [loading, setLoading] = useState(true);
-  const [lecturesPayload, setLecturesPayload] = useState(null);
-  const [subjectsPayload, setSubjectsPayload] = useState(null);
-  const [examsPayload, setExamsPayload] = useState(null);
-  const [attendancePayload, setAttendancePayload] = useState(null);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const loadDashboard = async () => {
-      setLoading(true);
-
-      const results = await Promise.allSettled([
-        getStudentLectures(),
-        getStudentSubjects(),
-        getStudentExams(),
-        getStudentAttendance(),
-      ]);
-
-      if (!mounted) return;
-
-      const [lecturesResult, subjectsResult, examsResult, attendanceResult] = results;
-
-      if (lecturesResult.status === "fulfilled") {
-        setLecturesPayload(lecturesResult.value);
-      } else {
-        const error = lecturesResult.reason;
-        const noClass =
-          error?.status === 400 &&
-          String(error?.message || "").includes("غير مسجل في أي فصل");
-
-        if (!noClass) {
-          console.warn("Student lectures request failed:", error);
-        }
-        setLecturesPayload([]);
-      }
-
-      if (subjectsResult.status === "fulfilled") {
-        setSubjectsPayload(subjectsResult.value);
-      } else {
-        console.warn("Student subjects request failed:", subjectsResult.reason);
-        setSubjectsPayload([]);
-      }
-
-      if (examsResult.status === "fulfilled") {
-        setExamsPayload(examsResult.value);
-      } else {
-        console.warn("Student exams request failed:", examsResult.reason);
-        setExamsPayload([]);
-      }
-
-      if (attendanceResult.status === "fulfilled") {
-        setAttendancePayload(attendanceResult.value);
-      } else {
-        console.warn("Student attendance request failed:", attendanceResult.reason);
-        setAttendancePayload([]);
-      }
-
-      setLoading(false);
-    };
-
-    loadDashboard();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   const displayName =
     buildFullName(studentProfile) ||
@@ -423,28 +408,40 @@ const StudentDashboardPage = () => {
   const academicYear = getAcademicYear(studentProfile);
 
   const subjects = useMemo(
-    () => getArray(subjectsPayload).slice(0, 6),
-    [subjectsPayload]
+    () => (Array.isArray(studentSubjects) ? studentSubjects : []),
+    [studentSubjects]
+  );
+
+  const visibleSubjects = useMemo(
+    () => subjects.slice(0, 6),
+    [subjects]
   );
 
   const lectures = useMemo(
-    () => getArray(lecturesPayload),
-    [lecturesPayload]
+    () => (Array.isArray(studentLectures) ? studentLectures : []),
+    [studentLectures]
   );
 
+  // كل حصص اليوم بدون slice حتى يكون العداد صحيحًا.
+  // مثال: لو عند الطالب 5 حصص يوم الثلاثاء سيظهر "5" فعلًا.
   const todayLectures = useMemo(() => {
     const today = new Date().getDay();
 
     return lectures
       .filter((lecture) => {
-        const day = String(lecture?.dayOfWeek || "").toLowerCase();
+        const day = String(lecture?.dayOfWeek || "")
+          .trim()
+          .toLowerCase();
+
         return DAYS[day] === today;
       })
-      .sort((a, b) => Number(a?.slot || 0) - Number(b?.slot || 0))
-      .slice(0, 4);
+      .sort((a, b) => Number(a?.slot || 0) - Number(b?.slot || 0));
   }, [lectures]);
 
-  const exams = useMemo(() => getArray(examsPayload), [examsPayload]);
+  const exams = useMemo(
+    () => (Array.isArray(studentExams) ? studentExams : []),
+    [studentExams]
+  );
 
   const upcomingItems = useMemo(
     () =>
@@ -460,29 +457,35 @@ const StudentDashboardPage = () => {
 
   const upcomingExams = useMemo(
     () =>
-      upcomingItems
-        .filter(
-          (item) => String(item?.examType || "").toLowerCase() !== "assignment"
-        )
-        .slice(0, 3),
+      upcomingItems.filter(
+        (item) => String(item?.examType || "").toLowerCase() !== "assignment"
+      ),
     [upcomingItems]
   );
 
-  const attendance = unwrapData(attendancePayload) || {};
-  const absenceCount =
-    Number(
-      attendance?.total ??
-        attendance?.count ??
-        getArray(attendancePayload).length ??
-        0
-    ) || 0;
+  const visibleUpcomingExams = useMemo(
+    () => upcomingExams.slice(0, 3),
+    [upcomingExams]
+  );
+
+  const absenceCount = useMemo(() => {
+    const total = Number(apiAttendanceTotal);
+
+    if (Number.isFinite(total) && total >= 0) {
+      return total;
+    }
+
+    return Array.isArray(studentAttendance)
+      ? studentAttendance.length
+      : 0;
+  }, [apiAttendanceTotal, studentAttendance]);
 
   const nextActivity = useMemo(() => {
     const nextLecture = todayLectures?.[0];
 
     if (nextLecture) {
       return {
-        badge: "الحصة القادمة",
+        badge: "حصة اليوم",
         title: getSubjectName(nextLecture),
         description: getTeacherName(nextLecture),
         meta: getSlotLabel(nextLecture),
@@ -544,6 +547,12 @@ const StudentDashboardPage = () => {
     },
   ];
 
+  const loading =
+    loadingSubjects ||
+    loadingLectures ||
+    loadingExams ||
+    loadingAttendance;
+
   if (loading) {
     return (
       <Stack spacing={2}>
@@ -553,12 +562,12 @@ const StudentDashboardPage = () => {
             display: "grid",
             gridTemplateColumns: {
               xs: "repeat(2,1fr)",
-              md: "repeat(4,1fr)",
+              md: "repeat(5,1fr)",
             },
             gap: 1.2,
           }}
         >
-          {[1, 2, 3, 4].map((item) => (
+          {[1, 2, 3, 4, 5].map((item) => (
             <Skeleton
               key={item}
               variant="rounded"
@@ -825,7 +834,8 @@ const StudentDashboardPage = () => {
           display: "grid",
           gridTemplateColumns: {
             xs: "repeat(2,minmax(0,1fr))",
-            md: "repeat(4,minmax(0,1fr))",
+            sm: "repeat(3,minmax(0,1fr))",
+            md: "repeat(5,minmax(0,1fr))",
           },
           gap: 1.2,
           mb: 1.7,
@@ -969,7 +979,7 @@ const StudentDashboardPage = () => {
 
           {todayLectures.length ? (
             <Stack spacing={0.8}>
-              {todayLectures.map((lecture, index) => (
+              {todayLectures.slice(0, 4).map((lecture, index) => (
                 <Box
                   key={lecture?._id || index}
                   sx={{
@@ -1040,9 +1050,9 @@ const StudentDashboardPage = () => {
             onAction={() => navigate("/student-dashboard/exams")}
           />
 
-          {upcomingExams.length ? (
+          {visibleUpcomingExams.length ? (
             <Stack spacing={0.8}>
-              {upcomingExams.map((exam, index) => (
+              {visibleUpcomingExams.map((exam, index) => (
                 <Box
                   key={exam?._id || index}
                   onClick={() => navigate("/student-dashboard/exams")}
@@ -1145,7 +1155,7 @@ const StudentDashboardPage = () => {
             mb: 2.5,
           }}
         >
-          {subjects.map((subject, index) => {
+          {visibleSubjects.map((subject, index) => {
             const styles = [
               { background: COLORS.blueLight, color: COLORS.blue },
               { background: COLORS.greenLight, color: COLORS.green },
