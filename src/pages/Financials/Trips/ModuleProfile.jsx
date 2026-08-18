@@ -1,4 +1,4 @@
-import { AddCircleOutlineOutlined } from "@mui/icons-material";
+import { AddCircleOutlineOutlined, GroupsRounded, PaymentsRounded } from "@mui/icons-material";
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Grid, Paper, Stack, Typography, Box } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -19,7 +19,6 @@ import PaginationControls from "@/components/Pagination";
 import Select from "@/components/Select/Select";
 import { translateGender } from "@/utils/helpers/translateGender";
 import { useInstallmentPlans } from "@/utils/hooks/apis/financials/useInstallmentPlans";
-import usePermissions from "@/utils/hooks/usePermissions";
 
 const statusMap = {
   paid: "مدفوعة",
@@ -31,7 +30,6 @@ const ModuleTripsProfilePage = () => {
   const { tripTemplateId } = useParams();
   const navigate = useNavigate();
   const { installmentPlans } = useInstallmentPlans();
-  const permissions = usePermissions("financial");
 
   const [template, setTemplate] = useState(null);
   const [students, setStudents] = useState([]);
@@ -174,48 +172,49 @@ const ModuleTripsProfilePage = () => {
       <Paper
         elevation={0}
         sx={{
-          bgcolor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
-          borderRadius: "16px",
-          mt: 8,
+          background: "linear-gradient(135deg, rgba(255,252,247,0.99), rgba(251,240,216,0.45))",
+          border: "1px solid rgba(36,74,112,0.10)",
+          boxShadow: "0 12px 28px rgba(18,47,77,0.055)",
+          p: { xs: 1.5, md: 2 },
+          borderRadius: "20px",
+          mt: 1.5,
         }}
       >
-        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={3} mb={4}>
+        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }} spacing={1.5} mb={1.5}>
           <Stack spacing={1}>
-            <Typography variant="h5" fontWeight={700}>{template?.name || "—"}</Typography>
-            <Typography color="text.secondary">{template?.description || "—"}</Typography>
+            <Typography sx={{ color: "var(--color-navy-deep)", fontSize: { xs: 20, md: 24 }, fontWeight: 900 }}>{template?.name || "—"}</Typography>
+            <Typography sx={{ color: "var(--color-muted)", fontSize: 10.5 }}>{template?.description || "لا يوجد وصف للرحلة"}</Typography>
           </Stack>
           <Box
             sx={{
               alignSelf: { xs: "flex-start", md: "center" },
-              px: 3,
-              py: 1.5,
+              px: 1.4,
+              py: 0.8,
               borderRadius: "999px",
-              bgcolor: "#F3F4F6",
-              color: "#374151",
-              fontSize: 12,
-              fontWeight: 700,
+              bgcolor: "rgba(36,74,112,0.055)",
+              color: "var(--color-navy)",
+              border: "1px solid rgba(36,74,112,0.10)",
+              fontSize: 9,
+              fontWeight: 800,
             }}
           >
             المعرّف: {template?._id || "—"}
           </Box>
         </Stack>
 
-        <Grid container spacing={4}>
+        <Grid container spacing={1.2}>
           <Grid item xs={12} md={6}>
-            <StatCard label="رسوم الرحلة" value={`${Number(template?.fee || 0)} جنيه`} />
+            <StatCard icon={<PaymentsRounded />} label="رسوم الرحلة" value={`${Number(template?.fee || 0).toLocaleString("ar-EG")} جنيه`} />
           </Grid>
           <Grid item xs={12} md={6}>
-            <StatCard label="عدد الطلاب المشتركين" value={String(template?.enrolledCount || 0)} />
+            <StatCard icon={<GroupsRounded />} label="عدد الطلاب المشتركين" value={String(template?.enrolledCount || 0)} />
           </Grid>
         </Grid>
       </Paper>
 
       <Box
-        mt={8}
-        mb={8}
+        mt={1.5}
+        mb={1.5}
         sx={{
           display: "flex",
           gap: 2,
@@ -225,7 +224,7 @@ const ModuleTripsProfilePage = () => {
           flexWrap: "wrap",
         }}
       >
-        <Stack maxWidth={400} width="100%">
+        <Stack maxWidth={430} width="100%">
           <SearchFilter
             value={searchName}
             onChange={setSearchName}
@@ -233,39 +232,58 @@ const ModuleTripsProfilePage = () => {
           />
         </Stack>
 
-        {permissions?.edit && (
-          <Button
-            startIcon={<AddCircleOutlineOutlined />}
-            variant="contained"
-            onClick={() => setOpenAdd(true)}
-            sx={{ px: 8, py: 8, borderRadius: "8px", width: { xs: "100%", sm: "auto" } }}
-          >
-            إضافة طالب إلى الرحلة
-          </Button>
-        )}
+        <Button
+          startIcon={<AddCircleOutlineOutlined />}
+          variant="contained"
+          onClick={() => setOpenAdd(true)}
+          sx={{
+            minHeight: 46,
+            px: 2.3,
+            py: 1,
+            borderRadius: "12px",
+            width: { xs: "100%", sm: "auto" },
+            fontSize: 11,
+            fontWeight: 800,
+            textTransform: "none",
+            background: "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
+            boxShadow: "0 9px 20px rgba(18,47,77,0.14)",
+          }}
+        >
+          إضافة طالب إلى الرحلة
+        </Button>
       </Box>
 
       <Paper
         elevation={0}
         sx={{
-          bgcolor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
-          borderRadius: "16px",
+          bgcolor: "var(--color-cream)",
+          border: "1px solid rgba(36,74,112,0.10)",
+          boxShadow: "0 12px 28px rgba(18,47,77,0.055)",
+          p: { xs: 1.1, md: 1.4 },
+          borderRadius: "20px",
         }}
       >
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-[#1E293B]">طلاب الرحلة</h2>
-          <span className="rounded-full bg-[#F3F4F6] px-3 py-1 text-xs font-semibold text-[#374151]">
-            العدد الحالي: {displayedStudents.length}
-          </span>
-        </div>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1} sx={{ mb: 1.2 }}>
+          <Box>
+            <Typography sx={{ color: "var(--color-navy-deep)", fontSize: 16, fontWeight: 900 }}>طلاب الرحلة</Typography>
+            <Typography sx={{ mt: 0.15, color: "var(--color-muted)", fontSize: 9.5 }}>إدارة الطلاب المسجلين ومتابعة حالة السداد.</Typography>
+          </Box>
+          <Box sx={{ px: 1.2, py: 0.55, borderRadius: "999px", color: "var(--color-gold-dark)", bgcolor: "var(--color-gold-soft)", border: "1px solid rgba(211,164,79,0.22)", fontSize: 9, fontWeight: 900 }}>
+            {displayedStudents.length} طالب
+          </Box>
+        </Stack>
 
         {displayedStudents.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm font-medium text-gray-500">
-            لا يوجد طلاب مطابقين لبحث الاسم
-          </div>
+          <Box sx={{ minHeight: 210, display: "grid", placeItems: "center", textAlign: "center", border: "1px dashed rgba(36,74,112,0.15)", borderRadius: "16px", bgcolor: "rgba(36,74,112,0.025)" }}>
+            <Box>
+              <Typography sx={{ color: "var(--color-navy-deep)", fontSize: 14, fontWeight: 900 }}>
+                {searchName ? "لا يوجد طلاب مطابقون للبحث" : "لا يوجد طلاب في الرحلة حتى الآن"}
+              </Typography>
+              <Typography sx={{ mt: 0.5, color: "var(--color-muted)", fontSize: 10 }}>
+                {searchName ? "غيّر عبارة البحث أو امسحها." : "أضف أول طالب إلى الرحلة من الزر بالأعلى."}
+              </Typography>
+            </Box>
+          </Box>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full border-separate border-spacing-y-2">
@@ -317,17 +335,15 @@ const ModuleTripsProfilePage = () => {
                               التفاصيل
                             </Button>
 
-                            {permissions?.edit && (
-                              <Button
-                                variant="outlined"
-                                color="error"
-                                onClick={() => handleRemove(student?._id)}
-                                disabled={actionLoading}
-                                sx={{ minWidth: 120 }}
-                              >
-                                إزالة
-                              </Button>
-                            )}
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              onClick={() => handleRemove(student?._id)}
+                              disabled={actionLoading}
+                              sx={{ minWidth: 120 }}
+                            >
+                              إزالة
+                            </Button>
                         </Stack>
                       </td>
                     </tr>
@@ -367,23 +383,28 @@ const ModuleTripsProfilePage = () => {
   );
 };
 
-const StatCard = ({ label, value }) => {
+const StatCard = ({ icon, label, value }) => {
   return (
     <Box
       sx={{
-        p: 2,
-        borderRadius: "10px",
-        bgcolor: "primary.white",
-        transition: ".5s",
-        "&:hover": { bgcolor: "grey.100" },
+        p: 1.4,
+        minHeight: 78,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 1,
+        borderRadius: "15px",
+        bgcolor: "rgba(255,255,255,0.78)",
+        border: "1px solid rgba(36,74,112,0.09)",
       }}
     >
-      <Typography variant="label" color="text.secondary" sx={{ mb: 0.5, fontWeight: 500, fontSize: "12px" }}>
-        {label}
-      </Typography>
-      <Typography variant="subtitle" sx={{ display: "block", fontWeight: 500, color: "text.primary" }}>
-        {value}
-      </Typography>
+      <Box>
+        <Typography sx={{ color: "var(--color-muted)", fontWeight: 800, fontSize: 10 }}>{label}</Typography>
+        <Typography sx={{ mt: 0.3, display: "block", fontWeight: 900, fontSize: 18, color: "var(--color-navy-deep)" }}>{value}</Typography>
+      </Box>
+      <Box sx={{ width: 40, height: 40, display: "grid", placeItems: "center", flexShrink: 0, color: "var(--color-gold-dark)", bgcolor: "var(--color-gold-soft)", border: "1px solid rgba(211,164,79,0.22)", borderRadius: "12px", "& svg": { fontSize: 20 } }}>
+        {icon}
+      </Box>
     </Box>
   );
 };
@@ -443,14 +464,14 @@ const EnrollDialog = ({
       onClose={onClose}
       fullWidth
       maxWidth="sm"
-      PaperProps={{ sx: { borderRadius: "14px" } }}
+      PaperProps={{ sx: { borderRadius: "20px", overflow: "hidden", bgcolor: "var(--color-cream)" } }}
     >
-      <DialogTitle sx={{ px: 6, pt: 5, pb: 6 }}>
+      <DialogTitle sx={{ px: 2.5, pt: 2.2, pb: 1.2 }}>
         <Typography variant="h6" fontWeight={700}>إضافة طالب إلى الرحلة</Typography>
       </DialogTitle>
 
-      <DialogContent sx={{ px: 6, pt: 2, pb: 6 }}>
-        <Grid container spacing={4}>
+      <DialogContent sx={{ px: 2.5, pt: 1.5, pb: 2.2 }}>
+        <Grid container spacing={1.5}>
           <Grid item xs={12} sm={6}>
             <Select
               register={register}
@@ -486,10 +507,10 @@ const EnrollDialog = ({
 
       <DialogActions
         sx={{
-          px: 6,
-          pb: 5,
-          pt: 1,
-          gap: 2,
+          px: 2.5,
+          pb: 1.8,
+          pt: 1.2,
+          gap: 1,
           flexDirection: { xs: "column-reverse", sm: "row" },
         }}
       >
