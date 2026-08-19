@@ -1,11 +1,18 @@
 import {
+  Alert,
   Box,
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
+  MenuItem,
   Paper,
   Stack,
+  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -37,11 +44,14 @@ import Popup from "@/components/Popup/Popup";
 import ClassFilter from "@/components/Filters/ClassFilter";
 
 import {
+  copyLectureSchedule,
   deleteLecture,
+  fetchLectures,
   fetchTermsByAcademicYear,
 } from "@/APIs/school/lectures";
 
 import { fetchClassesList } from "@/APIs/school/classes";
+import { fetchAcademicYears } from "@/APIs/school/academicYears";
 
 import { useLectures } from "@/utils/hooks/apis/useLectures";
 import usePermissions from "@/utils/hooks/usePermissions";
@@ -125,6 +135,59 @@ const mapTermOption = (item) => ({
   order: Number(item?.order) || 0,
   status: item?.status || "",
 });
+
+const extractAcademicYears = (response) => {
+  const payload = unwrapData(response);
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return (
+    [
+      payload?.docs,
+      payload?.items,
+      payload?.results,
+      payload?.records,
+      payload?.academicYears,
+      payload?.years,
+      payload?.data,
+    ].find(Array.isArray) || []
+  );
+};
+
+const getAcademicYearLabel = (item) =>
+  item?.name ||
+  item?.title ||
+  item?.label ||
+  "سنة دراسية";
+
+const getBucketCount = (value) => {
+  if (Array.isArray(value)) {
+    return value.length;
+  }
+
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    const nested = [
+      value?.items,
+      value?.docs,
+      value?.results,
+      value?.records,
+    ].find(Array.isArray);
+
+    if (nested) {
+      return nested.length;
+    }
+  }
+
+  const numeric = Number(value);
+  return Number.isFinite(numeric)
+    ? numeric
+    : 0;
+};
 
 const getLectureClass = (item) =>
   item?.class ||
@@ -443,6 +506,56 @@ const List = () => {
     setSelectedLectureId,
   ] = useState(null);
 
+  const [
+    copyOpen,
+    setCopyOpen,
+  ] = useState(false);
+
+  const [
+    copyLoading,
+    setCopyLoading,
+  ] = useState(false);
+
+  const [
+    copyYears,
+    setCopyYears,
+  ] = useState([]);
+
+  const [
+    copyYearsLoading,
+    setCopyYearsLoading,
+  ] = useState(false);
+
+  const [
+    copySourceYearId,
+    setCopySourceYearId,
+  ] = useState("");
+
+  const [
+    copySourceTermId,
+    setCopySourceTermId,
+  ] = useState("");
+
+  const [
+    copySourceTerms,
+    setCopySourceTerms,
+  ] = useState([]);
+
+  const [
+    copySourceTermsLoading,
+    setCopySourceTermsLoading,
+  ] = useState(false);
+
+  const [
+    copyTargetTermId,
+    setCopyTargetTermId,
+  ] = useState("");
+
+  const [
+    copyResult,
+    setCopyResult,
+  ] = useState(null);
+
   const savedTermId =
     useMemo(
       () =>
@@ -538,6 +651,361 @@ const List = () => {
         )
       );
     }, [selectedClass]);
+
+  const openCopySchedule = () => {
+    if (!permissions.add) {
+      return;
+    }
+
+    if (
+      !selectedClassAcademicYearId ||
+      !termOptions.length
+    ) {
+      toast.info(
+        "اختر فصلًا يحتوي على سنة دراسية وترمات أولًا"
+      );
+      return;
+    }
+
+    setCopyTargetTermId(
+      termId ||
+        defaultTermId ||
+        termOptions[0]?.value ||
+        ""
+    );
+
+    setCopySourceYearId("");
+    setCopySourceTermId("");
+    setCopySourceTerms([]);
+    setCopyResult(null);
+    setCopyOpen(true);
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCopyYears = async () => {
+      if (!copyOpen) {
+        return;
+      }
+
+      setCopyYearsLoading(true);
+
+      try {
+        const response =
+          await fetchAcademicYears();
+
+        if (!mounted) {
+          return;
+        }
+
+        if (response?.status === false) {
+          setCopyYears([]);
+          toast.error(
+            response?.message ||
+              "تعذر تحميل السنوات الدراسية"
+          );
+          return;
+        }
+
+        const years =
+          extractAcademicYears(
+            response
+          );
+
+        setCopyYears(years);
+
+        const targetYearId =
+          selectedClassAcademicYearId;
+
+        const sameYearHasOtherTerm =
+          termOptions.some(
+            (item) =>
+              item.value !==
+              (copyTargetTermId ||
+                termId)
+          );
+
+        const defaultSourceYear =
+          sameYearHasOtherTerm
+            ? targetYearId
+            : getId(
+                years.find(
+                  (item) =>
+                    getId(item) !==
+                    targetYearId
+                )
+              );
+
+        setCopySourceYearId(
+          (current) =>
+            current ||
+            defaultSourceYear ||
+            targetYearId ||
+            ""
+        );
+      } catch (error) {
+        if (mounted) {
+          setCopyYears([]);
+          toast.error(
+            error?.response?.data
+              ?.message ||
+              "تعذر تحميل السنوات الدراسية"
+          );
+        }
+      } finally {
+        if (mounted) {
+          setCopyYearsLoading(false);
+        }
+      }
+    };
+
+    loadCopyYears();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    copyOpen,
+    selectedClassAcademicYearId,
+    termOptions,
+    copyTargetTermId,
+    termId,
+  ]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSourceTerms = async () => {
+      if (
+        !copyOpen ||
+        !copySourceYearId
+      ) {
+        setCopySourceTerms([]);
+        setCopySourceTermId("");
+        setCopySourceTermsLoading(false);
+        return;
+      }
+
+      setCopySourceTermsLoading(true);
+
+      try {
+        const response =
+          await fetchTermsByAcademicYear(
+            copySourceYearId,
+            { force: true }
+          );
+
+        if (!mounted) {
+          return;
+        }
+
+        if (response?.status === false) {
+          setCopySourceTerms([]);
+          setCopySourceTermId("");
+          toast.error(
+            response?.message ||
+              "تعذر تحميل ترمات السنة المصدر"
+          );
+          return;
+        }
+
+        const options =
+          extractList(response)
+            .map(mapTermOption)
+            .filter(
+              (item) => item.value
+            )
+            .sort(
+              (a, b) =>
+                a.order - b.order
+            );
+
+        setCopySourceTerms(options);
+
+        setCopySourceTermId(
+          (current) => {
+            const currentIsValid =
+              options.some(
+                (item) =>
+                  item.value ===
+                    current &&
+                  !(
+                    copySourceYearId ===
+                      selectedClassAcademicYearId &&
+                    current ===
+                      copyTargetTermId
+                  )
+              );
+
+            if (currentIsValid) {
+              return current;
+            }
+
+            return (
+              options.find(
+                (item) =>
+                  !(
+                    copySourceYearId ===
+                      selectedClassAcademicYearId &&
+                    item.value ===
+                      copyTargetTermId
+                  )
+              )?.value || ""
+            );
+          }
+        );
+      } catch (error) {
+        if (mounted) {
+          setCopySourceTerms([]);
+          setCopySourceTermId("");
+          toast.error(
+            error?.response?.data
+              ?.message ||
+              "تعذر تحميل ترمات السنة المصدر"
+          );
+        }
+      } finally {
+        if (mounted) {
+          setCopySourceTermsLoading(false);
+        }
+      }
+    };
+
+    loadSourceTerms();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    copyOpen,
+    copySourceYearId,
+    copyTargetTermId,
+    selectedClassAcademicYearId,
+  ]);
+
+  const copySummary = useMemo(() => {
+    const data =
+      copyResult &&
+      typeof copyResult === "object"
+        ? copyResult
+        : {};
+
+    return {
+      created: getBucketCount(
+        data?.created
+      ),
+      unresolved: getBucketCount(
+        data?.unresolved
+      ),
+      needsTeacher: getBucketCount(
+        data?.needsTeacher
+      ),
+      teacherConflict:
+        getBucketCount(
+          data?.teacherConflict
+        ),
+    };
+  }, [copyResult]);
+
+  const handleCopySchedule = async () => {
+    if (copyLoading) {
+      return;
+    }
+
+    if (
+      !selectedClassAcademicYearId ||
+      !copyTargetTermId ||
+      !copySourceTermId
+    ) {
+      toast.info(
+        "اختر الترم المصدر والترم الهدف أولًا"
+      );
+      return;
+    }
+
+    if (
+      copyTargetTermId ===
+      copySourceTermId
+    ) {
+      toast.error(
+        "الترم المصدر والترم الهدف يجب أن يكونا مختلفين"
+      );
+      return;
+    }
+
+    setCopyLoading(true);
+    setCopyResult(null);
+
+    try {
+      const response =
+        await copyLectureSchedule(
+          selectedClassAcademicYearId,
+          copyTargetTermId,
+          copySourceTermId
+        );
+
+      if (!response?.status) {
+        toast.error(
+          response?.message ||
+            "تعذر نسخ الجدول الدراسي"
+        );
+        return;
+      }
+
+      const result =
+        unwrapData(response) || {};
+
+      setCopyResult(result);
+
+      const refreshed =
+        await fetchLectures(
+          {
+            page: 1,
+            limit: 1000,
+            classId:
+              classFilter ||
+              undefined,
+            termId:
+              copyTargetTermId,
+          },
+          { force: true }
+        );
+
+      if (refreshed?.status) {
+        setItems(
+          mapLectures(
+            refreshed?.data
+          )
+        );
+      }
+
+      setTermId(
+        copyTargetTermId
+      );
+
+      localStorage.setItem(
+        "nasaq:lectures:lastTermId",
+        copyTargetTermId
+      );
+
+      toast.success(
+        `تم نسخ الجدول: ${getBucketCount(
+          result?.created
+        )} حصة تم إنشاؤها`
+      );
+    } catch (error) {
+      toast.error(
+        error?.response?.data
+          ?.message ||
+          error?.message ||
+          "حدث خطأ أثناء نسخ الجدول الدراسي"
+      );
+    } finally {
+      setCopyLoading(false);
+    }
+  };
+
 
   useEffect(() => {
     let mounted = true;
@@ -1007,6 +1475,52 @@ const List = () => {
                 </>
               )}
 
+              {permissions.add &&
+                selectedClassAcademicYearId &&
+                termOptions.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outlined"
+                    startIcon={
+                      <AutoAwesomeRounded />
+                    }
+                    onClick={
+                      openCopySchedule
+                    }
+                    sx={{
+                      minHeight: 38,
+                      px: 1.4,
+                      borderRadius:
+                        "11px",
+                      color:
+                        "var(--color-gold-dark)",
+                      backgroundColor:
+                        "rgba(255,255,255,0.72)",
+                      borderColor:
+                        "rgba(211,164,79,0.28)",
+                      fontSize:
+                        "10px",
+                      fontWeight: 800,
+                      textTransform:
+                        "none",
+                      "&:hover": {
+                        borderColor:
+                          "rgba(211,164,79,0.48)",
+                        backgroundColor:
+                          "rgba(251,240,216,0.38)",
+                      },
+                      "& .MuiButton-startIcon":
+                        {
+                          marginLeft:
+                            "6px",
+                          marginRight: 0,
+                        },
+                    }}
+                  >
+                    نسخ الجدول
+                  </Button>
+                )}
+
               <Box
                 component={CSVLink}
                 data={csvData}
@@ -1447,6 +1961,422 @@ const List = () => {
           )}
         </Paper>
       </Box>
+
+      <Dialog
+        open={copyOpen}
+        onClose={() => {
+          if (!copyLoading) {
+            setCopyOpen(false);
+          }
+        }}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{
+          sx: {
+            borderRadius: "18px",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            color:
+              "var(--color-navy-deep)",
+            fontWeight: 900,
+          }}
+        >
+          نسخ الجدول الدراسي
+        </DialogTitle>
+
+        <DialogContent>
+          <Stack
+            spacing={1.2}
+            sx={{ pt: 0.5 }}
+          >
+            <Alert
+              severity="info"
+              sx={{
+                borderRadius: "12px",
+                fontSize: "11px",
+              }}
+            >
+              سيتم نسخ جدول ترم كامل إلى الترم الهدف في السنة
+              الدراسية المرتبطة بالفصل المحدد. الحالات التي تحتاج
+              مراجعة ستظهر بعد التنفيذ.
+            </Alert>
+
+            <Paper
+              elevation={0}
+              sx={{
+                p: 1.2,
+                border:
+                  "1px solid rgba(36,74,112,0.08)",
+                borderRadius: "12px",
+                backgroundColor:
+                  "rgba(36,74,112,0.025)",
+              }}
+            >
+              <Typography
+                sx={{
+                  color:
+                    "var(--color-muted)",
+                  fontSize: "9px",
+                  fontWeight: 800,
+                }}
+              >
+                السنة الهدف
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.2,
+                  color:
+                    "var(--color-navy-deep)",
+                  fontSize: "12px",
+                  fontWeight: 900,
+                }}
+              >
+                {getAcademicYearLabel(
+                  copyYears.find(
+                    (item) =>
+                      getId(item) ===
+                      selectedClassAcademicYearId
+                  )
+                ) ||
+                  getEntityName(
+                    getAcademicYear(
+                      selectedClass
+                    )
+                  ) ||
+                  "السنة الدراسية الحالية للفصل"}
+              </Typography>
+            </Paper>
+
+            <TextField
+              select
+              size="small"
+              label="السنة المصدر"
+              value={copySourceYearId}
+              disabled={
+                copyYearsLoading ||
+                copyLoading
+              }
+              onChange={(event) => {
+                setCopySourceYearId(
+                  event.target.value
+                );
+                setCopySourceTermId("");
+                setCopyResult(null);
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root":
+                  {
+                    borderRadius:
+                      "11px",
+                  },
+              }}
+            >
+              {copyYears.map(
+                (year) => (
+                  <MenuItem
+                    key={getId(year)}
+                    value={getId(year)}
+                  >
+                    {getAcademicYearLabel(
+                      year
+                    )}
+                    {year?.status ===
+                    "active"
+                      ? " - الحالية"
+                      : ""}
+                  </MenuItem>
+                )
+              )}
+            </TextField>
+
+            <TextField
+              select
+              size="small"
+              label="الترم المصدر"
+              value={copySourceTermId}
+              disabled={
+                !copySourceYearId ||
+                copySourceTermsLoading ||
+                copyLoading
+              }
+              onChange={(event) => {
+                setCopySourceTermId(
+                  event.target.value
+                );
+                setCopyResult(null);
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root":
+                  {
+                    borderRadius:
+                      "11px",
+                  },
+              }}
+            >
+              {copySourceTerms.map(
+                (option) => (
+                  <MenuItem
+                    key={option.value}
+                    value={option.value}
+                    disabled={
+                      copySourceYearId ===
+                        selectedClassAcademicYearId &&
+                      option.value ===
+                        copyTargetTermId
+                    }
+                  >
+                    {option.label}
+                  </MenuItem>
+                )
+              )}
+            </TextField>
+
+            <TextField
+              select
+              size="small"
+              label="الترم الهدف"
+              value={copyTargetTermId}
+              disabled={
+                !termOptions.length ||
+                copyLoading
+              }
+              onChange={(event) => {
+                const nextValue =
+                  event.target.value;
+
+                setCopyTargetTermId(
+                  nextValue
+                );
+
+                if (
+                  copySourceYearId ===
+                    selectedClassAcademicYearId &&
+                  copySourceTermId ===
+                    nextValue
+                ) {
+                  setCopySourceTermId(
+                    ""
+                  );
+                }
+
+                setCopyResult(null);
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root":
+                  {
+                    borderRadius:
+                      "11px",
+                  },
+              }}
+            >
+              {termOptions.map(
+                (option) => (
+                  <MenuItem
+                    key={option.value}
+                    value={option.value}
+                  >
+                    {option.label}
+                  </MenuItem>
+                )
+              )}
+            </TextField>
+
+            {copySourceYearId ===
+              selectedClassAcademicYearId &&
+              copySourceTermId &&
+              copySourceTermId ===
+                copyTargetTermId && (
+                <Alert
+                  severity="warning"
+                  sx={{
+                    borderRadius:
+                      "12px",
+                    fontSize:
+                      "10px",
+                  }}
+                >
+                  اختر ترمين مختلفين للنسخ داخل نفس السنة الدراسية.
+                </Alert>
+              )}
+
+            {copyResult && (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 1.2,
+                  border:
+                    "1px solid rgba(36,74,112,0.08)",
+                  borderRadius:
+                    "12px",
+                  backgroundColor:
+                    "rgba(255,255,255,0.82)",
+                }}
+              >
+                <Typography
+                  sx={{
+                    mb: 0.8,
+                    color:
+                      "var(--color-navy-deep)",
+                    fontSize:
+                      "11px",
+                    fontWeight: 900,
+                  }}
+                >
+                  نتيجة النسخ
+                </Typography>
+
+                <Stack
+                  direction="row"
+                  useFlexGap
+                  flexWrap="wrap"
+                  gap={0.6}
+                >
+                  <Chip
+                    size="small"
+                    label={`تم الإنشاء: ${copySummary.created}`}
+                    sx={{
+                      color: "#2F7D59",
+                      backgroundColor:
+                        "#EAF8F1",
+                      fontWeight: 800,
+                    }}
+                  />
+
+                  <Chip
+                    size="small"
+                    label={`مادة غير متاحة: ${copySummary.unresolved}`}
+                    sx={{
+                      color: "#B36B27",
+                      backgroundColor:
+                        "#FFF5E8",
+                      fontWeight: 800,
+                    }}
+                  />
+
+                  <Chip
+                    size="small"
+                    label={`تحتاج معلم: ${copySummary.needsTeacher}`}
+                    sx={{
+                      color: "#6D59B0",
+                      backgroundColor:
+                        "#F3EFFF",
+                      fontWeight: 800,
+                    }}
+                  />
+
+                  <Chip
+                    size="small"
+                    label={`تعارض معلم: ${copySummary.teacherConflict}`}
+                    sx={{
+                      color: "#B74F49",
+                      backgroundColor:
+                        "#FFF0EF",
+                      fontWeight: 800,
+                    }}
+                  />
+                </Stack>
+
+                {(copySummary.needsTeacher >
+                  0 ||
+                  copySummary.teacherConflict >
+                    0 ||
+                  copySummary.unresolved >
+                    0) && (
+                  <Typography
+                    sx={{
+                      mt: 0.8,
+                      color:
+                        "var(--color-muted)",
+                      fontSize:
+                        "9px",
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    راجع الحصص التي لم تُحل تلقائيًا بعد النسخ؛ تعارض
+                    المعلم قد ينشئ الحصة بدون معلم لتعديلها يدويًا.
+                  </Typography>
+                )}
+              </Paper>
+            )}
+          </Stack>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            px: 3,
+            pb: 2.2,
+            gap: 0.8,
+          }}
+        >
+          <Button
+            type="button"
+            disabled={copyLoading}
+            onClick={() =>
+              setCopyOpen(false)
+            }
+            sx={{
+              borderRadius: "10px",
+              fontWeight: 800,
+              textTransform: "none",
+            }}
+          >
+            إغلاق
+          </Button>
+
+          <Button
+            type="button"
+            variant="contained"
+            disabled={
+              copyLoading ||
+              copyYearsLoading ||
+              copySourceTermsLoading ||
+              !copySourceYearId ||
+              !copySourceTermId ||
+              !copyTargetTermId ||
+              copySourceTermId ===
+                copyTargetTermId
+            }
+            startIcon={
+              copyLoading ? (
+                <CircularProgress
+                  size={16}
+                  color="inherit"
+                />
+              ) : (
+                <AutoAwesomeRounded />
+              )
+            }
+            onClick={
+              handleCopySchedule
+            }
+            sx={{
+              borderRadius: "10px",
+              color:
+                "var(--color-white)",
+              background:
+                "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
+              boxShadow: "none",
+              fontWeight: 900,
+              textTransform: "none",
+              "&:hover": {
+                boxShadow: "none",
+              },
+              "& .MuiButton-startIcon":
+                {
+                  marginLeft:
+                    "6px",
+                  marginRight: 0,
+                },
+            }}
+          >
+            تنفيذ النسخ
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Popup
         open={deleteOpen}

@@ -51,8 +51,10 @@ import {
   addLibrary,
   fetchLibraries,
   fetchLibraryAcademicYears,
+  fetchLibraryBySubject,
 } from "@/APIs/school/library";
 import {
+  fetchTeacherAssignments,
   fetchTermsByAcademicYear,
 } from "@/APIs/school/lectures";
 import {
@@ -487,17 +489,43 @@ const TeacherLibrary = () => {
             : {}),
         };
 
+        /*
+         * قيمة فلتر المادة في الواجهة هي subjectOfferingId،
+         * بينما GET /library/by-subject/:subjectId يحتاج subjectId.
+         *
+         * نحصل على subjectId من الـOffering المسند للمعلم.
+         * لو لم نجده لأي سبب، نرجع للسلوك القديم الآمن بدل كسر الصفحة.
+         */
+        const selectedOffering =
+          subjectFilter !== "all"
+            ? assignedOfferings.find(
+                (offering) => offering.id === subjectFilter
+              ) ||
+              knownOfferings.find(
+                (offering) => offering.id === subjectFilter
+              )
+            : null;
+
+        const selectedSubjectId =
+          normalizeId(selectedOffering?.subjectId);
+
+        const libraryRequest =
+          subjectFilter !== "all" && selectedSubjectId
+            ? fetchLibraryBySubject(selectedSubjectId)
+            : fetchLibraries(libraryFilters);
+
         const [libraryResponse, yearsResponse, assignmentsResponse] =
           await Promise.all([
-            fetchLibraries(libraryFilters),
+            libraryRequest,
             fetchLibraryAcademicYears(),
-            api.get("/teacher-assignments", {
-              params: {
+            fetchTeacherAssignments(
+              {
                 teacherId,
                 page: 1,
                 limit: 500,
               },
-            }),
+              { force: true }
+            ),
           ]);
 
         if (isFailedResponse(libraryResponse)) {

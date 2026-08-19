@@ -5,6 +5,7 @@ import {
 import AcademicYearsList from "@/pages/AcademicYears/List";
 import AcademicYearAdd from "@/pages/AcademicYears/Add";
 import AcademicYearDetails from "@/pages/AcademicYears/Details";
+import AcademicYearPromotion from "@/pages/AcademicYears/Promotion";
 
 import RoleRoute from "@/shared/guards/RoleRoute";
 
@@ -34,6 +35,13 @@ export const academicYearsRoutes = (
       path="/school/academic-years/add"
       element={
         <AcademicYearAdd />
+      }
+    />
+
+    <Route
+      path="/school/student-promotion"
+      element={
+        <AcademicYearPromotion />
       }
     />
 

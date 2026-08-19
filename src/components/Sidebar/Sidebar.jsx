@@ -32,6 +32,7 @@ import {
   Route,
   SchoolRounded,
   SettingsRounded,
+  UpgradeRounded,
   ViewList,
 } from "@mui/icons-material";
 
@@ -259,6 +260,13 @@ const Sidebar = ({ active, setActive }) => {
             Icon: CalendarMonthRounded,
             iconType: "mui",
             to: "/school/academic-years",
+            show: canManageAcademicYears,
+          },
+          {
+            name: "ترقية الطلاب",
+            Icon: UpgradeRounded,
+            iconType: "mui",
+            to: "/school/student-promotion",
             show: canManageAcademicYears,
           },
           {

@@ -47,6 +47,9 @@ import { toast } from "react-toastify";
 
 import { api } from "@/APIs/Axios";
 import { addExam } from "@/APIs/school/exams";
+import {
+  fetchTeacherAssignments,
+} from "@/APIs/school/lectures";
 
 import nasaqLogo from "../../images/wadq-logo.png";
 
@@ -415,18 +418,29 @@ const TeacherExamAdd = () => {
       let assignments = [];
 
       try {
-        const assignmentResponse = await api.get("/teacher-assignments", {
-          params: {
-            ...(teacherId ? { teacherId } : {}),
-            page: 1,
-            limit: 500,
-          },
-        });
+        const assignmentResponse =
+          await fetchTeacherAssignments(
+            {
+              ...(teacherId
+                ? { teacherId }
+                : {}),
+              page: 1,
+              limit: 500,
+            },
+            { force: true }
+          );
 
-        assignments = extractCollection(assignmentResponse, [
-          "assignments",
-          "teacherAssignments",
-        ]);
+        if (isFailedResponse(assignmentResponse)) {
+          assignments = [];
+        } else {
+          assignments = extractCollection(
+            assignmentResponse,
+            [
+              "assignments",
+              "teacherAssignments",
+            ]
+          );
+        }
 
         if (teacherId) {
           assignments = assignments.filter((assignment) => {

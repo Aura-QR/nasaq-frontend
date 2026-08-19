@@ -5,6 +5,12 @@ import {
   fetchStudentProjects,
 } from "@/APIs/student";
 
+import {
+  getStudentGradeSubjects,
+  getStudentGrades,
+  getStudentGradingCriteria,
+} from "@/APIs/student/dashboard";
+
 import { api } from "@/APIs/Axios";
 
 import {
@@ -786,9 +792,7 @@ export const useStudentSubjects = () => {
         }
 
         const response =
-          await api.get(
-            "/gradesCriteria/student/me/subjects"
-          );
+          await getStudentGradeSubjects();
 
         if (!mounted) {
           return;
@@ -1192,22 +1196,12 @@ export const useGradesCriteria = (
             gradesResult,
           ] =
             await Promise.allSettled([
-              api.get(
-                "/gradesCriteria/student/me",
-                {
-                  params: {
-                    subjectOfferingId,
-                  },
-                }
+              getStudentGradingCriteria(
+                subjectOfferingId
               ),
 
-              api.get(
-                "/gradesCriteria/student/me/grades",
-                {
-                  params: {
-                    subjectOfferingId,
-                  },
-                }
+              getStudentGrades(
+                subjectOfferingId
               ),
             ]);
 

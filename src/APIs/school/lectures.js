@@ -218,6 +218,79 @@ export const fetchTeacherAssignments = async (
     options
   );
 
+export const addTeacherAssignment = async (
+  data = {}
+) => {
+  const teacherId = normalizeId(
+    data?.teacherId || data?.teacher
+  );
+
+  const subjectOfferingId = normalizeId(
+    data?.subjectOfferingId ||
+      data?.subjectOffering
+  );
+
+  if (!teacherId || !subjectOfferingId) {
+    return {
+      status: false,
+      message:
+        "المعلم وعرض المادة مطلوبان",
+    };
+  }
+
+  try {
+    const response = await api.post(
+      "/teacher-assignments",
+      {
+        teacherId,
+        subjectOfferingId,
+      }
+    );
+
+    invalidateLecturesCache();
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeFailure(
+      getApiError(
+        error,
+        "تعذر إضافة إسناد المعلم"
+      ),
+      "تعذر إضافة إسناد المعلم"
+    );
+  }
+};
+
+export const deleteTeacherAssignment = async (
+  id
+) => {
+  const assignmentId = normalizeId(id);
+
+  if (!assignmentId) {
+    return {
+      status: false,
+      message:
+        "معرّف إسناد المعلم غير موجود",
+    };
+  }
+
+  try {
+    const response = await api.delete(
+      `/teacher-assignments/${assignmentId}`
+    );
+
+    invalidateLecturesCache();
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeFailure(
+      getApiError(
+        error,
+        "تعذر حذف إسناد المعلم"
+      ),
+      "تعذر حذف إسناد المعلم"
+    );
+  }
+};
+
 export const normalizeLecturePayload = (
   data = {}
 ) => {
@@ -333,6 +406,66 @@ export const deleteLecture = async (id) => {
     return normalizeFailure(
       getApiError(error, "تعذر حذف الحصة"),
       "تعذر حذف الحصة"
+    );
+  }
+};
+
+/**
+ * POST /lectures/copy-from/:targetYearId/:targetTermId/:sourceTermId
+ * Body: none
+ *
+ * النتيجة قد تحتوي:
+ * created / unresolved / needsTeacher / teacherConflict
+ */
+export const copyLectureSchedule = async (
+  targetYearId,
+  targetTermId,
+  sourceTermId
+) => {
+  const normalizedTargetYearId =
+    normalizeId(targetYearId);
+  const normalizedTargetTermId =
+    normalizeId(targetTermId);
+  const normalizedSourceTermId =
+    normalizeId(sourceTermId);
+
+  if (
+    !normalizedTargetYearId ||
+    !normalizedTargetTermId ||
+    !normalizedSourceTermId
+  ) {
+    return {
+      status: false,
+      message:
+        "اختر السنة الهدف والترم المصدر والترم الهدف أولًا",
+    };
+  }
+
+  if (
+    normalizedTargetTermId ===
+    normalizedSourceTermId
+  ) {
+    return {
+      status: false,
+      message:
+        "الترم المصدر والترم الهدف يجب أن يكونا مختلفين",
+    };
+  }
+
+  try {
+    const response = await api.post(
+      `${ENDPOINT}/copy-from/${normalizedTargetYearId}/${normalizedTargetTermId}/${normalizedSourceTermId}`
+    );
+
+    invalidateLecturesCache();
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeFailure(
+      getApiError(
+        error,
+        "تعذر نسخ الجدول الدراسي"
+      ),
+      "تعذر نسخ الجدول الدراسي"
     );
   }
 };
