@@ -13,21 +13,69 @@ const Add = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
-  const onSubmit = async (payload) => {
-    setLoading(true);
-    const response = await createSchoolClass(payload);
+ const onSubmit = async (payload) => {
+  setLoading(true);
+
+  try {
+    const safePayload = {
+      ...payload,
+    };
+
+    const teacherValue =
+      payload?.teacherInChargeId;
+
+    const teacherInChargeId =
+      teacherValue &&
+      typeof teacherValue === "object"
+        ? teacherValue?._id ||
+          teacherValue?.id ||
+          ""
+        : String(
+            teacherValue || ""
+          ).trim();
+
+    // الحقل اختياري:
+    // لو مفيش معلم مسؤول، ما نبعتش الحقل أصلًا.
+    if (!teacherInChargeId) {
+      delete safePayload.teacherInChargeId;
+    } else {
+      safePayload.teacherInChargeId =
+        teacherInChargeId;
+    }
+
+    const response =
+      await createSchoolClass(
+        safePayload
+      );
 
     if (response?.status === false) {
-      toast.error(response?.message || "تعذر إضافة الفصل");
-      setLoading(false);
+      toast.error(
+        response?.message ||
+          "تعذر إضافة الفصل"
+      );
       return;
     }
 
-    toast.success("تمت إضافة الفصل بنجاح");
-    const created = unwrapApiData(response);
-    const id = getEntityId(created?.class || created);
-    navigate(id ? `/school/classes/${id}` : "/school/classes");
-  };
+    toast.success(
+      "تمت إضافة الفصل بنجاح"
+    );
+
+    const created =
+      unwrapApiData(response);
+
+    const id = getEntityId(
+      created?.class || created
+    );
+
+    navigate(
+      id
+        ? `/school/classes/${id}`
+        : "/school/classes"
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <Container>

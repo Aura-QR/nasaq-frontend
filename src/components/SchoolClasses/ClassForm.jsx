@@ -170,12 +170,28 @@ const ClassForm = ({ initialData = null, mode = "add", loading = false, onSubmit
     if (grade && stageIdOfGrade(grade) !== selectedStageId) setValue("gradeLevelId", "");
   }, [selectedStageId, selectedGradeId, grades, setValue]);
 
+  const submitForm = (values) => {
+    const payload = buildClassPayload(values);
+
+    const teacherInChargeId = getEntityId(
+      values?.teacherInChargeId
+    );
+
+    if (teacherInChargeId) {
+      payload.teacherInChargeId = teacherInChargeId;
+    } else {
+      delete payload.teacherInChargeId;
+    }
+
+    onSubmit?.(payload);
+  };
+
   if (optionsLoading) {
     return <Stack spacing={1}><Skeleton variant="rounded" height={160} /><Skeleton variant="rounded" height={300} /></Stack>;
   }
 
   return (
-    <Box component="form" noValidate dir="rtl" onSubmit={handleSubmit((values) => onSubmit?.(buildClassPayload(values)))}>
+    <Box component="form" noValidate dir="rtl" onSubmit={handleSubmit(submitForm)}>
       {optionsError && <Alert severity="warning" sx={{ borderRadius: "13px", fontSize: "9.5px" }}>{optionsError}</Alert>}
 
       <Section icon={<AccountTreeRounded />} title="الهيكل الأكاديمي" description="اختر السنة والمرحلة والصف الذي يتبع له الفصل.">
