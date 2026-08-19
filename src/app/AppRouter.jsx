@@ -9,6 +9,7 @@ import {
 // =========================
 import Home from "@/pages/Home/Home";
 import Login from "@/pages/Login/Login";
+import ForgotPassword from "@/pages/ForgotPassword/ForgotPassword";
 import Register from "@/pages/Register/Register";
 import Onboarding from "@/pages/Onboarding/Onboarding";
 import NoAccess from "@/pages/Others/NoAccess";
@@ -125,6 +126,13 @@ const AppRouter = () => {
         <Route
           path="/register"
           element={<Register />}
+        />
+
+        {/* استعادة كلمة المرور — للضيوف فقط، فالمستخدم المسجّل
+            يغيّر كلمته من ملفه الشخصي */}
+        <Route
+          path="/forgot-password"
+          element={<ForgotPassword />}
         />
       </Route>
 

@@ -988,6 +988,9 @@ const Login = () => {
           </Stack>
 
           <Button
+            onClick={() =>
+              navigate("/forgot-password")
+            }
             type="button"
             sx={{
               p: 0,
