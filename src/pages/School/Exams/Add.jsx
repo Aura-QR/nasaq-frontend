@@ -214,6 +214,29 @@ const getOfferingGradeLevelId = (
     offering?.gradeLevel
   );
 
+const getOfferingTermId = (offering) =>
+  normalizeId(
+    offering?.termId ||
+    offering?.term
+  );
+
+const offeringMatchesAcademicSelection = (
+  offering,
+  termId,
+  gradeLevelId
+) => {
+  const offeringTermId =
+    getOfferingTermId(offering);
+
+  const offeringGradeLevelId =
+    getOfferingGradeLevelId(offering);
+
+  return (
+    offeringTermId === termId &&
+    offeringGradeLevelId === gradeLevelId
+  );
+};
+
 const mapSubjectFromOffering = (
   offering
 ) => {
@@ -2010,7 +2033,18 @@ const DataInputs = ({
             }
           }
 
-          setOfferings(list);
+          const filteredOfferings =
+            list.filter((offering) =>
+              offeringMatchesAcademicSelection(
+                offering,
+                termId,
+                gradeLevelId
+              )
+            );
+
+          setOfferings(
+            filteredOfferings
+          );
         } catch (error) {
           if (active) {
             setOfferings([]);
@@ -2101,29 +2135,41 @@ const DataInputs = ({
     useMemo(() => {
       const map = new Map();
 
-      offerings.forEach(
-        (offering) => {
-          const subject =
-            mapSubjectFromOffering(
-              offering
-            );
+      offerings
+        .filter((offering) =>
+          offeringMatchesAcademicSelection(
+            offering,
+            termId,
+            gradeLevelId
+          )
+        )
+        .forEach(
+          (offering) => {
+            const subject =
+              mapSubjectFromOffering(
+                offering
+              );
 
-          if (
-            subject.id &&
-            !map.has(subject.id)
-          ) {
-            map.set(
-              subject.id,
-              subject
-            );
+            if (
+              subject.id &&
+              !map.has(subject.id)
+            ) {
+              map.set(
+                subject.id,
+                subject
+              );
+            }
           }
-        }
-      );
+        );
 
       return Array.from(
         map.values()
       );
-    }, [offerings]);
+    }, [
+      offerings,
+      termId,
+      gradeLevelId,
+    ]);
 
   const usingCatalogFallback = false;
 
@@ -2505,7 +2551,13 @@ const DataInputs = ({
                   (offering) =>
                     mapSubjectFromOffering(
                       offering
-                    ).id === nextValue
+                    ).id ===
+                      nextValue &&
+                    offeringMatchesAcademicSelection(
+                      offering,
+                      termId,
+                      gradeLevelId
+                    )
                 );
 
               updateValue(

@@ -691,8 +691,6 @@ const List = () => {
     loading,
   } = useLectures(filters, {
     enabled:
-      Boolean(classFilter) &&
-      Boolean(termId) &&
       !classesLoading &&
       !termsLoading,
   });

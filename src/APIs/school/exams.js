@@ -11,6 +11,22 @@ const getErrorMessage = (
   error?.message ||
   fallback;
 
+const normalizeFailure = (
+  error,
+  fallback
+) => ({
+  status: false,
+  message: getErrorMessage(error, fallback),
+  statusCode: error?.response?.status,
+});
+
+const validationFailure = (
+  message
+) => ({
+  status: false,
+  message,
+});
+
 export const fetchExams = async (filters = {}) => {
   try {
     const response = await api.get(ENDPOINT, {
@@ -18,7 +34,7 @@ export const fetchExams = async (filters = {}) => {
     });
     return response.data;
   } catch (error) {
-    return getErrorMessage(error, "تعذر تحميل الاختبارات");
+    return normalizeFailure(error, "تعذر تحميل الاختبارات");
   }
 };
 
@@ -33,7 +49,7 @@ export const fetchTeacherExams = async (filters = {}) => {
     if (error?.response?.status === 404) {
       return fetchExams(filters);
     }
-    return getErrorMessage(error, "تعذر تحميل اختبارات المعلم");
+    return normalizeFailure(error, "تعذر تحميل اختبارات المعلم");
   }
 };
 
@@ -42,7 +58,7 @@ export const fetchSingleExam = async (id) => {
     const response = await api.get(`${ENDPOINT}/${id}`);
     return response.data;
   } catch (error) {
-    return getErrorMessage(error, "تعذر تحميل بيانات الاختبار");
+    return normalizeFailure(error, "تعذر تحميل بيانات الاختبار");
   }
 };
 
@@ -51,7 +67,7 @@ export const addExam = async (data) => {
     const response = await api.post(ENDPOINT, data);
     return response.data;
   } catch (error) {
-    return getErrorMessage(error, "تعذر إضافة الاختبار");
+    return normalizeFailure(error, "تعذر إضافة الاختبار");
   }
 };
 
@@ -60,7 +76,7 @@ export const editExam = async (data, id) => {
     const response = await api.patch(`${ENDPOINT}/${id}`, data);
     return response.data;
   } catch (error) {
-    return getErrorMessage(error, "تعذر تعديل الاختبار");
+    return normalizeFailure(error, "تعذر تعديل الاختبار");
   }
 };
 
@@ -69,7 +85,7 @@ export const deleteExam = async (id) => {
     const response = await api.delete(`${ENDPOINT}/${id}`);
     return response.data;
   } catch (error) {
-    return getErrorMessage(error, "تعذر حذف الاختبار");
+    return normalizeFailure(error, "تعذر حذف الاختبار");
   }
 };
 
@@ -81,7 +97,7 @@ export const addExamQuestion = async (examId, question) => {
     );
     return response.data;
   } catch (error) {
-    return getErrorMessage(error, "تعذر إضافة السؤال");
+    return normalizeFailure(error, "تعذر إضافة السؤال");
   }
 };
 
@@ -97,7 +113,7 @@ export const editExamQuestion = async (
     );
     return response.data;
   } catch (error) {
-    return getErrorMessage(error, "تعذر تعديل السؤال");
+    return normalizeFailure(error, "تعذر تعديل السؤال");
   }
 };
 
@@ -111,7 +127,7 @@ export const deleteExamQuestion = async (
     );
     return response.data;
   } catch (error) {
-    return getErrorMessage(error, "تعذر حذف السؤال");
+    return normalizeFailure(error, "تعذر حذف السؤال");
   }
 };
 
@@ -145,11 +161,15 @@ export const gradeExamStudent = async (
   ).trim();
 
   if (!examId || !studentId) {
-    return "بيانات الاختبار أو الطالب غير مكتملة";
+    return validationFailure(
+      "بيانات الاختبار أو الطالب غير مكتملة"
+    );
   }
 
   if (!Number.isFinite(numericScore)) {
-    return "درجة الطالب غير صالحة";
+    return validationFailure(
+      "درجة الطالب غير صالحة"
+    );
   }
 
   const url = `${ENDPOINT}/${examId}/students/${studentId}/grade`;
@@ -170,7 +190,7 @@ export const gradeExamStudent = async (
 
     // لا نكرر الطلب عند أخطاء الصلاحيات أو الشبكة أو الخادم.
     if (![400, 422].includes(status)) {
-      return getErrorMessage(error, "تعذر حفظ درجة الطالب");
+      return normalizeFailure(error, "تعذر حفظ درجة الطالب");
     }
 
     try {
@@ -179,7 +199,7 @@ export const gradeExamStudent = async (
       });
       return response.data;
     } catch (fallbackError) {
-      return getErrorMessage(
+      return normalizeFailure(
         fallbackError,
         "تعذر حفظ درجة الطالب"
       );

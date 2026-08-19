@@ -102,19 +102,43 @@ export const getStudentMe = () =>
 
 // =====================================================
 // STUDENT CLASS
-// GET /classes/student/me
+// GET /students/me
+//
+// الـ endpoint بيرجع بيانات الطالب ومعها classId/class.
+// نحافظ على نفس contract القديم: response.data = class.
 // =====================================================
 
-export const getStudentClass = () =>
-  safeGet("/classes/student/me");
+export const getStudentClass = async () => {
+  const response =
+    await safeGet("/students/me");
+
+  const student =
+    unwrapData(response);
+
+  return {
+    ...response,
+    data:
+      student?.classId ||
+      student?.class ||
+      null,
+  };
+};
 
 // =====================================================
 // STUDENT CLASSMATES
-// GET /classes/student/me/mates
+//
+// لا يوجد Endpoint آمن للزملاء حاليًا.
+// نحافظ على الـ export للتوافق فقط بدون أي Network Request.
 // =====================================================
 
-export const getStudentMates = () =>
-  safeGet("/classes/student/me/mates");
+export const getStudentMates = async () => ({
+  data: {
+    status: false,
+    message:
+      "ميزة زملاء الفصل غير متاحة حاليًا حتى يوفر الباك Endpoint آمنًا لها",
+    data: [],
+  },
+});
 
 // =====================================================
 // STUDENT SUBJECTS

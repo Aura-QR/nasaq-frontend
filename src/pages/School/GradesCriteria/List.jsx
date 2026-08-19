@@ -675,25 +675,10 @@ const List = () => {
             await Promise.allSettled(
               academicYears.map(
                 async (year) => {
-                  let response;
-
-                  try {
-                    response =
-                      await api.get(
-                        `/terms/by-year/${year.id}`
-                      );
-                  } catch {
-                    response =
-                      await api.get(
-                        "/terms",
-                        {
-                          params: {
-                            academicYearId:
-                              year.id,
-                          },
-                        }
-                      );
-                  }
+                  const response =
+                    await api.get(
+                      `/terms/by-year/${year.id}`
+                    );
 
                   return {
                     year,

@@ -332,50 +332,6 @@ export const fetchGradeLevelById =
     });
   };
 
-export const fetchNextGradeLevel =
-  async (
-    id,
-    {
-      force = false,
-    } = {}
-  ) => {
-    const gradeLevelId =
-      normalizeId(id);
-
-    if (!gradeLevelId) {
-      return {
-        status: false,
-        message:
-          "معرّف الصف الدراسي غير موجود",
-      };
-    }
-
-    return requestCached({
-      key:
-        `grade-levels:next:${gradeLevelId}`,
-      force,
-
-      request:
-        async () => {
-          try {
-            const response =
-              await api.get(
-                `${ENDPOINT}/next/${gradeLevelId}`
-              );
-
-            return normalizeResponse(
-              response
-            );
-          } catch (error) {
-            return normalizeError(
-              error,
-              "تعذر تحميل الصف الدراسي التالي"
-            );
-          }
-        },
-    });
-  };
-
 export const createGradeLevel =
   async (payload) => {
     try {

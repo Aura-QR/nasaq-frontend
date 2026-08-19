@@ -27,6 +27,8 @@ const errorResult = (
     error,
     fallbackMessage
   ),
+  statusCode:
+    error?.response?.status,
   error,
 });
 
@@ -416,7 +418,7 @@ export const getCurrentStudentClassmates =
    تستورد الأسماء التالية مثل ClassFilter.jsx.
 
    هذه الدوال ترجع response.data مباشرة مثل الملف القديم،
-   وفي الخطأ ترجع رسالة نصية.
+   وفي الخطأ ترجع كائنًا موحدًا { status: false, message }.
 ========================================================= */
 
 export const fetchClasses =
@@ -451,8 +453,9 @@ export const fetchClasses =
 
       return response.data;
     } catch (error) {
-      return getErrorMessage(
-        error
+      return errorResult(
+        error,
+        "حدث خطأ ما"
       );
     }
   };
@@ -466,8 +469,9 @@ export const fetchClassesList =
 
       return response.data;
     } catch (error) {
-      return getErrorMessage(
-        error
+      return errorResult(
+        error,
+        "حدث خطأ ما"
       );
     }
   };
@@ -481,8 +485,9 @@ export const fetchSingleClass =
 
       return response.data;
     } catch (error) {
-      return getErrorMessage(
-        error
+      return errorResult(
+        error,
+        "حدث خطأ ما"
       );
     }
   };
@@ -502,8 +507,9 @@ export const fetchClassStudents =
 
       return response.data;
     } catch (error) {
-      return getErrorMessage(
-        error
+      return errorResult(
+        error,
+        "حدث خطأ ما"
       );
     }
   };
@@ -518,8 +524,9 @@ export const addClass =
 
       return response.data;
     } catch (error) {
-      return getErrorMessage(
-        error
+      return errorResult(
+        error,
+        "حدث خطأ ما"
       );
     }
   };
@@ -537,8 +544,9 @@ export const editClass =
 
       return response.data;
     } catch (error) {
-      return getErrorMessage(
-        error
+      return errorResult(
+        error,
+        "حدث خطأ ما"
       );
     }
   };
@@ -552,8 +560,9 @@ export const deleteClass =
 
       return response.data;
     } catch (error) {
-      return getErrorMessage(
-        error
+      return errorResult(
+        error,
+        "حدث خطأ ما"
       );
     }
   };
@@ -567,8 +576,9 @@ export const toggleActiveClass =
 
       return response.data;
     } catch (error) {
-      return getErrorMessage(
-        error
+      return errorResult(
+        error,
+        "حدث خطأ ما"
       );
     }
   };
@@ -598,7 +608,7 @@ export const addStudentToClass =
 
       return response.data;
     } catch (error) {
-      return getErrorMessage(
+      return errorResult(
         error,
         "تعذر إضافة الطالب إلى الفصل"
       );
@@ -631,7 +641,7 @@ export const deleteStudentFromClass =
 
       return response.data;
     } catch (error) {
-      return getErrorMessage(
+      return errorResult(
         error,
         "تعذر إزالة الطالب من الفصل"
       );
@@ -643,9 +653,6 @@ export const deleteStudentFromClass =
 export const fetchClass =
   fetchSingleClass;
 
-export const removeStudentFromClass =
-  deleteStudentFromClass;
-
 export const fetchMyClasses =
   async () => {
     try {
@@ -655,48 +662,12 @@ export const fetchMyClasses =
 
       return response.data;
     } catch (error) {
-      return getErrorMessage(
-        error
+      return errorResult(
+        error,
+        "حدث خطأ ما"
       );
     }
   };
-
-export const fetchStudentClass =
-  async () => {
-    try {
-      const response = await api.get(
-        `${STUDENTS_ENDPOINT}/me`
-      );
-
-      const student = unwrapApiData(
-        response?.data
-      );
-
-      return {
-        status: true,
-        data:
-          student?.classId ||
-          student?.class ||
-          null,
-      };
-    } catch (error) {
-      return {
-        status: false,
-        message: getErrorMessage(
-          error,
-          "تعذر تحميل فصل الطالب"
-        ),
-      };
-    }
-  };
-
-export const fetchClassmates =
-  async () => ({
-    status: false,
-    message:
-      "ميزة زملاء الفصل غير متاحة حاليًا حتى يوفر الباك Endpoint آمنًا لها",
-    data: [],
-  });
 
 export default {
   getSchoolClasses,
@@ -724,8 +695,5 @@ export default {
   toggleActiveClass,
   addStudentToClass,
   deleteStudentFromClass,
-  removeStudentFromClass,
   fetchMyClasses,
-  fetchStudentClass,
-  fetchClassmates,
 };

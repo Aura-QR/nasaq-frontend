@@ -52,19 +52,12 @@ import {
   addAttendance,
   deleteAttendance,
   fetchAttendance,
+  fetchLectureAttendanceSheet,
 } from "@/APIs/school/attendance";
-
-import {
-  getSchoolClassById,
-} from "@/APIs/school/classes";
 
 import {
   fetchLectures,
 } from "@/APIs/school/lectures";
-
-import {
-  fetchStudents,
-} from "@/APIs/school/students";
 
 import nasaqLogo from "../../images/wadq-logo.png";
 
@@ -320,6 +313,57 @@ const getAttendanceClassId = (record) =>
 const getAttendanceDate = (record) =>
   String(record?.date || record?.attendanceDate || "").slice(0, 10);
 
+const WEEKDAY_KEYS = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+
+const getDateWeekday = (value) => {
+  const date = new Date(`${value}T12:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return WEEKDAY_KEYS[date.getDay()] || "";
+};
+
+const getLectureId = (lecture) =>
+  normalizeId(lecture);
+
+const getLectureClassId = (lecture) =>
+  normalizeId(
+    lecture?.class ||
+      lecture?.classId ||
+      lecture?.classroom ||
+      lecture?.schoolClass
+  );
+
+const getLectureWeekday = (lecture) =>
+  String(
+    lecture?.dayOfWeek ||
+      lecture?.weekday ||
+      lecture?.day ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
+
+const getSheetAttendanceRecordId = (studentRow) =>
+  normalizeId(
+    studentRow?.attendanceId ||
+      studentRow?.attendanceRecordId ||
+      studentRow?.absenceId ||
+      studentRow?.attendance ||
+      studentRow?.absence ||
+      studentRow?.record
+  );
+
 const sameSet = (first, second) => {
   if (first.size !== second.size) return false;
 
@@ -459,6 +503,7 @@ const TeacherAttendance = () => {
   // Keep the latest classes outside loadRoster dependencies.
   // Updating class metadata must not trigger a new roster request.
   const classesRef = useRef([]);
+  const lecturesRef = useRef([]);
   const rosterRequestIdRef = useRef(0);
   const pendingRosterKeyRef = useRef("");
   const pendingClassesRef = useRef(false);
@@ -567,6 +612,8 @@ const TeacherAttendance = () => {
         "lectures",
       ]);
 
+      lecturesRef.current = lectureList;
+
       const map = new Map();
 
       lectureList.forEach((lecture) => {
@@ -614,6 +661,7 @@ const TeacherAttendance = () => {
         );
       }
     } catch (requestError) {
+      lecturesRef.current = [];
       setClasses([]);
       setSelectedClassId("");
       setError(
@@ -652,109 +700,95 @@ const TeacherAttendance = () => {
       setError("");
 
       try {
-        const attendancePromise = fetchAttendance({
-          classId: selectedClassId,
-          date: selectedDate,
-          page: 1,
-          limit: 500,
-        });
+        const selectedWeekday = getDateWeekday(selectedDate);
 
-        const currentClass =
-          classesRef.current.find(
-            (item) => getClassId(item) === selectedClassId
+        const lecture =
+          lecturesRef.current.find(
+            (item) =>
+              getLectureClassId(item) === selectedClassId &&
+              getLectureWeekday(item) === selectedWeekday
           ) || null;
 
-        let studentList = extractStudentsFromClass(currentClass);
-        let rosterMessage = "";
-        let resolvedClassMeta = null;
+        const lectureId = getLectureId(lecture);
 
-        if (!studentList.length) {
-          const classResponse = await getSchoolClassById(
-            selectedClassId,
-            { force }
+        if (!isMongoId(lectureId)) {
+          setStudents([]);
+          setAttendanceRecords([]);
+          setAbsentIds(new Set());
+          setInitialAbsentIds(new Set());
+          setError(
+            "لا توجد حصة لهذا الفصل في التاريخ المحدد."
           );
-
-          if (!isFailedResponse(classResponse)) {
-            studentList = extractStudentsFromClass(classResponse);
-
-            const classPayload = unwrapResponse(classResponse);
-            resolvedClassMeta =
-              classPayload?.class ||
-              classPayload?.classData ||
-              classPayload?.schoolClass ||
-              classPayload ||
-              null;
-          } else {
-            rosterMessage = getErrorMessage(
-              classResponse,
-              "تعذر تحميل بيانات الفصل"
-            );
-          }
+          return;
         }
 
-        if (!studentList.length) {
-          const studentsResponse = await fetchStudents({
-            classId: selectedClassId,
-            page: 1,
-            limit: 500,
-          });
-
-          if (!isFailedResponse(studentsResponse)) {
-            studentList = extractCollection(studentsResponse, [
-              "students",
-            ]);
-          } else {
-            rosterMessage = getErrorMessage(
-              studentsResponse,
-              rosterMessage || "تعذر تحميل طلاب الفصل"
-            );
-          }
-        }
-
-        const attendanceResponse = await attendancePromise;
+        const sheetResponse =
+          await fetchLectureAttendanceSheet(
+            lectureId,
+            selectedDate
+          );
 
         // Ignore an old request that finished after a newer request.
         if (requestId !== rosterRequestIdRef.current) return;
 
-        let records = [];
-
-        if (!isFailedResponse(attendanceResponse)) {
-          records = extractCollection(attendanceResponse, [
-            "attendanceRecords",
-          ]).filter((record) => {
-            const recordClassId = getAttendanceClassId(record);
-            const recordDate = getAttendanceDate(record);
-
-            return (
-              (!recordClassId || recordClassId === selectedClassId) &&
-              (!recordDate || recordDate === selectedDate)
-            );
-          });
+        if (isFailedResponse(sheetResponse)) {
+          throw new Error(
+            getErrorMessage(
+              sheetResponse,
+              "تعذر تحميل كشف الحضور"
+            )
+          );
         }
 
+        const sheet = unwrapResponse(sheetResponse) || {};
+        const studentList = Array.isArray(sheet?.students)
+          ? sheet.students
+          : [];
+
         const savedAbsentIds = new Set(
-          records.map(getAttendanceStudentId).filter(Boolean)
+          studentList
+            .filter((row) => row?.absent === true)
+            .map(getStudentId)
+            .filter(Boolean)
         );
 
+        const explicitRecords =
+          [
+            sheet?.attendanceRecords,
+            sheet?.attendance,
+            sheet?.attendances,
+            sheet?.absences,
+          ].find(Array.isArray) || [];
+
+        const records = explicitRecords.length
+          ? explicitRecords
+          : studentList
+              .filter((row) => row?.absent === true)
+              .map((row) => ({
+                _id: getSheetAttendanceRecordId(row),
+                studentId: getStudentId(row),
+                classId: selectedClassId,
+                date: selectedDate,
+              }));
+
+        const sheetLecture =
+          sheet?.lecture ||
+          lecture ||
+          null;
+
+        const rawRosterClass =
+          sheet?.class ||
+          sheetLecture?.class ||
+          sheetLecture?.classId ||
+          sheetLecture?.classroom ||
+          sheetLecture?.schoolClass ||
+          null;
+
         const rosterClass =
-          resolvedClassMeta ||
-          studentList
-            .map((row) => {
-              const student = getStudentEntity(row);
-              return (
-                student?.class ||
-                student?.classId ||
-                row?.class ||
-                row?.classId ||
-                null
-              );
-            })
-            .find(
-              (classValue) =>
-                classValue &&
-                typeof classValue === "object" &&
-                normalizeId(classValue) === selectedClassId
-            );
+          rawRosterClass &&
+          typeof rawRosterClass === "object"
+            ? rawRosterClass
+            : null;
 
         if (rosterClass) {
           setClasses((current) => {
@@ -812,17 +846,6 @@ const TeacherAttendance = () => {
         setAttendanceRecords(records);
         setAbsentIds(new Set(savedAbsentIds));
         setInitialAbsentIds(new Set(savedAbsentIds));
-
-        if (!studentList.length && rosterMessage) {
-          setError(rosterMessage);
-        } else if (isFailedResponse(attendanceResponse)) {
-          setError(
-            getErrorMessage(
-              attendanceResponse,
-              "تم تحميل الطلاب لكن تعذر تحميل الغياب المسجل"
-            )
-          );
-        }
       } catch (requestError) {
         if (requestId !== rosterRequestIdRef.current) return;
 
@@ -917,6 +940,59 @@ const TeacherAttendance = () => {
       ([studentId]) => !absentIds.has(studentId)
     );
 
+    let attendanceLookupPromise = null;
+
+    const resolveAttendanceRecordId = async (
+      studentId,
+      record
+    ) => {
+      const directId = getAttendanceRecordId(record);
+
+      if (directId) {
+        return directId;
+      }
+
+      if (!attendanceLookupPromise) {
+        attendanceLookupPromise = fetchAttendance({
+          classId: selectedClassId,
+          date: selectedDate,
+          page: 1,
+          limit: 500,
+        });
+      }
+
+      const lookupResponse = await attendanceLookupPromise;
+
+      if (isFailedResponse(lookupResponse)) {
+        throw new Error(
+          getErrorMessage(
+            lookupResponse,
+            "تعذر تحديد سجل الغياب المطلوب حذفه"
+          )
+        );
+      }
+
+      const matchingRecord = extractCollection(
+        lookupResponse,
+        ["attendanceRecords"]
+      ).find((item) => {
+        const itemStudentId =
+          getAttendanceStudentId(item);
+        const itemClassId =
+          getAttendanceClassId(item);
+        const itemDate =
+          getAttendanceDate(item);
+
+        return (
+          itemStudentId === studentId &&
+          (!itemClassId || itemClassId === selectedClassId) &&
+          (!itemDate || itemDate === selectedDate)
+        );
+      });
+
+      return getAttendanceRecordId(matchingRecord);
+    };
+
     setSaving(true);
 
     try {
@@ -936,9 +1012,18 @@ const TeacherAttendance = () => {
 
           return response;
         }),
-        ...toDelete.map(async ([, record]) => {
-          const recordId = getAttendanceRecordId(record);
-          if (!recordId) return null;
+        ...toDelete.map(async ([studentId, record]) => {
+          const recordId =
+            await resolveAttendanceRecordId(
+              studentId,
+              record
+            );
+
+          if (!recordId) {
+            throw new Error(
+              "تعذر تحديد سجل الغياب المطلوب حذفه"
+            );
+          }
 
           const response = await deleteAttendance(recordId);
 

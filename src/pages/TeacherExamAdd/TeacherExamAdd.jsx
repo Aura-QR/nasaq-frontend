@@ -138,6 +138,26 @@ const isFailedResponse = (response) =>
   response?.status === false ||
   Number(response?.statusCode) >= 400;
 
+const getCriteriaWeightForType = (
+  criteria,
+  type
+) => {
+  if (!criteria) return 0;
+
+  const fieldMap = {
+    final: "final",
+    assignment: "assignments",
+    activity: "activities",
+    quiz: "quizzes",
+  };
+
+  const field = fieldMap[type];
+
+  return Number(
+    field ? criteria?.[field] : 0
+  ) || 0;
+};
+
 const getSubjectEntity = (offering) =>
   offering?.subjectId ||
   offering?.subject ||
@@ -345,6 +365,26 @@ const TeacherExamAdd = () => {
   const [questions, setQuestions] = useState([createQuestion()]);
   const [validationErrors, setValidationErrors] = useState({});
 
+  const [
+    criteriaLoading,
+    setCriteriaLoading,
+  ] = useState(false);
+
+  const [
+    selectedCriteria,
+    setSelectedCriteria,
+  ] = useState(null);
+
+  const [
+    criteriaChecked,
+    setCriteriaChecked,
+  ] = useState(false);
+
+  const [
+    criteriaError,
+    setCriteriaError,
+  ] = useState("");
+
   const loadOptions = useCallback(async () => {
     setLoadingOptions(true);
     setOptionsError("");
@@ -476,6 +516,97 @@ const TeacherExamAdd = () => {
     [offerings, subjectOfferingId]
   );
 
+  useEffect(() => {
+    let active = true;
+
+    const loadCriteria = async () => {
+      setSelectedCriteria(null);
+      setCriteriaError("");
+      setCriteriaChecked(false);
+
+      if (!subjectOfferingId) {
+        setCriteriaLoading(false);
+        return;
+      }
+
+      setCriteriaLoading(true);
+
+      try {
+        const response =
+          await api.get(
+            "/gradesCriteria",
+            {
+              params: {
+                subjectOfferingId,
+                page: 1,
+                limit: 100,
+              },
+            }
+          );
+
+        if (!active) return;
+
+        const rows =
+          extractCollection(
+            response,
+            [
+              "gradesCriteria",
+              "criteria",
+            ]
+          );
+
+        setSelectedCriteria(
+          rows[0] || null
+        );
+
+        setCriteriaChecked(true);
+      } catch (error) {
+        if (!active) return;
+
+        setSelectedCriteria(null);
+        setCriteriaChecked(false);
+        setCriteriaError(
+          getErrorMessage(
+            error,
+            "تعذر التحقق من توزيع درجات المادة"
+          )
+        );
+      } finally {
+        if (active) {
+          setCriteriaLoading(false);
+        }
+      }
+    };
+
+    loadCriteria();
+
+    return () => {
+      active = false;
+    };
+  }, [subjectOfferingId]);
+
+  const hasGradesCriteria =
+    Boolean(selectedCriteria);
+
+  const enabledExamTypes =
+    useMemo(
+      () =>
+        new Set(
+          EXAM_TYPES
+            .filter(
+              (type) =>
+                getCriteriaWeightForType(
+                  selectedCriteria,
+                  type.value
+                ) > 0
+            )
+            .map(
+              (type) => type.value
+            )
+        ),
+      [selectedCriteria]
+    );
+
   const availableClasses = useMemo(() => {
     if (!subjectOfferingId) return classes;
 
@@ -502,6 +633,25 @@ const TeacherExamAdd = () => {
     const allowedIds = new Set(availableClasses.map(normalizeId));
     setClassIds((previous) => previous.filter((id) => allowedIds.has(id)));
   }, [availableClasses]);
+
+  useEffect(() => {
+    if (
+      !criteriaChecked ||
+      !selectedCriteria ||
+      !examType
+    ) {
+      return;
+    }
+
+    if (!enabledExamTypes.has(examType)) {
+      setExamType("");
+    }
+  }, [
+    criteriaChecked,
+    selectedCriteria,
+    enabledExamTypes,
+    examType,
+  ]);
 
   const updateQuestion = (questionIndex, patch) => {
     setQuestions((previous) =>
@@ -571,6 +721,22 @@ const TeacherExamAdd = () => {
 
     if (!subjectOfferingId) {
       errors.subjectOfferingId = "اختر المادة الدراسية";
+    } else if (
+      criteriaChecked &&
+      !hasGradesCriteria
+    ) {
+      errors.subjectOfferingId =
+        "لا يوجد توزيع درجات لهذه المادة";
+    }
+
+    if (
+      criteriaChecked &&
+      hasGradesCriteria &&
+      examType &&
+      !enabledExamTypes.has(examType)
+    ) {
+      errors.examType =
+        "نوع الاختبار غير مفعّل في توزيع درجات المادة";
     }
 
     if (!classIds.length) {
@@ -629,6 +795,16 @@ const TeacherExamAdd = () => {
 
     if (!validate()) {
       toast.error("راجع البيانات المطلوبة قبل الحفظ");
+      return;
+    }
+
+    if (
+      criteriaChecked &&
+      !hasGradesCriteria
+    ) {
+      toast.error(
+        "لا يوجد توزيع درجات لهذه المادة. يجب على إدارة المدرسة تحديد توزيع الدرجات قبل إنشاء الامتحانات."
+      );
       return;
     }
 
@@ -819,7 +995,14 @@ const TeacherExamAdd = () => {
 
               <Button
                 type="submit"
-                disabled={saving || loadingOptions || !offerings.length}
+                disabled={
+                  saving ||
+                  loadingOptions ||
+                  criteriaLoading ||
+                  !offerings.length ||
+                  (criteriaChecked &&
+                    !hasGradesCriteria)
+                }
                 variant="contained"
                 startIcon={
                   saving ? (
@@ -928,6 +1111,48 @@ const TeacherExamAdd = () => {
                     ))}
                   </TextField>
 
+                  {subjectOfferingId &&
+                    criteriaLoading && (
+                    <Alert
+                      severity="info"
+                      sx={{
+                        borderRadius: "12px",
+                        fontSize: "9.5px",
+                      }}
+                    >
+                      جارٍ التحقق من توزيع درجات المادة...
+                    </Alert>
+                  )}
+
+                  {subjectOfferingId &&
+                    !criteriaLoading &&
+                    criteriaChecked &&
+                    !hasGradesCriteria && (
+                    <Alert
+                      severity="warning"
+                      sx={{
+                        borderRadius: "12px",
+                        fontSize: "9.5px",
+                      }}
+                    >
+                      لا يوجد توزيع درجات لهذه المادة. يجب على إدارة المدرسة تحديد توزيع الدرجات قبل إنشاء الامتحانات.
+                    </Alert>
+                  )}
+
+                  {subjectOfferingId &&
+                    !criteriaLoading &&
+                    criteriaError && (
+                    <Alert
+                      severity="warning"
+                      sx={{
+                        borderRadius: "12px",
+                        fontSize: "9.5px",
+                      }}
+                    >
+                      {criteriaError}
+                    </Alert>
+                  )}
+
                   <TextField
                     select
                     label="نوع الاختبار"
@@ -937,11 +1162,27 @@ const TeacherExamAdd = () => {
                     helperText={validationErrors.examType}
                     sx={fieldSx}
                   >
-                    {EXAM_TYPES.map((type) => (
-                      <MenuItem key={type.value} value={type.value}>
-                        {type.label}
-                      </MenuItem>
-                    ))}
+                    {EXAM_TYPES.map((type) => {
+                      const disabled =
+                        criteriaChecked &&
+                        hasGradesCriteria &&
+                        !enabledExamTypes.has(
+                          type.value
+                        );
+
+                      return (
+                        <MenuItem
+                          key={type.value}
+                          value={type.value}
+                          disabled={disabled}
+                        >
+                          {type.label}
+                          {disabled
+                            ? " — غير مفعّل"
+                            : ""}
+                        </MenuItem>
+                      );
+                    })}
                   </TextField>
 
                   <Box
@@ -1389,7 +1630,14 @@ const TeacherExamAdd = () => {
             </Button>
             <Button
               type="submit"
-              disabled={saving || loadingOptions || !offerings.length}
+              disabled={
+                  saving ||
+                  loadingOptions ||
+                  criteriaLoading ||
+                  !offerings.length ||
+                  (criteriaChecked &&
+                    !hasGradesCriteria)
+                }
               variant="contained"
               startIcon={
                 saving ? <CircularProgress size={15} color="inherit" /> : <SaveRounded />

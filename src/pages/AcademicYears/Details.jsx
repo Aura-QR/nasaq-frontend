@@ -3,7 +3,6 @@ import {
   ArrowBackRounded,
   CalendarMonthRounded,
   CheckCircleRounded,
-  DeleteOutlineRounded,
   EditRounded,
   RefreshRounded,
   ScheduleRounded,
@@ -49,7 +48,6 @@ import AcademicYearForm from "@/components/AcademicYears/AcademicYearForm";
 import TermsManager from "@/components/AcademicYears/TermsManager";
 
 import {
-  deleteAcademicYear,
   fetchAcademicYearById,
   fetchAcademicYears,
   updateAcademicYear,
@@ -316,11 +314,6 @@ const AcademicYearDetails =
       setEditOpen,
     ] = useState(false);
 
-    const [
-      deleteOpen,
-      setDeleteOpen,
-    ] = useState(false);
-
     const {
       register,
       handleSubmit,
@@ -514,45 +507,6 @@ const AcademicYearDetails =
         load({
           force: true,
         });
-      };
-
-    const handleDelete =
-      async () => {
-        setActionLoading(
-          true
-        );
-
-        const response =
-          await deleteAcademicYear(
-            id
-          );
-
-        if (
-          response?.status ===
-            false
-        ) {
-          toast.error(
-            response?.message ||
-            "تعذر حذف السنة الدراسية"
-          );
-
-          setActionLoading(
-            false
-          );
-
-          return;
-        }
-
-        toast.success(
-          "تم حذف السنة الدراسية بنجاح"
-        );
-
-        navigate(
-          "/school/academic-years",
-          {
-            replace: true,
-          }
-        );
       };
 
     if (loading) {
@@ -909,35 +863,6 @@ const AcademicYearDetails =
                   تعديل البيانات
                 </Button>
 
-                <Button
-                  type="button"
-                  variant="outlined"
-                  color="error"
-                  startIcon={
-                    <DeleteOutlineRounded />
-                  }
-                  onClick={() =>
-                    setDeleteOpen(
-                      true
-                    )
-                  }
-                  sx={{
-                    minHeight: 42,
-
-                    borderRadius:
-                      "12px",
-
-                    fontWeight: 800,
-
-                    "& .MuiButton-startIcon":
-                      {
-                        ml: 0.65,
-                        mr: 0,
-                      },
-                  }}
-                >
-                  حذف السنة
-                </Button>
               </Stack>
             </Stack>
           </Paper>
@@ -1165,111 +1090,7 @@ const AcademicYearDetails =
             </DialogContent>
           </Dialog>
 
-          <Dialog
-            open={
-              deleteOpen
-            }
-            onClose={
-              actionLoading
-                ? undefined
-                : () =>
-                    setDeleteOpen(
-                      false
-                    )
-            }
-            fullWidth
-            maxWidth="xs"
-            PaperProps={{
-              sx: {
-                borderRadius:
-                  "18px",
-              },
-            }}
-          >
-            <DialogTitle
-              sx={{
-                color:
-                  "#122f4d",
 
-                fontWeight: 800,
-              }}
-            >
-              حذف السنة الدراسية
-            </DialogTitle>
-
-            <DialogContent
-              sx={{
-                pt:
-                  "16px !important",
-              }}
-            >
-              <Typography
-                sx={{
-                  color:
-                    "#193754",
-
-                  fontSize:
-                    "11px",
-
-                  lineHeight: 1.9,
-                }}
-              >
-                هل تريد حذف السنة "{year?.name}"؟ قد يرفض الخادم الحذف إذا كانت مرتبطة بسجلات أكاديمية.
-              </Typography>
-
-              <Stack
-                direction="row"
-                spacing={0.8}
-                sx={{
-                  mt: 2,
-                }}
-              >
-                <Button
-                  type="button"
-                  variant="outlined"
-                  disabled={
-                    actionLoading
-                  }
-                  onClick={() =>
-                    setDeleteOpen(
-                      false
-                    )
-                  }
-                  sx={{
-                    borderRadius:
-                      "10px",
-                  }}
-                >
-                  إلغاء
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="contained"
-                  color="error"
-                  disabled={
-                    actionLoading
-                  }
-                  onClick={
-                    handleDelete
-                  }
-                  sx={{
-                    borderRadius:
-                      "10px",
-                  }}
-                >
-                  {actionLoading ? (
-                    <CircularProgress
-                      size={16}
-                      color="inherit"
-                    />
-                  ) : (
-                    "حذف السنة"
-                  )}
-                </Button>
-              </Stack>
-            </DialogContent>
-          </Dialog>
         </Box>
       </Container>
     );

@@ -488,13 +488,10 @@ const SubjectOfferings = () => {
   const fetchTermsForYear = useCallback(async (yearId) => {
     if (!yearId) return [];
 
-    const response = await fetchWithFallback(
-      [
-        () => api.get(`/terms/by-year/${yearId}`),
-        () => api.get("/terms", { params: { academicYearId: yearId } }),
-      ],
-      "تعذر تحميل الترمات"
-    );
+    const response =
+      await api.get(
+        `/terms/by-year/${yearId}`
+      );
 
     return normalizeCollection(
       extractList(response?.data),

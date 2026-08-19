@@ -2,10 +2,8 @@ import {
   Box,
   Button,
   Chip,
-  Collapse,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from "@mui/material";
 
@@ -39,7 +37,6 @@ import SelectFilter from "@/components/Filters/SelectFilter";
 import PaginationControls from "@/components/Pagination";
 
 import { useExams } from "@/utils/hooks/apis/useExams";
-import { useTeachers } from "@/utils/hooks/apis/useTeachers";
 import usePermissions from "@/utils/hooks/usePermissions";
 
 import { deleteExam, fetchSingleExam } from "@/APIs/school/exams";
@@ -54,7 +51,6 @@ import MCQExams from "@/utils/constants/MCQExams";
 import SchoolIcon from "@mui/icons-material/School";
 import SubjectIcon from "@mui/icons-material/Subject";
 import TaskIcon from "@mui/icons-material/Task";
-import Person2Icon from "@mui/icons-material/Person2";
 import GradeIcon from "@mui/icons-material/Grade";
 
 const TABLE_HEADERS = [
@@ -592,37 +588,9 @@ const List = () => {
   ] = useState("");
 
   const [
-    createdBy,
-    setCreatedBy,
-  ] = useState("");
-
-  const [grade, setGrade] =
-    useState("");
-
-  const [
     gradesCriteriaId,
     setGradesCriteriaId,
   ] = useState("");
-
-  const [
-    startDate,
-    setStartDate,
-  ] = useState("");
-
-  const [
-    endDate,
-    setEndDate,
-  ] = useState("");
-
-  const [
-    duration,
-    setDuration,
-  ] = useState("");
-
-  const [
-    showAdvancedFilters,
-    setShowAdvancedFilters,
-  ] = useState(false);
 
   const [limit, setLimit] =
     useState(10);
@@ -678,38 +646,19 @@ const List = () => {
     () => ({
       page,
       limit,
+
+      // Supported GET /exams filters only.
       subjectOfferingId:
         subjectOfferingId || undefined,
 
-      // The schema field is classIds, not classId.
-      // We send the selected id using the exact API key.
       classIds:
         classFilter || undefined,
 
       examType:
         examType || undefined,
 
-      createdBy:
-        createdBy || undefined,
-
-      grade:
-        grade === ""
-          ? undefined
-          : Number(grade),
-
       gradesCriteriaId:
         gradesCriteriaId || undefined,
-
-      startDate:
-        startDate || undefined,
-
-      endDate:
-        endDate || undefined,
-
-      duration:
-        duration === ""
-          ? undefined
-          : Number(duration),
     }),
     [
       page,
@@ -717,12 +666,7 @@ const List = () => {
       subjectOfferingId,
       classFilter,
       examType,
-      createdBy,
-      grade,
       gradesCriteriaId,
-      startDate,
-      endDate,
-      duration,
     ]
   );
 
@@ -731,14 +675,6 @@ const List = () => {
     loading,
     pagination,
   } = useExams(filters);
-
-  const {
-    teachers = [],
-    loading: loadingTeachers,
-  } = useTeachers({
-    page: 1,
-    limit: 1000,
-  });
 
   const academicYearMap =
     useMemo(
@@ -1105,12 +1041,7 @@ const List = () => {
     subjectOfferingId,
     classFilter,
     examType,
-    createdBy,
-    grade,
     gradesCriteriaId,
-    startDate,
-    endDate,
-    duration,
   ]);
 
   const currentPagination =
@@ -1121,12 +1052,7 @@ const List = () => {
     subjectOfferingId,
     classFilter,
     examType,
-    createdBy,
-    grade,
     gradesCriteriaId,
-    startDate,
-    endDate,
-    duration,
   ].filter(
     (value) =>
       value !== "" &&
@@ -1163,55 +1089,6 @@ const List = () => {
     ]
   );
 
-  const creatorOptions =
-    useMemo(() => {
-      const map = new Map();
-
-      getArray(teachers).forEach(
-        (teacherItem) => {
-          const id =
-            normalizeId(
-              teacherItem
-            );
-
-          if (!id) return;
-
-          map.set(id, {
-            value: id,
-            label:
-              teacherItem?.name ||
-              teacherItem?.username ||
-              teacherItem?.email ||
-              id,
-          });
-        }
-      );
-
-      items.forEach((item) => {
-        if (
-          item.createdById &&
-          !map.has(
-            item.createdById
-          )
-        ) {
-          map.set(
-            item.createdById,
-            {
-              value:
-                item.createdById,
-              label:
-                item.createdBy ||
-                item.createdById,
-            }
-          );
-        }
-      });
-
-      return Array.from(
-        map.values()
-      );
-    }, [teachers, items]);
-
   const csvData = useMemo(
     () =>
       items.map((item) => ({
@@ -1240,12 +1117,7 @@ const List = () => {
     setSubjectOfferingId("");
     setClassFilter("");
     setExamType("");
-    setCreatedBy("");
-    setGrade("");
     setGradesCriteriaId("");
-    setStartDate("");
-    setEndDate("");
-    setDuration("");
     setPage(1);
   };
 
@@ -1757,42 +1629,6 @@ const List = () => {
             >
               <Button
                 type="button"
-                onClick={() =>
-                  setShowAdvancedFilters(
-                    (value) => !value
-                  )
-                }
-                variant="text"
-                startIcon={
-                  <TuneRounded />
-                }
-                sx={{
-                  minHeight: 32,
-                  px: 1,
-                  color:
-                    "var(--color-navy)",
-                  backgroundColor:
-                    showAdvancedFilters
-                      ? "rgba(36,74,112,0.09)"
-                      : "rgba(36,74,112,0.045)",
-                  borderRadius: "9px",
-                  fontSize: "8px",
-                  fontWeight: 800,
-                  textTransform: "none",
-                  "& .MuiButton-startIcon":
-                    {
-                      marginLeft: "4px",
-                      marginRight: 0,
-                    },
-                }}
-              >
-                {showAdvancedFilters
-                  ? "إخفاء المتقدم"
-                  : "فلاتر متقدمة"}
-              </Button>
-
-              <Button
-                type="button"
                 disabled={
                   activeFiltersCount ===
                   0
@@ -1825,7 +1661,7 @@ const List = () => {
             </Stack>
           </Stack>
 
-          {/* Primary API fields */}
+          {/* Supported API filters */}
           <Box
             sx={{
               display: "grid",
@@ -1885,119 +1721,25 @@ const List = () => {
             />
 
             <SelectFilter
-              value={createdBy}
-              onChange={setCreatedBy}
-              label="أنشأه"
-              icon={Person2Icon}
-              allLabel="كل المعلمين"
-              disabled={
-                loadingTeachers
+              value={
+                gradesCriteriaId
               }
-              options={creatorOptions}
+              onChange={
+                setGradesCriteriaId
+              }
+              label="معيار الدرجات"
+              icon={GradeIcon}
+              allLabel="كل المعايير"
+              disabled={
+                loadingFilterOptions
+              }
+              options={
+                criteriaOptions
+              }
             />
           </Box>
 
-          <Collapse
-            in={showAdvancedFilters}
-            timeout="auto"
-            unmountOnExit
-          >
-            <Box
-              sx={{
-                mt: 0.9,
-                pt: 0.9,
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "1fr",
-                  sm:
-                    "repeat(2, minmax(0, 1fr))",
-                  lg:
-                    "repeat(5, minmax(0, 1fr))",
-                },
-                gap: 0.8,
-                borderTop:
-                  "1px solid rgba(36,74,112,0.07)",
-                minWidth: 0,
-                "& > *": {
-                  minWidth: 0,
-                },
-              }}
-            >
-              <TextField
-                type="date"
-                label="من تاريخ"
-                value={startDate}
-                onChange={(event) =>
-                  setStartDate(
-                    event.target.value
-                  )
-                }
-                InputLabelProps={{
-                  shrink: true,
-                }}
-              />
 
-              <TextField
-                type="date"
-                label="إلى تاريخ"
-                value={endDate}
-                onChange={(event) =>
-                  setEndDate(
-                    event.target.value
-                  )
-                }
-                InputLabelProps={{
-                  shrink: true,
-                }}
-              />
-
-              <TextField
-                type="number"
-                label="المدة بالدقائق"
-                value={duration}
-                onChange={(event) =>
-                  setDuration(
-                    event.target.value
-                  )
-                }
-                inputProps={{
-                  min: 1,
-                }}
-              />
-
-              <TextField
-                type="number"
-                label="الدرجة"
-                value={grade}
-                onChange={(event) =>
-                  setGrade(
-                    event.target.value
-                  )
-                }
-                inputProps={{
-                  min: 0,
-                }}
-              />
-
-              <SelectFilter
-                value={
-                  gradesCriteriaId
-                }
-                onChange={
-                  setGradesCriteriaId
-                }
-                label="معيار الدرجات"
-                icon={GradeIcon}
-                allLabel="كل المعايير"
-                disabled={
-                  loadingFilterOptions
-                }
-                options={
-                  criteriaOptions
-                }
-              />
-            </Box>
-          </Collapse>
         </Paper>
 
         <Paper

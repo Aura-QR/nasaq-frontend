@@ -7,8 +7,25 @@ const getErrorMessage = (
   fallback = "حدث خطأ ما"
 ) =>
   error?.response?.data?.message ||
+  error?.response?.data?.error ||
   error?.message ||
   fallback;
+
+const normalizeFailure = (
+  error,
+  fallback
+) => ({
+  status: false,
+  message: getErrorMessage(error, fallback),
+  statusCode: error?.response?.status,
+});
+
+const validationFailure = (
+  message
+) => ({
+  status: false,
+  message,
+});
 
 const isValidationError = (error) =>
   [400, 422].includes(
@@ -47,7 +64,7 @@ export const fetchProjects = async (
 
     return response.data;
   } catch (error) {
-    return getErrorMessage(
+    return normalizeFailure(
       error,
       "تعذر تحميل المشروعات"
     );
@@ -65,7 +82,7 @@ export const fetchTeacherProjects = async (
 
     return response.data;
   } catch (error) {
-    return getErrorMessage(
+    return normalizeFailure(
       error,
       "تعذر تحميل مشروعات المعلم"
     );
@@ -82,7 +99,7 @@ export const fetchSingleProject = async (
 
     return response.data;
   } catch (error) {
-    return getErrorMessage(
+    return normalizeFailure(
       error,
       "تعذر تحميل بيانات المشروع"
     );
@@ -98,7 +115,7 @@ export const addProject = async (data) => {
 
     return response.data;
   } catch (error) {
-    return getErrorMessage(
+    return normalizeFailure(
       error,
       "تعذر إضافة المشروع"
     );
@@ -117,7 +134,7 @@ export const editProject = async (
 
     return response.data;
   } catch (error) {
-    return getErrorMessage(
+    return normalizeFailure(
       error,
       "تعذر تعديل المشروع"
     );
@@ -132,7 +149,7 @@ export const deleteProject = async (id) => {
 
     return response.data;
   } catch (error) {
-    return getErrorMessage(
+    return normalizeFailure(
       error,
       "تعذر حذف المشروع"
     );
@@ -163,7 +180,7 @@ export const addFilesToProject = async (
 
     return response.data;
   } catch (error) {
-    return getErrorMessage(
+    return normalizeFailure(
       error,
       "تعذر رفع ملفات المشروع"
     );
@@ -183,7 +200,7 @@ export const removeFileFromProject = async (
 
     return response.data;
   } catch (error) {
-    return getErrorMessage(
+    return normalizeFailure(
       error,
       "تعذر حذف ملف المشروع"
     );
@@ -200,7 +217,7 @@ export const fetchAllProjectSubmissions =
 
       return response.data;
     } catch (error) {
-      return getErrorMessage(
+      return normalizeFailure(
         error,
         "تعذر تحميل تسليمات المشروعات"
       );
@@ -219,7 +236,7 @@ export const fetchProjectSubmissions = async (
 
     return response.data;
   } catch (error) {
-    return getErrorMessage(
+    return normalizeFailure(
       error,
       "تعذر تحميل تسليمات المشروع"
     );
@@ -238,7 +255,7 @@ export const downloadProjectSubmission = async (
 
     return response.data;
   } catch (error) {
-    return getErrorMessage(
+    return normalizeFailure(
       error,
       "تعذر تحميل ملفات التسليم"
     );
@@ -278,11 +295,15 @@ export const gradeSubmission = async (
         };
 
   if (!projectId || !studentId) {
-    return "بيانات المشروع أو الطالب غير مكتملة";
+    return validationFailure(
+      "بيانات المشروع أو الطالب غير مكتملة"
+    );
   }
 
   if (!Number.isFinite(normalized.grade)) {
-    return "درجة المشروع غير صالحة";
+    return validationFailure(
+      "درجة المشروع غير صالحة"
+    );
   }
 
   const endpoint =
@@ -360,7 +381,7 @@ export const gradeSubmission = async (
     }
   }
 
-  return getErrorMessage(
+  return normalizeFailure(
     lastError,
     "تعذر حفظ تقييم المشروع"
   );
