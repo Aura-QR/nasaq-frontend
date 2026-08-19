@@ -51,6 +51,7 @@ import {
 import { toast } from "react-toastify";
 
 import {
+  fetchExamResults,
   fetchExams,
   fetchSingleExam,
   gradeExamStudent,
@@ -338,6 +339,7 @@ const getStudentEmail = (result) => {
 
   return String(
     student?.email ||
+      result?.schoolEmail ||
       result?.studentEmail ||
       result?.email ||
       ""
@@ -365,23 +367,32 @@ const getResultScore = (result) => {
   return Number.isFinite(value) ? value : null;
 };
 
-const getTeacherNotes = (result) =>
-  String(
-    result?.teacherNotes ||
-      result?.notes ||
-      result?.feedback ||
-      result?.result?.teacherNotes ||
-      ""
-  ).trim();
-
 const getSubmittedAt = (result) =>
   result?.submittedAt ||
   result?.completedAt ||
   result?.finishedAt ||
   result?.gradedAt ||
+  result?.startedAt ||
   result?.result?.submittedAt ||
   result?.result?.completedAt ||
   null;
+
+const getAttemptStatusLabel = (result) => {
+  const dateLabel = formatDate(
+    getSubmittedAt(result),
+    true
+  );
+
+  if (result?.submitted === false) {
+    return `بدأ ولم يسلّم • ${dateLabel}`;
+  }
+
+  if (result?.submitted === true) {
+    return `تم التسليم • ${dateLabel}`;
+  }
+
+  return dateLabel;
+};
 
 const getAnswers = (result) => {
   const candidates = [
@@ -507,7 +518,7 @@ const StatCard = ({ icon, label, value, helper, tone = "navy" }) => {
         <Typography
           sx={{
             color: COLORS.muted,
-            fontSize: "13px",
+            fontSize: "9px",
             fontWeight: 800,
           }}
         >
@@ -515,9 +526,9 @@ const StatCard = ({ icon, label, value, helper, tone = "navy" }) => {
         </Typography>
         <Typography
           sx={{
-            mt: 0.35,
+            mt: 0.1,
             color: COLORS.navyDeep,
-            fontSize: { xs: "24px", sm: "28px", md: "32px" },
+            fontSize: "22px",
             lineHeight: 1.1,
             fontWeight: 900,
           }}
@@ -527,10 +538,9 @@ const StatCard = ({ icon, label, value, helper, tone = "navy" }) => {
         <Typography
           noWrap
           sx={{
-            mt: 0.45,
+            mt: 0.25,
             color: COLORS.muted,
-            fontSize: "12px",
-            fontWeight: 600,
+            fontSize: "8px",
           }}
         >
           {helper}
@@ -555,6 +565,7 @@ const TeacherExamGrading = () => {
   const [exams, setExams] = useState([]);
   const [selectedExamId, setSelectedExamId] = useState(requestedExamId);
   const [detailCache, setDetailCache] = useState({});
+  const [resultsCache, setResultsCache] = useState({});
   const [overrideMap, setOverrideMap] = useState({});
 
   const [loadingExams, setLoadingExams] = useState(true);
@@ -570,17 +581,21 @@ const TeacherExamGrading = () => {
   const [gradeTarget, setGradeTarget] = useState(null);
   const [gradeForm, setGradeForm] = useState({
     score: "",
-    notes: "",
   });
   const [savingGrade, setSavingGrade] = useState(false);
   const [gradeError, setGradeError] = useState("");
 
   const autoOpenedStudentRef = useRef("");
   const detailCacheRef = useRef({});
+  const resultsCacheRef = useRef({});
 
   useEffect(() => {
     detailCacheRef.current = detailCache;
   }, [detailCache]);
+
+  useEffect(() => {
+    resultsCacheRef.current = resultsCache;
+  }, [resultsCache]);
 
   const loadExams = useCallback(async ({ silent = false } = {}) => {
     silent ? setRefreshing(true) : setLoadingExams(true);
@@ -638,36 +653,92 @@ const TeacherExamGrading = () => {
   const loadExamDetail = useCallback(
     async (examId, { force = false } = {}) => {
       if (!examId) return;
-      if (!force && detailCacheRef.current[examId]) return;
+
+      const hasDetail =
+        Boolean(detailCacheRef.current[examId]);
+      const hasResults =
+        Boolean(resultsCacheRef.current[examId]);
+
+      if (
+        !force &&
+        hasDetail &&
+        hasResults
+      ) {
+        return;
+      }
 
       setLoadingDetail(true);
       setError("");
 
       try {
-        const response = await fetchSingleExam(examId);
+        const [
+          detailResult,
+          resultsResult,
+        ] = await Promise.allSettled([
+          fetchSingleExam(examId),
+          fetchExamResults(examId),
+        ]);
 
-        if (isFailedResponse(response)) {
-          setError(
-            getErrorMessage(
-              response,
-              "تعذر تحميل نتائج الاختبار"
-            )
-          );
-          return;
+        let nextError = "";
+
+        if (
+          detailResult.status === "fulfilled" &&
+          !isFailedResponse(detailResult.value)
+        ) {
+          const response = detailResult.value;
+
+          setDetailCache((current) => {
+            const next = {
+              ...current,
+              [examId]: response,
+            };
+            detailCacheRef.current = next;
+            return next;
+          });
+        } else {
+          nextError =
+            detailResult.status === "fulfilled"
+              ? getErrorMessage(
+                  detailResult.value,
+                  "تعذر تحميل تفاصيل الاختبار"
+                )
+              : detailResult.reason?.message ||
+                "تعذر تحميل تفاصيل الاختبار";
         }
 
-        setDetailCache((current) => {
-          const next = {
-            ...current,
-            [examId]: response,
-          };
-          detailCacheRef.current = next;
-          return next;
-        });
+        if (
+          resultsResult.status === "fulfilled" &&
+          !isFailedResponse(resultsResult.value)
+        ) {
+          const response = resultsResult.value;
+
+          setResultsCache((current) => {
+            const next = {
+              ...current,
+              [examId]: response,
+            };
+            resultsCacheRef.current = next;
+            return next;
+          });
+        } else {
+          nextError =
+            resultsResult.status === "fulfilled"
+              ? getErrorMessage(
+                  resultsResult.value,
+                  "تعذر تحميل نتائج الاختبار"
+                )
+              : resultsResult.reason?.message ||
+                "تعذر تحميل نتائج الاختبار";
+        }
+
+        if (nextError) {
+          setError(nextError);
+        }
       } catch (requestError) {
         setError(
           requestError?.response?.data?.message ||
-            "تعذر تحميل تفاصيل الاختبار"
+            requestError?.message ||
+            "تعذر تحميل بيانات الاختبار"
         );
       } finally {
         setLoadingDetail(false);
@@ -700,14 +771,32 @@ const TeacherExamGrading = () => {
     [exams, selectedExamId]
   );
 
-  const selectedResponse = detailCache[selectedExamId];
-  const selectedPayload = unwrapResponse(selectedResponse);
+  const selectedResponse =
+    detailCache[selectedExamId];
+
+  const selectedPayload =
+    unwrapResponse(selectedResponse);
+
   const selectedDetail =
-    selectedPayload?.exam || selectedPayload || selectedExam || null;
+    selectedPayload?.exam ||
+    selectedPayload ||
+    selectedExam ||
+    null;
+
+  const selectedResultsResponse =
+    resultsCache[selectedExamId];
+
+  const selectedResultsPayload =
+    unwrapResponse(
+      selectedResultsResponse
+    );
 
   const rawResults = useMemo(
-    () => extractExamResults(selectedResponse || selectedExam),
-    [selectedResponse, selectedExam]
+    () =>
+      extractExamResults(
+        selectedResultsResponse
+      ),
+    [selectedResultsResponse]
   );
 
   const results = useMemo(
@@ -721,7 +810,6 @@ const TeacherExamGrading = () => {
               ...result,
               achievedGrade: override.score,
               score: override.score,
-              teacherNotes: override.notes,
               dashboardOverridden: true,
             }
           : result;
@@ -777,17 +865,48 @@ const TeacherExamGrading = () => {
 
   const resultCounts = useMemo(() => {
     const graded = results.filter(
-      (result) => getResultScore(result) !== null
+      (result) =>
+        getResultScore(result) !== null
     ).length;
 
-    return {
-      total: results.length,
-      graded,
-      pending: Math.max(results.length - graded, 0),
-    };
-  }, [results]);
+    const startedRaw = Number(
+      selectedResultsPayload?.startedCount
+    );
 
-  const maxScore = getMaxScore(selectedDetail || selectedExam || {});
+    const enrolledRaw = Number(
+      selectedResultsPayload?.enrolledCount
+    );
+
+    const started = Number.isFinite(startedRaw)
+      ? startedRaw
+      : results.length;
+
+    const total = Number.isFinite(enrolledRaw)
+      ? enrolledRaw
+      : started;
+
+    return {
+      total,
+      started,
+      graded,
+      pending: Math.max(started - graded, 0),
+      notStarted: Math.max(total - started, 0),
+    };
+  }, [results, selectedResultsPayload]);
+
+  const resultsMaxScore = Number(
+    selectedResultsPayload?.totalGrade
+  );
+
+  const maxScore =
+    Number.isFinite(resultsMaxScore) &&
+    resultsMaxScore > 0
+      ? resultsMaxScore
+      : getMaxScore(
+          selectedDetail ||
+            selectedExam ||
+            {}
+        );
 
   useEffect(() => {
     if (
@@ -811,7 +930,6 @@ const TeacherExamGrading = () => {
         getResultScore(target) === null
           ? ""
           : String(getResultScore(target)),
-      notes: getTeacherNotes(target),
     });
   }, [requestedStudentId, selectedExamId, results]);
 
@@ -835,7 +953,6 @@ const TeacherExamGrading = () => {
         getResultScore(result) === null
           ? ""
           : String(getResultScore(result)),
-      notes: getTeacherNotes(result),
     });
   };
 
@@ -872,8 +989,7 @@ const TeacherExamGrading = () => {
         selectedExamId,
         studentId,
         {
-          score,
-          teacherNotes: gradeForm.notes,
+          achievedGrade: score,
         }
       );
 
@@ -888,7 +1004,6 @@ const TeacherExamGrading = () => {
         ...current,
         [`${selectedExamId}:${studentId}`]: {
           score,
-          notes: gradeForm.notes.trim(),
         },
       }));
 
@@ -1115,7 +1230,7 @@ const TeacherExamGrading = () => {
             icon={<AssignmentTurnedInRounded />}
             label="طلاب الاختبار المحدد"
             value={resultCounts.total}
-            helper="المحاولات التي أرجعها الباك"
+            helper={`${resultCounts.started} بدأوا الاختبار`}
             tone="gold"
           />
           <StatCard
@@ -1225,7 +1340,15 @@ const TeacherExamGrading = () => {
                 filteredExams.map((exam, index) => {
                   const examId = getExamId(exam);
                   const active = examId === selectedExamId;
-                  const embeddedResults = extractExamResults(exam).length;
+                  const cachedResultsPayload =
+                    unwrapResponse(
+                      resultsCache[examId]
+                    );
+                  const cachedStarted =
+                    Number(
+                      cachedResultsPayload
+                        ?.startedCount
+                    );
 
                   return (
                     <Button
@@ -1258,16 +1381,16 @@ const TeacherExamGrading = () => {
                         <Box sx={{ minWidth: 0 }}>
                           <Typography
                             noWrap
-                            sx={{ fontSize: "14px", fontWeight: 900 }}
+                            sx={{ fontSize: "10px", fontWeight: 900 }}
                           >
                             {getExamTitle(exam)}
                           </Typography>
                           <Typography
                             noWrap
                             sx={{
-                              mt: 0.3,
+                              mt: 0.2,
                               color: COLORS.muted,
-                              fontSize: "12px",
+                              fontSize: "8px",
                             }}
                           >
                             {getSubjectLabel(exam)}
@@ -1275,12 +1398,18 @@ const TeacherExamGrading = () => {
                         </Box>
 
                         <Chip
-                          label={`${embeddedResults} نتيجة`}
+                          label={
+                            Number.isFinite(
+                              cachedStarted
+                            )
+                              ? `${cachedStarted} بدأ`
+                              : "عرض النتائج"
+                          }
                           size="small"
                           sx={{
                             flexShrink: 0,
-                            height: 26,
-                            fontSize: "11.5px",
+                            height: 22,
+                            fontSize: "7.5px",
                             fontWeight: 900,
                           }}
                         />
@@ -1364,6 +1493,19 @@ const TeacherExamGrading = () => {
 
                 <Divider sx={{ my: 1 }} />
 
+                {resultCounts.notStarted > 0 && (
+                  <Alert
+                    severity="info"
+                    sx={{
+                      mb: 1,
+                      borderRadius: 2,
+                      fontSize: "9px",
+                    }}
+                  >
+                    {resultCounts.notStarted} طلاب لم يبدأوا الاختبار، ولا يظهرون في القائمة.
+                  </Alert>
+                )}
+
                 <Stack
                   direction={{ xs: "column", md: "row" }}
                   gap={0.8}
@@ -1426,45 +1568,52 @@ const TeacherExamGrading = () => {
                     </Stack>
                   </Box>
                 ) : !results.length ? (
-                  <Box sx={{ mt: 1 }}>
-                    <Alert
-                      severity="info"
-                      icon={<HelpOutlineRounded />}
-                      sx={{ borderRadius: 2, fontSize: "9px" }}
+                  <Box
+                    sx={{
+                      ...TEACHER_UI.emptyState,
+                      mt: 1,
+                      display: "grid",
+                      placeItems: "center",
+                      textAlign: "center",
+                    }}
+                  >
+                    <Stack
+                      alignItems="center"
+                      spacing={0.8}
                     >
-                      تفاصيل الاختبار الحالية لا تحتوي على قائمة محاولات أو نتائج الطلاب. مسار تعديل الدرجة موجود، لكن يلزم أن يعيد الباك النتائج داخل <b>GET /exams/:id</b> أو يضيف Endpoint مخصصًا لعرضها.
-                    </Alert>
+                      <Box
+                        sx={{
+                          width: 50,
+                          height: 50,
+                          display: "grid",
+                          placeItems: "center",
+                          color: COLORS.gold,
+                          backgroundColor:
+                            COLORS.goldSoft,
+                          borderRadius: 2,
+                        }}
+                      >
+                        <AssignmentTurnedInRounded />
+                      </Box>
 
-                    <Box
-                      sx={{
-                        ...TEACHER_UI.emptyState,
-                        display: "grid",
-                        placeItems: "center",
-                        textAlign: "center",
-                      }}
-                    >
-                      <Stack alignItems="center" spacing={0.8}>
-                        <Box
-                          sx={{
-                            width: 50,
-                            height: 50,
-                            display: "grid",
-                            placeItems: "center",
-                            color: COLORS.gold,
-                            backgroundColor: COLORS.goldSoft,
-                            borderRadius: 2,
-                          }}
-                        >
-                          <AssignmentTurnedInRounded />
-                        </Box>
-                        <Typography sx={{ fontSize: "13px", fontWeight: 900 }}>
-                          لا توجد نتائج طلاب متاحة
-                        </Typography>
-                        <Typography sx={{ color: COLORS.muted, fontSize: "8.5px" }}>
-                          بعد أن يعيد الباك المحاولات ستظهر تلقائيًا هنا.
-                        </Typography>
-                      </Stack>
-                    </Box>
+                      <Typography
+                        sx={{
+                          fontSize: "13px",
+                          fontWeight: 900,
+                        }}
+                      >
+                        لم يبدأ أي طالب الاختبار حتى الآن
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          color: COLORS.muted,
+                          fontSize: "8.5px",
+                        }}
+                      >
+                        الطلاب الذين لم يبدأوا لا يكون لهم صف داخل نتائج الاختبار.
+                      </Typography>
+                    </Stack>
                   </Box>
                 ) : !filteredResults.length ? (
                   <Box
@@ -1536,26 +1685,26 @@ const TeacherExamGrading = () => {
                           <Box sx={{ minWidth: 0 }}>
                             <Typography
                               noWrap
-                              sx={{ fontSize: "14.5px", fontWeight: 900 }}
+                              sx={{ fontSize: "10px", fontWeight: 900 }}
                             >
                               {getStudentName(result)}
                             </Typography>
                             {!!email && (
                               <Typography
                                 noWrap
-                                sx={{ mt: 0.3, color: COLORS.muted, fontSize: "12px" }}
+                                sx={{ mt: 0.15, color: COLORS.muted, fontSize: "7.5px" }}
                               >
                                 {email}
                               </Typography>
                             )}
                             <Typography
-                              sx={{ mt: 0.3, color: COLORS.muted, fontSize: "12px" }}
+                              sx={{ mt: 0.25, color: COLORS.muted, fontSize: "7.5px" }}
                             >
-                              {formatDate(getSubmittedAt(result), true)}
+                              {getAttemptStatusLabel(result)}
                             </Typography>
                           </Box>
 
-                          <Stack alignItems="flex-end" spacing={0.8}>
+                          <Stack alignItems="flex-end" spacing={0.45}>
                             <Chip
                               label={
                                 graded
@@ -1564,17 +1713,17 @@ const TeacherExamGrading = () => {
                               }
                               size="small"
                               sx={{
-                                height: 28,
+                                height: 22,
                                 color: graded ? COLORS.green : "#9B6810",
                                 backgroundColor: graded
                                   ? COLORS.greenSoft
                                   : COLORS.goldSoft,
-                                fontSize: "12px",
+                                fontSize: "8px",
                                 fontWeight: 900,
                               }}
                             />
 
-                            <Stack direction="row" spacing={0.6}>
+                            <Stack direction="row" spacing={0.35}>
                               <Tooltip title="عرض الإجابات">
                                 <span>
                                   <IconButton
@@ -1582,12 +1731,12 @@ const TeacherExamGrading = () => {
                                     disabled={!getAnswers(result).length}
                                     size="small"
                                     sx={{
-                                      width: 36,
-                                      height: 36,
+                                      width: 30,
+                                      height: 30,
                                       border: `1px solid ${COLORS.border}`,
                                     }}
                                   >
-                                    <VisibilityRounded sx={{ fontSize: 19 }} />
+                                    <VisibilityRounded sx={{ fontSize: 16 }} />
                                   </IconButton>
                                 </span>
                               </Tooltip>
@@ -1597,16 +1746,13 @@ const TeacherExamGrading = () => {
                                 startIcon={<GradingRounded />}
                                 sx={{
                                   ...TEACHER_UI.button,
-                                  minHeight: 36,
-                                  px: 1.8,
-                                  fontSize: "12.5px",
-                                  fontWeight: 800,
+                                  minHeight: 30,
                                   color: "white",
                                   backgroundColor: COLORS.navy,
                                   "&:hover": { backgroundColor: COLORS.navyDeep },
                                 }}
                               >
-                                {graded ? "تعديل الدرجة" : "رصد الدرجة"}
+                                {graded ? "تعديل" : "تصحيح"}
                               </Button>
                             </Stack>
                           </Stack>
@@ -1660,21 +1806,6 @@ const TeacherExamGrading = () => {
               fullWidth
               inputProps={{ min: 0, max: maxScore, step: "0.5" }}
               helperText={`القيمة المسموحة من 0 إلى ${maxScore}`}
-            />
-
-            <TextField
-              value={gradeForm.notes}
-              onChange={(event) =>
-                setGradeForm((current) => ({
-                  ...current,
-                  notes: event.target.value,
-                }))
-              }
-              label="ملاحظات المعلم"
-              multiline
-              minRows={3}
-              fullWidth
-              placeholder="اكتب ملاحظة مختصرة للطالب"
             />
           </Stack>
         </DialogContent>
