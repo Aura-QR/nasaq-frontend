@@ -52,6 +52,7 @@ import { toast } from "react-toastify";
 
 import {
   downloadProjectSubmission,
+  fetchAllProjectSubmissions,
   fetchProjectSubmissions,
   fetchTeacherProjects,
   gradeSubmission,
@@ -141,6 +142,38 @@ const isFailedResponse = (response) =>
 
 const getProjectId = (project) =>
   normalizeId(project);
+
+const getProjectOfferingId = (project) =>
+  normalizeId(
+    project?.subjectOfferingId ||
+      project?.subjectOffering
+  );
+
+const getProjectClassIds = (project) => {
+  const source = Array.isArray(project?.classIds)
+    ? project.classIds
+    : Array.isArray(project?.classes)
+      ? project.classes
+      : [
+          project?.classId ||
+            project?.class,
+        ];
+
+  return Array.from(
+    new Set(
+      source
+        .map((item) => normalizeId(item))
+        .filter(Boolean)
+    )
+  );
+};
+
+const getSubmissionProjectId = (submission) =>
+  normalizeId(
+    submission?.projectId ||
+      submission?.project ||
+      submission?.projectData
+  );
 
 const getStudentEntity = (submission) =>
   submission?.student ||
@@ -378,8 +411,8 @@ const StatCard = ({
       <Box sx={{ minWidth: 0 }}>
         <Typography
           sx={{
-            color: "#778594",
-            fontSize: "13px",
+            color: "#6d7d90",
+            fontSize: "10px",
             fontWeight: 800,
           }}
         >
@@ -389,7 +422,7 @@ const StatCard = ({
           sx={{
             mt: 0.35,
             color: "#122f4d",
-            fontSize: { xs: "24px", sm: "28px", md: "32px" },
+            fontSize: "24px",
             fontWeight: 900,
             lineHeight: 1.1,
           }}
@@ -397,12 +430,10 @@ const StatCard = ({
           {value}
         </Typography>
         <Typography
-          noWrap
           sx={{
             mt: 0.45,
-            color: "#95a1ae",
-            fontSize: "12px",
-            fontWeight: 600,
+            color: "#94a0af",
+            fontSize: "8px",
           }}
         >
           {helper}
@@ -543,40 +574,198 @@ const TeacherProjectGrading = () => {
           ["projects"]
         );
 
-        const settled =
+        const projectsById = new Map(
+          projectRows
+            .map((project) => [
+              getProjectId(project),
+              project,
+            ])
+            .filter(([projectId]) =>
+              Boolean(projectId)
+            )
+        );
+
+        const aggregateGroups = new Map();
+        const fallbackProjects = [];
+
+        projectRows.forEach((project) => {
+          const subjectOfferingId =
+            getProjectOfferingId(project);
+          const classIds =
+            getProjectClassIds(project);
+
+          if (
+            !subjectOfferingId ||
+            classIds.length === 0
+          ) {
+            fallbackProjects.push(project);
+            return;
+          }
+
+          classIds.forEach((classId) => {
+            const key =
+              `${subjectOfferingId}:${classId}`;
+
+            if (!aggregateGroups.has(key)) {
+              aggregateGroups.set(key, {
+                subjectOfferingId,
+                classId,
+                projects: [],
+              });
+            }
+
+            aggregateGroups
+              .get(key)
+              .projects.push(project);
+          });
+        });
+
+        const aggregateSettled =
           await Promise.allSettled(
-            projectRows.map(async (project) => {
-              const projectId =
-                getProjectId(project);
-
-              if (!projectId) return [];
-
+            Array.from(
+              aggregateGroups.values()
+            ).map(async (group) => {
               const response =
-                await fetchProjectSubmissions(
-                  projectId,
-                  { page: 1, limit: 500 }
-                );
+                await fetchAllProjectSubmissions({
+                  subjectOfferingId:
+                    group.subjectOfferingId,
+                  classId: group.classId,
+                });
 
               if (isFailedResponse(response)) {
                 return [];
               }
 
+              const groupProjectsById = new Map(
+                group.projects
+                  .map((project) => [
+                    getProjectId(project),
+                    project,
+                  ])
+                  .filter(([projectId]) =>
+                    Boolean(projectId)
+                  )
+              );
+
+              const onlyProject =
+                group.projects.length === 1
+                  ? group.projects[0]
+                  : null;
+
               return extractCollection(
                 response,
                 ["submissions"]
-              ).map((submission) => ({
-                ...submission,
-                dashboardProject: project,
-              }));
+              ).map((submission) => {
+                const submissionProjectId =
+                  getSubmissionProjectId(
+                    submission
+                  );
+
+                const project =
+                  (submissionProjectId &&
+                    (groupProjectsById.get(
+                      submissionProjectId
+                    ) ||
+                      projectsById.get(
+                        submissionProjectId
+                      ))) ||
+                  onlyProject ||
+                  null;
+
+                return {
+                  ...submission,
+                  dashboardProject: project,
+                };
+              });
             })
           );
 
-        const submissionRows = settled.flatMap(
-          (result) =>
-            result.status === "fulfilled"
-              ? result.value
-              : []
+        const fallbackSettled =
+          await Promise.allSettled(
+            fallbackProjects.map(
+              async (project) => {
+                const projectId =
+                  getProjectId(project);
+
+                if (!projectId) return [];
+
+                const response =
+                  await fetchProjectSubmissions(
+                    projectId,
+                    {
+                      page: 1,
+                      limit: 500,
+                    }
+                  );
+
+                if (
+                  isFailedResponse(response)
+                ) {
+                  return [];
+                }
+
+                return extractCollection(
+                  response,
+                  ["submissions"]
+                ).map((submission) => ({
+                  ...submission,
+                  dashboardProject: project,
+                }));
+              }
+            )
+          );
+
+        const rawSubmissionRows = [
+          ...aggregateSettled,
+          ...fallbackSettled,
+        ].flatMap((result) =>
+          result.status === "fulfilled"
+            ? result.value
+            : []
         );
+
+        const uniqueSubmissions =
+          new Map();
+
+        rawSubmissionRows.forEach(
+          (submission, index) => {
+            const projectId =
+              getProjectId(
+                submission.dashboardProject
+              ) ||
+              getSubmissionProjectId(
+                submission
+              );
+
+            const studentId =
+              getStudentId(submission);
+
+            const submissionId =
+              normalizeId(submission);
+
+            const key =
+              submissionId ||
+              `${projectId}:${studentId}:${index}`;
+
+            if (!uniqueSubmissions.has(key)) {
+              uniqueSubmissions.set(
+                key,
+                submission
+              );
+            }
+          }
+        );
+
+        const submissionRows =
+          Array.from(
+            uniqueSubmissions.values()
+          ).filter((submission) =>
+            Boolean(
+              getProjectId(
+                submission.dashboardProject
+              )
+            )
+          );
 
         setProjects(projectRows);
         setSubmissions(submissionRows);
@@ -897,7 +1086,7 @@ const TeacherProjectGrading = () => {
       dir="rtl"
       sx={{
         minHeight: "100vh",
-        py: { xs: 2, sm: 2.5, md: 3.5 },
+        p: { xs: 1.2, md: 2.5 },
         color: "#122f4d",
         background:
           "linear-gradient(180deg,#f6f3eb 0%,#f4f0e7 100%)",
@@ -905,16 +1094,14 @@ const TeacherProjectGrading = () => {
     >
       <Box
         sx={{
-          width: "100%",
-          maxWidth: "1680px",
+          width: "min(1500px,100%)",
           mx: "auto",
-          px: { xs: 2, sm: 3, md: 4, lg: 5 },
         }}
       >
         <Paper
           elevation={0}
           sx={{
-            p: { xs: 2.2, md: 3 },
+            p: { xs: 1.5, md: 2.2 },
             overflow: "hidden",
             position: "relative",
             color: "white",
@@ -924,11 +1111,11 @@ const TeacherProjectGrading = () => {
             boxShadow:
               "0 18px 44px rgba(18,47,77,.16)",
             "&::after": {
-              content: '""',
+              content: '\"\"',
               position: "absolute",
               inset: "auto -60px -100px auto",
-              width: 320,
-              height: 320,
+              width: 260,
+              height: 260,
               borderRadius: "50%",
               border:
                 "1px solid rgba(255,255,255,.08)",
@@ -945,12 +1132,12 @@ const TeacherProjectGrading = () => {
             <Stack
               direction="row"
               alignItems="center"
-              gap={1.5}
+              gap={1.2}
             >
               <Box
                 sx={{
-                  width: { xs: 52, md: 62 },
-                  height: { xs: 46, md: 54 },
+                  width: 64,
+                  height: 50,
                   p: 0.7,
                   display: "grid",
                   placeItems: "center",
@@ -977,15 +1164,12 @@ const TeacherProjectGrading = () => {
                   size="small"
                   sx={{
                     mb: 0.7,
-                    height: 27,
                     color: "#ffe19b",
                     backgroundColor:
                       "rgba(255,255,255,.1)",
-                    fontSize: "12px",
                     fontWeight: 800,
                     "& .MuiChip-icon": {
                       color: "inherit",
-                      fontSize: 16,
                     },
                   }}
                 />
@@ -1004,9 +1188,9 @@ const TeacherProjectGrading = () => {
                 </Typography>
                 <Typography
                   sx={{
-                    mt: 0.45,
-                    color: "rgba(255,255,255,.80)",
-                    fontSize: { xs: "12.5px", md: "14px" },
+                    mt: 0.35,
+                    color: "rgba(255,255,255,.72)",
+                    fontSize: "10px",
                   }}
                 >
                   راجع ملفات الطلاب، أضف الدرجة، وسجّل ملاحظاتك من مكان واحد.
@@ -1016,7 +1200,7 @@ const TeacherProjectGrading = () => {
 
             <Stack
               direction="row"
-              gap={1}
+              gap={0.8}
               flexWrap="wrap"
             >
               <Button
