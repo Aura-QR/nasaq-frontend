@@ -117,7 +117,7 @@ const AdditionalFeesAddPage = () => {
     defaultValues: {
       targetType: "all",
       targetId: "",
-      targetAcademicYear: "",
+      targetAcademicYearId: "",
     },
   });
 
@@ -190,19 +190,27 @@ const AdditionalFeesAddPage = () => {
     );
 
   /*
-   * Additional Fees API expects targetAcademicYear as a string,
-   * so we show the academic years from the backend but submit year.name.
+   * Additional Fees API expects the academic year's Mongo ObjectId
+   * in targetId. The visible label remains the academic year name.
    */
   const academicYearOptions =
     useMemo(
       () =>
-        academicYears.map((year) => ({
-          value: year.name,
-          label:
-            year.status === "active"
-              ? `${year.name} - الحالية`
-              : year.name,
-        })),
+        academicYears
+          .map((year) => ({
+            value:
+              year?._id ||
+              year?.id ||
+              "",
+            label:
+              year?.status === "active"
+                ? `${year?.name || "سنة دراسية"} - الحالية`
+                : year?.name || "سنة دراسية",
+          }))
+          .filter(
+            (year) =>
+              Boolean(year.value)
+          ),
       [academicYears]
     );
 
@@ -248,7 +256,7 @@ const AdditionalFeesAddPage = () => {
     if (
       formData.targetType ===
         "academicYear" &&
-      !formData.targetAcademicYear
+      !formData.targetAcademicYearId
     ) {
       toast.error(
         "اختر السنة الدراسية"
@@ -280,8 +288,8 @@ const AdditionalFeesAddPage = () => {
       formData.targetType ===
       "academicYear"
     ) {
-      payload.targetAcademicYear =
-        formData.targetAcademicYear;
+      payload.targetId =
+        formData.targetAcademicYearId;
     }
 
     setLoading(true);
@@ -605,7 +613,7 @@ const AdditionalFeesAddPage = () => {
                   </InputLabel>
 
                   <Controller
-                    name="targetAcademicYear"
+                    name="targetAcademicYearId"
                     control={
                       control
                     }
