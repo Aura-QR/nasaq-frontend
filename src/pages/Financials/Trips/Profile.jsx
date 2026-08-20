@@ -1,13 +1,49 @@
-﻿import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Grid, Paper, TextField, Typography } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+﻿import {
+  DeleteOutlineRounded,
+  LuggageRounded,
+  PaymentsRounded,
+  ReceiptLongRounded,
+  UndoRounded,
+} from "@mui/icons-material";
+
+import {
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import { useForm } from "react-hook-form";
-import { useNavigate, useParams } from "react-router-dom";
+import {
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import { toast } from "react-toastify";
-import { deleteTrip, payTripInstallment, refundTripInstallment } from "@/APIs/financials/trips";
+
+import {
+  deleteTrip,
+  payTripInstallment,
+  refundTripInstallment,
+} from "@/APIs/financials/trips";
+
 import Back from "@/components/Back/Back";
 import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
 import Loading from "@/components/Loading";
+
 import { useTrip } from "@/utils/hooks/apis/financials/useTrip";
 import usePermissions from "@/utils/hooks/usePermissions";
 
@@ -23,154 +59,404 @@ const installmentStatusMap = {
   pending: "قيد الانتظار",
 };
 
-const formatMoney = (value) => `${Number(value || 0)} ريال`;
+const cardSx = {
+  border: "1px solid rgba(36,74,112,.08)",
+  borderRadius: "18px",
+  bgcolor: "rgba(255,255,255,.96)",
+  boxShadow: "0 8px 22px rgba(18,47,77,.05)",
+};
+
+const formatMoney = (value) =>
+  `${Number(value || 0)} ريال`;
 
 const formatDate = (value) => {
   if (!value) return "—";
-  return new Date(value).toLocaleDateString("en-GB");
+
+  return new Date(
+    value
+  ).toLocaleDateString("en-GB");
 };
 
+const SummaryCard = ({
+  label,
+  value,
+  icon,
+}) => (
+  <Paper
+    elevation={0}
+    sx={{
+      ...cardSx,
+      p: 1.35,
+      minHeight: 82,
+      display: "flex",
+      alignItems: "center",
+      gap: 1,
+    }}
+  >
+    <Box
+      sx={{
+        width: 42,
+        height: 42,
+        flexShrink: 0,
+        display: "grid",
+        placeItems: "center",
+        color:
+          "var(--color-gold-dark)",
+        bgcolor:
+          "var(--color-gold-soft)",
+        border:
+          "1px solid rgba(211,164,79,.20)",
+        borderRadius: "13px",
+        "& svg": {
+          fontSize: 21,
+        },
+      }}
+    >
+      {icon}
+    </Box>
+
+    <Box>
+      <Typography
+        sx={{
+          color:
+            "var(--color-muted)",
+          fontSize: 9.5,
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </Typography>
+
+      <Typography
+        sx={{
+          mt: 0.15,
+          color:
+            "var(--color-navy-deep)",
+          fontSize: 17,
+          fontWeight: 900,
+        }}
+      >
+        {value}
+      </Typography>
+    </Box>
+  </Paper>
+);
+
 const TripProfilePage = () => {
-  const { studentId, tripId } = useParams();
+  const { studentId, tripId } =
+    useParams();
+
   const navigate = useNavigate();
-  const permissions = usePermissions("financial");
-  const { trip, loading, refetch } = useTrip(studentId, tripId);
 
-  const [payOpen, setPayOpen] = useState(false);
-  const [refundOpen, setRefundOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [selectedInstallment, setSelectedInstallment] = useState(null);
-  const [actionLoading, setActionLoading] = useState(false);
+  const permissions =
+    usePermissions("financial");
 
-  const installments = useMemo(() => {
-    return (trip?.installments || []).map((item) => ({
-      id: item?._id || item?.installmentNumber,
-      installmentNumber: item?.installmentNumber,
-      amountRaw: Number(item?.amount || 0),
-      paidAmountRaw: Number(item?.paidAmount || 0),
-      remainingRaw: Math.max(Number(item?.amount || 0) - Number(item?.paidAmount || 0), 0),
-      amount: formatMoney(item?.amount),
-      paidAmount: formatMoney(item?.paidAmount),
-      dueDate: formatDate(item?.dueDate),
-      paymentDate:
-        item?.payments?.length > 0
-          ? formatDate(item?.payments[item?.payments?.length - 1]?.paidAt)
-          : "—",
-      statusRaw: item?.status,
-      status: installmentStatusMap[item?.status] || "قيد الانتظار",
-    }));
-  }, [trip?.installments]);
+  const {
+    trip,
+    loading,
+    refetch,
+  } = useTrip(
+    studentId,
+    tripId
+  );
 
-  const handleOpenPay = (installment) => {
-    setSelectedInstallment(installment);
+  const [payOpen, setPayOpen] =
+    useState(false);
+
+  const [
+    refundOpen,
+    setRefundOpen,
+  ] = useState(false);
+
+  const [
+    deleteOpen,
+    setDeleteOpen,
+  ] = useState(false);
+
+  const [
+    selectedInstallment,
+    setSelectedInstallment,
+  ] = useState(null);
+
+  const [
+    actionLoading,
+    setActionLoading,
+  ] = useState(false);
+
+  const installments =
+    useMemo(() => {
+      return (
+        trip?.installments || []
+      ).map((item) => ({
+        id:
+          item?._id ||
+          item?.installmentNumber,
+
+        installmentNumber:
+          item?.installmentNumber,
+
+        amountRaw: Number(
+          item?.amount || 0
+        ),
+
+        paidAmountRaw: Number(
+          item?.paidAmount || 0
+        ),
+
+        remainingRaw:
+          Math.max(
+            Number(
+              item?.amount || 0
+            ) -
+              Number(
+                item?.paidAmount ||
+                  0
+              ),
+            0
+          ),
+
+        amount: formatMoney(
+          item?.amount
+        ),
+
+        paidAmount:
+          formatMoney(
+            item?.paidAmount
+          ),
+
+        dueDate: formatDate(
+          item?.dueDate
+        ),
+
+        paymentDate:
+          item?.payments?.length >
+          0
+            ? formatDate(
+                item?.payments[
+                  item.payments
+                    .length - 1
+                ]?.paidAt
+              )
+            : "—",
+
+        statusRaw:
+          item?.status,
+
+        status:
+          installmentStatusMap[
+            item?.status
+          ] ||
+          "قيد الانتظار",
+      }));
+    }, [trip?.installments]);
+
+  const handleOpenPay = (
+    installment
+  ) => {
+    setSelectedInstallment(
+      installment
+    );
     setPayOpen(true);
   };
 
-  const handleClosePay = () => {
-    setPayOpen(false);
-    setSelectedInstallment(null);
-  };
+  const handleClosePay =
+    () => {
+      setPayOpen(false);
+      setSelectedInstallment(
+        null
+      );
+    };
 
-  const handleOpenRefund = (installment) => {
-    setSelectedInstallment(installment);
+  const handleOpenRefund = (
+    installment
+  ) => {
+    setSelectedInstallment(
+      installment
+    );
     setRefundOpen(true);
   };
 
-  const handleCloseRefund = () => {
-    setRefundOpen(false);
-    setSelectedInstallment(null);
-  };
-
-  const handlePay = async (data) => {
-    if (!studentId || !tripId) return;
-
-    setActionLoading(true);
-    const payload = {
-      installmentNumber: Number(data.installmentNumber),
-      amount: Number(data.amount),
-      paidAt: data.paidAt,
-      notes: data.notes || undefined,
+  const handleCloseRefund =
+    () => {
+      setRefundOpen(false);
+      setSelectedInstallment(
+        null
+      );
     };
 
-    const response = await payTripInstallment(studentId, tripId, payload);
-    if (response.status) {
-      toast.success(response.message || "تم تسجيل دفعة الرحلة بنجاح");
-      handleClosePay();
-      refetch();
-    } else {
-      toast.error(response?.message || response || "حدث خطأ ما أثناء تسجيل دفعة الرحلة");
-    }
-    setActionLoading(false);
-  };
-
-  const handleRefund = async (data) => {
-    if (!studentId || !tripId || !selectedInstallment) return;
-
-    const amount = Number(data.amount);
-    const reason = String(data.reason || "").trim();
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error("أدخل مبلغ استرداد صحيح");
-      return;
-    }
-
-    if (amount > selectedInstallment.paidAmountRaw) {
-      toast.error(
-        `قيمة الاسترداد لا يمكن أن تتجاوز المدفوع ${formatMoney(
-          selectedInstallment.paidAmountRaw
-        )}`
-      );
-      return;
-    }
-
-    if (!reason) {
-      toast.error("سبب التصحيح مطلوب");
+  const handlePay = async (
+    data
+  ) => {
+    if (!studentId || !tripId) {
       return;
     }
 
     setActionLoading(true);
 
-    const response = await refundTripInstallment(
-      studentId,
-      tripId,
-      selectedInstallment.installmentNumber,
-      {
-        installmentNumber: Number(selectedInstallment.installmentNumber),
-        amount,
-        reason,
-      }
-    );
+    const payload = {
+      installmentNumber:
+        Number(
+          data.installmentNumber
+        ),
+      amount: Number(
+        data.amount
+      ),
+      paidAt: data.paidAt,
+      notes:
+        data.notes ||
+        undefined,
+    };
 
-    if (response?.status) {
-      toast.success(
-        response.message || "تم تسجيل استرداد دفعة الرحلة بنجاح"
+    const response =
+      await payTripInstallment(
+        studentId,
+        tripId,
+        payload
       );
-      handleCloseRefund();
+
+    if (response.status) {
+      toast.success(
+        response.message ||
+          "تم تسجيل دفعة الرحلة بنجاح"
+      );
+
+      handleClosePay();
       await refetch();
     } else {
       toast.error(
         response?.message ||
           response ||
-          "تعذر تسجيل استرداد دفعة الرحلة"
+          "حدث خطأ ما أثناء تسجيل دفعة الرحلة"
       );
     }
 
     setActionLoading(false);
   };
 
-  const handleDelete = async () => {
-    if (!studentId || !tripId) return;
+  const handleRefund =
+    async (data) => {
+      if (
+        !studentId ||
+        !tripId ||
+        !selectedInstallment
+      ) {
+        return;
+      }
 
-    setActionLoading(true);
-    const response = await deleteTrip(studentId, tripId);
-    if (response.status) {
-      toast.success(response.message || "تم حذف الرحلة بنجاح");
-      navigate(`/financial/records/${studentId}/trips`);
-    } else {
-      toast.error(response || "حدث خطأ ما أثناء حذف الرحلة");
-    }
-    setActionLoading(false);
-  };
+      const amount =
+        Number(data.amount);
+
+      const reason =
+        String(
+          data.reason || ""
+        ).trim();
+
+      if (
+        !Number.isFinite(
+          amount
+        ) ||
+        amount <= 0
+      ) {
+        toast.error(
+          "أدخل مبلغ استرداد صحيح"
+        );
+        return;
+      }
+
+      if (
+        amount >
+        selectedInstallment
+          .paidAmountRaw
+      ) {
+        toast.error(
+          `قيمة الاسترداد لا يمكن أن تتجاوز المدفوع ${formatMoney(
+            selectedInstallment
+              .paidAmountRaw
+          )}`
+        );
+        return;
+      }
+
+      if (!reason) {
+        toast.error(
+          "سبب التصحيح مطلوب"
+        );
+        return;
+      }
+
+      setActionLoading(true);
+
+      const response =
+        await refundTripInstallment(
+          studentId,
+          tripId,
+          selectedInstallment
+            .installmentNumber,
+          {
+            installmentNumber:
+              Number(
+                selectedInstallment
+                  .installmentNumber
+              ),
+            amount,
+            reason,
+          }
+        );
+
+      if (response?.status) {
+        toast.success(
+          response.message ||
+            "تم تسجيل استرداد دفعة الرحلة بنجاح"
+        );
+
+        handleCloseRefund();
+        await refetch();
+      } else {
+        toast.error(
+          response?.message ||
+            response ||
+            "تعذر تسجيل استرداد دفعة الرحلة"
+        );
+      }
+
+      setActionLoading(false);
+    };
+
+  const handleDelete =
+    async () => {
+      if (
+        !studentId ||
+        !tripId
+      ) {
+        return;
+      }
+
+      setActionLoading(true);
+
+      const response =
+        await deleteTrip(
+          studentId,
+          tripId
+        );
+
+      if (response.status) {
+        toast.success(
+          response.message ||
+            "تم حذف الرحلة بنجاح"
+        );
+
+        navigate(
+          `/financial/records/${studentId}/trips`
+        );
+      } else {
+        toast.error(
+          response ||
+            "حدث خطأ ما أثناء حذف الرحلة"
+        );
+      }
+
+      setActionLoading(false);
+    };
 
   if (loading) {
     return (
@@ -183,216 +469,567 @@ const TripProfilePage = () => {
   if (!trip) {
     return (
       <Container>
-        <Back title={"تفاصيل الرحلة"} />
-        <Typography mt={8}>لا توجد بيانات لهذه الرحلة</Typography>
+        <Back title="تفاصيل الرحلة" />
+
+        <Paper
+          elevation={0}
+          sx={{
+            ...cardSx,
+            mt: 1.25,
+            p: 2,
+          }}
+        >
+          <Typography
+            sx={{
+              color:
+                "var(--color-muted)",
+              fontWeight: 700,
+            }}
+          >
+            لا توجد بيانات لهذه الرحلة
+          </Typography>
+        </Paper>
       </Container>
     );
   }
 
-  const effectiveFee = Number(trip?.discount ? trip?.netFee : trip?.fee || 0);
-  const totalPaid = Number(trip?.totalPaid || 0);
-  const remaining = Math.max(effectiveFee - totalPaid, 0);
+  const effectiveFee =
+    Number(
+      trip?.discount
+        ? trip?.netFee
+        : trip?.fee || 0
+    );
+
+  const totalPaid =
+    Number(
+      trip?.totalPaid || 0
+    );
+
+  const remaining =
+    Math.max(
+      effectiveFee -
+        totalPaid,
+      0
+    );
+
+  const status =
+    statusMap[
+      trip?.status
+    ] || "غير مدفوعة";
 
   return (
     <Container>
-      <Back title={"تفاصيل الرحلة"} />
-
-      <Paper
-        elevation={0}
-        sx={{
-          bgcolor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
-          borderRadius: "16px",
-          mt: 8,
-        }}
+      <Box
+        dir="rtl"
+        sx={{ pb: 4 }}
       >
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={6} lg={4}>
-            <StatCard label="اسم الرحلة" value={trip?.name || "—"} />
-          </Grid>
-          <Grid item xs={12} md={6} lg={4}>
-            <StatCard label="الوصف" value={trip?.description || "—"} />
-          </Grid>
-          <Grid item xs={12} md={6} lg={4}>
-            <StatCard label="الحالة" value={statusMap[trip?.status] || "غير مدفوعة"} />
-          </Grid>
-          <Grid item xs={12} md={6} lg={4}>
-            <StatCard label="إجمالي الرسوم" value={formatMoney(effectiveFee)} />
-          </Grid>
-          <Grid item xs={12} md={6} lg={4}>
-            <StatCard label="إجمالي المدفوع" value={formatMoney(totalPaid)} />
-          </Grid>
-          <Grid item xs={12} md={6} lg={4}>
-            <StatCard label="المتبقي" value={formatMoney(remaining)} />
-          </Grid>
-        </Grid>
+        <Back title="تفاصيل الرحلة" />
 
-        {permissions?.delete && (
-          <Box mt={6}>
-            <Button variant="outlined" color="error" onClick={() => setDeleteOpen(true)}>
-              حذف الرحلة
-            </Button>
-          </Box>
-        )}
-      </Paper>
+        <Paper
+          elevation={0}
+          sx={{
+            ...cardSx,
+            mt: 1.1,
+            mb: 1.15,
+            p: {
+              xs: 1.5,
+              md: 1.8,
+            },
+            background:
+              "linear-gradient(135deg,rgba(255,252,247,.98),rgba(251,240,216,.44))",
+          }}
+        >
+          <Stack
+            direction={{
+              xs: "column",
+              sm: "row",
+            }}
+            justifyContent="space-between"
+            alignItems={{
+              xs: "stretch",
+              sm: "center",
+            }}
+            gap={1}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              gap={1}
+            >
+              <Box
+                sx={{
+                  width: 46,
+                  height: 46,
+                  flexShrink: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  color:
+                    "var(--color-gold-dark)",
+                  bgcolor:
+                    "var(--color-gold-soft)",
+                  border:
+                    "1px solid rgba(211,164,79,.22)",
+                  borderRadius:
+                    "14px",
+                }}
+              >
+                <LuggageRounded />
+              </Box>
 
-      <Paper
-        elevation={0}
-        sx={{
-          bgcolor: "#FFFFFF",
-          border: "1px solid #E5E7EB",
-          boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
-          borderRadius: "16px",
-          mt: 8,
-        }}
-      >
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-[#1E293B]">أقساط الرحلة</h2>
-          <span className="rounded-full bg-[#F3F4F6] px-3 py-1 text-xs font-semibold text-[#374151]">
-            عدد الأقساط: {installments.length}
-          </span>
-        </div>
+              <Box minWidth={0}>
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  gap={0.7}
+                  flexWrap="wrap"
+                >
+                  <Typography
+                    component="h1"
+                    sx={{
+                      color:
+                        "var(--color-navy-deep)",
+                      fontSize: {
+                        xs: 20,
+                        md: 24,
+                      },
+                      fontWeight: 900,
+                    }}
+                  >
+                    {trip?.name ||
+                      "—"}
+                  </Typography>
 
-        {installments.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm font-medium text-gray-500">
-            لا توجد أقساط لعرضها
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-y-2">
-              <thead>
-                <tr>
-                  <th className="rounded-r-xl bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">القسط</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">المبلغ</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">المدفوع</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">الاستحقاق</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">تاريخ الدفع</th>
-                  <th className="bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">الحالة</th>
-                  <th className="rounded-l-xl bg-[#F9FAFB] px-3 py-3 text-right text-xs font-bold text-[#35413E]">الإجراء</th>
-                </tr>
-              </thead>
-              <tbody>
-                {installments.map((item) => (
-                  <tr key={item.id}>
-                    <td className="rounded-r-xl border border-[#E5E7EB] bg-white px-3 py-3 text-sm font-semibold text-[#1E293B]">
-                      #{item.installmentNumber}
-                    </td>
-                    <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm text-[#374151]">
-                      {item.amount}
-                    </td>
-                    <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm text-[#374151]">
-                      {item.paidAmount}
-                    </td>
-                    <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm text-[#374151]">
-                      {item.dueDate}
-                    </td>
-                    <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm text-[#374151]">
-                      {item.paymentDate}
-                    </td>
-                    <td className="border border-r-0 border-l-0 border-[#E5E7EB] bg-white px-3 py-3 text-sm">
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.statusRaw === "paid" ? "bg-[#E7F8F1] text-[#0E9F6E]" : item.statusRaw === "overdue" ? "bg-[#FDECEC] text-[#D14343]" : "bg-[#EEF5FF] text-[#1D4ED8]"}`}>
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="rounded-l-xl border border-[#E5E7EB] bg-white px-3 py-3 text-sm">
-                      {permissions?.edit ? (
-                        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                          {item.statusRaw !== "paid" && item.remainingRaw > 0 && (
-                            <Button
-                              variant="contained"
-                              onClick={() => handleOpenPay(item)}
-                              sx={{ minWidth: "120px" }}
-                            >
-                              تسجيل دفعة
-                            </Button>
-                          )}
+                  <Chip
+                    size="small"
+                    label={status}
+                    sx={{
+                      height: 24,
+                      fontSize: 9,
+                      fontWeight: 900,
+                      bgcolor:
+                        trip?.status ===
+                        "paid"
+                          ? "#E7F8F1"
+                          : trip?.status ===
+                              "partial"
+                            ? "#EEF5FF"
+                            : "#FDECEC",
+                      color:
+                        trip?.status ===
+                        "paid"
+                          ? "#0E9F6E"
+                          : trip?.status ===
+                              "partial"
+                            ? "#1D4ED8"
+                            : "#D14343",
+                    }}
+                  />
+                </Stack>
 
-                          {item.paidAmountRaw > 0 && (
-                            <Button
-                              variant="outlined"
-                              color="error"
-                              onClick={() => handleOpenRefund(item)}
-                              sx={{ minWidth: "120px" }}
-                            >
-                              تصحيح دفعة
-                            </Button>
-                          )}
+                <Typography
+                  sx={{
+                    mt: 0.2,
+                    color:
+                      "var(--color-muted)",
+                    fontSize: 10,
+                  }}
+                >
+                  {trip?.description ||
+                    "—"}
+                </Typography>
+              </Box>
+            </Stack>
 
-                          {item.statusRaw === "paid" && item.paidAmountRaw <= 0 && (
-                            <Typography color="text.secondary" fontSize={13}>—</Typography>
-                          )}
-                        </Box>
-                      ) : (
-                        <Typography color="text.secondary" fontSize={13}>—</Typography>
-                      )}
-                    </td>
+            {permissions?.delete && (
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={
+                  <DeleteOutlineRounded />
+                }
+                onClick={() =>
+                  setDeleteOpen(true)
+                }
+                sx={{
+                  minHeight: 40,
+                  borderRadius:
+                    "11px",
+                  fontSize: 10,
+                  fontWeight: 900,
+                }}
+              >
+                حذف الرحلة
+              </Button>
+            )}
+          </Stack>
+        </Paper>
+
+        <Box
+          sx={{
+            mb: 1.15,
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              md: "repeat(3,minmax(0,1fr))",
+            },
+            gap: 1,
+          }}
+        >
+          <SummaryCard
+            label="إجمالي الرسوم"
+            value={formatMoney(
+              effectiveFee
+            )}
+            icon={<PaymentsRounded />}
+          />
+
+          <SummaryCard
+            label="إجمالي المدفوع"
+            value={formatMoney(
+              totalPaid
+            )}
+            icon={<ReceiptLongRounded />}
+          />
+
+          <SummaryCard
+            label="المتبقي"
+            value={formatMoney(
+              remaining
+            )}
+            icon={<ReceiptLongRounded />}
+          />
+        </Box>
+
+        <Paper
+          elevation={0}
+          sx={{
+            ...cardSx,
+            p: {
+              xs: 1.15,
+              md: 1.4,
+            },
+          }}
+        >
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            gap={1}
+            sx={{ mb: 1 }}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  color:
+                    "var(--color-navy-deep)",
+                  fontSize: 16,
+                  fontWeight: 900,
+                }}
+              >
+                أقساط الرحلة
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.1,
+                  color:
+                    "var(--color-muted)",
+                  fontSize: 9.5,
+                }}
+              >
+                راجع الاستحقاق وسجّل
+                الدفعات أو التصحيحات.
+              </Typography>
+            </Box>
+
+            <Chip
+              size="small"
+              label={`${installments.length} قسط`}
+              sx={{
+                bgcolor:
+                  "var(--color-gold-soft)",
+                color:
+                  "var(--color-gold-dark)",
+                fontWeight: 900,
+                fontSize: 9,
+              }}
+            />
+          </Stack>
+
+          {installments.length ===
+          0 ? (
+            <Box
+              sx={{
+                py: 5,
+                textAlign: "center",
+                border:
+                  "1px dashed rgba(36,74,112,.14)",
+                borderRadius:
+                  "14px",
+              }}
+            >
+              <Typography
+                sx={{
+                  color:
+                    "var(--color-muted)",
+                  fontSize: 11,
+                  fontWeight: 700,
+                }}
+              >
+                لا توجد أقساط لعرضها
+              </Typography>
+            </Box>
+          ) : (
+            <Box
+              sx={{
+                overflowX: "auto",
+              }}
+            >
+              <Box
+                component="table"
+                sx={{
+                  width: "100%",
+                  minWidth: 820,
+                  borderCollapse:
+                    "separate",
+                  borderSpacing:
+                    "0 7px",
+
+                  "& th": {
+                    px: 1.2,
+                    py: 1.1,
+                    bgcolor:
+                      "rgba(36,74,112,.045)",
+                    color:
+                      "var(--color-navy)",
+                    fontSize: 9.5,
+                    fontWeight: 900,
+                    textAlign:
+                      "right",
+                  },
+
+                  "& td": {
+                    px: 1.2,
+                    py: 1.05,
+                    bgcolor:
+                      "rgba(255,255,255,.98)",
+                    borderTop:
+                      "1px solid rgba(36,74,112,.08)",
+                    borderBottom:
+                      "1px solid rgba(36,74,112,.08)",
+                    color:
+                      "var(--color-navy-deep)",
+                    fontSize: 10.5,
+                  },
+                }}
+              >
+                <thead>
+                  <tr>
+                    <th>القسط</th>
+                    <th>المبلغ</th>
+                    <th>المدفوع</th>
+                    <th>الاستحقاق</th>
+                    <th>تاريخ الدفع</th>
+                    <th>الحالة</th>
+                    <th>الإجراء</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Paper>
+                </thead>
 
-      <PayTripDialog
-        open={payOpen}
-        onClose={handleClosePay}
-        installment={selectedInstallment}
-        onSubmit={handlePay}
-        loading={actionLoading}
-      />
+                <tbody>
+                  {installments.map(
+                    (item) => (
+                      <tr
+                        key={item.id}
+                      >
+                        <td
+                          style={{
+                            fontWeight:
+                              900,
+                          }}
+                        >
+                          #
+                          {
+                            item.installmentNumber
+                          }
+                        </td>
 
-      <RefundTripDialog
-        open={refundOpen}
-        onClose={handleCloseRefund}
-        installment={selectedInstallment}
-        onSubmit={handleRefund}
-        loading={actionLoading}
-      />
+                        <td>
+                          {item.amount}
+                        </td>
 
-      <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>حذف الرحلة</DialogTitle>
-        <DialogContent>
-          <Typography>هل أنت متأكد من حذف هذه الرحلة؟</Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 6, pb: 5 }}>
-          <Button variant="outlined" onClick={() => setDeleteOpen(false)}>
-            إلغاء
-          </Button>
-          <Button variant="contained" color="error" onClick={handleDelete} disabled={actionLoading}>
-            تأكيد
-          </Button>
-        </DialogActions>
-      </Dialog>
+                        <td>
+                          {
+                            item.paidAmount
+                          }
+                        </td>
+
+                        <td>
+                          {
+                            item.dueDate
+                          }
+                        </td>
+
+                        <td>
+                          {
+                            item.paymentDate
+                          }
+                        </td>
+
+                        <td>
+                          <Chip
+                            size="small"
+                            label={
+                              item.status
+                            }
+                            sx={{
+                              height: 24,
+                              fontSize: 9,
+                              fontWeight:
+                                900,
+                              bgcolor:
+                                item.statusRaw ===
+                                "paid"
+                                  ? "#E7F8F1"
+                                  : item.statusRaw ===
+                                      "overdue"
+                                    ? "#FDECEC"
+                                    : "#EEF5FF",
+                              color:
+                                item.statusRaw ===
+                                "paid"
+                                  ? "#0E9F6E"
+                                  : item.statusRaw ===
+                                      "overdue"
+                                    ? "#D14343"
+                                    : "#1D4ED8",
+                            }}
+                          />
+                        </td>
+
+                        <td>
+                          {permissions?.edit ? (
+                            <Stack
+                              direction="row"
+                              spacing={0.7}
+                              flexWrap="wrap"
+                            >
+                              {item.statusRaw !==
+                                "paid" &&
+                                item.remainingRaw >
+                                  0 && (
+                                  <Button
+                                    variant="contained"
+                                    onClick={() =>
+                                      handleOpenPay(
+                                        item
+                                      )
+                                    }
+                                    sx={{
+                                      minHeight: 34,
+                                      px: 1.5,
+                                      borderRadius:
+                                        "9px",
+                                      fontSize:
+                                        9.5,
+                                      fontWeight:
+                                        900,
+                                    }}
+                                  >
+                                    تسجيل دفعة
+                                  </Button>
+                                )}
+
+                              {item.paidAmountRaw >
+                                0 && (
+                                <Button
+                                  variant="outlined"
+                                  color="error"
+                                  startIcon={
+                                    <UndoRounded />
+                                  }
+                                  onClick={() =>
+                                    handleOpenRefund(
+                                      item
+                                    )
+                                  }
+                                  sx={{
+                                    minHeight: 34,
+                                    px: 1.5,
+                                    borderRadius:
+                                      "9px",
+                                    fontSize:
+                                      9.5,
+                                    fontWeight:
+                                      900,
+                                  }}
+                                >
+                                  تصحيح دفعة
+                                </Button>
+                              )}
+
+                              {item.statusRaw ===
+                                "paid" &&
+                                item.paidAmountRaw <=
+                                  0 &&
+                                "—"}
+                            </Stack>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </Box>
+            </Box>
+          )}
+        </Paper>
+
+        <PayTripDialog
+          open={payOpen}
+          onClose={handleClosePay}
+          installment={
+            selectedInstallment
+          }
+          onSubmit={handlePay}
+          loading={actionLoading}
+        />
+
+        <RefundTripDialog
+          open={refundOpen}
+          onClose={
+            handleCloseRefund
+          }
+          installment={
+            selectedInstallment
+          }
+          onSubmit={handleRefund}
+          loading={actionLoading}
+        />
+
+        <ConfirmDeleteDialog
+          open={deleteOpen}
+          onClose={() =>
+            setDeleteOpen(false)
+          }
+          onConfirm={
+            handleDelete
+          }
+          loading={actionLoading}
+        />
+      </Box>
     </Container>
   );
 };
 
-const StatCard = ({ label, value }) => {
-  return (
-    <Box
-      sx={{
-        p: 2,
-        borderRadius: "10px",
-        bgcolor: "primary.white",
-        transition: ".5s",
-        "&:hover": { bgcolor: "grey.100" },
-      }}
-    >
-      <Typography variant="label" color="text.secondary" sx={{ mb: 0.5, fontWeight: 500, fontSize: "12px" }}>
-        {label}
-      </Typography>
-      <Typography variant="subtitle" sx={{ display: "block", fontWeight: 500, color: "text.primary" }}>
-        {value}
-      </Typography>
-    </Box>
-  );
-};
-
-const PayTripDialog = ({ open, onClose, installment, onSubmit, loading }) => {
+const PayTripDialog = ({
+  open,
+  onClose,
+  installment,
+  onSubmit,
+  loading,
+}) => {
   const {
     register,
     handleSubmit,
@@ -403,54 +1040,166 @@ const PayTripDialog = ({ open, onClose, installment, onSubmit, loading }) => {
   useEffect(() => {
     if (installment) {
       reset({
-        installmentNumber: installment.installmentNumber,
-        amount: installment.remainingRaw,
-        paidAt: new Date().toISOString().slice(0, 10),
+        installmentNumber:
+          installment.installmentNumber,
+        amount:
+          installment.remainingRaw,
+        paidAt:
+          new Date()
+            .toISOString()
+            .slice(0, 10),
         notes: "",
       });
     }
   }, [installment, reset]);
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ pb: 6 }}>تسجيل دفعة الرحلة</DialogTitle>
-      <DialogContent>
-        <input type="hidden" {...register("installmentNumber", { required: true, valueAsNumber: true })} />
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      PaperProps={{
+        sx: {
+          overflow: "hidden",
+          borderRadius: "20px",
+          bgcolor:
+            "var(--color-cream)",
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          px: 2.2,
+          pt: 2,
+          pb: 1,
+          color:
+            "var(--color-navy-deep)",
+          fontSize: 17,
+          fontWeight: 900,
+        }}
+      >
+        تسجيل دفعة الرحلة
+      </DialogTitle>
 
-        <Grid container spacing={4}>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              type="number"
-              label="المبلغ المدفوع"
-              error={Boolean(errors.amount)}
-              helperText={errors.amount?.message || `المتبقي على القسط: ${installment?.remainingRaw || 0} ريال`}
-              inputProps={{ min: 1, max: installment?.remainingRaw || undefined, step: "any" }}
-              {...register("amount", {
-                required: "أدخل مبلغ الدفعة",
-                valueAsNumber: true,
-                min: { value: 1, message: "المبلغ يجب أن يكون أكبر من صفر" },
-                max: { value: installment?.remainingRaw || Number.MAX_SAFE_INTEGER, message: `أقصى مبلغ متاح هو ${installment?.remainingRaw || 0} ريال` },
-              })}
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <Input
-              register={register}
-              registerName={"paidAt"}
-              error={errors.paidAt?.message}
-              label={"تاريخ الدفع"}
-              required={true}
-              type={"date"}
-            />
-          </Grid>
-        </Grid>
+      <DialogContent
+        sx={{
+          px: 2.2,
+          pt: "8px !important",
+          pb: 1.5,
+        }}
+      >
+        <input
+          type="hidden"
+          {...register(
+            "installmentNumber",
+            {
+              required: true,
+              valueAsNumber:
+                true,
+            }
+          )}
+        />
+
+        <Stack spacing={1.25}>
+          <TextField
+            fullWidth
+            type="number"
+            label="المبلغ المدفوع"
+            error={Boolean(
+              errors.amount
+            )}
+            helperText={
+              errors.amount
+                ?.message ||
+              `المتبقي على القسط: ${
+                installment?.remainingRaw ||
+                0
+              } ريال`
+            }
+            inputProps={{
+              min: 1,
+              max:
+                installment?.remainingRaw ||
+                undefined,
+              step: "any",
+            }}
+            {...register(
+              "amount",
+              {
+                required:
+                  "أدخل مبلغ الدفعة",
+                valueAsNumber:
+                  true,
+                min: {
+                  value: 1,
+                  message:
+                    "المبلغ يجب أن يكون أكبر من صفر",
+                },
+                max: {
+                  value:
+                    installment?.remainingRaw ||
+                    Number.MAX_SAFE_INTEGER,
+                  message: `أقصى مبلغ متاح هو ${
+                    installment?.remainingRaw ||
+                    0
+                  } ريال`,
+                },
+              }
+            )}
+          />
+
+          <Input
+            register={register}
+            registerName="paidAt"
+            error={
+              errors.paidAt
+                ?.message
+            }
+            label="تاريخ الدفع"
+            required
+            type="date"
+          />
+        </Stack>
       </DialogContent>
-      <DialogActions sx={{ px: 6, pb: 5, pt: 1 }}>
-        <Button variant="outlined" onClick={onClose}>
+
+      <DialogActions
+        sx={{
+          px: 2.2,
+          pb: 2,
+          pt: 1,
+          gap: 1,
+        }}
+      >
+        <Button
+          variant="outlined"
+          onClick={onClose}
+          disabled={loading}
+          sx={{
+            minHeight: 38,
+            borderRadius: "10px",
+            fontWeight: 800,
+          }}
+        >
           إلغاء
         </Button>
-        <Button variant="contained" onClick={handleSubmit(onSubmit)} disabled={loading || !installment?.remainingRaw}>
+
+        <Button
+          variant="contained"
+          onClick={handleSubmit(
+            onSubmit
+          )}
+          disabled={
+            loading ||
+            !installment?.remainingRaw
+          }
+          sx={{
+            minHeight: 38,
+            px: 2.5,
+            borderRadius: "10px",
+            fontWeight: 900,
+          }}
+        >
           تسجيل الدفع
         </Button>
       </DialogActions>
@@ -458,8 +1207,13 @@ const PayTripDialog = ({ open, onClose, installment, onSubmit, loading }) => {
   );
 };
 
-
-const RefundTripDialog = ({ open, onClose, installment, onSubmit, loading }) => {
+const RefundTripDialog = ({
+  open,
+  onClose,
+  installment,
+  onSubmit,
+  loading,
+}) => {
   const {
     register,
     handleSubmit,
@@ -470,76 +1224,149 @@ const RefundTripDialog = ({ open, onClose, installment, onSubmit, loading }) => 
   useEffect(() => {
     if (installment) {
       reset({
-        amount: installment.paidAmountRaw,
+        amount:
+          installment.paidAmountRaw,
         reason: "",
       });
     }
   }, [installment, reset]);
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ pb: 6 }}>تصحيح / استرداد دفعة الرحلة</DialogTitle>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      PaperProps={{
+        sx: {
+          overflow: "hidden",
+          borderRadius: "20px",
+          bgcolor:
+            "var(--color-cream)",
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          px: 2.2,
+          pt: 2,
+          pb: 1,
+          color:
+            "var(--color-navy-deep)",
+          fontSize: 17,
+          fontWeight: 900,
+        }}
+      >
+        تصحيح / استرداد دفعة الرحلة
+      </DialogTitle>
 
-      <DialogContent>
-        <Grid container spacing={4}>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              type="number"
-              label="مبلغ الاسترداد"
-              error={Boolean(errors.amount)}
-              helperText={
-                errors.amount?.message ||
-                `أقصى مبلغ متاح: ${installment?.paidAmountRaw || 0} ريال`
-              }
-              inputProps={{
-                min: 1,
-                max: installment?.paidAmountRaw || undefined,
-                step: "any",
-              }}
-              {...register("amount", {
-                required: "أدخل مبلغ الاسترداد",
-                valueAsNumber: true,
+      <DialogContent
+        sx={{
+          px: 2.2,
+          pt: "8px !important",
+          pb: 1.5,
+        }}
+      >
+        <Stack spacing={1.25}>
+          <TextField
+            fullWidth
+            type="number"
+            label="مبلغ الاسترداد"
+            error={Boolean(
+              errors.amount
+            )}
+            helperText={
+              errors.amount
+                ?.message ||
+              `أقصى مبلغ متاح: ${
+                installment?.paidAmountRaw ||
+                0
+              } ريال`
+            }
+            inputProps={{
+              min: 1,
+              max:
+                installment?.paidAmountRaw ||
+                undefined,
+              step: "any",
+            }}
+            {...register(
+              "amount",
+              {
+                required:
+                  "أدخل مبلغ الاسترداد",
+                valueAsNumber:
+                  true,
                 min: {
                   value: 1,
-                  message: "المبلغ يجب أن يكون أكبر من صفر",
+                  message:
+                    "المبلغ يجب أن يكون أكبر من صفر",
                 },
                 max: {
                   value:
                     installment?.paidAmountRaw ||
                     Number.MAX_SAFE_INTEGER,
                   message: `أقصى مبلغ متاح هو ${
-                    installment?.paidAmountRaw || 0
+                    installment?.paidAmountRaw ||
+                    0
                   } ريال`,
                 },
-              })}
-            />
-          </Grid>
+              }
+            )}
+          />
 
-          <Grid item xs={12}>
-            <Input
-              register={register}
-              registerName="reason"
-              error={errors.reason?.message}
-              label="سبب التصحيح"
-              required={true}
-              multiline
-              rows={3}
-            />
-          </Grid>
-        </Grid>
+          <Input
+            register={register}
+            registerName="reason"
+            error={
+              errors.reason
+                ?.message
+            }
+            label="سبب التصحيح"
+            required
+            multiline
+            rows={3}
+          />
+        </Stack>
       </DialogContent>
 
-      <DialogActions sx={{ px: 6, pb: 5, pt: 1 }}>
-        <Button variant="outlined" onClick={onClose} disabled={loading}>
+      <DialogActions
+        sx={{
+          px: 2.2,
+          pb: 2,
+          pt: 1,
+          gap: 1,
+        }}
+      >
+        <Button
+          variant="outlined"
+          onClick={onClose}
+          disabled={loading}
+          sx={{
+            minHeight: 38,
+            borderRadius: "10px",
+            fontWeight: 800,
+          }}
+        >
           إلغاء
         </Button>
 
         <Button
           variant="contained"
           color="error"
-          onClick={handleSubmit(onSubmit)}
-          disabled={loading || !installment?.paidAmountRaw}
+          onClick={handleSubmit(
+            onSubmit
+          )}
+          disabled={
+            loading ||
+            !installment?.paidAmountRaw
+          }
+          sx={{
+            minHeight: 38,
+            px: 2.5,
+            borderRadius: "10px",
+            fontWeight: 900,
+          }}
         >
           تسجيل الاسترداد
         </Button>
@@ -547,5 +1374,92 @@ const RefundTripDialog = ({ open, onClose, installment, onSubmit, loading }) => 
     </Dialog>
   );
 };
+
+const ConfirmDeleteDialog = ({
+  open,
+  onClose,
+  onConfirm,
+  loading,
+}) => (
+  <Dialog
+    open={open}
+    onClose={onClose}
+    fullWidth
+    maxWidth="xs"
+    PaperProps={{
+      sx: {
+        overflow: "hidden",
+        borderRadius: "20px",
+        bgcolor:
+          "var(--color-cream)",
+      },
+    }}
+  >
+    <DialogTitle
+      sx={{
+        px: 2.2,
+        pt: 2,
+        pb: 1,
+        color:
+          "var(--color-navy-deep)",
+        fontSize: 17,
+        fontWeight: 900,
+      }}
+    >
+      حذف الرحلة
+    </DialogTitle>
+
+    <DialogContent
+      sx={{
+        px: 2.2,
+        pt: "8px !important",
+      }}
+    >
+      <Typography
+        sx={{
+          color:
+            "var(--color-navy)",
+          fontSize: 11,
+        }}
+      >
+        هل أنت متأكد من حذف هذه
+        الرحلة؟
+      </Typography>
+    </DialogContent>
+
+    <DialogActions
+      sx={{
+        px: 2.2,
+        pb: 2,
+        gap: 1,
+      }}
+    >
+      <Button
+        variant="outlined"
+        onClick={onClose}
+        disabled={loading}
+        sx={{
+          borderRadius: "10px",
+          fontWeight: 800,
+        }}
+      >
+        إلغاء
+      </Button>
+
+      <Button
+        variant="contained"
+        color="error"
+        onClick={onConfirm}
+        disabled={loading}
+        sx={{
+          borderRadius: "10px",
+          fontWeight: 900,
+        }}
+      >
+        تأكيد
+      </Button>
+    </DialogActions>
+  </Dialog>
+);
 
 export default TripProfilePage;
