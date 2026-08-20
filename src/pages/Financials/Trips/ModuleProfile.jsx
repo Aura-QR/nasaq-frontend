@@ -175,12 +175,18 @@ const ModuleTripsProfilePage = () => {
           bgcolor: "#FFFFFF",
           border: "1px solid #E5E7EB",
           boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
+          p: { xs: 1.5, md: 2 },
           borderRadius: "16px",
-          mt: 8,
+          mt: 1.25,
         }}
       >
-        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={3} mb={4}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "stretch", md: "center" }}
+          spacing={1.5}
+          mb={1.5}
+        >
           <Stack spacing={1}>
             <Typography variant="h5" fontWeight={700}>{template?.name || "—"}</Typography>
             <Typography color="text.secondary">{template?.description || "—"}</Typography>
@@ -188,8 +194,8 @@ const ModuleTripsProfilePage = () => {
           <Box
             sx={{
               alignSelf: { xs: "flex-start", md: "center" },
-              px: 3,
-              py: 1.5,
+              px: 1.5,
+              py: 0.75,
               borderRadius: "999px",
               bgcolor: "#F3F4F6",
               color: "#374151",
@@ -201,7 +207,7 @@ const ModuleTripsProfilePage = () => {
           </Box>
         </Stack>
 
-        <Grid container spacing={4}>
+        <Grid container spacing={1.5}>
           <Grid item xs={12} md={6}>
             <StatCard label="رسوم الرحلة" value={`${Number(template?.fee || 0)} ريال`} />
           </Grid>
@@ -212,11 +218,11 @@ const ModuleTripsProfilePage = () => {
       </Paper>
 
       <Box
-        mt={8}
-        mb={8}
+        mt={1.25}
+        mb={1.25}
         sx={{
           display: "flex",
-          gap: 2,
+          gap: 1,
           alignItems: "center",
           flexDirection: "row",
           justifyContent: "space-between",
@@ -235,7 +241,14 @@ const ModuleTripsProfilePage = () => {
           startIcon={<AddCircleOutlineOutlined />}
           variant="contained"
           onClick={() => setOpenAdd(true)}
-          sx={{ px: 8, py: 8, borderRadius: "8px", width: { xs: "100%", sm: "auto" } }}
+          sx={{
+            px: 2.25,
+            py: 1,
+            minHeight: 42,
+            borderRadius: "10px",
+            width: { xs: "100%", sm: "auto" },
+            fontWeight: 800,
+          }}
         >
           إضافة طالب إلى الرحلة
         </Button>
@@ -247,11 +260,11 @@ const ModuleTripsProfilePage = () => {
           bgcolor: "#FFFFFF",
           border: "1px solid #E5E7EB",
           boxShadow: "0px 1px 2px 0px #0000000D",
-          p: 12,
+          p: { xs: 1.25, md: 1.75 },
           borderRadius: "16px",
         }}
       >
-        <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-lg font-bold text-[#1E293B]">طلاب الرحلة</h2>
           <span className="rounded-full bg-[#F3F4F6] px-3 py-1 text-xs font-semibold text-[#374151]">
             العدد الحالي: {displayedStudents.length}
@@ -308,7 +321,7 @@ const ModuleTripsProfilePage = () => {
                           <Button
                             variant="contained"
                             onClick={() => navigate(`/financial/records/${student?._id}/trips/${trip?._id}`)}
-                            sx={{ minWidth: 120 }}
+                            sx={{ minWidth: 105, minHeight: 36, borderRadius: "9px", fontWeight: 800 }}
                           >
                               التفاصيل
                             </Button>
@@ -318,7 +331,7 @@ const ModuleTripsProfilePage = () => {
                               color="error"
                               onClick={() => handleRemove(student?._id)}
                               disabled={actionLoading}
-                              sx={{ minWidth: 120 }}
+                              sx={{ minWidth: 105, minHeight: 36, borderRadius: "9px", fontWeight: 800 }}
                             >
                               إزالة
                             </Button>
@@ -365,7 +378,7 @@ const StatCard = ({ label, value }) => {
   return (
     <Box
       sx={{
-        p: 2,
+        p: 1.25,
         borderRadius: "10px",
         bgcolor: "primary.white",
         transition: ".5s",
@@ -439,12 +452,12 @@ const EnrollDialog = ({
       maxWidth="sm"
       PaperProps={{ sx: { borderRadius: "14px" } }}
     >
-      <DialogTitle sx={{ px: 6, pt: 5, pb: 6 }}>
+      <DialogTitle sx={{ px: 2.5, pt: 2.25, pb: 1.25 }}>
         <Typography variant="h6" fontWeight={700}>إضافة طالب إلى الرحلة</Typography>
       </DialogTitle>
 
-      <DialogContent sx={{ px: 6, pt: 2, pb: 6 }}>
-        <Grid container spacing={4}>
+      <DialogContent sx={{ px: 2.5, pt: 1, pb: 2 }}>
+        <Grid container spacing={1.5}>
           <Grid item xs={12} sm={6}>
             <Select
               register={register}
@@ -480,10 +493,10 @@ const EnrollDialog = ({
 
       <DialogActions
         sx={{
-          px: 6,
-          pb: 5,
+          px: 2.5,
+          pb: 2.25,
           pt: 1,
-          gap: 2,
+          gap: 1,
           flexDirection: { xs: "column-reverse", sm: "row" },
         }}
       >
