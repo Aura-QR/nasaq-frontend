@@ -8,6 +8,7 @@ import {
 
 import {
   AccountBalanceWallet,
+  AddCardRounded,
   AccountTreeRounded,
   AutoStoriesRounded,
   CalendarMonthRounded,
@@ -413,6 +414,13 @@ const Sidebar = ({ active, setActive }) => {
             Icon: Route,
             iconType: "mui",
             to: "/financial/trips",
+            show: financialPermissions.read,
+          },
+          {
+            name: "الرسوم الإضافية",
+            Icon: AddCardRounded,
+            iconType: "mui",
+            to: "/financial/additional-fees",
             show: financialPermissions.read,
           },
           {
