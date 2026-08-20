@@ -181,6 +181,65 @@ const FormSection = ({
   </Paper>
 );
 
+const getNationalityCode = (country) => {
+  if (!country) return "";
+
+  const candidates = [
+    country?.code,
+    country?.nationalityCode,
+    country?.countryCode,
+    country?.iso2,
+    country?.isoCode,
+    country?.alpha2,
+    country?.value,
+    country?.id,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = String(
+      candidate || ""
+    )
+      .trim()
+      .toUpperCase();
+
+    if (/^[A-Z]{2}$/.test(normalized)) {
+      return normalized;
+    }
+  }
+
+  // Fallback للبيانات الثابتة القديمة إن كانت تحتوي الاسم فقط.
+  const name = String(
+    country?.name ||
+      country?.labelAr ||
+      country?.label ||
+      ""
+  ).trim();
+
+  if (
+    [
+      "السعودية",
+      "سعودي",
+      "سعودية",
+      "المملكة العربية السعودية",
+    ].includes(name)
+  ) {
+    return "SA";
+  }
+
+  if (
+    [
+      "مصر",
+      "مصري",
+      "مصرية",
+      "جمهورية مصر العربية",
+    ].includes(name)
+  ) {
+    return "EG";
+  }
+
+  return "";
+};
+
 const StudentForm = ({
   register,
   errors,
@@ -209,7 +268,20 @@ const StudentForm = ({
 
     setNationality(selectedCountry);
     setNationalityInput(nationalityName);
-  }, [defaultValues]);
+
+    const code =
+      defaultValues?.nationalityCode ||
+      getNationalityCode(selectedCountry);
+
+    setValue(
+      "nationalityCode",
+      code || "",
+      {
+        shouldDirty: false,
+        shouldValidate: false,
+      }
+    );
+  }, [defaultValues, setValue]);
 
   const handleNationalityChange = (_, newValue) => {
     setNationality(newValue);
@@ -217,6 +289,15 @@ const StudentForm = ({
     setValue(
       "nationality",
       newValue ? newValue.name : "",
+      {
+        shouldDirty: true,
+        shouldValidate: true,
+      }
+    );
+
+    setValue(
+      "nationalityCode",
+      getNationalityCode(newValue),
       {
         shouldDirty: true,
         shouldValidate: true,
@@ -274,6 +355,15 @@ const StudentForm = ({
             type="date"
           />
         </Grid>
+
+        <input
+          type="hidden"
+          {...register("nationality")}
+        />
+        <input
+          type="hidden"
+          {...register("nationalityCode")}
+        />
 
         <Grid item xs={12} sm={6} lg={3}>
           <SingleSelect
