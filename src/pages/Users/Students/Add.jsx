@@ -28,8 +28,6 @@ import {
   addStudent,
   getStudentResponseId,
 } from "@/APIs/school/students";
-import { fetchSingleClass } from "@/APIs/school/classes";
-import { createStudentEnrollment } from "@/APIs/school/enrollments";
 
 import {
   generateStudentEmail,
@@ -49,57 +47,6 @@ const getReferenceId = (value) => {
   }
 
   return String(value).trim();
-};
-
-const unwrapResponseData = (response) => {
-  let current = response;
-
-  for (let index = 0; index < 5; index += 1) {
-    if (
-      !current ||
-      Array.isArray(current) ||
-      typeof current !== "object" ||
-      !Object.prototype.hasOwnProperty.call(
-        current,
-        "data"
-      )
-    ) {
-      break;
-    }
-
-    current = current.data;
-  }
-
-  return current;
-};
-
-const resolveClassAcademicYearId = async (
-  classId
-) => {
-  if (!classId) return "";
-
-  const response = await fetchSingleClass(
-    classId
-  );
-
-  if (
-    !response ||
-    response?.status === false
-  ) {
-    return "";
-  }
-
-  const classData =
-    unwrapResponseData(response);
-
-  return (
-    getReferenceId(
-      classData?.academicYearId
-    ) ||
-    getReferenceId(
-      classData?.academicYear
-    )
-  );
 };
 
 const Add = () => {
@@ -156,7 +103,6 @@ const Add = () => {
     try {
       setLoading(true);
 
-      // نحتفظ بالفصل لاستخدامه بعد إنشاء الطالب فقط.
       const selectedClassId =
         getReferenceId(
           formData?.classId
@@ -169,15 +115,25 @@ const Add = () => {
       const generatedPassword =
         generateTemporaryPassword();
 
-      // نفصل إنشاء الطالب عن التسجيل في الفصل.
-      // classId لا يجب أن يذهب مع POST /students لأنه يفعّل automatic enrollment في الباك.
+      /*
+       * الـ backend يدعم automatic enrollment عند إرسال classId
+       * مع POST /students، لذلك نرسل الفصل في نفس الطلب بدل
+       * إنشاء الطالب أولًا ثم عمل POST /enrollments منفصل.
+       */
       const studentPayload = {
         ...formData,
         email: generatedEmail,
         password: generatedPassword,
       };
 
-      delete studentPayload.classId;
+      if (selectedClassId) {
+        studentPayload.classId =
+          selectedClassId;
+      } else {
+        delete studentPayload.classId;
+      }
+
+      // حقول واجهة قديمة/مساعدة وليست ضمن CreateStudentDto.
       delete studentPayload.academicYear;
       delete studentPayload.installmentPlanId;
       delete studentPayload.class;
@@ -220,40 +176,6 @@ const Add = () => {
         return;
       }
 
-      let enrollmentSucceeded = true;
-      let enrollmentMessage = "";
-
-      if (selectedClassId) {
-        const academicYearId =
-          await resolveClassAcademicYearId(
-            selectedClassId
-          );
-
-        if (!academicYearId) {
-          enrollmentSucceeded = false;
-          enrollmentMessage =
-            "تمت إضافة الطالب، لكن تعذر تحديد السنة الدراسية الخاصة بالفصل.";
-        } else {
-          const enrollmentResponse =
-            await createStudentEnrollment({
-              studentId,
-              classId:
-                selectedClassId,
-              academicYearId,
-            });
-
-          if (
-            enrollmentResponse?.status ===
-            false
-          ) {
-            enrollmentSucceeded = false;
-            enrollmentMessage =
-              enrollmentResponse?.message ||
-              "تمت إضافة الطالب، لكن تعذر ربطه بالفصل.";
-          }
-        }
-      }
-
       setCreatedCredentials({
         studentId,
         username: generatedEmail,
@@ -261,25 +183,11 @@ const Add = () => {
           generatedPassword,
       });
 
-      if (
-        selectedClassId &&
-        enrollmentSucceeded
-      ) {
-        toast.success(
-          "تمت إضافة الطالب وربطه بالفصل وإنشاء بيانات الدخول"
-        );
-      } else if (
-        selectedClassId &&
-        !enrollmentSucceeded
-      ) {
-        toast.warning(
-          enrollmentMessage
-        );
-      } else {
-        toast.success(
-          "تمت إضافة الطالب وإنشاء بيانات الدخول"
-        );
-      }
+      toast.success(
+        selectedClassId
+          ? "تمت إضافة الطالب وربطه بالفصل وإنشاء بيانات الدخول"
+          : "تمت إضافة الطالب وإنشاء بيانات الدخول"
+      );
     } catch (error) {
       toast.error(
         error?.response?.data
