@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { deleteTrip, payTripInstallment } from "@/APIs/financials/trips";
+import { deleteTrip, payTripInstallment, refundTripInstallment } from "@/APIs/financials/trips";
 import Back from "@/components/Back/Back";
 import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
@@ -23,7 +23,7 @@ const installmentStatusMap = {
   pending: "قيد الانتظار",
 };
 
-const formatMoney = (value) => `${Number(value || 0)} جنيه`;
+const formatMoney = (value) => `${Number(value || 0)} ريال`;
 
 const formatDate = (value) => {
   if (!value) return "—";
@@ -37,6 +37,7 @@ const TripProfilePage = () => {
   const { trip, loading, refetch } = useTrip(studentId, tripId);
 
   const [payOpen, setPayOpen] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedInstallment, setSelectedInstallment] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -70,6 +71,16 @@ const TripProfilePage = () => {
     setSelectedInstallment(null);
   };
 
+  const handleOpenRefund = (installment) => {
+    setSelectedInstallment(installment);
+    setRefundOpen(true);
+  };
+
+  const handleCloseRefund = () => {
+    setRefundOpen(false);
+    setSelectedInstallment(null);
+  };
+
   const handlePay = async (data) => {
     if (!studentId || !tripId) return;
 
@@ -89,6 +100,61 @@ const TripProfilePage = () => {
     } else {
       toast.error(response?.message || response || "حدث خطأ ما أثناء تسجيل دفعة الرحلة");
     }
+    setActionLoading(false);
+  };
+
+  const handleRefund = async (data) => {
+    if (!studentId || !tripId || !selectedInstallment) return;
+
+    const amount = Number(data.amount);
+    const reason = String(data.reason || "").trim();
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("أدخل مبلغ استرداد صحيح");
+      return;
+    }
+
+    if (amount > selectedInstallment.paidAmountRaw) {
+      toast.error(
+        `قيمة الاسترداد لا يمكن أن تتجاوز المدفوع ${formatMoney(
+          selectedInstallment.paidAmountRaw
+        )}`
+      );
+      return;
+    }
+
+    if (!reason) {
+      toast.error("سبب التصحيح مطلوب");
+      return;
+    }
+
+    setActionLoading(true);
+
+    const response = await refundTripInstallment(
+      studentId,
+      tripId,
+      selectedInstallment.installmentNumber,
+      {
+        installmentNumber: Number(selectedInstallment.installmentNumber),
+        amount,
+        reason,
+      }
+    );
+
+    if (response?.status) {
+      toast.success(
+        response.message || "تم تسجيل استرداد دفعة الرحلة بنجاح"
+      );
+      handleCloseRefund();
+      await refetch();
+    } else {
+      toast.error(
+        response?.message ||
+          response ||
+          "تعذر تسجيل استرداد دفعة الرحلة"
+      );
+    }
+
     setActionLoading(false);
   };
 
@@ -232,10 +298,33 @@ const TripProfilePage = () => {
                       </span>
                     </td>
                     <td className="rounded-l-xl border border-[#E5E7EB] bg-white px-3 py-3 text-sm">
-                      {permissions?.edit && item.statusRaw !== "paid" ? (
-                        <Button variant="contained" onClick={() => handleOpenPay(item)} sx={{ minWidth: "120px" }}>
-                          تسجيل دفعة
-                        </Button>
+                      {permissions?.edit ? (
+                        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                          {item.statusRaw !== "paid" && item.remainingRaw > 0 && (
+                            <Button
+                              variant="contained"
+                              onClick={() => handleOpenPay(item)}
+                              sx={{ minWidth: "120px" }}
+                            >
+                              تسجيل دفعة
+                            </Button>
+                          )}
+
+                          {item.paidAmountRaw > 0 && (
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              onClick={() => handleOpenRefund(item)}
+                              sx={{ minWidth: "120px" }}
+                            >
+                              تصحيح دفعة
+                            </Button>
+                          )}
+
+                          {item.statusRaw === "paid" && item.paidAmountRaw <= 0 && (
+                            <Typography color="text.secondary" fontSize={13}>—</Typography>
+                          )}
+                        </Box>
                       ) : (
                         <Typography color="text.secondary" fontSize={13}>—</Typography>
                       )}
@@ -253,6 +342,14 @@ const TripProfilePage = () => {
         onClose={handleClosePay}
         installment={selectedInstallment}
         onSubmit={handlePay}
+        loading={actionLoading}
+      />
+
+      <RefundTripDialog
+        open={refundOpen}
+        onClose={handleCloseRefund}
+        installment={selectedInstallment}
+        onSubmit={handleRefund}
         loading={actionLoading}
       />
 
@@ -327,13 +424,13 @@ const PayTripDialog = ({ open, onClose, installment, onSubmit, loading }) => {
               type="number"
               label="المبلغ المدفوع"
               error={Boolean(errors.amount)}
-              helperText={errors.amount?.message || `المتبقي على القسط: ${installment?.remainingRaw || 0} جنيه`}
+              helperText={errors.amount?.message || `المتبقي على القسط: ${installment?.remainingRaw || 0} ريال`}
               inputProps={{ min: 1, max: installment?.remainingRaw || undefined, step: "any" }}
               {...register("amount", {
                 required: "أدخل مبلغ الدفعة",
                 valueAsNumber: true,
                 min: { value: 1, message: "المبلغ يجب أن يكون أكبر من صفر" },
-                max: { value: installment?.remainingRaw || Number.MAX_SAFE_INTEGER, message: `أقصى مبلغ متاح هو ${installment?.remainingRaw || 0} جنيه` },
+                max: { value: installment?.remainingRaw || Number.MAX_SAFE_INTEGER, message: `أقصى مبلغ متاح هو ${installment?.remainingRaw || 0} ريال` },
               })}
             />
           </Grid>
@@ -355,6 +452,96 @@ const PayTripDialog = ({ open, onClose, installment, onSubmit, loading }) => {
         </Button>
         <Button variant="contained" onClick={handleSubmit(onSubmit)} disabled={loading || !installment?.remainingRaw}>
           تسجيل الدفع
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+
+const RefundTripDialog = ({ open, onClose, installment, onSubmit, loading }) => {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm();
+
+  useEffect(() => {
+    if (installment) {
+      reset({
+        amount: installment.paidAmountRaw,
+        reason: "",
+      });
+    }
+  }, [installment, reset]);
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle sx={{ pb: 6 }}>تصحيح / استرداد دفعة الرحلة</DialogTitle>
+
+      <DialogContent>
+        <Grid container spacing={4}>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              type="number"
+              label="مبلغ الاسترداد"
+              error={Boolean(errors.amount)}
+              helperText={
+                errors.amount?.message ||
+                `أقصى مبلغ متاح: ${installment?.paidAmountRaw || 0} ريال`
+              }
+              inputProps={{
+                min: 1,
+                max: installment?.paidAmountRaw || undefined,
+                step: "any",
+              }}
+              {...register("amount", {
+                required: "أدخل مبلغ الاسترداد",
+                valueAsNumber: true,
+                min: {
+                  value: 1,
+                  message: "المبلغ يجب أن يكون أكبر من صفر",
+                },
+                max: {
+                  value:
+                    installment?.paidAmountRaw ||
+                    Number.MAX_SAFE_INTEGER,
+                  message: `أقصى مبلغ متاح هو ${
+                    installment?.paidAmountRaw || 0
+                  } ريال`,
+                },
+              })}
+            />
+          </Grid>
+
+          <Grid item xs={12}>
+            <Input
+              register={register}
+              registerName="reason"
+              error={errors.reason?.message}
+              label="سبب التصحيح"
+              required={true}
+              multiline
+              rows={3}
+            />
+          </Grid>
+        </Grid>
+      </DialogContent>
+
+      <DialogActions sx={{ px: 6, pb: 5, pt: 1 }}>
+        <Button variant="outlined" onClick={onClose} disabled={loading}>
+          إلغاء
+        </Button>
+
+        <Button
+          variant="contained"
+          color="error"
+          onClick={handleSubmit(onSubmit)}
+          disabled={loading || !installment?.paidAmountRaw}
+        >
+          تسجيل الاسترداد
         </Button>
       </DialogActions>
     </Dialog>
