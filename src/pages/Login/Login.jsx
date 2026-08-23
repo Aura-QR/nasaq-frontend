@@ -44,6 +44,10 @@ import {
   loginRequest,
 } from "@/APIs/auth/login";
 
+import {
+  resetSessionGuard,
+} from "@/APIs/Axios";
+
 import AuthLayout, {
   AuthField,
   authColors,
@@ -787,6 +791,13 @@ const Login = () => {
 
         return;
       }
+
+      /*
+       * رفع قفل انتهاء الجلسة. القفل يمنع أي نداء بعد أول 401 حتى لا تتكرر
+       * محاولات الخروج — وبدون رفعه هنا، جلسة جديدة في نفس تبويب المتصفح
+       * (بعد انتهاء سابقة) ستبقى محجوبة وكأن الخادم لا يجيب.
+       */
+      resetSessionGuard();
 
       localStorage.setItem(
         "user",
