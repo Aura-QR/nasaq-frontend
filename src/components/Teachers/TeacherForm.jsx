@@ -348,7 +348,7 @@ const TeacherForm = ({
         <FormSection
           icon={<MenuBookRounded />}
           title="المواد الدراسية"
-          description="اختر مادة دراسية واحدة على الأقل."
+          description="اختر عروض المواد والصفوف الدراسية التي سيقوم المعلم بتدريسها."
           contentSx={{
             "& > .MuiGrid-item": {
               minHeight: "auto",

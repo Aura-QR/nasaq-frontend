@@ -1,9 +1,25 @@
+import {
+  useAuthUser,
+} from "react-auth-kit";
+
 const OPERATION_MAP = {
   read: "read",
+
   add: "create",
   create: "create",
+
   edit: "update",
   update: "update",
+
+  delete: "delete",
+
+  manage: "manage",
+};
+
+const LEGACY_OPERATION_MAP = {
+  read: "read",
+  create: "add",
+  update: "edit",
   delete: "delete",
   manage: "manage",
 };
@@ -16,138 +32,302 @@ const EMPTY_MODULE_PERMISSIONS = {
 };
 
 /*
- * Business Rule:
+ * OWNER / SUPERVISOR
  *
- * OWNER / SUPERVISOR / MANAGER
- *
- * في:
- * - التحضير
- * - الامتحانات / الواجبات / الأنشطة / الكويز
- * - المشاريع
- *
- * صلاحية مشاهدة فقط.
- *
- * أما توزيع الدرجات gradesCriteria:
- * - Read
- * - Create
- * - Update
- *
- * بدون Delete.
+ * الباك يعطيهم ["*"] عند تسجيل الدخول.
  */
-const ADMIN_READ_ONLY_ROLES = new Set([
+const FULL_ACCESS_ROLES = new Set([
   "OWNER",
   "SUPERVISOR",
-  "MANAGER",
 ]);
 
-const ACADEMIC_READ_ONLY_MODULES = new Set([
-  "exams",
-  "projects",
-  "preparation",
+/*
+ * SUPER_ADMIN خاص بالمنصة
+ * ولا يدخل school-scoped routes.
+ */
+const PLATFORM_ONLY_ROLES = new Set([
+  "SUPER_ADMIN",
 ]);
 
-const GRADES_CRITERIA_MODULE =
-  "gradesCriteria";
+/*
+ * محتوى خاص بالمعلم.
+ *
+ * OWNER / SUPERVISOR / MANAGER:
+ * Read  ✅
+ * Add   ❌
+ * Edit  ❌
+ * Delete ✅
+ *
+ * المعلم هو الذي ينشئ ويعدل
+ * المحتوى التعليمي الخاص به.
+ */
+const TEACHER_AUTHORED_MODULES =
+  new Set([
+    "exams",
+    "projects",
+    "preparation",
+  ]);
 
-const normalizeRole = (value) =>
+const NON_TEACHER_ADMIN_ROLES =
+  new Set([
+    "OWNER",
+    "SUPERVISOR",
+    "MANAGER",
+  ]);
+
+const normalizeRole = (
+  value
+) =>
   String(value || "")
     .trim()
     .toUpperCase();
 
-const getCurrentRole = () => {
-  try {
-    const storedRole =
-      localStorage.getItem("role");
-
-    if (storedRole) {
-      return normalizeRole(
-        storedRole
-      );
-    }
-
-    const storedUser =
-      localStorage.getItem("user");
-
-    if (storedUser) {
-      const user =
-        JSON.parse(storedUser);
-
-      return normalizeRole(
-        user?.role ||
-          user?.user?.role
-      );
-    }
-  } catch (error) {
-    console.warn(
-      "Unable to read current user role:",
-      error
-    );
-  }
-
-  return "";
-};
-
-const getReadOnlyPermissions = (
+const normalizeOperation = (
   operation
-) => {
-  if (operation) {
-    const normalizedOperation =
-      OPERATION_MAP[operation] ||
-      operation;
-
-    return (
-      normalizedOperation ===
-      "read"
-    );
-  }
-
-  return {
-    read: true,
-    add: false,
-    edit: false,
-    delete: false,
-  };
-};
+) =>
+  OPERATION_MAP[
+    operation
+  ] || operation;
 
 /*
- * OWNER / SUPERVISOR / MANAGER
- * صلاحيات توزيع الدرجات:
- *
- * Read   ✅
- * Create ✅
- * Update ✅
- * Delete ❌
+ * استخرج المستخدم الحالي
+ * من react-auth-kit.
  */
-const getGradesCriteriaPermissions = (
-  operation
+const getAuthenticatedUser = (
+  authState
 ) => {
-  if (operation) {
-    const normalizedOperation =
-      OPERATION_MAP[operation] ||
-      operation;
+  const candidates = [
+    authState?.user,
+    authState?.admin,
 
-    return [
-      "read",
-      "create",
-      "update",
-      "delete",
-    ].includes(
-      normalizedOperation
-    );
-  }
+    authState?.data?.user,
+    authState?.data?.admin,
 
-  return {
+    authState?.data?.data?.user,
+    authState?.data?.data?.admin,
+
+    authState,
+  ];
+
+  return (
+    candidates.find(
+      (candidate) =>
+        candidate &&
+        typeof candidate ===
+          "object" &&
+        !Array.isArray(
+          candidate
+        ) &&
+        (
+          candidate.role ||
+          candidate.email ||
+          candidate._id ||
+          candidate.id
+        )
+    ) || {}
+  );
+};
+
+const getLocalStorageUser =
+  () => {
+    try {
+      const raw =
+        localStorage.getItem(
+          "user"
+        );
+
+      if (!raw) {
+        return {};
+      }
+
+      return (
+        JSON.parse(raw) ||
+        {}
+      );
+    } catch {
+      return {};
+    }
+  };
+
+const getLocalStoragePermissions =
+  () => {
+    const raw =
+      localStorage.getItem(
+        "permissions"
+      );
+
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(
+        raw
+      );
+    } catch {
+      if (
+        raw === "*" ||
+        raw === "school.*"
+      ) {
+        return [raw];
+      }
+
+      return null;
+    }
+  };
+
+const normalizePermissionsValue =
+  (value) => {
+    if (
+      Array.isArray(value)
+    ) {
+      return value;
+    }
+
+    if (
+      typeof value ===
+        "string" &&
+      value.trim()
+    ) {
+      return [
+        value.trim(),
+      ];
+    }
+
+    if (
+      value &&
+      typeof value ===
+        "object"
+    ) {
+      return value;
+    }
+
+    return null;
+  };
+
+const getFullPermissions =
+  () => ({
     read: true,
     add: true,
     edit: true,
     delete: true,
+  });
+
+const hasFullAccess = (
+  permissions
+) => {
+  if (
+    permissions === "*" ||
+    permissions ===
+      "school.*"
+  ) {
+    return true;
+  }
+
+  if (
+    Array.isArray(
+      permissions
+    )
+  ) {
+    return (
+      permissions.includes(
+        "*"
+      ) ||
+      permissions.includes(
+        "school.*"
+      )
+    );
+  }
+
+  return false;
+};
+
+/*
+ * Exams / Projects / Preparation
+ *
+ * ليست محتوى إداري.
+ *
+ * OWNER / SUPERVISOR / MANAGER
+ * لا ننفذ لهم Create أو Update
+ * من الواجهة.
+ */
+const isTeacherAuthoredOperationBlocked =
+  (
+    role,
+    module,
+    operation
+  ) => {
+    if (
+      !NON_TEACHER_ADMIN_ROLES.has(
+        role
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      !TEACHER_AUTHORED_MODULES.has(
+        module
+      )
+    ) {
+      return false;
+    }
+
+    const normalizedOperation =
+      normalizeOperation(
+        operation
+      );
+
+    return [
+      "create",
+      "update",
+    ].includes(
+      normalizedOperation
+    );
+  };
+
+/*
+ * New flat permission format:
+ *
+ * [
+ *   "school.students.read",
+ *   "school.students.create",
+ *   "school.students.update",
+ *   "school.students.delete"
+ * ]
+ */
+const createArrayChecker = (
+  permissions,
+  module
+) => {
+  const prefix =
+    `school.${module}.`;
+
+  const hasManage =
+    permissions.includes(
+      `${prefix}manage`
+    );
+
+  return (
+    requestedOperation
+  ) => {
+    const operation =
+      normalizeOperation(
+        requestedOperation
+      );
+
+    return (
+      hasManage ||
+      permissions.includes(
+        `${prefix}${operation}`
+      )
+    );
   };
 };
 
-/**
- * Supports both permission formats:
+/*
+ * Old permission format:
  *
- * Old:
  * {
  *   students: {
  *     read: true,
@@ -156,69 +336,113 @@ const getGradesCriteriaPermissions = (
  *     delete: true
  *   }
  * }
- *
- * New:
- * [
- *   "school.students.read",
- *   "school.students.create",
- *   "school.students.update",
- *   "school.students.delete"
- * ]
  */
+const createLegacyChecker = (
+  modulePermissions
+) => {
+  return (
+    requestedOperation
+  ) => {
+    const normalizedOperation =
+      normalizeOperation(
+        requestedOperation
+      );
+
+    const legacyOperation =
+      LEGACY_OPERATION_MAP[
+        normalizedOperation
+      ] ||
+      requestedOperation;
+
+    return Boolean(
+      modulePermissions[
+        legacyOperation
+      ] ??
+        modulePermissions[
+          normalizedOperation
+        ]
+    );
+  };
+};
+
 const usePermissions = (
   module,
   operation
 ) => {
-  const role =
-    getCurrentRole();
+  const getAuthUser =
+    useAuthUser();
+
+  const authState =
+    getAuthUser?.() ||
+    {};
+
+  const authUser =
+    getAuthenticatedUser(
+      authState
+    );
+
+  const storedUser =
+    getLocalStorageUser();
 
   /*
-   * OWNER / SUPERVISOR / MANAGER
+   * Session الحالية هي المصدر الأساسي.
+   */
+  const role =
+    normalizeRole(
+      authUser?.role ||
+        authState?.role ||
+        storedUser?.role ||
+        storedUser?.user
+          ?.role ||
+        localStorage.getItem(
+          "role"
+        )
+    );
+
+  /*
+   * مهم:
    *
-   * gradesCriteria:
-   * مسموح Read + Create + Update.
+   * MANAGER لم يعد له
+   * managerPermissions خاصة بالحساب.
    *
-   * الشرط لازم يسبق wildcard "*"
-   * علشان نمنع Delete حتى لو المستخدم
-   * عنده Full Access.
+   * الـ Backend يضع MANAGER permissions
+   * الموحدة للمدرسة داخل الـ token
+   * عند تسجيل الدخول.
+   *
+   * كذلك promoted teacher يأخذ
+   * الصلاحيات المدمجة في token.
+   *
+   * لذلك لا نقرأ managerPermissions هنا.
+   */
+  const authPermissions =
+    normalizePermissionsValue(
+      authState
+        ?.permissions ??
+        authUser
+          ?.permissions
+    );
+
+  let permissions =
+    authPermissions;
+
+  /*
+   * LocalStorage مجرد fallback.
    */
   if (
-    ADMIN_READ_ONLY_ROLES.has(
-      role
-    ) &&
-    module ===
-      GRADES_CRITERIA_MODULE
+    permissions === null
   ) {
-    return getGradesCriteriaPermissions(
-      operation
-    );
+    permissions =
+      getLocalStoragePermissions();
   }
 
   /*
-   * باقي الأكاديميات المحددة:
-   * Read Only.
-   *
-   * هذا الشرط يسبق wildcard "*".
+   * SUPER_ADMIN
    */
   if (
-    ADMIN_READ_ONLY_ROLES.has(
+    PLATFORM_ONLY_ROLES.has(
       role
-    ) &&
-    ACADEMIC_READ_ONLY_MODULES.has(
-      module
     )
   ) {
-    return getReadOnlyPermissions(
-      operation
-    );
-  }
-
-  const raw =
-    localStorage.getItem(
-      "permissions"
-    );
-
-  if (!raw) {
     return operation
       ? false
       : {
@@ -226,19 +450,51 @@ const usePermissions = (
         };
   }
 
-  let permissions;
+  /*
+   * OWNER / SUPERVISOR
+   *
+   * Full Access بشكل عام.
+   */
+  if (
+    FULL_ACCESS_ROLES.has(
+      role
+    )
+  ) {
+    if (operation) {
+      if (
+        isTeacherAuthoredOperationBlocked(
+          role,
+          module,
+          operation
+        )
+      ) {
+        return false;
+      }
 
-  try {
-    permissions =
-      JSON.parse(raw);
-  } catch {
-    return operation
-      ? false
-      : {
-          ...EMPTY_MODULE_PERMISSIONS,
-        };
+      return true;
+    }
+
+    const result =
+      getFullPermissions();
+
+    if (
+      TEACHER_AUTHORED_MODULES.has(
+        module
+      )
+    ) {
+      result.add =
+        false;
+
+      result.edit =
+        false;
+    }
+
+    return result;
   }
 
+  /*
+   * لو مفيش permissions.
+   */
   if (!permissions) {
     return operation
       ? false
@@ -247,60 +503,82 @@ const usePermissions = (
         };
   }
 
-  // Full-access shortcut
+  /*
+   * Wildcard.
+   */
   if (
-    permissions === "*" ||
-    permissions?.includes?.("*") ||
-    permissions?.includes?.(
-      "school.*"
+    hasFullAccess(
+      permissions
     )
   ) {
     if (operation) {
+      if (
+        isTeacherAuthoredOperationBlocked(
+          role,
+          module,
+          operation
+        )
+      ) {
+        return false;
+      }
+
       return true;
     }
 
-    return {
-      read: true,
-      add: true,
-      edit: true,
-      delete: true,
-    };
+    const result =
+      getFullPermissions();
+
+    if (
+      TEACHER_AUTHORED_MODULES.has(
+        module
+      ) &&
+      NON_TEACHER_ADMIN_ROLES.has(
+        role
+      )
+    ) {
+      result.add =
+        false;
+
+      result.edit =
+        false;
+    }
+
+    return result;
   }
 
-  // New permissions array format
+  /*
+   * New permissions array.
+   *
+   * MANAGER الحالي يدخل هنا
+   * ويقرأ School MANAGER Set
+   * الموجود في الـ JWT.
+   */
   if (
-    Array.isArray(permissions)
+    Array.isArray(
+      permissions
+    )
   ) {
     if (!module) {
       return permissions;
     }
 
-    const prefix =
-      `school.${module}.`;
-
-    const hasManage =
-      permissions.includes(
-        `${prefix}manage`
+    const hasOperation =
+      createArrayChecker(
+        permissions,
+        module
       );
-
-    const hasOperation = (
-      requestedOperation
-    ) => {
-      const normalizedOperation =
-        OPERATION_MAP[
-          requestedOperation
-        ] ||
-        requestedOperation;
-
-      return (
-        hasManage ||
-        permissions.includes(
-          `${prefix}${normalizedOperation}`
-        )
-      );
-    };
 
     if (operation) {
+      if (
+        isTeacherAuthoredOperationBlocked(
+          role,
+          module,
+          operation
+        )
+      ) {
+        return false;
+      }
+
       return hasOperation(
         operation
       );
@@ -308,55 +586,106 @@ const usePermissions = (
 
     return {
       read:
-        hasOperation("read"),
+        hasOperation(
+          "read"
+        ),
 
       add:
-        hasOperation("add"),
+        isTeacherAuthoredOperationBlocked(
+          role,
+          module,
+          "add"
+        )
+          ? false
+          : hasOperation(
+              "add"
+            ),
 
       edit:
-        hasOperation("edit"),
+        isTeacherAuthoredOperationBlocked(
+          role,
+          module,
+          "edit"
+        )
+          ? false
+          : hasOperation(
+              "edit"
+            ),
 
       delete:
-        hasOperation("delete"),
+        hasOperation(
+          "delete"
+        ),
     };
   }
 
-  // Old nested-object format
+  /*
+   * Legacy nested-object format.
+   */
   if (
     typeof permissions ===
       "object" &&
+    permissions !== null &&
     module &&
     module in permissions
   ) {
     const modulePermissions =
-      permissions[module] || {};
+      permissions[module] ||
+      {};
+
+    const hasOperation =
+      createLegacyChecker(
+        modulePermissions
+      );
 
     if (operation) {
-      return Boolean(
-        modulePermissions[
+      if (
+        isTeacherAuthoredOperationBlocked(
+          role,
+          module,
           operation
-        ]
+        )
+      ) {
+        return false;
+      }
+
+      return hasOperation(
+        operation
       );
     }
 
     return {
-      read: Boolean(
-        modulePermissions.read
-      ),
+      read:
+        hasOperation(
+          "read"
+        ),
 
-      add: Boolean(
-        modulePermissions.add
-      ),
+      add:
+        isTeacherAuthoredOperationBlocked(
+          role,
+          module,
+          "add"
+        )
+          ? false
+          : hasOperation(
+              "add"
+            ),
 
-      edit: Boolean(
-        modulePermissions.edit
-      ),
+      edit:
+        isTeacherAuthoredOperationBlocked(
+          role,
+          module,
+          "edit"
+        )
+          ? false
+          : hasOperation(
+              "edit"
+            ),
 
-      delete: Boolean(
-        modulePermissions.delete
-      ),
-
-      ...modulePermissions,
+      delete:
+        hasOperation(
+          "delete"
+        ),
     };
   }
 

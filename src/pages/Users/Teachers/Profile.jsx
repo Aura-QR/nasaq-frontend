@@ -63,7 +63,23 @@ const getSubjects = (teacher) => {
     ? teacher.subject
     : [];
 
-  return subjects;
+  if (subjects.length > 0) {
+    return subjects;
+  }
+
+  const offerings = Array.isArray(
+    teacher?.subjectOfferings
+  )
+    ? teacher.subjectOfferings
+    : [];
+
+  return offerings
+    .map(
+      (offering) =>
+        offering?.subjectId ||
+        offering?.subject
+    )
+    .filter(Boolean);
 };
 
 const infoCardSx = {
@@ -842,20 +858,23 @@ const TeacherSubjects = ({
 }) => {
   const { id } = useParams();
 
-  const subjects =
-    getSubjects(teacher);
+  const originalIds = useMemo(() => {
+    const offerings = Array.isArray(
+      teacher?.subjectOfferings
+    )
+      ? teacher.subjectOfferings
+      : [];
 
-  const originalIds = useMemo(
-    () =>
-      subjects
-        .map(
-          (subject) =>
-            subject?._id ||
-            subject?.id
-        )
-        .filter(Boolean),
-    [subjects]
-  );
+    return offerings
+      .map(
+        (offering) =>
+          offering?._id ||
+          offering?.id ||
+          offering
+      )
+      .filter(Boolean)
+      .map(String);
+  }, [teacher]);
 
   const [
     selectedSubjects,
@@ -915,7 +934,7 @@ const TeacherSubjects = ({
         const response =
           await editTeacher(
             {
-              subjectIds:
+              subjectOfferingIds:
                 selectedSubjects,
             },
             id
@@ -937,9 +956,18 @@ const TeacherSubjects = ({
           ...previous,
           ...(updatedTeacher || {}),
           subjects:
-            updatedTeacher?.subjects ||
-            updatedTeacher?.subject ||
-            previous.subjects,
+            updatedTeacher?.subjects ??
+            updatedTeacher?.subject ??
+            previous?.subjects ??
+            [],
+          subjectIds:
+            updatedTeacher?.subjectIds ??
+            previous?.subjectIds ??
+            [],
+          subjectOfferings:
+            updatedTeacher?.subjectOfferings ??
+            previous?.subjectOfferings ??
+            [],
         }));
 
         toast.success(

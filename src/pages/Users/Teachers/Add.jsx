@@ -95,10 +95,6 @@ const Add = () => {
     try {
       setLoading(true);
 
-      /*
-       * CreateTeacherDto يقبل password،
-       * ولا يعرّف username منفصلًا.
-       */
       const generatedPassword =
         generateTemporaryPassword();
 
@@ -108,7 +104,10 @@ const Add = () => {
           generatedPassword,
         isActive:
           formData.isActive == 1,
-        subjectIds:
+
+        // IMPORTANT:
+        // selectedSubjects now contains SubjectOffering IDs.
+        subjectOfferingIds:
           selectedSubjects,
       };
 

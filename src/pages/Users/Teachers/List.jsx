@@ -59,19 +59,43 @@ const TABLE_BODY = [
 ];
 
 const getTeacherSubjects = (teacher) => {
-  const subjects = Array.isArray(teacher?.subject)
-    ? teacher.subject
-    : Array.isArray(teacher?.subjects)
-    ? teacher.subjects
+  const subjects =
+    Array.isArray(teacher?.subjects) &&
+    teacher.subjects.length > 0
+      ? teacher.subjects
+      : Array.isArray(teacher?.subject)
+      ? teacher.subject
+      : [];
+
+  if (subjects.length > 0) {
+    return subjects
+      .map(
+        (subject) =>
+          subject?.subjectName ||
+          subject?.name ||
+          subject?.title
+      )
+      .filter(Boolean);
+  }
+
+  const offerings = Array.isArray(
+    teacher?.subjectOfferings
+  )
+    ? teacher.subjectOfferings
     : [];
 
-  return subjects
-    .map(
-      (subject) =>
+  return offerings
+    .map((offering) => {
+      const subject =
+        offering?.subjectId ||
+        offering?.subject;
+
+      return (
         subject?.subjectName ||
         subject?.name ||
         subject?.title
-    )
+      );
+    })
     .filter(Boolean);
 };
 

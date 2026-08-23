@@ -2124,23 +2124,7 @@ const TeacherDashboard = () => {
                 </Button>
               }
             >
-              <Alert
-                severity="info"
-                sx={{
-                  mb: 1.5,
-                  py: 0.8,
-                  px: 1.5,
-                  borderRadius: "12px",
-                  fontSize: "13px",
-                  "& .MuiAlert-icon": {
-                    py: 0.3,
-                    fontSize: 20,
-                  },
-                }}
-              >
-                تصحيح الاختبارات اليدوي متاح من صفحة تفاصيل الاختبار؛ الباك لا يوفّر حاليًا قائمة مستقلة بالمحاولات المنتظرة.
-              </Alert>
-
+             
               {pendingCorrections.length > 0 ? (
                 <Stack spacing={1.2}>
                   {pendingCorrections
