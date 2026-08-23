@@ -149,6 +149,7 @@ const getTeacherSpecialization = (teacher) =>
 const getTeacherSubjects = (teacher) => {
   const subjects =
     teacher?.subjects ??
+    teacher?.subjectOfferings ??
     teacher?.subjectIds ??
     teacher?.assignedSubjects ??
     [];
@@ -156,18 +157,70 @@ const getTeacherSubjects = (teacher) => {
   return Array.isArray(subjects) ? subjects : [];
 };
 
-const getTeacherSubjectNames = (teacher) =>
-  getTeacherSubjects(teacher)
-    .map((subject) =>
-      typeof subject === "string"
-        ? subject
-        : subject?.name ||
-          subject?.title ||
-          subject?.subjectName ||
-          subject?._id ||
-          subject?.id
-    )
-    .filter(Boolean);
+const getTeacherSubjectOfferings = (teacher) => {
+  if (Array.isArray(teacher?.subjectOfferings)) {
+    return teacher.subjectOfferings;
+  }
+  return [];
+};
+
+const getTeacherSubjectOfferingIds = (teacher) => {
+  if (Array.isArray(teacher?.subjectOfferings)) {
+    return Array.from(
+      new Set(
+        teacher.subjectOfferings
+          .map((item) =>
+            typeof item === "string"
+              ? item
+              : item?.subjectOfferingId || item?._id || item?.id
+          )
+          .map((val) => String(val || "").trim())
+          .filter(Boolean)
+      )
+    );
+  }
+
+  if (Array.isArray(teacher?.subjectOfferingIds)) {
+    return Array.from(
+      new Set(
+        teacher.subjectOfferingIds
+          .map((val) => String(val || "").trim())
+          .filter(Boolean)
+      )
+    );
+  }
+
+  return [];
+};
+
+const getTeacherSubjectNames = (teacher) => {
+  if (Array.isArray(teacher?.subjectOfferings) && teacher.subjectOfferings.length > 0) {
+    return teacher.subjectOfferings
+      .map((item) => {
+        if (typeof item === "string") return item;
+        const name = item?.subjectName || item?.subject?.name || item?.name;
+        const grade = item?.gradeLevel || item?.gradeLevelId?.name;
+        if (name && grade) return `${name} (${grade})`;
+        return name;
+      })
+      .filter(Boolean);
+  }
+
+  if (Array.isArray(teacher?.subjects) && teacher.subjects.length > 0) {
+    return teacher.subjects
+      .map((subject) =>
+        typeof subject === "string"
+          ? subject
+          : subject?.subjectName ||
+            subject?.name ||
+            subject?.title ||
+            subject?.subjectCode
+      )
+      .filter(Boolean);
+  }
+
+  return [];
+};
 
 const getTeacherSubjectIds = (teacher) =>
   getTeacherSubjects(teacher)
@@ -226,8 +279,18 @@ const toTeacherDateInput = (value) => {
   return date.toISOString().slice(0, 10);
 };
 
-const parseSubjectIds = (value) =>
-  Array.from(
+const parseSubjectIds = (value) => {
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .map((item) => String(item?._id || item?.id || item || "").trim())
+          .filter(Boolean)
+      )
+    );
+  }
+
+  return Array.from(
     new Set(
       String(value || "")
         .split(/[\n,]+/)
@@ -235,16 +298,21 @@ const parseSubjectIds = (value) =>
         .filter(Boolean)
     )
   );
+};
 
 const buildTeacherPayload = (
   form,
   { editing = false } = {}
 ) => {
+  const offeringIds = parseSubjectIds(
+    form.subjectOfferingIds ?? form.subjectIds
+  );
+
   const payload = {
     name: form.name?.trim(),
     email: form.email?.trim(),
     phoneNumber: form.phoneNumber?.trim(),
-    subjectIds: parseSubjectIds(form.subjectIds),
+    subjectOfferingIds: offeringIds,
     qualification: form.qualification?.trim(),
     experience: form.experience?.trim(),
     specialization: form.specialization?.trim(),
@@ -265,10 +333,12 @@ const buildTeacherPayload = (
   });
 
   if (
-    Array.isArray(payload.subjectIds) &&
-    payload.subjectIds.length === 0
+    Array.isArray(payload.subjectOfferingIds) &&
+    payload.subjectOfferingIds.length === 0
   ) {
-    delete payload.subjectIds;
+    if (!editing) {
+      delete payload.subjectOfferingIds;
+    }
   }
 
   if (editing && !form.password) {
@@ -291,6 +361,8 @@ export {
   getTeacherExperience,
   getTeacherSpecialization,
   getTeacherSubjects,
+  getTeacherSubjectOfferings,
+  getTeacherSubjectOfferingIds,
   getTeacherSubjectNames,
   getTeacherSubjectIds,
   isTeacherActive,
@@ -314,6 +386,8 @@ export default {
   getTeacherExperience,
   getTeacherSpecialization,
   getTeacherSubjects,
+  getTeacherSubjectOfferings,
+  getTeacherSubjectOfferingIds,
   getTeacherSubjectNames,
   getTeacherSubjectIds,
   isTeacherActive,

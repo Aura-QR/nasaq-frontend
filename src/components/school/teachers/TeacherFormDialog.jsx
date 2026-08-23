@@ -24,9 +24,11 @@ import {
 
 import {
   buildTeacherPayload,
-  getTeacherSubjectIds,
+  getTeacherSubjectOfferingIds,
   toTeacherDateInput,
 } from "@/utils/school/teacherData";
+
+import SubjectCheckBoxes from "@/components/Selector/SubjectCheckBoxes";
 
 const EMAIL_PATTERN =
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -48,10 +50,10 @@ const getInitialForm = (
     teacher?.phoneNumber ||
     teacher?.phone ||
     "",
-  subjectIds:
-    getTeacherSubjectIds(
+  subjectOfferingIds:
+    getTeacherSubjectOfferingIds(
       teacher
-    ).join("\n"),
+    ),
   qualification:
     teacher?.qualification ||
     "",
@@ -579,107 +581,59 @@ const TeacherFormDialog = ({
 
           <Box
             sx={{
-              display:
-                "grid",
-              gridTemplateColumns:
-                {
-                  xs: "1fr",
-                  md:
-                    "repeat(2,minmax(0,1fr))",
-                },
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+              },
               gap: 1.2,
             }}
           >
             <TextField
-              label="معرّفات المواد"
-              value={
-                form.subjectIds
-              }
-              onChange={(
-                event
-              ) =>
+              label="العنوان"
+              value={form.address}
+              onChange={(event) =>
                 updateField(
-                  "subjectIds",
+                  "address",
                   event.target.value
                 )
               }
               multiline
-              minRows={4}
-              placeholder="ضع كل Subject ID في سطر، أو افصل بينها بفاصلة"
-              helperText="اختياري مؤقتًا لحين تنفيذ صفحة المواد وتحويله إلى Dropdown"
-              inputProps={{
-                dir: "ltr",
-              }}
+              minRows={2}
               disabled={loading}
-              sx={{
-                ...fieldSx,
-                "& .MuiOutlinedInput-root":
-                  {
-                    borderRadius:
-                      "12px",
-                    backgroundColor:
-                      "#fffcf7",
-                    fontSize:
-                      "10px",
-                  },
-              }}
+              sx={fieldSx}
             />
 
-            <Stack spacing={1.2}>
-              <TextField
-                label="العنوان"
-                value={
-                  form.address
-                }
-                onChange={(
-                  event
-                ) =>
-                  updateField(
-                    "address",
-                    event.target.value
-                  )
-                }
-                multiline
-                minRows={2}
-                disabled={loading}
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: "14px",
+                backgroundColor: "#fffcf7",
+                border: "1px solid #ded8cd",
+              }}
+            >
+              <Typography
                 sx={{
-                  ...fieldSx,
-                  "& .MuiOutlinedInput-root":
-                    {
-                      borderRadius:
-                        "12px",
-                      backgroundColor:
-                        "#fffcf7",
-                      fontSize:
-                        "10px",
-                    },
-                }}
-              />
-
-              <Box
-                sx={{
-                  p: 1.2,
-                  borderRadius:
-                    "13px",
-                  backgroundColor:
-                    "rgba(211,164,79,0.08)",
-                  border:
-                    "1px solid rgba(211,164,79,0.22)",
+                  mb: 1,
+                  color: "#122f4d",
+                  fontSize: "12px",
+                  fontWeight: 800,
                 }}
               >
-                <Typography
-                  sx={{
-                    color:
-                      "#8a5a00",
-                    fontSize:
-                      "8.5px",
-                    lineHeight: 1.75,
-                  }}
-                >
-                  بعد تنفيذ Subjects Module سيتم عرض المواد المتاحة بأسمائها بدل إدخال المعرّفات يدويًا.
-                </Typography>
-              </Box>
-            </Stack>
+                المواد الدراسية المسندة للمعلم
+              </Typography>
+
+              <SubjectCheckBoxes
+                selectedSubjects={
+                  form.subjectOfferingIds || []
+                }
+                setSelectedSubjects={(value) =>
+                  updateField(
+                    "subjectOfferingIds",
+                    value
+                  )
+                }
+              />
+            </Box>
           </Box>
         </Stack>
       </DialogContent>
