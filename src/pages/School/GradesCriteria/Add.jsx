@@ -224,9 +224,9 @@ const GradeInputs = ({ register, errors }) => {
   const fields = [
     ["passingGrade", "درجة النجاح", 50, 0, 100],
     ["final", "درجة الاختبار النهائي", 100, 0, 100],
-    ["activities", "درجة أعمال السنة", 0, 0, 100],
-    ["projects", "درجة المهام الأدائية", 0, 0, 100],
-    ["projectsCount", "عدد المهام الأدائية", 0, 0, undefined],
+    ["activities", "درجة الأنشطة", 0, 0, 100],
+    ["projects", "درجة المشاريع", 0, 0, 100],
+    ["projectsCount", "عدد المشاريع", 0, 0, undefined],
     ["assignments", "درجة الواجبات", 0, 0, 100],
     ["assignmentsCount", "عدد الواجبات", 0, 0, undefined],
     ["quizzes", "درجة الاختبارات القصيرة", 0, 0, 100],

@@ -750,7 +750,7 @@ const Profile = () => {
       },
       {
         label:
-          "أعمال السنة",
+          "الأنشطة",
         value: gradeValue(
           item?.activities
         ),
@@ -759,7 +759,7 @@ const Profile = () => {
       },
       {
         label:
-          "المهام الأدائية",
+          "المشاريع",
         value: gradeValue(
           item?.projects
         ),
@@ -768,7 +768,7 @@ const Profile = () => {
       },
       {
         label:
-          "عدد المهام الأدائية",
+          "عدد المشاريع",
         value: Number(
           item?.projectsCount ||
             0

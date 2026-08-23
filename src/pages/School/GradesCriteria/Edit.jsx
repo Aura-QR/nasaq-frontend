@@ -198,8 +198,8 @@ const SectionHeading = ({ icon, title, description, endContent }) => (
 );
 const GradeInputs = ({ register, errors, defaults }) => {
   const fields = [
-    ["passingGrade", "درجة النجاح", 50, 0, 100], ["final", "درجة الاختبار النهائي", 0, 0, 100], ["activities", "درجة أعمال السنة", 0, 0, 100],
-    ["projects", "درجة المهام الأدائية", 0, 0, 100], ["projectsCount", "عدد المهام الأدائية", 0, 0, undefined], ["assignments", "درجة الواجبات", 0, 0, 100],
+    ["passingGrade", "درجة النجاح", 50, 0, 100], ["final", "درجة الاختبار النهائي", 0, 0, 100], ["activities", "درجة الأنشطة", 0, 0, 100],
+    ["projects", "درجة المشاريع", 0, 0, 100], ["projectsCount", "عدد المشاريع", 0, 0, undefined], ["assignments", "درجة الواجبات", 0, 0, 100],
     ["assignmentsCount", "عدد الواجبات", 0, 0, undefined], ["quizzes", "درجة الاختبارات القصيرة", 0, 0, 100], ["quizzesCount", "عدد الاختبارات القصيرة", 0, 0, undefined],
   ];
   return <Grid container spacing={{ xs: 1.5, md: 2 }}>{fields.map(([name, label, fallback, min, max]) => <Grid item xs={12} sm={6} lg={4} key={name}><Input register={register} registerName={name} error={errors?.[name]?.message} label={label} type="number" defaultValue={defaults?.[name] ?? fallback} valueAsNumber inputProps={{ min, ...(max !== undefined ? { max } : {}), step: 1 }} /></Grid>)}</Grid>;
