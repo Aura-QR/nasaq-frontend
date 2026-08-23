@@ -103,13 +103,14 @@ const ExpensesAddPage = () => {
   );
 
   /*
-   * Expenses API currently expects academicYear as a string,
-   * so the option id/value is the academic year name, not Mongo _id.
+   * The id is the Mongo _id: the expense document stores academicYearId, an
+   * ObjectId. Sending the year NAME meant mongoose dropped the field on save
+   * and every expense was written with a null year.
    */
   const academicYearOptions = useMemo(
     () =>
       academicYears.map((year) => ({
-        id: year.name,
+        id: year._id || year.id,
         name:
           year.status === "active"
             ? `${year.name} - الحالية`
@@ -129,7 +130,9 @@ const ExpensesAddPage = () => {
       amount: Number(formValues.amount),
       categoryId: formValues.categoryId || undefined,
       date: formValues.date,
-      academicYear: formValues.academicYear || undefined,
+      academicYearId:
+        formValues.academicYear ||
+        undefined,
       notes: formValues.notes || undefined,
     };
 

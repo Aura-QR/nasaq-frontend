@@ -147,13 +147,14 @@ const ExpensesListPage = () => {
   );
 
   /*
-   * Expense filtering currently uses academicYear string,
-   * therefore value is year.name rather than year.id.
+   * The option value is the Mongo _id: the API filters on academicYearId.
+   * It used to be year.name, which the API compared against a field no
+   * expense document has — every year filter returned an empty list.
    */
   const academicYearOptions = useMemo(
     () =>
       academicYears.map((year) => ({
-        value: year.name,
+        value: year._id || year.id,
         label:
           year.status === "active"
             ? `${year.name} - الحالية`
@@ -166,7 +167,9 @@ const ExpensesListPage = () => {
     () => ({
       name: debouncedName.trim() || undefined,
       categoryId: categoryId || undefined,
-      academicYear: academicYear || undefined,
+      academicYearId:
+        academicYear ||
+        undefined,
       page,
       limit,
     }),
@@ -203,7 +206,8 @@ const ExpensesListPage = () => {
         amountRaw: Number(item?.amount || 0),
         date: formatDate(item?.date),
         academicYear: getExpenseAcademicYearName(
-          item?.academicYear
+          item?.academicYearId ??
+            item?.academicYear
         ),
         notes: item?.notes || "—",
       })),
