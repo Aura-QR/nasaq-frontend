@@ -17,21 +17,11 @@ import {
   VisibilityRounded,
 } from "@mui/icons-material";
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-
-import {
-  Link,
-} from "react-router-dom";
-
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 
-import {
-  deleteExpense,
-} from "@/APIs/expenses";
+import { deleteExpense } from "@/APIs/expenses";
 
 import Container from "@/components/Container/Container";
 import PaginationControls from "@/components/Pagination";
@@ -43,21 +33,11 @@ import FinancialPageHeader from "@/components/financial/FinancialPageHeader";
 import FinancialStatCard from "@/components/financial/FinancialStatCard";
 import FinancialEmptyState from "@/components/financial/FinancialEmptyState";
 
-import {
-  useExpenses,
-} from "@/utils/hooks/apis/expenses/useExpenses";
-
-import {
-  useExpenseCategories,
-} from "@/utils/hooks/apis/expenses/useExpenseCategories";
-
-import {
-  useAcademicYears,
-} from "@/utils/hooks/apis/useAcademicYears";
-
+import { useExpenses } from "@/utils/hooks/apis/expenses/useExpenses";
+import { useExpenseCategories } from "@/utils/hooks/apis/expenses/useExpenseCategories";
+import { useAcademicYears } from "@/utils/hooks/apis/useAcademicYears";
 import useDebounce from "@/utils/hooks/useDebounce";
 import usePermissions from "@/utils/hooks/usePermissions";
-
 import {
   formatDate,
   formatMoney,
@@ -81,26 +61,16 @@ const BODY = [
   "notes",
 ];
 
-const getCategoryItems = (
-  value,
-  depth = 0
-) => {
-  if (
-    !value ||
-    depth > 5
-  ) {
+const getCategoryItems = (value, depth = 0) => {
+  if (!value || depth > 5) {
     return [];
   }
 
-  if (
-    Array.isArray(value)
-  ) {
+  if (Array.isArray(value)) {
     return value;
   }
 
-  if (
-    typeof value !== "object"
-  ) {
+  if (typeof value !== "object") {
     return [];
   }
 
@@ -111,15 +81,9 @@ const getCategoryItems = (
     "categories",
     "data",
   ]) {
-    const items =
-      getCategoryItems(
-        value?.[key],
-        depth + 1
-      );
+    const items = getCategoryItems(value?.[key], depth + 1);
 
-    if (
-      items.length > 0
-    ) {
+    if (items.length > 0) {
       return items;
     }
   }
@@ -127,27 +91,13 @@ const getCategoryItems = (
   return [];
 };
 
-const normalizeCategoryOptions = (
-  value
-) =>
+const normalizeCategoryOptions = (value) =>
   getCategoryItems(value)
     .map((item) => {
-      const id =
-        item?._id ||
-        item?.id ||
-        item?.value ||
-        "";
+      const id = item?._id || item?.id || item?.value || "";
+      const label = item?.name || item?.label || item?.title || "";
 
-      const label =
-        item?.name ||
-        item?.label ||
-        item?.title ||
-        "";
-
-      if (
-        !id ||
-        !label
-      ) {
+      if (!id || !label) {
         return null;
       }
 
@@ -162,16 +112,10 @@ const normalizeCategoryOptions = (
     })
     .filter(Boolean);
 
-const getExpenseAcademicYearName = (
-  value
-) => {
-  if (!value) {
-    return "—";
-  }
+const getExpenseAcademicYearName = (value) => {
+  if (!value) return "—";
 
-  if (
-    typeof value === "object"
-  ) {
+  if (typeof value === "object") {
     return (
       value?.name ||
       value?.label ||
@@ -184,268 +128,124 @@ const getExpenseAcademicYearName = (
 };
 
 const ExpensesListPage = () => {
-  const [
-    page,
-    setPage,
-  ] = useState(1);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [name, setName] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [academicYear, setAcademicYear] = useState("");
+  const [localPagination, setLocalPagination] = useState(null);
 
-  const [
-    limit,
-    setLimit,
-  ] = useState(10);
+  const debouncedName = useDebounce(name, 500);
+  const permissions = usePermissions("expenses");
 
-  const [
-    name,
-    setName,
-  ] = useState("");
+  const { categories = [] } = useExpenseCategories();
+  const { academicYears = [] } = useAcademicYears();
 
-  const [
-    categoryId,
-    setCategoryId,
-  ] = useState("");
-
-  const [
-    academicYear,
-    setAcademicYear,
-  ] = useState("");
-
-  const [
-    localPagination,
-    setLocalPagination,
-  ] = useState(null);
-
-  const debouncedName =
-    useDebounce(
-      name,
-      500
-    );
-
-  const permissions =
-    usePermissions(
-      "expenses"
-    );
-
-  const {
-    categories = [],
-  } =
-    useExpenseCategories();
-
-  const {
-    academicYears = [],
-  } =
-    useAcademicYears();
-
-  const categoryOptions =
-    useMemo(
-      () =>
-        normalizeCategoryOptions(
-          categories
-        ),
-      [categories]
-    );
+  const categoryOptions = useMemo(
+    () => normalizeCategoryOptions(categories),
+    [categories]
+  );
 
   /*
-   * فلترة المصروفات ما زالت تستخدم academicYear
-   * كنص باسم السنة مثل 2026/2027.
-   *
-   * لذلك نترك قيمة الفلتر باسم السنة
-   * طالما الـ API يدعمها بهذا الشكل.
+   * The option value is the Mongo _id: the API filters on academicYearId.
+   * It used to be year.name, which the API compared against a field no
+   * expense document has — every year filter returned an empty list.
    */
-  const academicYearOptions =
-    useMemo(
-      () =>
-        academicYears.map(
-          (year) => ({
-            value:
-              year.name,
+  const academicYearOptions = useMemo(
+    () =>
+      academicYears.map((year) => ({
+        value: year._id || year.id,
+        label:
+          year.status === "active"
+            ? `${year.name} - الحالية`
+            : year.name,
+      })),
+    [academicYears]
+  );
 
-            label:
-              year.status ===
-              "active"
-                ? `${year.name} - الحالية`
-                : year.name,
-          })
-        ),
-      [academicYears]
-    );
-
-  const filters =
-    useMemo(
-      () => ({
-        name:
-          debouncedName.trim() ||
-          undefined,
-
-        categoryId:
-          categoryId ||
-          undefined,
-
-        academicYear:
-          academicYear ||
-          undefined,
-
-        page,
-
-        limit,
-      }),
-      [
-        debouncedName,
-        categoryId,
-        academicYear,
-        page,
-        limit,
-      ]
-    );
+  const filters = useMemo(
+    () => ({
+      name: debouncedName.trim() || undefined,
+      categoryId: categoryId || undefined,
+      academicYearId:
+        academicYear ||
+        undefined,
+      page,
+      limit,
+    }),
+    [debouncedName, categoryId, academicYear, page, limit]
+  );
 
   const {
     expenses = [],
     loading,
     pagination,
     setExpenses,
-  } =
-    useExpenses(filters);
+  } = useExpenses(filters);
 
   useEffect(() => {
     setPage(1);
-  }, [
-    debouncedName,
-    categoryId,
-    academicYear,
-    limit,
-  ]);
+  }, [debouncedName, categoryId, academicYear, limit]);
 
   useEffect(() => {
     if (pagination) {
-      setLocalPagination(
-        pagination
-      );
+      setLocalPagination(pagination);
     }
   }, [pagination]);
 
-  /*
-   * الـ Backend أصبح يرجع السنة بالشكل:
-   *
-   * academicYearId: {
-   *   _id: "...",
-   *   name: "2026/2027",
-   *   status: "active"
-   * }
-   *
-   * لذلك نقرأ academicYearId أولاً،
-   * مع دعم academicYear القديم كـ fallback.
-   */
-  const mappedExpenses =
-    useMemo(
-      () =>
-        expenses.map(
-          (item) => ({
-            id:
-              item?._id ||
-              item?.id,
-
-            name:
-              item?.name ||
-              "—",
-
-            categoryName:
-              item
-                ?.categoryId
-                ?.name ||
-              item
-                ?.category
-                ?.name ||
-              "—",
-
-            amount:
-              formatMoney(
-                item?.amount
-              ),
-
-            amountRaw:
-              Number(
-                item?.amount ||
-                  0
-              ),
-
-            date:
-              formatDate(
-                item?.date
-              ),
-
-            academicYear:
-              getExpenseAcademicYearName(
-                item?.academicYearId ||
-                  item?.academicYear
-              ),
-
-            notes:
-              item?.notes ||
-              "—",
-          })
+  const mappedExpenses = useMemo(
+    () =>
+      expenses.map((item) => ({
+        id: item?._id || item?.id,
+        name: item?.name || "—",
+        categoryName:
+          item?.categoryId?.name ||
+          item?.category?.name ||
+          "—",
+        amount: formatMoney(item?.amount),
+        amountRaw: Number(item?.amount || 0),
+        date: formatDate(item?.date),
+        academicYear: getExpenseAcademicYearName(
+          item?.academicYearId ??
+            item?.academicYear
         ),
-      [expenses]
-    );
+        notes: item?.notes || "—",
+      })),
+    [expenses]
+  );
 
-  const currentPagination =
-    localPagination ||
-    pagination;
+  const currentPagination = localPagination || pagination;
 
-  const stats =
-    useMemo(
-      () => ({
-        total:
-          currentPagination
-            ?.totalDocs ??
-          mappedExpenses.length,
+  const stats = useMemo(
+    () => ({
+      total:
+        currentPagination?.totalDocs ??
+        mappedExpenses.length,
+      visible: mappedExpenses.length,
+      totalAmount: mappedExpenses.reduce(
+        (sum, item) => sum + item.amountRaw,
+        0
+      ),
+      categoriesCount: new Set(
+        expenses
+          .map(
+            (item) =>
+              item?.categoryId?._id ||
+              item?.categoryId?.id ||
+              item?.category?._id ||
+              item?.category?.id
+          )
+          .filter(Boolean)
+      ).size,
+    }),
+    [mappedExpenses, expenses, currentPagination]
+  );
 
-        visible:
-          mappedExpenses.length,
-
-        totalAmount:
-          mappedExpenses.reduce(
-            (
-              sum,
-              item
-            ) =>
-              sum +
-              item.amountRaw,
-            0
-          ),
-
-        categoriesCount:
-          new Set(
-            expenses
-              .map(
-                (item) =>
-                  item
-                    ?.categoryId
-                    ?._id ||
-                  item
-                    ?.categoryId
-                    ?.id ||
-                  item
-                    ?.category
-                    ?._id ||
-                  item
-                    ?.category
-                    ?.id
-              )
-              .filter(Boolean)
-          ).size,
-      }),
-      [
-        mappedExpenses,
-        expenses,
-        currentPagination,
-      ]
-    );
-
-  const activeFiltersCount =
-    [
-      name,
-      categoryId,
-      academicYear,
-    ].filter(Boolean).length;
+  const activeFiltersCount = [
+    name,
+    categoryId,
+    academicYear,
+  ].filter(Boolean).length;
 
   const resetFilters = () => {
     setName("");
@@ -454,117 +254,70 @@ const ExpensesListPage = () => {
     setPage(1);
   };
 
-  const handleDelete =
-    async (
-      id,
-      setActive
-    ) => {
-      if (
-        !permissions?.delete
-      ) {
-        toast.error(
-          "ليس لديك صلاحية حذف المصروفات"
-        );
-        return;
-      }
+  const handleDelete = async (id, setActive) => {
+    if (!permissions?.delete) {
+      toast.error("ليس لديك صلاحية حذف المصروفات");
+      return;
+    }
 
-      const response =
-        await deleteExpense(
-          id
-        );
+    const response = await deleteExpense(id);
 
-      if (
-        response?.status
-      ) {
-        toast.success(
-          "تم حذف المصروف بنجاح"
-        );
+    if (response?.status) {
+      toast.success("تم حذف المصروف بنجاح");
 
-        setExpenses(
-          (previous) =>
-            previous.filter(
-              (item) =>
-                (
-                  item?._id ||
-                  item?.id
-                ) !== id
-            )
-        );
+      setExpenses((previous) =>
+        previous.filter(
+          (item) => (item?._id || item?.id) !== id
+        )
+      );
 
-        setLocalPagination(
-          (previous) =>
-            previous
-              ? {
-                  ...previous,
+      setLocalPagination((previous) =>
+        previous
+          ? {
+              ...previous,
+              totalDocs: Math.max(
+                Number(previous.totalDocs || 1) - 1,
+                0
+              ),
+            }
+          : previous
+      );
 
-                  totalDocs:
-                    Math.max(
-                      Number(
-                        previous.totalDocs ||
-                          1
-                      ) - 1,
-                      0
-                    ),
-                }
-              : previous
-        );
+      setActive(false);
+    } else {
+      toast.error(
+        response?.message ||
+          response ||
+          "حدث خطأ ما أثناء حذف المصروف"
+      );
+    }
+  };
 
-        setActive(false);
-      } else {
-        toast.error(
-          response?.message ||
-            response ||
-            "حدث خطأ ما أثناء حذف المصروف"
-        );
-      }
-    };
-
-  const addAction =
-    permissions?.add ? (
-      <Button
-        component={Link}
-        to="add"
-        variant="contained"
-        startIcon={
-          <AddCircleOutlineRounded />
-        }
-        sx={{
-          width: {
-            xs: "100%",
-            sm: 165,
-          },
-
-          minHeight: 42,
-
-          borderRadius:
-            "12px",
-
-          color:
-            "var(--color-white)",
-
-          background:
-            "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-
-          boxShadow:
-            "0 9px 20px rgba(18,47,77,0.16)",
-
-          fontSize:
-            "12px",
-
-          fontWeight: 800,
-
-          textTransform:
-            "none",
-        }}
-      >
-        إضافة مصروف
-      </Button>
-    ) : null;
+  const addAction = permissions?.add ? (
+    <Button
+      component={Link}
+      to="add"
+      variant="contained"
+      startIcon={<AddCircleOutlineRounded />}
+      sx={{
+        width: { xs: "100%", sm: 165 },
+        minHeight: 42,
+        borderRadius: "12px",
+        color: "var(--color-white)",
+        background:
+          "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
+        boxShadow: "0 9px 20px rgba(18,47,77,0.16)",
+        fontSize: "12px",
+        fontWeight: 800,
+        textTransform: "none",
+      }}
+    >
+      إضافة مصروف
+    </Button>
+  ) : null;
 
   const showEmptyState =
-    !loading &&
-    mappedExpenses.length ===
-      0;
+    !loading && mappedExpenses.length === 0;
 
   return (
     <Container>
@@ -575,77 +328,52 @@ const ExpensesListPage = () => {
           maxWidth: "100%",
           minWidth: 0,
           pb: 4,
-          overflowX:
-            "hidden",
+          overflowX: "hidden",
         }}
       >
         <FinancialPageHeader
           title="إدارة المصروفات"
           description="سجّل مصروفات المدرسة وتابع تصنيفاتها وقيمتها والسنة الدراسية."
           count={
-            currentPagination
-              ?.totalDocs ??
+            currentPagination?.totalDocs ??
             mappedExpenses.length
           }
-          actions={
-            addAction
-          }
+          actions={addAction}
         />
 
         <Box
           sx={{
             mb: 1.25,
-
-            display:
-              "grid",
-
-            gridTemplateColumns:
-              {
-                xs: "repeat(2, minmax(0,1fr))",
-                lg: "repeat(4, minmax(0,1fr))",
-              },
-
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "repeat(2, minmax(0,1fr))",
+              lg: "repeat(4, minmax(0,1fr))",
+            },
             gap: 1,
           }}
         >
           <FinancialStatCard
             label="إجمالي المصروفات"
-            value={
-              stats.total
-            }
-            icon={
-              <ReceiptLongRounded />
-            }
+            value={stats.total}
+            icon={<ReceiptLongRounded />}
           />
 
           <FinancialStatCard
             label="الظاهر في الصفحة"
-            value={
-              stats.visible
-            }
-            icon={
-              <VisibilityRounded />
-            }
+            value={stats.visible}
+            icon={<VisibilityRounded />}
           />
 
           <FinancialStatCard
             label="إجمالي مبالغ الصفحة"
-            value={formatMoney(
-              stats.totalAmount
-            )}
-            icon={
-              <PaymentsRounded />
-            }
+            value={formatMoney(stats.totalAmount)}
+            icon={<PaymentsRounded />}
           />
 
           <FinancialStatCard
             label="التصنيفات في الصفحة"
-            value={
-              stats.categoriesCount
-            }
-            icon={
-              <CategoryRounded />
-            }
+            value={stats.categoriesCount}
+            icon={<CategoryRounded />}
           />
         </Box>
 
@@ -653,86 +381,44 @@ const ExpensesListPage = () => {
           elevation={0}
           sx={{
             mb: 1.25,
-
-            px: {
-              xs: 1.5,
-              md: 1.9,
-            },
-
+            px: { xs: 1.5, md: 1.9 },
             py: 1.45,
-
-            border:
-              "1px solid rgba(36,74,112,0.08)",
-
-            borderRadius:
-              "18px",
-
-            backgroundColor:
-              "var(--color-cream)",
-
-            boxShadow:
-              "0 9px 22px rgba(18,47,77,0.05)",
-
-            "& .MuiFormControl-root":
-              {
-                width:
-                  "100%",
-                minWidth: 0,
-                margin: 0,
-              },
-
-            "& .MuiInputBase-root, & .MuiOutlinedInput-root":
-              {
-                minHeight: 50,
-                height: 50,
-
-                backgroundColor:
-                  "var(--color-white)",
-
-                borderRadius:
-                  "12px",
-              },
-
-            "& .MuiInputLabel-root":
-              {
-                px: 0.65,
-
-                backgroundColor:
-                  "var(--color-cream)",
-
-                fontSize:
-                  "10.5px",
-
-                fontWeight: 700,
-              },
+            border: "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "18px",
+            backgroundColor: "var(--color-cream)",
+            boxShadow: "0 9px 22px rgba(18,47,77,0.05)",
+            "& .MuiFormControl-root": {
+              width: "100%",
+              minWidth: 0,
+              margin: 0,
+            },
+            "& .MuiInputBase-root, & .MuiOutlinedInput-root": {
+              minHeight: 50,
+              height: 50,
+              backgroundColor: "var(--color-white)",
+              borderRadius: "12px",
+            },
+            "& .MuiInputLabel-root": {
+              px: 0.65,
+              backgroundColor: "var(--color-cream)",
+              fontSize: "10.5px",
+              fontWeight: 700,
+            },
           }}
         >
           <Stack
-            direction={{
-              xs: "column",
-              sm: "row",
-            }}
-            alignItems={{
-              xs: "stretch",
-              sm: "flex-start",
-            }}
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ xs: "stretch", sm: "flex-start" }}
             justifyContent="space-between"
             gap={1}
-            sx={{
-              mb: 1.35,
-            }}
+            sx={{ mb: 1.35 }}
           >
             <Box>
               <Typography
                 sx={{
-                  color:
-                    "var(--color-navy-deep)",
-
-                  fontSize:
-                    "15px",
-
-                  fontWeight:
-                    800,
+                  color: "var(--color-navy-deep)",
+                  fontSize: "15px",
+                  fontWeight: 800,
                 }}
               >
                 البحث والتصفية
@@ -741,58 +427,30 @@ const ExpensesListPage = () => {
               <Typography
                 sx={{
                   mt: 0.2,
-
-                  color:
-                    "var(--color-muted)",
-
-                  fontSize:
-                    "9.5px",
+                  color: "var(--color-muted)",
+                  fontSize: "9.5px",
                 }}
               >
-                ابحث بالاسم أو
-                حدّد التصنيف
-                والسنة الدراسية.
+                ابحث بالاسم أو حدّد التصنيف والسنة الدراسية.
               </Typography>
             </Box>
 
             <Button
               type="button"
-              disabled={
-                activeFiltersCount ===
-                0
-              }
-              onClick={
-                resetFilters
-              }
+              disabled={activeFiltersCount === 0}
+              onClick={resetFilters}
               variant="text"
-              startIcon={
-                <RestartAltRounded />
-              }
+              startIcon={<RestartAltRounded />}
               sx={{
                 minHeight: 36,
-
                 px: 1.2,
-
-                color:
-                  "var(--color-navy)",
-
-                backgroundColor:
-                  "rgba(36,74,112,0.055)",
-
-                border:
-                  "1px solid rgba(36,74,112,0.075)",
-
-                borderRadius:
-                  "11px",
-
-                fontSize:
-                  "10px",
-
-                fontWeight:
-                  800,
-
-                textTransform:
-                  "none",
+                color: "var(--color-navy)",
+                backgroundColor: "rgba(36,74,112,0.055)",
+                border: "1px solid rgba(36,74,112,0.075)",
+                borderRadius: "11px",
+                fontSize: "10px",
+                fontWeight: 800,
+                textTransform: "none",
               }}
             >
               مسح الفلاتر
@@ -801,73 +459,42 @@ const ExpensesListPage = () => {
 
           <Box
             sx={{
-              display:
-                "grid",
-
-              gridTemplateColumns:
-                {
-                  xs: "1fr",
-                  sm: "repeat(2, minmax(0,1fr))",
-                  lg: "1.2fr 1fr 1fr",
-                },
-
-              gap: 1.5,
-
-              minWidth: 0,
-
-              "& > *": {
-                minWidth: 0,
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "repeat(2, minmax(0,1fr))",
+                lg: "1.2fr 1fr 1fr",
               },
+              gap: 1.5,
+              minWidth: 0,
+              "& > *": { minWidth: 0 },
             }}
           >
             <SearchFilter
               value={name}
-              onChange={
-                setName
-              }
+              onChange={setName}
               placeholder="ابحث باسم المصروف..."
             />
 
             <SelectFilter
-              value={
-                categoryId
-              }
-              onChange={
-                setCategoryId
-              }
+              value={categoryId}
+              onChange={setCategoryId}
               label="التصنيف"
-              icon={
-                CategoryRounded
-              }
+              icon={CategoryRounded}
               allLabel="كل التصنيفات"
-              options={categoryOptions.map(
-                (
-                  category
-                ) => ({
-                  value:
-                    category._id,
-
-                  label:
-                    category.name,
-                })
-              )}
+              options={categoryOptions.map((category) => ({
+                value: category._id,
+                label: category.name,
+              }))}
             />
 
             <SelectFilter
-              value={
-                academicYear
-              }
-              onChange={
-                setAcademicYear
-              }
+              value={academicYear}
+              onChange={setAcademicYear}
               label="السنة الدراسية"
-              icon={
-                SchoolRounded
-              }
+              icon={SchoolRounded}
               allLabel="كل السنوات"
-              options={
-                academicYearOptions
-              }
+              options={academicYearOptions}
             />
           </Box>
         </Paper>
@@ -875,45 +502,25 @@ const ExpensesListPage = () => {
         <Paper
           elevation={0}
           sx={{
-            overflow:
-              "hidden",
-
-            border:
-              "1px solid rgba(36,74,112,0.08)",
-
-            borderRadius:
-              "18px",
-
-            backgroundColor:
-              "var(--color-cream)",
-
-            boxShadow:
-              "0 14px 32px rgba(18,47,77,0.065)",
+            overflow: "hidden",
+            border: "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "18px",
+            backgroundColor: "var(--color-cream)",
+            boxShadow: "0 14px 32px rgba(18,47,77,0.065)",
           }}
         >
           <Box
             sx={{
-              px: {
-                xs: 1.5,
-                md: 1.9,
-              },
-
+              px: { xs: 1.5, md: 1.9 },
               py: 1.25,
-
-              borderBottom:
-                "1px solid rgba(36,74,112,0.07)",
+              borderBottom: "1px solid rgba(36,74,112,0.07)",
             }}
           >
             <Typography
               sx={{
-                color:
-                  "var(--color-navy-deep)",
-
-                fontSize:
-                  "16px",
-
-                fontWeight:
-                  800,
+                color: "var(--color-navy-deep)",
+                fontSize: "16px",
+                fontWeight: 800,
               }}
             >
               سجل المصروفات
@@ -922,17 +529,11 @@ const ExpensesListPage = () => {
             <Typography
               sx={{
                 mt: 0.25,
-
-                color:
-                  "var(--color-muted)",
-
-                fontSize:
-                  "9.5px",
+                color: "var(--color-muted)",
+                fontSize: "9.5px",
               }}
             >
-              عدّل المصروف أو
-              احذفه حسب
-              صلاحياتك.
+              عدّل المصروف أو احذفه حسب صلاحياتك.
             </Typography>
           </Box>
 
@@ -962,9 +563,7 @@ const ExpensesListPage = () => {
               }
               actionIcon={
                 activeFiltersCount
-                  ? (
-                    <RestartAltRounded />
-                  )
+                  ? <RestartAltRounded />
                   : undefined
               }
               onAction={
@@ -974,30 +573,13 @@ const ExpensesListPage = () => {
               }
             />
           ) : (
-            <Box
-              sx={{
-                p: {
-                  xs: 0.7,
-                  md: 1,
-                },
-              }}
-            >
+            <Box sx={{ p: { xs: 0.7, md: 1 } }}>
               <Table
-                headers={
-                  HEADERS
-                }
-                data={
-                  mappedExpenses
-                }
-                loading={
-                  loading
-                }
-                edit={
-                  permissions?.edit
-                }
-                body={
-                  BODY
-                }
+                headers={HEADERS}
+                data={mappedExpenses}
+                loading={loading}
+                edit={permissions?.edit}
+                body={BODY}
                 deleteFn={
                   permissions?.delete
                     ? handleDelete
@@ -1006,24 +588,13 @@ const ExpensesListPage = () => {
               />
 
               {currentPagination &&
-                mappedExpenses.length >
-                  0 && (
+                mappedExpenses.length > 0 && (
                   <PaginationControls
-                    pagination={
-                      currentPagination
-                    }
-                    page={
-                      page
-                    }
-                    onPageChange={
-                      setPage
-                    }
-                    limit={
-                      limit
-                    }
-                    onLimitChange={
-                      setLimit
-                    }
+                    pagination={currentPagination}
+                    page={page}
+                    onPageChange={setPage}
+                    limit={limit}
+                    onLimitChange={setLimit}
                     label="عدد المصروفات"
                   />
                 )}

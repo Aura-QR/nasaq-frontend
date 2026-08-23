@@ -71,14 +71,18 @@ const normalizeCategoryOptions = (value) =>
     })
     .filter(Boolean);
 
+/*
+ * The select is keyed by the year's _id, so the prefilled value has to be an
+ * id too. academicYearId comes back populated ({ _id, name, status }) from the
+ * API, hence the object branch.
+ */
 const normalizeExpenseAcademicYear = (value) => {
   if (!value) return "";
 
   if (typeof value === "object") {
     return String(
-      value?.name ||
-        value?.label ||
-        value?.title ||
+      value?._id ||
+        value?.id ||
         ""
     ).trim();
   }
@@ -117,7 +121,7 @@ const ExpensesEditPage = () => {
   const academicYearOptions = useMemo(
     () =>
       academicYears.map((year) => ({
-        id: year.name,
+        id: year._id || year.id,
         name:
           year.status === "active"
             ? `${year.name} - الحالية`
@@ -140,7 +144,8 @@ const ExpensesEditPage = () => {
         expense.categoryId ||
         "",
       academicYear: normalizeExpenseAcademicYear(
-        expense.academicYear
+        expense.academicYearId ??
+          expense.academicYear
       ),
     };
 
@@ -159,7 +164,9 @@ const ExpensesEditPage = () => {
       amount: Number(formValues.amount),
       categoryId: formValues.categoryId || undefined,
       date: formValues.date || undefined,
-      academicYear: formValues.academicYear || undefined,
+      academicYearId:
+        formValues.academicYear ||
+        undefined,
       notes: formValues.notes || undefined,
     };
 
