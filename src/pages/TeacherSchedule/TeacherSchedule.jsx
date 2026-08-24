@@ -546,6 +546,13 @@ const TeacherSchedule = () => {
   const isPreparationMode =
     searchParams.get("mode") === "prepare";
 
+  const requestedPreparationLectureId =
+    String(
+      searchParams.get(
+        "lectureId"
+      ) || ""
+    ).trim();
+
   const authRoot = getAuthUser?.() || {};
   const currentUser = authRoot?.user || authRoot;
   const teacherId = resolveTeacherId(authRoot, currentUser);
@@ -559,9 +566,7 @@ const TeacherSchedule = () => {
   const [search, setSearch] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
-  const [preparationFilter, setPreparationFilter] = useState(
-    isPreparationMode ? "unprepared" : "all"
-  );
+  const [preparationFilter, setPreparationFilter] = useState("all");
 
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -570,8 +575,13 @@ const TeacherSchedule = () => {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
+    /*
+     * في وضع إضافة التحضير نعرض كل حصص المعلم.
+     * الحصة المحضّرة تظهر كـ "فتح التحضير"،
+     * وغير المحضّرة يظهر لها "إضافة تحضير".
+     */
     if (isPreparationMode) {
-      setPreparationFilter("unprepared");
+      setPreparationFilter("all");
     }
   }, [isPreparationMode]);
 
@@ -677,6 +687,62 @@ const TeacherSchedule = () => {
         .filter((lecture) => lecture.scheduleDayKey),
     [lectures, preparationByLecture]
   );
+
+  /*
+   * لو جايين من "تحضيراتي" ومعانا lectureId،
+   * افتح نموذج التحضير الحديث تلقائيًا.
+   */
+  useEffect(() => {
+    if (
+      !isPreparationMode ||
+      !requestedPreparationLectureId ||
+      selectedLecture
+    ) {
+      return;
+    }
+
+    const requestedLecture =
+      enrichedLectures.find(
+        (lecture) =>
+          getLectureId(
+            lecture
+          ) ===
+          requestedPreparationLectureId
+      );
+
+    if (!requestedLecture) {
+      return;
+    }
+
+    const preparationId =
+      getPreparationId(
+        requestedLecture
+          .schedulePreparation
+      );
+
+    if (preparationId) {
+      navigate(
+        `/teacher/preparations?preparationId=${preparationId}`,
+        { replace: true }
+      );
+      return;
+    }
+
+    setSelectedLecture(
+      requestedLecture
+    );
+
+    setUploadedFile(
+      null
+    );
+  }, [
+    isPreparationMode,
+    requestedPreparationLectureId,
+    enrichedLectures,
+    selectedLecture,
+    navigate,
+  ]);
+
 
   const subjectOptions = useMemo(() => {
     const map = new Map();
@@ -817,39 +883,107 @@ const TeacherSchedule = () => {
   );
 
   const openAttendance = (lecture, day) => {
-    const classId = lecture.scheduleClassId;
-    const dayDate = getDateForDay(weekStart, day.jsDay);
-    const params = new URLSearchParams({
-      date: formatLocalDate(dayDate),
-    });
+    const classId =
+      lecture.scheduleClassId;
 
-    if (classId) params.set("classId", classId);
+    const lectureId =
+      getLectureId(
+        lecture
+      );
 
-    navigate(`/teacher/attendance?${params.toString()}`);
+    const dayDate =
+      getDateForDay(
+        weekStart,
+        day.jsDay
+      );
+
+    const params =
+      new URLSearchParams({
+        date:
+          formatLocalDate(
+            dayDate
+          ),
+      });
+
+    if (classId) {
+      params.set(
+        "classId",
+        classId
+      );
+    }
+
+    if (lectureId) {
+      params.set(
+        "lectureId",
+        lectureId
+      );
+    }
+
+    navigate(
+      `/teacher/attendance?${params.toString()}`
+    );
   };
 
   const openPreparation = (lecture) => {
-    const lectureId = getLectureId(lecture);
-    const hasPreparation = Boolean(
-      getPreparationId(lecture.schedulePreparation)
-    );
+    const lectureId =
+      getLectureId(
+        lecture
+      );
 
-    if (hasPreparation) {
-      const preparationId = getPreparationId(
+    const preparationId =
+      getPreparationId(
         lecture.schedulePreparation
       );
 
+    if (preparationId) {
+      /*
+       * لا نفتح School/Preparation/Profile القديمة.
+       */
       navigate(
-        preparationId
-          ? `/teacher/preparations/${preparationId}`
-          : "/teacher/preparations"
+        `/teacher/preparations?preparationId=${preparationId}`
       );
       return;
     }
 
-    navigate(
-      `/teacher/preparations/add?lectureId=${lectureId}&returnTo=%2Fteacher%2Fschedule%3Fmode%3Dprepare`
+    if (!lectureId) {
+      toast.error(
+        "تعذر تحديد الحصة المختارة"
+      );
+      return;
+    }
+
+    /*
+     * الـ Dialog الخاص برفع التحضير موجود داخل وضع prepare.
+     * لذلك عند الضغط من الجدول العادي ننقل لنفس الصفحة بوضع
+     * التحضير ونمرر lectureId، وبعد التحميل يتم فتح الـ Dialog
+     * تلقائيًا بواسطة الـ effect الموجود أعلى الصفحة.
+     */
+    if (!isPreparationMode) {
+      const params = new URLSearchParams();
+      params.set("mode", "prepare");
+      params.set("lectureId", lectureId);
+
+      navigate(`/teacher/schedule?${params.toString()}`);
+      return;
+    }
+
+    /*
+     * داخل وضع التحضير نفتح نموذج الرفع الحديث مباشرة.
+     */
+    setSelectedLecture(
+      lecture
     );
+
+    setUploadedFile(
+      null
+    );
+
+    if (
+      fileInputRef.current
+    ) {
+      fileInputRef.current.value =
+        "";
+    }
   };
 
   const closePreparationDialog = () => {
@@ -941,7 +1075,7 @@ const TeacherSchedule = () => {
     setSearch("");
     setSubjectFilter("");
     setClassFilter("");
-    setPreparationFilter(isPreparationMode ? "unprepared" : "all");
+    setPreparationFilter("all");
   };
 
   if (isPreparationMode) {
@@ -951,11 +1085,11 @@ const TeacherSchedule = () => {
         sx={{
           minHeight: "100dvh",
           bgcolor: "#f6f4ef",
-          px: { xs: 2, sm: 3, md: 4, lg: 5 },
-          py: { xs: 2, sm: 2.5, md: 3.5 },
+          px: { xs: 1, md: 2 },
+          py: { xs: 1, md: 1.5 },
         }}
       >
-        <Box sx={{ width: "100%", maxWidth: 1680, mx: "auto" }}>
+        <Box sx={{ maxWidth: 1180, mx: "auto" }}>
           <Paper
             elevation={0}
             sx={{
@@ -1154,10 +1288,10 @@ const TeacherSchedule = () => {
                 <Typography
                   sx={{ color: "#0b2c4d", fontWeight: 900, fontSize: 17 }}
                 >
-                  الحصص التي تحتاج تحضير
+                  اختر الحصة التي تريد تحضيرها
                 </Typography>
                 <Typography sx={{ color: "#98a2af", fontSize: 11.5 }}>
-                  {filteredLectures.length} حصة متاحة للتحضير
+                  {filteredLectures.length} حصة في جدولك • المحضّر منها يمكن فتحه للمراجعة
                 </Typography>
               </Box>
 
@@ -1185,10 +1319,10 @@ const TeacherSchedule = () => {
                 <Stack alignItems="center" spacing={1}>
                   <CheckCircleRounded sx={{ fontSize: 44, color: "#26956d" }} />
                   <Typography sx={{ color: "#0b2c4d", fontWeight: 900 }}>
-                    لا توجد حصص تحتاج تحضير
+                    لا توجد حصص مطابقة
                   </Typography>
                   <Typography sx={{ color: "#98a2af", fontSize: 12 }}>
-                    كل الحصص الظاهرة لديها ملف تحضير، أو لا توجد نتائج مطابقة.
+                    غيّر الفلاتر أو راجع الجدول الدراسي.
                   </Typography>
                 </Stack>
               </Box>
@@ -1259,25 +1393,55 @@ const TeacherSchedule = () => {
 
                       <Button
                         fullWidth
-                        variant="contained"
+                        variant={
+                          getPreparationId(
+                            lecture.schedulePreparation
+                          )
+                            ? "outlined"
+                            : "contained"
+                        }
                         startIcon={<MenuBookRounded />}
-                        onClick={() => {
-                          setSelectedLecture(lecture);
-                          setUploadedFile(null);
-                        }}
+                        onClick={() => openPreparation(lecture)}
                         sx={{
                           minHeight: 40,
                           borderRadius: 2,
                           fontWeight: 900,
-                          bgcolor: "#c89027",
+                          color: getPreparationId(
+                            lecture.schedulePreparation
+                          )
+                            ? "#1b7f60"
+                            : "#fff",
+                          borderColor: getPreparationId(
+                            lecture.schedulePreparation
+                          )
+                            ? "#7bc8af"
+                            : undefined,
+                          bgcolor: getPreparationId(
+                            lecture.schedulePreparation
+                          )
+                            ? "#f4fbf8"
+                            : "#c89027",
                           boxShadow: "none",
                           "&:hover": {
-                            bgcolor: "#ad7718",
+                            borderColor: getPreparationId(
+                              lecture.schedulePreparation
+                            )
+                              ? "#42a987"
+                              : undefined,
+                            bgcolor: getPreparationId(
+                              lecture.schedulePreparation
+                            )
+                              ? "#eaf8f2"
+                              : "#ad7718",
                             boxShadow: "none",
                           },
                         }}
                       >
-                        فتح نموذج التحضير
+                        {getPreparationId(
+                          lecture.schedulePreparation
+                        )
+                          ? "فتح التحضير الموجود"
+                          : "إضافة تحضير"}
                       </Button>
                     </Box>
                   ));
@@ -1435,11 +1599,11 @@ const TeacherSchedule = () => {
       sx={{
         minHeight: "100dvh",
         bgcolor: "#fff",
-        px: { xs: 2, sm: 3, md: 4, lg: 5 },
-        py: { xs: 2, sm: 2.5, md: 3.5 },
+        px: { xs: 1, md: 1.5 },
+        py: { xs: 1, md: 1.15 },
       }}
     >
-      <Box sx={{ width: "100%", maxWidth: 1680, mx: "auto" }}>
+      <Box sx={{ maxWidth: 1520, mx: "auto" }}>
         <Paper
           elevation={0}
           sx={{
@@ -1449,9 +1613,9 @@ const TeacherSchedule = () => {
             color: "#fff",
             background:
               "linear-gradient(115deg, #173f64 0%, #245b86 58%, #2d6b99 100%)",
-            px: { xs: 2, md: 3 },
-            py: { xs: 2, md: 2.5 },
-            mb: 2,
+            px: { xs: 1.5, md: 2 },
+            py: { xs: 1.25, md: 1.4 },
+            mb: 1,
           }}
         >
           <Box
@@ -1470,18 +1634,18 @@ const TeacherSchedule = () => {
             direction={{ xs: "column", md: "row" }}
             alignItems={{ xs: "stretch", md: "center" }}
             justifyContent="space-between"
-            spacing={1.5}
+            spacing={1}
             sx={{ position: "relative", zIndex: 1 }}
           >
             <Stack
               direction="row"
               alignItems="center"
-              spacing={1.5}
+              spacing={1}
             >
               <Box
                 sx={{
-                  width: { xs: 50, md: 58 },
-                  height: { xs: 50, md: 58 },
+                  width: { xs: 46, md: 52 },
+                  height: { xs: 46, md: 52 },
                   borderRadius: 2.5,
                   bgcolor: "#fff",
                   display: "grid",
@@ -1508,20 +1672,19 @@ const TeacherSchedule = () => {
                   label={isPreparationMode ? "مسار التحضير" : "بوابة المعلم"}
                   icon={<ScheduleRounded />}
                   sx={{
-                    mb: 0.5,
+                    mb: 0.3,
                     bgcolor: "rgba(255, 216, 128, .13)",
                     color: "#ffdc8e",
                     border: "1px solid rgba(255, 220, 142, .28)",
                     fontWeight: 900,
-                    fontSize: "12px",
                     "& .MuiChip-icon": { color: "#ffdc8e" },
                   }}
                 />
                 <Typography
                   sx={{
-                    fontSize: { xs: 24, md: 32 },
+                    fontSize: { xs: 23, md: 28 },
                     fontWeight: 900,
-                    lineHeight: 1.2,
+                    lineHeight: 1.05,
                   }}
                 >
                   {isPreparationMode
@@ -1530,9 +1693,9 @@ const TeacherSchedule = () => {
                 </Typography>
                 <Typography
                   sx={{
-                    color: "rgba(255,255,255,.82)",
-                    mt: 0.5,
-                    fontSize: { xs: 12.5, md: 14 },
+                    color: "rgba(255,255,255,.75)",
+                    mt: 0.3,
+                    fontSize: { xs: 10.5, md: 11.5 },
                   }}
                 >
                   {isPreparationMode

@@ -26,171 +26,361 @@ import {
 } from "./quizUtils";
 
 
+// =====================================================
+// HELPERS
+// =====================================================
+
+const normalizeId = (value) => {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return "";
+  }
+
+  if (
+    typeof value === "object"
+  ) {
+    return String(
+      value?._id ||
+        value?.id ||
+        ""
+    ).trim();
+  }
+
+  return String(value).trim();
+};
+
+
+const extractExams = (response) => {
+  const candidates = [
+    response,
+    response?.data,
+    response?.data?.data,
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      Array.isArray(candidate)
+    ) {
+      return candidate;
+    }
+
+    if (
+      candidate &&
+      typeof candidate ===
+        "object"
+    ) {
+      const list = [
+        candidate.exams,
+        candidate.docs,
+        candidate.items,
+        candidate.results,
+        candidate.data,
+      ].find(Array.isArray);
+
+      if (list) {
+        return list;
+      }
+    }
+  }
+
+  return [];
+};
+
+
+const getQuestionsCount = (
+  exam
+) => {
+  if (
+    Array.isArray(
+      exam?.questions
+    )
+  ) {
+    return exam.questions.length;
+  }
+
+  const value =
+    exam?.questionsCount ??
+    exam?.questionCount ??
+    exam?.totalQuestions;
+
+  const number =
+    Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : 0;
+};
+
+
+const getDuration = (exam) => {
+  const value =
+    exam?.duration ??
+    exam?.durationMinutes;
+
+  const number =
+    Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : 0;
+};
+
+
+// =====================================================
+// COMPONENT
+// =====================================================
+
 const StartPage = () => {
-  const { examId } = useParams();
+  const { examId } =
+    useParams();
 
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
-  const location = useLocation();
-
-
-  const quizMeta =
-    location.state?.quiz ||
-    location.state?.exam ||
-    null;
+  const location =
+    useLocation();
 
 
-  const [preStartExam, setPreStartExam] =
-    useState(null);
+  // ===================================================
+  // DATA COMING FROM MY EXAMS / ASSIGNMENTS
+  // ===================================================
+
+  const stateExam =
+    useMemo(() => {
+      return (
+        location.state
+          ?.rawExam ||
+        location.state?.exam
+          ?.rawExam ||
+        location.state?.quiz
+          ?.rawExam ||
+        location.state?.assignment
+          ?.rawExam ||
+        location.state?.exam ||
+        location.state?.quiz ||
+        location.state
+          ?.assignment ||
+        null
+      );
+    }, [
+      location.state,
+    ]);
+
+
+  const stateExamMatches =
+    useMemo(() => {
+      if (!stateExam) {
+        return null;
+      }
+
+      return (
+        normalizeId(
+          stateExam
+        ) ===
+        normalizeId(examId)
+      )
+        ? stateExam
+        : null;
+    }, [
+      stateExam,
+      examId,
+    ]);
+
+
+  // ===================================================
+  // STATE
+  // ===================================================
+
+  const [
+    preStartExam,
+    setPreStartExam,
+  ] = useState(
+    stateExamMatches
+  );
 
   const [
     loadingStarter,
     setLoadingStarter,
-  ] = useState(false);
+  ] = useState(
+    !stateExamMatches
+  );
 
 
-  // =========================================
-  // Load Exam
-  // =========================================
+  // ===================================================
+  // LOAD EXAM
+  // ===================================================
 
   useEffect(() => {
-    const fetchExam = async () => {
-      setLoadingStarter(true);
+    let mounted = true;
 
-      try {
+
+    const loadExam =
+      async () => {
         /*
-         * لو داخل من assignments
-         * ندور على assignment فقط.
-         *
-         * غير كده ندور في quiz + final.
+         * لو الاختبار جاي أصلًا كامل
+         * من MyExams / MyAssignments
+         * مفيش داعي نعمل request جديد.
          */
 
-        const isAssignmentPage =
-          location.pathname.includes(
-            "assignments"
+        if (
+          stateExamMatches
+        ) {
+          setPreStartExam(
+            stateExamMatches
           );
 
+          setLoadingStarter(
+            false
+          );
 
-        const stateExamType =
-          quizMeta?.examType ||
-          location.state?.examType;
-
-
-        let examTypes;
-
-
-        if (stateExamType) {
-          examTypes = [
-            stateExamType,
-          ];
-        } else if (isAssignmentPage) {
-          examTypes = [
-            "assignment",
-          ];
-        } else {
-          examTypes = [
-            "quiz",
-            "final",
-          ];
+          return;
         }
 
 
-        const responses =
-          await Promise.all(
-            examTypes.map(
-              (examType) =>
-                fetchStudentExams({
-                  examType,
-                })
-            )
+        setLoadingStarter(
+          true
+        );
+
+
+        try {
+          /*
+           * مهم:
+           *
+           * نجيب كل الاختبارات
+           * بدون examType filter.
+           *
+           * كده الصفحة تدعم:
+           *
+           * final
+           * quiz
+           * assignment
+           * activity
+           *
+           * وأي نوع جديد بعد كده.
+           */
+
+          const response =
+            await fetchStudentExams();
+
+
+          if (!mounted) {
+            return;
+          }
+
+
+          /*
+           * fetchStudentExams
+           * ممكن ترجع:
+           *
+           * { status, data }
+           *
+           * أو Array مباشرة
+           *
+           * لذلك بنعمل normalization.
+           */
+
+          const exams =
+            extractExams(
+              response
+            );
+
+
+          const exam =
+            exams.find(
+              (item) =>
+                normalizeId(
+                  item
+                ) ===
+                normalizeId(
+                  examId
+                )
+            ) || null;
+
+
+          setPreStartExam(
+            exam
           );
 
 
-        const exams =
-          responses.flatMap(
-            (response) => {
-              if (
-                !response?.status ||
-                !Array.isArray(
-                  response?.data
-                )
-              ) {
-                return [];
+          if (!exam) {
+            toast.error(
+              "لم يتم العثور على بيانات الاختبار",
+              {
+                toastId:
+                  `exam-not-found-${examId}`,
               }
+            );
+          }
+        } catch (error) {
+          if (!mounted) {
+            return;
+          }
 
-              return response.data;
+
+          console.error(
+            "[StartPage] load exam:",
+            error
+          );
+
+
+          setPreStartExam(
+            null
+          );
+
+
+          toast.error(
+            error?.response?.data
+              ?.message ||
+              error?.message ||
+              "حدث خطأ أثناء جلب بيانات الاختبار",
+            {
+              toastId:
+                `exam-load-error-${examId}`,
             }
           );
-
-
-        let exam =
-          exams.find(
-            (item) =>
-              item?._id === examId
-          ) || null;
-
-
-        /*
-         * Fallback:
-         * لو جاي من MyExams ومعانا
-         * rawExam بالفعل.
-         */
-
-        if (!exam && quizMeta) {
-          if (
-            quizMeta?.rawExam?._id ===
-            examId
-          ) {
-            exam =
-              quizMeta.rawExam;
-          } else if (
-            quizMeta?.id === examId ||
-            quizMeta?._id === examId
-          ) {
-            exam =
-              quizMeta;
+        } finally {
+          if (mounted) {
+            setLoadingStarter(
+              false
+            );
           }
         }
+      };
 
 
-        setPreStartExam(exam);
+    loadExam();
 
 
-        if (!exam) {
-          toast.error(
-            "لم يتم العثور على بيانات الاختبار"
-          );
-        }
-      } catch (error) {
-        toast.error(
-          error?.response?.data
-            ?.message ||
-            "حدث خطأ أثناء جلب بيانات الاختبار"
-        );
-      } finally {
-        setLoadingStarter(false);
-      }
+    return () => {
+      mounted = false;
     };
-
-
-    fetchExam();
-
   }, [
     examId,
-    location.pathname,
-    location.state,
-    quizMeta,
+    stateExamMatches,
   ]);
 
 
-  // =========================================
-  // Exam Type
-  // =========================================
+  // ===================================================
+  // RESOLVED EXAM
+  // ===================================================
+
+  const exam =
+    preStartExam ||
+    stateExamMatches ||
+    stateExam ||
+    null;
+
+
+  // ===================================================
+  // EXAM TYPE
+  // ===================================================
 
   const examType =
-    preStartExam?.examType ||
-    quizMeta?.examType ||
-    location.state?.examType ||
+    exam?.examType ||
+    location.state
+      ?.examType ||
     (
       location.pathname.includes(
         "assignments"
@@ -207,101 +397,100 @@ const StartPage = () => {
 
 
   // =========================================
-  // Duration
+  // Subject
   // =========================================
+
+  const subjectData =
+    exam?.subjectOffering
+      ?.subjectId ||
+    exam?.gradesCriteria
+      ?.subjectOfferingId
+      ?.subjectId ||
+    null;
+
+
+  const subjectLabel =
+    [
+      subjectData?.subjectName,
+      subjectData?.subjectCode,
+    ]
+      .filter(Boolean)
+      .join(" - ") ||
+    "المادة غير محددة";
+
+
+  // ===================================================
+  // DURATION
+  // ===================================================
 
   const durationMinutes =
-    useMemo(() => {
-      if (
-        typeof preStartExam?.duration ===
-        "number"
-      ) {
-        return preStartExam.duration;
-      }
-
-
-      if (
-        typeof quizMeta?.duration ===
-        "number"
-      ) {
-        return quizMeta.duration;
-      }
-
-
-      if (
-        typeof quizMeta?.duration ===
-        "string"
-      ) {
-        const parsed =
-          Number.parseInt(
-            quizMeta.duration,
-            10
-          );
-
-        if (
-          !Number.isNaN(parsed)
-        ) {
-          return parsed;
-        }
-      }
-
-
-      return 0;
-
-    }, [
-      preStartExam,
-      quizMeta,
-    ]);
-
-
-  // =========================================
-  // Questions Count
-  // =========================================
-
-  const questionsCount =
-    useMemo(() => {
-      if (
-        Array.isArray(
-          preStartExam?.questions
-        )
-      ) {
-        return (
-          preStartExam.questions.length
-        );
-      }
-
-
-      return (
-        Number(
-          quizMeta?.questionsCount
-        ) || 0
-      );
-
-    }, [
-      preStartExam,
-      quizMeta,
-    ]);
-
-
-  // =========================================
-  // Title
-  // =========================================
-
-  const examTitle =
-    quizMeta?.title ||
-    preStartExam?.title ||
-    (
-      examType === "final"
-        ? "الاختبار النهائي"
-        : examType === "assignment"
-        ? "الواجب"
-        : "الكويز"
+    useMemo(
+      () =>
+        getDuration(
+          exam
+        ),
+      [exam]
     );
 
 
-  // =========================================
-  // Back Path
-  // =========================================
+  // ===================================================
+  // QUESTIONS COUNT
+  // ===================================================
+
+  const questionsCount =
+    useMemo(
+      () =>
+        getQuestionsCount(
+          exam
+        ),
+      [exam]
+    );
+
+
+  // ===================================================
+  // TITLE
+  // ===================================================
+
+  const examTitle =
+    useMemo(() => {
+      if (exam?.title) {
+        return exam.title;
+      }
+
+
+      switch (
+        String(
+          examType || ""
+        ).toLowerCase()
+      ) {
+        case "final":
+          return "الاختبار النهائي";
+
+        case "assignment":
+          return "الواجب";
+
+        case "activity":
+          return "النشاط";
+
+        case "quiz":
+          return "الاختبار القصير";
+
+        default:
+          return (
+            examLabel ||
+            "الاختبار"
+          );
+      }
+    }, [
+      exam,
+      examType,
+      examLabel,
+    ]);
+
+
+  // ===================================================
+  // BACK PATH
+  // ===================================================
 
   const backPath =
     location.pathname.includes(
@@ -311,22 +500,35 @@ const StartPage = () => {
       : "/student-dashboard/exams";
 
 
-  // =========================================
-  // Start
-  // =========================================
+  // ===================================================
+  // START
+  // ===================================================
 
   const handleStart = () => {
+    if (!exam) {
+      toast.error(
+        "بيانات الاختبار غير متاحة",
+        {
+          toastId:
+            `exam-start-missing-${examId}`,
+        }
+      );
+
+      return;
+    }
+
+
     navigate(
       "active",
       {
         state: {
           examTitle,
 
-          quiz:
-            quizMeta,
+          quiz: exam,
 
-          exam:
-            preStartExam,
+          exam,
+
+          rawExam: exam,
 
           examType,
 
@@ -337,15 +539,34 @@ const StartPage = () => {
   };
 
 
+  // ===================================================
+  // RENDER
+  // ===================================================
+
   return (
-    <Container noSidebar={true}>
-      <Back title={examTitle} />
+    <Container
+      noSidebar={true}
+    >
+      <Back
+        title={
+          examTitle
+        }
+      />
 
 
-      <div className="mt-6 min-h-[calc(100vh-200px)] flex items-center justify-center">
-
+      <div
+        className="
+          mt-6
+          min-h-[calc(100vh-200px)]
+          flex
+          items-center
+          justify-center
+        "
+      >
         <StartQuizCard
-          examId={examId}
+          subjectLabel={
+            subjectLabel
+          }
 
           durationMinutes={
             durationMinutes
@@ -355,21 +576,28 @@ const StartPage = () => {
             questionsCount
           }
 
-          examType={examType}
+          examType={
+            examType
+          }
 
-          examLabel={examLabel}
+          examLabel={
+            examLabel
+          }
 
-          onStart={handleStart}
+          onStart={
+            handleStart
+          }
 
           onCancel={() =>
-            navigate(backPath)
+            navigate(
+              backPath
+            )
           }
 
           isStarting={
             loadingStarter
           }
         />
-
       </div>
     </Container>
   );

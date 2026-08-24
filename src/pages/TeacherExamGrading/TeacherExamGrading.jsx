@@ -158,20 +158,54 @@ const getExamTitle = (exam) =>
       "اختبار بدون عنوان"
   ).trim();
 
-const getSubjectOffering = (exam) =>
-  exam?.subjectOfferingId ||
-  exam?.subjectOffering ||
-  exam?.offering ||
-  {};
+const getSubjectOffering = (exam) => {
+  const candidates = [
+    exam?.subjectOffering,
+    exam?.offering,
+    exam?.gradesCriteria?.subjectOfferingId,
+    exam?.gradesCriteria?.subjectOffering,
+    exam?.subjectOfferingId,
+  ];
+
+  // Prefer a populated offering object over a raw Mongo id string.
+  return (
+    candidates.find(
+      (candidate) =>
+        candidate &&
+        typeof candidate === "object" &&
+        !Array.isArray(candidate)
+    ) ||
+    candidates.find(Boolean) ||
+    {}
+  );
+};
 
 const getSubjectEntity = (exam) => {
   const offering = getSubjectOffering(exam);
 
+  const criteriaOffering =
+    exam?.gradesCriteria?.subjectOfferingId ||
+    exam?.gradesCriteria?.subjectOffering ||
+    {};
+
+  const candidates = [
+    offering?.subjectId,
+    offering?.subject,
+    criteriaOffering?.subjectId,
+    criteriaOffering?.subject,
+    exam?.subjectId,
+    exam?.subject,
+  ];
+
+  // Prefer the populated subject object, because subjectId may also be a raw id.
   return (
-    offering?.subjectId ||
-    offering?.subject ||
-    exam?.subjectId ||
-    exam?.subject ||
+    candidates.find(
+      (candidate) =>
+        candidate &&
+        typeof candidate === "object" &&
+        !Array.isArray(candidate)
+    ) ||
+    candidates.find(Boolean) ||
     {}
   );
 };

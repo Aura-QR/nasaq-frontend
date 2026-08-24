@@ -62,12 +62,13 @@ import {
   addProject,
   deleteProject,
   editProject,
-  fetchProjectSubmissions,
   fetchTeacherProjects,
 } from "@/APIs/school/projects";
 
-import { fetchLectures } from "@/APIs/school/lectures";
-import { fetchMyClasses } from "@/APIs/school/classes";
+import { api } from "@/APIs/Axios";
+import {
+  fetchTeacherAssignments,
+} from "@/APIs/school/lectures";
 import { TEACHER_UI } from "@/shared/ui/teacherUi";
 
 import nasaqLogo from "../../images/wadq-logo.png";
@@ -199,20 +200,51 @@ const getOfferingEntity = (source) => {
     source?.offeringId,
   ];
 
-  return (
-    candidates.find(
-      (item) => item && typeof item === "object"
-    ) || null
+  const nested = candidates.find(
+    (item) => item && typeof item === "object"
   );
+
+  if (nested) {
+    return nested;
+  }
+
+  /*
+   * أحيانًا يكون source نفسه هو SubjectOffering.
+   */
+  if (
+    source &&
+    typeof source === "object" &&
+    (
+      source?.subjectId ||
+      source?.subject ||
+      source?.gradeLevelId ||
+      source?.gradeLevel ||
+      source?.termId ||
+      source?.term
+    )
+  ) {
+    return source;
+  }
+
+  return null;
 };
 
-const getOfferingId = (source) =>
-  normalizeId(
+const getOfferingId = (source) => {
+  const nestedId = normalizeId(
     source?.subjectOfferingId ||
       source?.subjectOffering ||
       source?.offeringId ||
       source?.offering
   );
+
+  if (nestedId) {
+    return nestedId;
+  }
+
+  return normalizeId(
+    getOfferingEntity(source)
+  );
+};
 
 const getSubjectEntity = (source) => {
   const offering = getOfferingEntity(source);
@@ -237,6 +269,7 @@ const getSubjectLabel = (source) => {
   const offering = getOfferingEntity(source);
 
   const name =
+    subject?.subjectName ||
     subject?.name ||
     subject?.title ||
     source?.subjectName ||
@@ -244,6 +277,7 @@ const getSubjectLabel = (source) => {
     "مادة غير محددة";
 
   const code =
+    subject?.subjectCode ||
     subject?.code ||
     source?.subjectCode ||
     offering?.subjectCode ||
@@ -297,6 +331,184 @@ const getClassName = (classItem) => {
   return [grade, name, gender]
     .filter(Boolean)
     .join(" - ");
+};
+
+
+const getClassOfferingIds = (classEntity) => {
+  const sources = [
+    classEntity?.subjectOfferingId,
+    classEntity?.subjectOffering,
+    classEntity?.subjectOfferingIds,
+    classEntity?.subjectOfferings,
+    classEntity?.offerings,
+  ];
+
+  const subjectSources = Array.isArray(classEntity?.subjects)
+    ? classEntity.subjects.flatMap((subject) => [
+        subject?.subjectOfferingId,
+        subject?.subjectOffering,
+        subject?.offeringId,
+        subject?.offering,
+      ])
+    : [];
+
+  return [...sources, ...subjectSources]
+    .flatMap((value) =>
+      Array.isArray(value)
+        ? value
+        : [value]
+    )
+    .map(normalizeId)
+    .filter(Boolean);
+};
+
+const getOfferingGradeId = (offeringLike) => {
+  const offering =
+    getOfferingEntity(offeringLike) ||
+    offeringLike;
+
+  return normalizeId(
+    offering?.gradeLevelId ||
+      offering?.gradeLevel ||
+      offering?.classLevelId
+  );
+};
+
+const getClassGradeId = (classEntity) =>
+  normalizeId(
+    classEntity?.gradeLevelId ||
+      classEntity?.gradeLevel ||
+      classEntity?.classLevelId
+  );
+
+const collectOfferingCandidates = (items = []) => {
+  const candidates = [];
+
+  const addCandidate = (candidate) => {
+    if (candidate) {
+      candidates.push(candidate);
+    }
+  };
+
+  items.forEach((item) => {
+    if (!item || typeof item !== "object") {
+      return;
+    }
+
+    /*
+     * لو العنصر نفسه SubjectOffering.
+     */
+    if (
+      item?.subjectId &&
+      (item?.gradeLevelId || item?.termId)
+    ) {
+      addCandidate(item);
+    }
+
+    [
+      item?.subjectOfferingId,
+      item?.subjectOffering,
+      item?.offeringId,
+      item?.offering,
+    ].forEach(addCandidate);
+
+    [
+      item?.subjectOfferings,
+      item?.offerings,
+      item?.subjects,
+      item?.assignments,
+    ].forEach((list) => {
+      if (!Array.isArray(list)) {
+        return;
+      }
+
+      list.forEach((entry) => {
+        if (!entry) return;
+
+        if (
+          entry?.subjectId &&
+          (entry?.gradeLevelId || entry?.termId)
+        ) {
+          addCandidate(entry);
+        }
+
+        addCandidate(
+          entry?.subjectOfferingId ||
+            entry?.subjectOffering ||
+            entry?.offeringId ||
+            entry?.offering
+        );
+      });
+    });
+  });
+
+  return candidates;
+};
+
+const hydrateOfferingCandidates = async (candidates = []) => {
+  const offeringMap = new Map();
+  const pendingIds = new Set();
+
+  candidates.forEach((candidate) => {
+    if (!candidate) return;
+
+    if (typeof candidate === "object") {
+      const id = normalizeId(candidate);
+
+      if (id) {
+        offeringMap.set(id, candidate);
+      }
+
+      return;
+    }
+
+    const id = normalizeId(candidate);
+    if (id) {
+      pendingIds.add(id);
+    }
+  });
+
+  offeringMap.forEach((_, id) => {
+    pendingIds.delete(id);
+  });
+
+  if (pendingIds.size > 0) {
+    const responses = await Promise.allSettled(
+      Array.from(pendingIds).map(
+        (id) =>
+          api.get(
+            `/subject-offerings/${id}`
+          )
+      )
+    );
+
+    responses.forEach((result) => {
+      if (
+        result.status !== "fulfilled"
+      ) {
+        return;
+      }
+
+      const entity =
+        extractEntity(
+          result.value
+        );
+
+      const id =
+        normalizeId(entity);
+
+      if (id) {
+        offeringMap.set(
+          id,
+          entity
+        );
+      }
+    });
+  }
+
+  return Array.from(
+    offeringMap.values()
+  );
 };
 
 const getProjectClassIds = (project) => {
@@ -516,25 +728,87 @@ const TeacherProjects = () => {
 
   const loadData = useCallback(
     async ({ silent = false } = {}) => {
-      silent ? setRefreshing(true) : setLoading(true);
+      silent
+        ? setRefreshing(true)
+        : setLoading(true);
+
       setError("");
 
       try {
-        const [projectsResponse, lecturesResponse, classesResponse] =
-          await Promise.all([
-            fetchTeacherProjects({ page: 1, limit: 500 }),
-            fetchLectures(
+        /*
+         * نفس مصادر البيانات المستخدمة في صفحة إنشاء الاختبار:
+         * - teacher profile
+         * - classes/teacher/me
+         * - subjects/teacher/me
+         * - teacher assignments
+         *
+         * وبكده المادة والفصول في المشروع يطلعوا من نفس
+         * الـ SubjectOffering الحقيقي.
+         */
+        const profileResponse =
+          await api.get(
+            "/teachers/me"
+          );
+
+        const teacherProfile =
+          extractEntity(
+            profileResponse
+          );
+
+        const resolvedTeacherId =
+          normalizeId(
+            teacherProfile
+          ) ||
+          teacherId;
+
+        if (!resolvedTeacherId) {
+          throw new Error(
+            "تعذر تحديد حساب المعلم الحالي"
+          );
+        }
+
+        const [
+          projectsResult,
+          classesResult,
+          subjectsResult,
+          assignmentsResult,
+        ] =
+          await Promise.allSettled([
+            fetchTeacherProjects({
+              page: 1,
+              limit: 500,
+            }),
+
+            api.get(
+              "/classes/teacher/me"
+            ),
+
+            api.get(
+              "/subjects/teacher/me"
+            ),
+
+            fetchTeacherAssignments(
               {
-                ...(teacherId ? { teacherId } : {}),
+                teacherId:
+                  resolvedTeacherId,
                 page: 1,
                 limit: 500,
               },
               { force: true }
             ),
-            fetchMyClasses(),
           ]);
 
-        if (isFailedResponse(projectsResponse)) {
+        const projectsResponse =
+          projectsResult.status ===
+          "fulfilled"
+            ? projectsResult.value
+            : null;
+
+        if (
+          isFailedResponse(
+            projectsResponse
+          )
+        ) {
           throw new Error(
             getErrorMessage(
               projectsResponse,
@@ -543,57 +817,148 @@ const TeacherProjects = () => {
           );
         }
 
-        const nextProjects = extractCollection(
-          projectsResponse,
-          ["projects"]
-        );
+        const nextProjects =
+          extractCollection(
+            projectsResponse,
+            ["projects"]
+          );
 
-        const nextLectures = isFailedResponse(lecturesResponse)
-          ? []
-          : extractCollection(lecturesResponse, ["lectures"]);
+        const myClasses =
+          classesResult.status ===
+          "fulfilled"
+            ? extractCollection(
+                classesResult.value,
+                [
+                  "classes",
+                  "myClasses",
+                ]
+              )
+            : [];
 
-        const nextClasses = isFailedResponse(classesResponse)
-          ? []
-          : extractCollection(classesResponse, ["classes"]);
+        const mySubjects =
+          subjectsResult.status ===
+          "fulfilled"
+            ? extractCollection(
+                subjectsResult.value,
+                [
+                  "subjects",
+                  "teacherSubjects",
+                ]
+              )
+            : [];
 
-        setProjects(nextProjects);
-        setLectures(nextLectures);
-        setClasses(nextClasses);
+        let assignments =
+          assignmentsResult.status ===
+          "fulfilled" &&
+          !isFailedResponse(
+            assignmentsResult.value
+          )
+            ? extractCollection(
+                assignmentsResult.value,
+                [
+                  "assignments",
+                  "teacherAssignments",
+                ]
+              )
+            : [];
 
-        const submissionsResults = await Promise.all(
-          nextProjects.map(async (project) => {
-            const projectId = getProjectId(project);
-            if (!projectId) {
-              return ["", []];
+        assignments =
+          assignments.filter(
+            (assignment) => {
+              const assignedTeacherId =
+                normalizeId(
+                  assignment?.teacherId ||
+                    assignment?.teacher
+                );
+
+              return (
+                !assignedTeacherId ||
+                assignedTeacherId ===
+                  resolvedTeacherId
+              );
+            }
+          );
+
+        const rawOfferingCandidates =
+          collectOfferingCandidates([
+            ...assignments,
+            ...myClasses,
+            ...mySubjects,
+            ...nextProjects,
+          ]);
+
+        const hydratedOfferings =
+          await hydrateOfferingCandidates(
+            rawOfferingCandidates
+          );
+
+        const classMap =
+          new Map();
+
+        const addClass =
+          (classItem) => {
+            const id =
+              normalizeId(
+                classItem
+              );
+
+            if (
+              !id ||
+              classMap.has(id)
+            ) {
+              return;
             }
 
-            const response = await fetchProjectSubmissions(projectId, {
-              page: 1,
-              limit: 500,
-            });
+            classMap.set(
+              id,
+              classItem
+            );
+          };
 
-            return [
-              projectId,
-              isFailedResponse(response)
-                ? []
-                : extractCollection(response, ["submissions"]),
-            ];
-          })
+        myClasses.forEach(addClass);
+
+        nextProjects.forEach(
+          (project) =>
+            getProjectClasses(
+              project
+            ).forEach(addClass)
+        );
+
+        setProjects(
+          nextProjects
+        );
+
+        /*
+         * اسم state قديم فقط؛ المحتوى هنا أصبح
+         * SubjectOfferings الخاصة بالمعلم.
+         */
+        setLectures(
+          hydratedOfferings
+        );
+
+        setClasses(
+          Array.from(
+            classMap.values()
+          )
         );
 
         setSubmissionMap(
-          Object.fromEntries(
-            submissionsResults.filter(([id]) => Boolean(id))
-          )
+          {}
         );
-      } catch (requestError) {
+      } catch (
+        requestError
+      ) {
         setError(
-          requestError?.message ||
+          requestError?.response
+            ?.data?.message ||
+            requestError?.message ||
             "تعذر تحميل صفحة المشروعات"
         );
       } finally {
         setLoading(false);
-        setRefreshing(false);
+        setRefreshing(
+          false
+        );
       }
     },
     [teacherId]
@@ -607,71 +972,203 @@ const TeacherProjects = () => {
     const map = new Map();
 
     const add = (classItem) => {
-      const id = normalizeId(classItem);
-      if (!id || map.has(id)) {
+      const id =
+        normalizeId(
+          classItem
+        );
+
+      if (
+        !id ||
+        map.has(id)
+      ) {
         return;
       }
 
       map.set(id, {
         id,
-        label: getClassName(classItem),
+        label:
+          getClassName(
+            classItem
+          ),
         raw: classItem,
       });
     };
 
     classes.forEach(add);
-    lectures.forEach((lecture) =>
-      add(lecture?.class || lecture?.classId)
-    );
-    projects.forEach((project) =>
-      getProjectClasses(project).forEach(add)
+
+    projects.forEach(
+      (project) =>
+        getProjectClasses(
+          project
+        ).forEach(add)
     );
 
-    return Array.from(map.values());
-  }, [classes, lectures, projects]);
+    return Array.from(
+      map.values()
+    );
+  }, [
+    classes,
+    projects,
+  ]);
 
   const offeringOptions = useMemo(() => {
     const map = new Map();
 
     const add = (source) => {
-      const id = getOfferingId(source);
-      if (!id || map.has(id)) {
+      const offering =
+        getOfferingEntity(
+          source
+        ) ||
+        source;
+
+      const id =
+        getOfferingId(
+          offering
+        );
+
+      if (
+        !id ||
+        map.has(id)
+      ) {
         return;
       }
 
-      const relatedClassId = normalizeId(
-        source?.class || source?.classId
-      );
+      const offeringGradeId =
+        getOfferingGradeId(
+          offering
+        );
+
+      const relatedClassIds =
+        classOptions
+          .filter(
+            ({ id: classId, raw }) => {
+              const linkedOfferingIds =
+                getClassOfferingIds(
+                  raw
+                );
+
+              if (
+                linkedOfferingIds.includes(
+                  id
+                )
+              ) {
+                return true;
+              }
+
+              const classGradeId =
+                getClassGradeId(
+                  raw
+                );
+
+              return (
+                Boolean(
+                  offeringGradeId
+                ) &&
+                Boolean(
+                  classGradeId
+                ) &&
+                offeringGradeId ===
+                  classGradeId
+              );
+            }
+          )
+          .map(
+            (item) =>
+              item.id
+          );
 
       map.set(id, {
         id,
-        label: getSubjectLabel(source),
-        classIds: relatedClassId ? [relatedClassId] : [],
+        label:
+          getSubjectLabel(
+            offering
+          ),
+        classIds:
+          relatedClassIds,
+        raw:
+          offering,
       });
     };
 
     lectures.forEach(add);
     projects.forEach(add);
 
-    return Array.from(map.values());
-  }, [lectures, projects]);
+    return Array.from(
+      map.values()
+    );
+  }, [
+    lectures,
+    projects,
+    classOptions,
+  ]);
 
   const filteredClassOptions = useMemo(() => {
     if (!form.subjectOfferingId) {
       return classOptions;
     }
 
-    const offering = offeringOptions.find(
-      (item) => item.id === form.subjectOfferingId
-    );
+    const selectedOffering =
+      offeringOptions.find(
+        (item) =>
+          item.id ===
+          form.subjectOfferingId
+      );
 
-    if (!offering || offering.classIds.length === 0) {
+    if (!selectedOffering) {
       return classOptions;
     }
 
-    const allowed = new Set(offering.classIds);
-    return classOptions.filter((item) => allowed.has(item.id));
-  }, [classOptions, offeringOptions, form.subjectOfferingId]);
+    const directIds =
+      new Set(
+        selectedOffering
+          .classIds ||
+          []
+      );
+
+    const offeringGradeId =
+      getOfferingGradeId(
+        selectedOffering.raw
+      );
+
+    const matched =
+      classOptions.filter(
+        ({ id, raw }) => {
+          if (
+            directIds.has(id)
+          ) {
+            return true;
+          }
+
+          const classGradeId =
+            getClassGradeId(
+              raw
+            );
+
+          return (
+            Boolean(
+              offeringGradeId
+            ) &&
+            Boolean(
+              classGradeId
+            ) &&
+            offeringGradeId ===
+              classGradeId
+          );
+        }
+      );
+
+    /*
+     * نفس fallback الموجود في إنشاء الاختبار:
+     * لو الباك لم يرسل relation كافيًا لا نخفي الفصول.
+     */
+    return matched.length
+      ? matched
+      : classOptions;
+  }, [
+    classOptions,
+    offeringOptions,
+    form.subjectOfferingId,
+  ]);
 
   const projectRows = useMemo(
     () =>
@@ -777,18 +1274,18 @@ const TeacherProjects = () => {
   };
 
   const handleOfferingChange = (event) => {
-    const nextOfferingId = event.target.value;
-    const offering = offeringOptions.find(
-      (item) => item.id === nextOfferingId
-    );
+    const nextOfferingId =
+      event.target.value;
 
     setForm((current) => ({
       ...current,
-      subjectOfferingId: nextOfferingId,
-      classIds:
-        offering?.classIds?.length > 0
-          ? offering.classIds
-          : current.classIds,
+      subjectOfferingId:
+        nextOfferingId,
+      /*
+       * لا نختار كل الفصول تلقائيًا؛
+       * نعرض الفصول المطابقة ويختار المعلم المطلوب.
+       */
+      classIds: [],
     }));
   };
 
@@ -1085,8 +1582,8 @@ const TeacherProjects = () => {
               sm: "repeat(2, minmax(0, 1fr))",
               lg: "repeat(4, minmax(0, 1fr))",
             },
-            gap: 0.8,
-            mt: 0.8,
+            gap: 0.65,
+            mt: 0.65,
           }}
         >
           <StatCard
@@ -1121,8 +1618,8 @@ const TeacherProjects = () => {
         <Paper
           elevation={0}
           sx={{
-            mt: 0.8,
-            p: 0.75,
+            mt: 0.65,
+            p: 0.6,
             border: `1px solid ${COLORS.border}`,
             borderRadius: 2.5,
             display: "grid",
@@ -1171,34 +1668,59 @@ const TeacherProjects = () => {
         <Paper
           elevation={0}
           sx={{
-            mt: 0.8,
+            mt: 0.65,
             border: `1px solid ${COLORS.border}`,
             borderRadius: 2.5,
             overflow: "hidden",
+            background: "#FBFDFE",
           }}
         >
           <Box
             sx={{
-              px: 1.2,
-              py: 0.8,
+              px: { xs: 1.1, md: 1.35 },
+              py: 0.9,
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
-              gap: 1,
+              gap: 0.8,
+              flexWrap: "wrap",
             }}
           >
-            <Box>
-              <Typography sx={{ fontWeight: 900, fontSize: 15 }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography
+                sx={{
+                  fontWeight: 900,
+                  fontSize: 15,
+                  color: COLORS.text,
+                  lineHeight: 1.25,
+                }}
+              >
                 المشروعات المسجلة
               </Typography>
-              <Typography sx={{ color: COLORS.muted, fontSize: 9.5 }}>
+
+              <Typography
+                sx={{
+                  mt: 0.15,
+                  color: COLORS.muted,
+                  fontSize: 9.5,
+                }}
+              >
                 تابع تفاصيل المشروع والتسليمات المرتبطة به
               </Typography>
             </Box>
+
             <Chip
               label={`${visibleRows.length} مشروع`}
               size="small"
-              sx={{ height: 24, fontWeight: 900, background: "#EEF3F7", "& .MuiChip-label": { fontSize: "8.5px" } }}
+              sx={{
+                height: 22,
+                fontWeight: 900,
+                color: COLORS.navy,
+                background: "#EEF3F7",
+                "& .MuiChip-label": {
+                  px: 0.9,
+                  fontSize: "8.5px",
+                },
+              }}
             />
           </Box>
 
@@ -1229,12 +1751,27 @@ const TeacherProjects = () => {
                 >
                   <AssignmentRounded sx={{ fontSize: 24 }} />
                 </Box>
-                <Typography sx={{ mt: 0.75, fontWeight: 900, fontSize: 14 }}>
+
+                <Typography
+                  sx={{
+                    mt: 0.75,
+                    fontWeight: 900,
+                    fontSize: 14,
+                  }}
+                >
                   لا توجد مشروعات مطابقة
                 </Typography>
-                <Typography sx={{ mt: 0.25, color: COLORS.muted, fontSize: 9.5 }}>
+
+                <Typography
+                  sx={{
+                    mt: 0.25,
+                    color: COLORS.muted,
+                    fontSize: 9.5,
+                  }}
+                >
                   غيّر الفلاتر أو أنشئ مشروعًا جديدًا للطلاب.
                 </Typography>
+
                 <Button
                   onClick={openCreateDialog}
                   startIcon={<AddRounded />}
@@ -1245,7 +1782,9 @@ const TeacherProjects = () => {
                     color: "white",
                     fontWeight: 900,
                     px: 2.2,
-                    "&:hover": { background: COLORS.navyLight },
+                    "&:hover": {
+                      background: COLORS.navyLight,
+                    },
                   }}
                 >
                   إنشاء مشروع
@@ -1253,290 +1792,605 @@ const TeacherProjects = () => {
               </Box>
             </Box>
           ) : (
-            <Box
+            <Stack
+              spacing={0.7}
               sx={{
-                p: 1.5,
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "1fr",
-                  lg: "repeat(2, minmax(0, 1fr))",
-                },
-                gap: 1.3,
+                p: { xs: 0.75, md: 0.9 },
               }}
             >
               {visibleRows.map((row) => {
-                const highlighted = row.id === highlightedProjectId;
+                const highlighted =
+                  row.id === highlightedProjectId;
+
+                const visibleClasses =
+                  row.classes.slice(0, 2);
+
+                const extraClassesCount =
+                  Math.max(
+                    0,
+                    row.classes.length -
+                      visibleClasses.length
+                  );
 
                 return (
                   <Paper
                     key={row.id}
                     elevation={0}
                     sx={{
-                      p: 1.7,
-                      borderRadius: 3.5,
+                      width: "100%",
+                      p: { xs: 1, md: 1.1 },
+                      borderRadius: 2.2,
                       border: `1px solid ${
-                        highlighted ? COLORS.navyLight : COLORS.border
+                        highlighted
+                          ? COLORS.navyLight
+                          : COLORS.border
                       }`,
-                      background: highlighted ? "#F5F9FD" : "white",
-                      transition: "180ms ease",
+                      background: highlighted
+                        ? "#F5F9FD"
+                        : "#FFFFFF",
+                      boxShadow: highlighted
+                        ? "0 6px 18px rgba(23,63,103,.07)"
+                        : "none",
+                      transition:
+                        "border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease",
                       "&:hover": {
-                        borderColor: COLORS.navyLight,
-                        transform: "translateY(-1px)",
-                        boxShadow: "0 10px 24px rgba(17,52,84,.07)",
+                        borderColor:
+                          "rgba(44,100,143,.55)",
+                        boxShadow:
+                          "0 8px 22px rgba(17,52,84,.06)",
                       },
                     }}
                   >
-                    <Stack
-                      direction="row"
-                      alignItems="flex-start"
-                      justifyContent="space-between"
-                      spacing={1.3}
-                    >
-                      <Stack direction="row" spacing={1.2} sx={{ minWidth: 0 }}>
-                        <Box
-                          sx={{
-                            width: 48,
-                            height: 48,
-                            borderRadius: 3,
-                            display: "grid",
-                            placeItems: "center",
-                            color: row.isExpired ? COLORS.red : COLORS.gold,
-                            background: row.isExpired
-                              ? COLORS.redSoft
-                              : COLORS.goldSoft,
-                            flexShrink: 0,
-                          }}
-                        >
-                          <FolderRounded />
-                        </Box>
-
-                        <Box sx={{ minWidth: 0 }}>
-                          <Typography
-                            sx={{
-                              fontWeight: 900,
-                              fontSize: 17,
-                              color: COLORS.text,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {row.title}
-                          </Typography>
-                          <Typography
-                            sx={{
-                              color: COLORS.navy,
-                              fontSize: 12,
-                              fontWeight: 800,
-                              mt: 0.2,
-                            }}
-                          >
-                            {row.subject}
-                          </Typography>
-                        </Box>
-                      </Stack>
-
-                      <Chip
-                        size="small"
-                        label={row.isExpired ? "منتهي" : "نشط"}
-                        sx={{
-                          fontWeight: 900,
-                          color: row.isExpired ? COLORS.red : COLORS.green,
-                          background: row.isExpired
-                            ? COLORS.redSoft
-                            : COLORS.greenSoft,
-                        }}
-                      />
-                    </Stack>
-
-                    <Typography
-                      sx={{
-                        mt: 1.2,
-                        minHeight: 42,
-                        color: COLORS.muted,
-                        fontSize: 12.5,
-                        lineHeight: 1.8,
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {row.description}
-                    </Typography>
-
                     <Box
                       sx={{
-                        mt: 1.3,
                         display: "grid",
                         gridTemplateColumns: {
                           xs: "1fr",
-                          sm: "repeat(3, minmax(0, 1fr))",
+                          md: "minmax(220px, 1.35fr) minmax(300px, 1.55fr) minmax(190px, .8fr) auto",
                         },
-                        gap: 0.8,
+                        alignItems: "center",
+                        gap: {
+                          xs: 1,
+                          md: 1.15,
+                        },
                       }}
                     >
-                      <Box sx={{ p: 1, borderRadius: 2.5, background: COLORS.soft }}>
-                        <Stack direction="row" spacing={0.7} alignItems="center">
-                          <CalendarMonthRounded sx={{ fontSize: 18, color: COLORS.navy }} />
-                          <Box>
-                            <Typography sx={{ fontSize: 10, color: COLORS.muted }}>
-                              موعد التسليم
-                            </Typography>
-                            <Typography sx={{ fontSize: 11.5, fontWeight: 900 }}>
-                              {formatDate(row.dueDate)}
-                            </Typography>
-                          </Box>
-                        </Stack>
-                      </Box>
-
-                      <Box sx={{ p: 1, borderRadius: 2.5, background: COLORS.soft }}>
-                        <Stack direction="row" spacing={0.7} alignItems="center">
-                          <GroupsRounded sx={{ fontSize: 18, color: COLORS.green }} />
-                          <Box>
-                            <Typography sx={{ fontSize: 10, color: COLORS.muted }}>
-                              الفصول
-                            </Typography>
-                            <Typography sx={{ fontSize: 12, fontWeight: 900 }}>
-                              {row.classIds.length || row.classes.length}
-                            </Typography>
-                          </Box>
-                        </Stack>
-                      </Box>
-
-                      <Box sx={{ p: 1, borderRadius: 2.5, background: COLORS.soft }}>
-                        <Stack direction="row" spacing={0.7} alignItems="center">
-                          <DescriptionRounded sx={{ fontSize: 18, color: COLORS.gold }} />
-                          <Box>
-                            <Typography sx={{ fontSize: 10, color: COLORS.muted }}>
-                              الملفات
-                            </Typography>
-                            <Typography sx={{ fontSize: 12, fontWeight: 900 }}>
-                              {row.fileCount}
-                            </Typography>
-                          </Box>
-                        </Stack>
-                      </Box>
-                    </Box>
-
-                    {row.classes.length > 0 && (
-                      <Stack
-                        direction="row"
-                        spacing={0.7}
-                        useFlexGap
-                        flexWrap="wrap"
-                        sx={{ mt: 1.1 }}
+                      {/* بيانات المشروع */}
+                      <Box
+                        sx={{
+                          minWidth: 0,
+                        }}
                       >
-                        {row.classes.slice(0, 4).map((classItem, index) => (
-                          <Chip
-                            key={`${normalizeId(classItem) || index}`}
-                            label={getClassName(classItem)}
-                            size="small"
+                        <Stack
+                          direction="row"
+                          alignItems="flex-start"
+                          spacing={0.8}
+                        >
+                          <Box
                             sx={{
-                              height: 26,
-                              fontSize: 10.5,
-                              fontWeight: 800,
-                              background: "#EEF6F2",
-                              color: COLORS.green,
+                              width: 36,
+                              height: 36,
+                              borderRadius: 1.8,
+                              display: "grid",
+                              placeItems: "center",
+                              flexShrink: 0,
+                              color: row.isExpired
+                                ? COLORS.red
+                                : COLORS.gold,
+                              background: row.isExpired
+                                ? COLORS.redSoft
+                                : COLORS.goldSoft,
+                              "& svg": {
+                                fontSize: 19,
+                              },
                             }}
-                          />
-                        ))}
-                      </Stack>
-                    )}
+                          >
+                            <FolderRounded />
+                          </Box>
 
-                    <Box
-                      sx={{
-                        mt: 1.3,
-                        p: 1.1,
-                        borderRadius: 2.5,
-                        background: "#F8FAFC",
-                        display: "grid",
-                        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                        gap: 1,
-                        textAlign: "center",
-                      }}
-                    >
-                      <Box>
-                        <Typography sx={{ fontSize: 10, color: COLORS.muted }}>
-                          التسليمات
-                        </Typography>
-                        <Typography sx={{ fontWeight: 900, color: COLORS.navy }}>
-                          {row.submittedCount}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography sx={{ fontSize: 10, color: COLORS.muted }}>
-                          تم التصحيح
-                        </Typography>
-                        <Typography sx={{ fontWeight: 900, color: COLORS.green }}>
-                          {row.gradedCount}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Typography sx={{ fontSize: 10, color: COLORS.muted }}>
-                          متبقي
-                        </Typography>
-                        <Typography sx={{ fontWeight: 900, color: COLORS.red }}>
-                          {row.pendingCount}
-                        </Typography>
-                      </Box>
-                    </Box>
+                          <Box
+                            sx={{
+                              minWidth: 0,
+                              flex: 1,
+                            }}
+                          >
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              spacing={0.65}
+                              useFlexGap
+                              flexWrap="wrap"
+                            >
+                              <Typography
+                                noWrap
+                                sx={{
+                                  maxWidth: {
+                                    xs: "100%",
+                                    md: 210,
+                                  },
+                                  fontWeight: 900,
+                                  fontSize: 13.5,
+                                  color: COLORS.text,
+                                }}
+                              >
+                                {row.title}
+                              </Typography>
 
-                    <Stack
-                      direction={{ xs: "column", sm: "row" }}
-                      spacing={0.8}
-                      sx={{ mt: 1.3 }}
-                    >
-                      <Button
-                        onClick={() =>
-                          navigate(
-                            `/teacher/grading/projects?projectId=${row.id}`
-                          )
-                        }
-                        startIcon={<FactCheckRounded />}
+                              <Chip
+                                size="small"
+                                label={
+                                  row.isExpired
+                                    ? "منتهي"
+                                    : "نشط"
+                                }
+                                sx={{
+                                  height: 20,
+                                  color: row.isExpired
+                                    ? COLORS.red
+                                    : COLORS.green,
+                                  background:
+                                    row.isExpired
+                                      ? COLORS.redSoft
+                                      : COLORS.greenSoft,
+                                  fontWeight: 900,
+                                  "& .MuiChip-label": {
+                                    px: 0.8,
+                                    fontSize: 8.2,
+                                  },
+                                }}
+                              />
+                            </Stack>
+
+                            <Typography
+                              noWrap
+                              sx={{
+                                mt: 0.18,
+                                color: COLORS.navy,
+                                fontSize: 9.6,
+                                fontWeight: 900,
+                              }}
+                            >
+                              {row.subject}
+                            </Typography>
+
+                            <Typography
+                              noWrap
+                              sx={{
+                                mt: 0.15,
+                                color: COLORS.muted,
+                                fontSize: 8.8,
+                              }}
+                            >
+                              {row.description}
+                            </Typography>
+
+                            {visibleClasses.length > 0 && (
+                              <Stack
+                                direction="row"
+                                spacing={0.4}
+                                useFlexGap
+                                flexWrap="wrap"
+                                sx={{ mt: 0.55 }}
+                              >
+                                {visibleClasses.map(
+                                  (
+                                    classItem,
+                                    index
+                                  ) => (
+                                    <Chip
+                                      key={`${
+                                        normalizeId(
+                                          classItem
+                                        ) || index
+                                      }`}
+                                      label={getClassName(
+                                        classItem
+                                      )}
+                                      size="small"
+                                      sx={{
+                                        height: 19,
+                                        color:
+                                          COLORS.green,
+                                        background:
+                                          "#EEF6F2",
+                                        fontWeight: 800,
+                                        "& .MuiChip-label":
+                                          {
+                                            px: 0.7,
+                                            fontSize:
+                                              7.8,
+                                          },
+                                      }}
+                                    />
+                                  )
+                                )}
+
+                                {extraClassesCount >
+                                  0 && (
+                                  <Chip
+                                    label={`+${extraClassesCount}`}
+                                    size="small"
+                                    sx={{
+                                      height: 19,
+                                      color:
+                                        COLORS.muted,
+                                      background:
+                                        "#F0F3F6",
+                                      fontWeight: 900,
+                                      "& .MuiChip-label":
+                                        {
+                                          px: 0.7,
+                                          fontSize: 7.8,
+                                        },
+                                    }}
+                                  />
+                                )}
+                              </Stack>
+                            )}
+                          </Box>
+                        </Stack>
+                      </Box>
+
+                      {/* معلومات المشروع */}
+                      <Box
                         sx={{
-                          flex: 1,
-                          borderRadius: 2.5,
-                          background: COLORS.navy,
-                          color: "white",
-                          fontWeight: 900,
-                          "&:hover": { background: COLORS.navyLight },
+                          display: "grid",
+                          gridTemplateColumns: {
+                            xs: "repeat(3, minmax(0, 1fr))",
+                          },
+                          gap: 0.45,
                         }}
                       >
-                        تصحيح التسليمات
-                      </Button>
-
-                      <Button
-                        onClick={() => openEditDialog(row)}
-                        startIcon={<EditRounded />}
-                        variant="outlined"
-                        sx={{
-                          borderRadius: 2.5,
-                          borderColor: COLORS.border,
-                          color: COLORS.navy,
-                          fontWeight: 900,
-                        }}
-                      >
-                        تعديل
-                      </Button>
-
-                      <Tooltip title="حذف المشروع">
-                        <IconButton
-                          onClick={() => setDeleteTarget(row)}
+                        <Box
                           sx={{
-                            borderRadius: 2.5,
-                            border: `1px solid ${COLORS.border}`,
-                            color: COLORS.red,
+                            minWidth: 0,
+                            p: 0.65,
+                            borderRadius: 1.5,
+                            background: COLORS.soft,
                           }}
                         >
-                          <DeleteOutlineRounded />
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
+                          <Stack
+                            direction="row"
+                            alignItems="center"
+                            spacing={0.55}
+                          >
+                            <CalendarMonthRounded
+                              sx={{
+                                flexShrink: 0,
+                                fontSize: 14,
+                                color:
+                                  COLORS.navy,
+                              }}
+                            />
+
+                            <Box
+                              sx={{
+                                minWidth: 0,
+                              }}
+                            >
+                              <Typography
+                                sx={{
+                                  color:
+                                    COLORS.muted,
+                                  fontSize: 7.7,
+                                }}
+                              >
+                                موعد التسليم
+                              </Typography>
+
+                              <Typography
+                                noWrap
+                                sx={{
+                                  color:
+                                    COLORS.text,
+                                  fontSize: 8.8,
+                                  fontWeight: 900,
+                                }}
+                              >
+                                {formatDate(
+                                  row.dueDate
+                                )}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        </Box>
+
+                        <Box
+                          sx={{
+                            p: 0.65,
+                            borderRadius: 1.5,
+                            background: COLORS.soft,
+                          }}
+                        >
+                          <Stack
+                            direction="row"
+                            alignItems="center"
+                            spacing={0.55}
+                          >
+                            <GroupsRounded
+                              sx={{
+                                fontSize: 14,
+                                color:
+                                  COLORS.green,
+                              }}
+                            />
+
+                            <Box>
+                              <Typography
+                                sx={{
+                                  color:
+                                    COLORS.muted,
+                                  fontSize: 7.7,
+                                }}
+                              >
+                                الفصول
+                              </Typography>
+
+                              <Typography
+                                sx={{
+                                  color:
+                                    COLORS.text,
+                                  fontSize: 9.2,
+                                  fontWeight: 900,
+                                }}
+                              >
+                                {row.classIds
+                                  .length ||
+                                  row.classes
+                                    .length}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        </Box>
+
+                        <Box
+                          sx={{
+                            p: 0.65,
+                            borderRadius: 1.5,
+                            background: COLORS.soft,
+                          }}
+                        >
+                          <Stack
+                            direction="row"
+                            alignItems="center"
+                            spacing={0.55}
+                          >
+                            <DescriptionRounded
+                              sx={{
+                                fontSize: 14,
+                                color:
+                                  COLORS.gold,
+                              }}
+                            />
+
+                            <Box>
+                              <Typography
+                                sx={{
+                                  color:
+                                    COLORS.muted,
+                                  fontSize: 7.7,
+                                }}
+                              >
+                                الملفات
+                              </Typography>
+
+                              <Typography
+                                sx={{
+                                  color:
+                                    COLORS.text,
+                                  fontSize: 9.2,
+                                  fontWeight: 900,
+                                }}
+                              >
+                                {row.fileCount}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        </Box>
+                      </Box>
+
+                      {/* حالة التسليمات */}
+                      <Box
+                        sx={{
+                          p: 0.65,
+                          borderRadius: 1.6,
+                          background: "#F8FAFC",
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(3, minmax(0, 1fr))",
+                          gap: 0.35,
+                          textAlign: "center",
+                        }}
+                      >
+                        <Box>
+                          <Typography
+                            sx={{
+                              color:
+                                COLORS.muted,
+                              fontSize: 7.6,
+                            }}
+                          >
+                            التسليمات
+                          </Typography>
+
+                          <Typography
+                            sx={{
+                              color:
+                                COLORS.navy,
+                              fontSize: 13,
+                              fontWeight: 900,
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            {row.submittedCount}
+                          </Typography>
+                        </Box>
+
+                        <Box>
+                          <Typography
+                            sx={{
+                              color:
+                                COLORS.muted,
+                              fontSize: 7.6,
+                            }}
+                          >
+                            مصحح
+                          </Typography>
+
+                          <Typography
+                            sx={{
+                              color:
+                                COLORS.green,
+                              fontSize: 13,
+                              fontWeight: 900,
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            {row.gradedCount}
+                          </Typography>
+                        </Box>
+
+                        <Box>
+                          <Typography
+                            sx={{
+                              color:
+                                COLORS.muted,
+                              fontSize: 7.6,
+                            }}
+                          >
+                            متبقي
+                          </Typography>
+
+                          <Typography
+                            sx={{
+                              color:
+                                COLORS.red,
+                              fontSize: 13,
+                              fontWeight: 900,
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            {row.pendingCount}
+                          </Typography>
+                        </Box>
+                      </Box>
+
+                      {/* الإجراءات */}
+                      <Stack
+                        direction={{
+                          xs: "row",
+                          md: "column",
+                        }}
+                        spacing={0.45}
+                        sx={{
+                          minWidth: {
+                            md: 132,
+                          },
+                        }}
+                      >
+                        <Button
+                          onClick={() =>
+                            navigate(
+                              `/teacher/grading/projects?projectId=${row.id}`
+                            )
+                          }
+                          startIcon={
+                            <FactCheckRounded />
+                          }
+                          sx={{
+                            minHeight: 31,
+                            px: 1.1,
+                            borderRadius: 1.6,
+                            background:
+                              COLORS.navy,
+                            color: "white",
+                            whiteSpace: "nowrap",
+                            fontSize: 8.8,
+                            fontWeight: 900,
+                            "& .MuiButton-startIcon":
+                              {
+                                marginInlineEnd:
+                                  0.4,
+                              },
+                            "& svg": {
+                              fontSize:
+                                "15px !important",
+                            },
+                            "&:hover": {
+                              background:
+                                COLORS.navyLight,
+                            },
+                          }}
+                        >
+                          تصحيح التسليمات
+                        </Button>
+
+                        <Stack
+                          direction="row"
+                          spacing={0.4}
+                        >
+                          <Button
+                            onClick={() =>
+                              openEditDialog(
+                                row
+                              )
+                            }
+                            startIcon={
+                              <EditRounded />
+                            }
+                            variant="outlined"
+                            sx={{
+                              flex: 1,
+                              minHeight: 30,
+                              px: 0.8,
+                              borderRadius: 1.6,
+                              borderColor:
+                                COLORS.border,
+                              color:
+                                COLORS.navy,
+                              whiteSpace:
+                                "nowrap",
+                              fontSize: 8.7,
+                              fontWeight: 900,
+                              "& svg": {
+                                fontSize:
+                                  "14px !important",
+                              },
+                            }}
+                          >
+                            تعديل
+                          </Button>
+
+                          <Tooltip title="حذف المشروع">
+                            <IconButton
+                              onClick={() =>
+                                setDeleteTarget(
+                                  row
+                                )
+                              }
+                              sx={{
+                                width: 31,
+                                height: 31,
+                                borderRadius: 1.6,
+                                border: `1px solid ${COLORS.border}`,
+                                color:
+                                  COLORS.red,
+                                flexShrink: 0,
+                                "& svg": {
+                                  fontSize: 17,
+                                },
+                              }}
+                            >
+                              <DeleteOutlineRounded />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </Stack>
+                    </Box>
                   </Paper>
                 );
               })}
-            </Box>
+            </Stack>
           )}
         </Paper>
       </Box>

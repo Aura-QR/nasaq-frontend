@@ -36,10 +36,6 @@ import TeacherCheckIn from "@/pages/TeacherCheckIn/TeacherCheckIn";
 // =========================
 import TeacherAttendanceAdmin from "@/pages/School/TeacherAttendance/TeacherAttendanceAdmin";
 
-import PreparationAdd from "@/pages/School/Preparation/Add";
-import PreparationProfile from "@/pages/School/Preparation/Profile";
-import PreparationEdit from "@/pages/School/Preparation/Edit";
-
 import SchoolManagersList from "@/pages/SchoolManagers/List";
 import SchoolManagerAdd from "@/pages/SchoolManagers/Add";
 
@@ -310,6 +306,11 @@ const AppRouter = () => {
           />
 
           <Route
+            path="/teacher/exams/edit/:id"
+            element={<TeacherExamAdd />}
+          />
+
+          <Route
             path="/teacher/grading/exams"
             element={<TeacherExamGrading />}
           />
@@ -337,17 +338,26 @@ const AppRouter = () => {
             element={<TeacherPreparations />}
           />
 
+          {/*
+            Teacher preparation routes must stay inside the
+            teacher portal UI. The old School/Preparation
+            components are intentionally not mounted here.
+          */}
           <Route
             path="/teacher/preparations/add"
-            element={<PreparationAdd />}
+            element={
+              <Navigate
+                to="/teacher/schedule?mode=prepare"
+                replace
+              />
+            }
           />
 
-          {/* old route support */}
           <Route
             path="/teacher/preparation/add"
             element={
               <Navigate
-                to="/teacher/preparations/add"
+                to="/teacher/schedule?mode=prepare"
                 replace
               />
             }
@@ -355,12 +365,22 @@ const AppRouter = () => {
 
           <Route
             path="/teacher/preparations/edit/:id"
-            element={<PreparationEdit />}
+            element={
+              <Navigate
+                to="/teacher/preparations"
+                replace
+              />
+            }
           />
 
           <Route
             path="/teacher/preparations/:id"
-            element={<PreparationProfile />}
+            element={
+              <Navigate
+                to="/teacher/preparations"
+                replace
+              />
+            }
           />
 
           {/* =========================

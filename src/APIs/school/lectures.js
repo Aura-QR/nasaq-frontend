@@ -140,6 +140,29 @@ export const fetchLecturesList = async (
     }
   );
 
+/**
+ * GET /lectures/teacher/me/classes
+ * يرجع الفصول المرتبطة بالمعلم الحالي من التوكن مباشرة.
+ *
+ * مهم:
+ * - لا نرسل teacherId من الفرونت.
+ * - مناسب لصفحات بوابة المعلم مثل الحضور والمشروعات.
+ * - نستخدم force افتراضيًا حتى لا تظهر بيانات قديمة بعد تعديل الجدول.
+ */
+export const fetchTeacherMyClasses = async (
+  filters = {},
+  options = {}
+) =>
+  getCached(
+    `${ENDPOINT}/teacher/me/classes`,
+    filters,
+    "تعذر تحميل فصول المعلم",
+    {
+      ...options,
+      force: options.force ?? true,
+    }
+  );
+
 export const fetchSingleLecture = async (
   id,
   options = {}

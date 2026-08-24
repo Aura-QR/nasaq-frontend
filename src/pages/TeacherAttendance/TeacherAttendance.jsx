@@ -55,9 +55,7 @@ import {
   fetchLectureAttendanceSheet,
 } from "@/APIs/school/attendance";
 
-import {
-  fetchLectures,
-} from "@/APIs/school/lectures";
+import { api } from "@/APIs/Axios";
 
 import nasaqLogo from "../../images/wadq-logo.png";
 
@@ -344,15 +342,207 @@ const getLectureClassId = (lecture) =>
       lecture?.schoolClass
   );
 
+const WEEKDAY_ALIASES = {
+  sunday: "sunday",
+  sun: "sunday",
+  "الأحد": "sunday",
+  "الاحد": "sunday",
+
+  monday: "monday",
+  mon: "monday",
+  "الاثنين": "monday",
+  "الإثنين": "monday",
+
+  tuesday: "tuesday",
+  tue: "tuesday",
+  "الثلاثاء": "tuesday",
+
+  wednesday: "wednesday",
+  wed: "wednesday",
+  "الأربعاء": "wednesday",
+  "الاربعاء": "wednesday",
+
+  thursday: "thursday",
+  thu: "thursday",
+  "الخميس": "thursday",
+
+  friday: "friday",
+  fri: "friday",
+  "الجمعة": "friday",
+
+  saturday: "saturday",
+  sat: "saturday",
+  "السبت": "saturday",
+};
+
+const normalizeWeekdayKey = (value) => {
+  const raw =
+    String(value || "")
+      .trim()
+      .toLowerCase();
+
+  return (
+    WEEKDAY_ALIASES[raw] ||
+    raw
+  );
+};
+
 const getLectureWeekday = (lecture) =>
-  String(
+  normalizeWeekdayKey(
     lecture?.dayOfWeek ||
       lecture?.weekday ||
-      lecture?.day ||
-      ""
-  )
-    .trim()
-    .toLowerCase();
+      lecture?.day
+  );
+
+const getDateForWeekday = (
+  referenceDate,
+  weekdayKey
+) => {
+  const date = new Date(
+    `${referenceDate}T12:00:00`
+  );
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return referenceDate;
+  }
+
+  const targetIndex =
+    WEEKDAY_KEYS.indexOf(
+      weekdayKey
+    );
+
+  if (targetIndex < 0) {
+    return referenceDate;
+  }
+
+  /*
+   * نختار نفس أسبوع التاريخ المعروض.
+   * مثال: الاثنين 24/8 وحصة الأحد -> الأحد 23/8.
+   */
+  const diff =
+    targetIndex -
+    date.getDay();
+
+  date.setDate(
+    date.getDate() +
+      diff
+  );
+
+  return formatLocalDate(
+    date
+  );
+};
+
+const findLectureForClassAndDate = (
+  lectures,
+  classId,
+  dateValue
+) => {
+  const weekday =
+    getDateWeekday(
+      dateValue
+    );
+
+  return (
+    lectures.find(
+      (lecture) =>
+        getLectureClassId(
+          lecture
+        ) ===
+          classId &&
+        getLectureWeekday(
+          lecture
+        ) ===
+          weekday
+    ) ||
+    null
+  );
+};
+
+const findBestLectureForClass = (
+  lectures,
+  classId,
+  dateValue
+) => {
+  const exact =
+    findLectureForClassAndDate(
+      lectures,
+      classId,
+      dateValue
+    );
+
+  if (exact) {
+    return exact;
+  }
+
+  const baseDate =
+    new Date(
+      `${dateValue}T12:00:00`
+    );
+
+  const baseDay =
+    Number.isNaN(
+      baseDate.getTime()
+    )
+      ? new Date().getDay()
+      : baseDate.getDay();
+
+  const candidates =
+    lectures
+      .filter(
+        (lecture) =>
+          getLectureClassId(
+            lecture
+          ) ===
+          classId
+      )
+      .map((lecture) => {
+        const weekday =
+          getLectureWeekday(
+            lecture
+          );
+
+        const dayIndex =
+          WEEKDAY_KEYS.indexOf(
+            weekday
+          );
+
+        return {
+          lecture,
+          distance:
+            dayIndex < 0
+              ? 99
+              : Math.abs(
+                  dayIndex -
+                    baseDay
+                ),
+          slot:
+            Number(
+              lecture?.slot ||
+                lecture?.period ||
+                lecture?.slotNumber ||
+                0
+            ),
+        };
+      })
+      .sort(
+        (a, b) =>
+          a.distance -
+            b.distance ||
+          a.slot -
+            b.slot
+      );
+
+  return (
+    candidates[0]
+      ?.lecture ||
+    null
+  );
+};
 
 const getSheetAttendanceRecordId = (studentRow) =>
   normalizeId(
@@ -479,15 +669,51 @@ const TeacherAttendance = () => {
   );
 
   const [initialRequestedClassId] = useState(
-    () => searchParams.get("classId") || ""
+    () =>
+      searchParams.get(
+        "classId"
+      ) || ""
   );
-  const requestedDate = searchParams.get("date") || formatLocalDate();
+
+  const [initialRequestedLectureId] = useState(
+    () =>
+      searchParams.get(
+        "lectureId"
+      ) || ""
+  );
+
+  const [initialRequestedDate] = useState(
+    () =>
+      searchParams.get(
+        "date"
+      ) ||
+      formatLocalDate()
+  );
 
   const [classes, setClasses] = useState([]);
-  const [selectedClassId, setSelectedClassId] = useState(
-    isMongoId(initialRequestedClassId) ? initialRequestedClassId : ""
-  );
-  const [selectedDate, setSelectedDate] = useState(requestedDate);
+
+  const [selectedClassId, setSelectedClassId] =
+    useState(
+      isMongoId(
+        initialRequestedClassId
+      )
+        ? initialRequestedClassId
+        : ""
+    );
+
+  const [selectedLectureId, setSelectedLectureId] =
+    useState(
+      isMongoId(
+        initialRequestedLectureId
+      )
+        ? initialRequestedLectureId
+        : ""
+    );
+
+  const [selectedDate, setSelectedDate] =
+    useState(
+      initialRequestedDate
+    );
   const [students, setStudents] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [absentIds, setAbsentIds] = useState(new Set());
@@ -587,91 +813,232 @@ const TeacherAttendance = () => {
     setError("");
 
     try {
-      if (!teacherId) {
-        throw new Error(
-          "تعذر تحديد حساب المعلم الحالي من بيانات تسجيل الدخول"
+      /*
+       * المسار الخاص بالمعلم يعتمد على الـ JWT،
+       * فلا نحتاج teacherId في query.
+       */
+      const lecturesResponse =
+        await api.get(
+          "/lectures/teacher/me"
         );
-      }
 
-      const lecturesResponse = await fetchLectures(
-        {
-          teacherId,
-          page: 1,
-          limit: 500,
-        },
-        { force: true }
+      const lectureList =
+        extractCollection(
+          lecturesResponse,
+          ["lectures"]
+        );
+
+      lecturesRef.current =
+        lectureList;
+
+      const map =
+        new Map();
+
+      lectureList.forEach(
+        (lecture) => {
+          const rawClass =
+            lecture?.class ||
+            lecture?.classId ||
+            lecture?.classroom ||
+            lecture?.schoolClass;
+
+          const classId =
+            normalizeId(
+              rawClass
+            );
+
+          if (
+            !isMongoId(
+              classId
+            ) ||
+            map.has(
+              classId
+            )
+          ) {
+            return;
+          }
+
+          const entity =
+            rawClass &&
+            typeof rawClass ===
+              "object"
+              ? rawClass
+              : {
+                  _id:
+                    classId,
+                };
+
+          map.set(
+            classId,
+            entity
+          );
+        }
       );
 
-      if (isFailedResponse(lecturesResponse)) {
-        throw new Error(
-          getErrorMessage(lecturesResponse, "تعذر تحميل جدول المعلم")
+      const uniqueClasses =
+        Array.from(
+          map.values()
+        );
+
+      classesRef.current =
+        uniqueClasses;
+
+      setClasses(
+        uniqueClasses
+      );
+
+      const requestedLecture =
+        isMongoId(
+          initialRequestedLectureId
+        )
+          ? lectureList.find(
+              (lecture) =>
+                getLectureId(
+                  lecture
+                ) ===
+                initialRequestedLectureId
+            ) ||
+            null
+          : null;
+
+      const requestedLectureClassId =
+        getLectureClassId(
+          requestedLecture
+        );
+
+      const requestedClassExists =
+        uniqueClasses.some(
+          (item) =>
+            getClassId(
+              item
+            ) ===
+            initialRequestedClassId
+        );
+
+      const targetClassId =
+        (
+          isMongoId(
+            requestedLectureClassId
+          ) &&
+          uniqueClasses.some(
+            (item) =>
+              getClassId(
+                item
+              ) ===
+              requestedLectureClassId
+          )
+        )
+          ? requestedLectureClassId
+          : (
+              isMongoId(
+                initialRequestedClassId
+              ) &&
+              requestedClassExists
+            )
+            ? initialRequestedClassId
+            : uniqueClasses[0]
+              ? getClassId(
+                  uniqueClasses[0]
+                )
+              : "";
+
+      setSelectedClassId(
+        targetClassId
+      );
+
+      let targetLecture =
+        requestedLecture &&
+        getLectureClassId(
+          requestedLecture
+        ) ===
+          targetClassId
+          ? requestedLecture
+          : findBestLectureForClass(
+              lectureList,
+              targetClassId,
+              initialRequestedDate
+            );
+
+      if (targetLecture) {
+        const lectureId =
+          getLectureId(
+            targetLecture
+          );
+
+        const lectureWeekday =
+          getLectureWeekday(
+            targetLecture
+          );
+
+        const requestedWeekday =
+          getDateWeekday(
+            initialRequestedDate
+          );
+
+        setSelectedLectureId(
+          lectureId
+        );
+
+        /*
+         * لو الصفحة اتفتحت بتاريخ اليوم لكن الفصل لا توجد
+         * له حصة في هذا اليوم، ننقلها تلقائيًا ليوم الحصة
+         * في نفس الأسبوع بدل شاشة فاضية.
+         */
+        if (
+          lectureWeekday &&
+          lectureWeekday !==
+            requestedWeekday
+        ) {
+          setSelectedDate(
+            getDateForWeekday(
+              initialRequestedDate,
+              lectureWeekday
+            )
+          );
+        }
+      } else {
+        setSelectedLectureId(
+          ""
         );
       }
 
-      const lectureList = extractCollection(lecturesResponse, [
-        "lectures",
-      ]);
-
-      lecturesRef.current = lectureList;
-
-      const map = new Map();
-
-      lectureList.forEach((lecture) => {
-        const rawClass =
-          lecture?.class ||
-          lecture?.classId ||
-          lecture?.classroom ||
-          lecture?.schoolClass;
-
-        const classId = normalizeId(rawClass);
-        if (!isMongoId(classId) || map.has(classId)) return;
-
-        const entity =
-          rawClass && typeof rawClass === "object"
-            ? rawClass
-            : { _id: classId };
-
-        map.set(classId, entity);
-      });
-
-      const uniqueClasses = Array.from(map.values());
-      classesRef.current = uniqueClasses;
-      setClasses(uniqueClasses);
-
-      setSelectedClassId((current) => {
-        const initialExists = uniqueClasses.some(
-          (item) => getClassId(item) === initialRequestedClassId
-        );
-
-        if (isMongoId(initialRequestedClassId) && initialExists) {
-          return initialRequestedClassId;
-        }
-
-        const currentExists = uniqueClasses.some(
-          (item) => getClassId(item) === current
-        );
-
-        if (isMongoId(current) && currentExists) return current;
-        return uniqueClasses[0] ? getClassId(uniqueClasses[0]) : "";
-      });
-
-      if (!uniqueClasses.length) {
+      if (
+        !uniqueClasses.length
+      ) {
         setError(
           "لا توجد فصول داخل حصص المعلم الحالية. راجع الجدول وتكليفات المعلم من حساب الإدارة."
         );
       }
-    } catch (requestError) {
-      lecturesRef.current = [];
+    } catch (
+      requestError
+    ) {
+      lecturesRef.current =
+        [];
       setClasses([]);
-      setSelectedClassId("");
+      setSelectedClassId(
+        ""
+      );
+      setSelectedLectureId(
+        ""
+      );
       setError(
-        requestError?.message || "حدث خطأ أثناء تحميل فصول المعلم"
+        requestError?.response
+          ?.data?.message ||
+          requestError?.message ||
+          "حدث خطأ أثناء تحميل فصول المعلم"
       );
     } finally {
-      pendingClassesRef.current = false;
-      setLoadingClasses(false);
+      pendingClassesRef.current =
+        false;
+      setLoadingClasses(
+        false
+      );
     }
-  }, [teacherId, initialRequestedClassId]);
+  }, [
+    initialRequestedClassId,
+    initialRequestedLectureId,
+    initialRequestedDate,
+  ]);
 
   const loadRoster = useCallback(
     async ({ silent = false, force = false } = {}) => {
@@ -702,14 +1069,50 @@ const TeacherAttendance = () => {
       try {
         const selectedWeekday = getDateWeekday(selectedDate);
 
-        const lecture =
-          lecturesRef.current.find(
-            (item) =>
-              getLectureClassId(item) === selectedClassId &&
-              getLectureWeekday(item) === selectedWeekday
-          ) || null;
+        const requestedLecture =
+          isMongoId(
+            selectedLectureId
+          )
+            ? lecturesRef.current.find(
+                (item) =>
+                  getLectureId(
+                    item
+                  ) ===
+                    selectedLectureId &&
+                  getLectureClassId(
+                    item
+                  ) ===
+                    selectedClassId &&
+                  getLectureWeekday(
+                    item
+                  ) ===
+                    selectedWeekday
+              ) ||
+              null
+            : null;
 
-        const lectureId = getLectureId(lecture);
+        const lecture =
+          requestedLecture ||
+          findLectureForClassAndDate(
+            lecturesRef.current,
+            selectedClassId,
+            selectedDate
+          );
+
+        const lectureId =
+          getLectureId(
+            lecture
+          );
+
+        if (
+          lectureId &&
+          lectureId !==
+            selectedLectureId
+        ) {
+          setSelectedLectureId(
+            lectureId
+          );
+        }
 
         if (!isMongoId(lectureId)) {
           setStudents([]);
@@ -864,7 +1267,7 @@ const TeacherAttendance = () => {
         }
       }
     },
-    [selectedClassId, selectedDate]
+    [selectedClassId, selectedDate, selectedLectureId]
   );
 
   useEffect(() => {
@@ -881,13 +1284,107 @@ const TeacherAttendance = () => {
     if (isMongoId(selectedClassId)) next.set("classId", selectedClassId);
     else next.delete("classId");
 
-    if (selectedDate) next.set("date", selectedDate);
-    else next.delete("date");
+    if (selectedDate) {
+      next.set(
+        "date",
+        selectedDate
+      );
+    } else {
+      next.delete(
+        "date"
+      );
+    }
+
+    if (
+      isMongoId(
+        selectedLectureId
+      )
+    ) {
+      next.set(
+        "lectureId",
+        selectedLectureId
+      );
+    } else {
+      next.delete(
+        "lectureId"
+      );
+    }
 
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
-  }, [selectedClassId, selectedDate, searchParams, setSearchParams]);
+  }, [selectedClassId, selectedDate, selectedLectureId, searchParams, setSearchParams]);
+
+  const handleClassChange = (event) => {
+    const nextClassId =
+      event.target.value;
+
+    setSelectedClassId(
+      nextClassId
+    );
+
+    const nextLecture =
+      findBestLectureForClass(
+        lecturesRef.current,
+        nextClassId,
+        selectedDate
+      );
+
+    if (!nextLecture) {
+      setSelectedLectureId(
+        ""
+      );
+      return;
+    }
+
+    setSelectedLectureId(
+      getLectureId(
+        nextLecture
+      )
+    );
+
+    const lectureWeekday =
+      getLectureWeekday(
+        nextLecture
+      );
+
+    if (
+      lectureWeekday &&
+      lectureWeekday !==
+        getDateWeekday(
+          selectedDate
+        )
+    ) {
+      setSelectedDate(
+        getDateForWeekday(
+          selectedDate,
+          lectureWeekday
+        )
+      );
+    }
+  };
+
+  const handleDateChange = (event) => {
+    const nextDate =
+      event.target.value;
+
+    setSelectedDate(
+      nextDate
+    );
+
+    const matchingLecture =
+      findLectureForClassAndDate(
+        lecturesRef.current,
+        selectedClassId,
+        nextDate
+      );
+
+    setSelectedLectureId(
+      getLectureId(
+        matchingLecture
+      )
+    );
+  };
 
   const toggleAbsent = (studentId) => {
     if (!studentId || saving) return;
@@ -1291,7 +1788,7 @@ const TeacherAttendance = () => {
             <TextField
               select
               value={classSelectValue}
-              onChange={(event) => setSelectedClassId(event.target.value)}
+              onChange={handleClassChange}
               label="الفصل"
               size="small"
               disabled={loadingClasses || !classes.length}
@@ -1313,7 +1810,7 @@ const TeacherAttendance = () => {
             <TextField
               type="date"
               value={selectedDate}
-              onChange={(event) => setSelectedDate(event.target.value)}
+              onChange={handleDateChange}
               label="التاريخ"
               size="small"
               InputLabelProps={{ shrink: true }}

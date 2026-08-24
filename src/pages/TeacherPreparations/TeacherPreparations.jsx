@@ -12,6 +12,8 @@ import {
   SearchRounded,
   VisibilityRounded,
   WarningAmberRounded,
+  CloseRounded,
+  DescriptionRounded,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -19,6 +21,11 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
   FormControl,
   Grid,
   IconButton,
@@ -39,7 +46,10 @@ import {
   useState,
 } from "react";
 import { useAuthUser } from "react-auth-kit";
-import { useNavigate } from "react-router-dom";
+import {
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import { toast } from "react-toastify";
 
 import nasaqLogo from "@/images/wadq-logo.png";
@@ -512,6 +522,49 @@ const getPreparationFiles = (preparation) => {
   return candidates.find(Array.isArray) || [];
 };
 
+const getPreparationFileLabel = (
+  file,
+  index = 0
+) => {
+  if (
+    typeof file ===
+    "string"
+  ) {
+    const parts =
+      file.split("/");
+
+    return (
+      decodeURIComponent(
+        parts[
+          parts.length - 1
+        ] ||
+          ""
+      ) ||
+      `ملف ${index + 1}`
+    );
+  }
+
+  const path =
+    file?.path ||
+    file?.url ||
+    file?.filePath ||
+    "";
+
+  const pathName =
+    typeof path ===
+    "string"
+      ? path.split("/").pop()
+      : "";
+
+  return (
+    file?.originalName ||
+    file?.name ||
+    file?.filename ||
+    pathName ||
+    `ملف ${index + 1}`
+  );
+};
+
 const getPreparationDate = (preparation) => {
   const raw = preparation?.updatedAt || preparation?.createdAt;
   if (!raw) return "";
@@ -635,6 +688,13 @@ const LoadingView = () => (
 
 const TeacherPreparations = () => {
   const navigate = useNavigate();
+
+  const [
+    searchParams,
+    setSearchParams,
+  ] =
+    useSearchParams();
+
   const getAuthUser = useAuthUser();
   const authState = getAuthUser?.() || {};
   const teacherId = resolveTeacherId(authState);
@@ -650,6 +710,19 @@ const TeacherPreparations = () => {
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  const [
+    detailsRow,
+    setDetailsRow,
+  ] =
+    useState(null);
+
+  const focusedPreparationId =
+    String(
+      searchParams.get(
+        "preparationId"
+      ) || ""
+    ).trim();
 
   const loadData = useCallback(
     async ({ silent = false } = {}) => {
@@ -740,6 +813,84 @@ const TeacherPreparations = () => {
       })),
     [lectures, preparationByLecture]
   );
+
+  useEffect(() => {
+    if (
+      !focusedPreparationId ||
+      detailsRow
+    ) {
+      return;
+    }
+
+    const matchedRow =
+      rows.find(
+        (row) =>
+          getPreparationId(
+            row.preparation
+          ) ===
+          focusedPreparationId
+      );
+
+    if (matchedRow) {
+      setDetailsRow(
+        matchedRow
+      );
+    }
+  }, [
+    focusedPreparationId,
+    rows,
+    detailsRow,
+  ]);
+
+  const openPreparationDetails = (row) => {
+    setDetailsRow(
+      row
+    );
+
+    const preparationId =
+      getPreparationId(
+        row?.preparation
+      );
+
+    if (!preparationId) {
+      return;
+    }
+
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+
+    next.set(
+      "preparationId",
+      preparationId
+    );
+
+    setSearchParams(
+      next,
+      { replace: true }
+    );
+  };
+
+  const closePreparationDetails = () => {
+    setDetailsRow(
+      null
+    );
+
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+
+    next.delete(
+      "preparationId"
+    );
+
+    setSearchParams(
+      next,
+      { replace: true }
+    );
+  };
 
   const subjects = useMemo(() => {
     const map = new Map();
@@ -938,7 +1089,7 @@ const TeacherPreparations = () => {
               onClick={() =>
                 nextMissing &&
                 navigate(
-                  `/school/preparation/add?lectureId=${nextMissing.lectureId}`
+                  `/teacher/schedule?mode=prepare&lectureId=${nextMissing.lectureId}`
                 )
               }
               sx={{
@@ -1214,7 +1365,7 @@ const TeacherPreparations = () => {
                           <>
                             <Tooltip title="عرض التحضير">
                               <IconButton
-                                onClick={() => navigate(`/school/preparation/${preparationId}`)}
+                                onClick={() => openPreparationDetails(row)}
                                 sx={{ width: 32, height: 32, color: COLORS.navy, bgcolor: COLORS.navySoft }}
                               >
                                 <VisibilityRounded sx={{ fontSize: 17 }} />
@@ -1222,7 +1373,7 @@ const TeacherPreparations = () => {
                             </Tooltip>
                             <Tooltip title="تعديل التحضير">
                               <IconButton
-                                onClick={() => navigate(`/school/preparation/edit/${preparationId}`)}
+                                onClick={() => openPreparationDetails(row)}
                                 sx={{ width: 32, height: 32, color: COLORS.gold, bgcolor: COLORS.goldSoft }}
                               >
                                 <EditRounded sx={{ fontSize: 17 }} />
@@ -1249,7 +1400,7 @@ const TeacherPreparations = () => {
                             startIcon={<AddRounded />}
                             onClick={() =>
                               navigate(
-                                `/school/preparation/add?lectureId=${row.lectureId}`
+                                `/teacher/schedule?mode=prepare&lectureId=${row.lectureId}`
                               )
                             }
                             sx={{
@@ -1270,6 +1421,313 @@ const TeacherPreparations = () => {
             </Grid>
           )}
         </Paper>
+
+        <Dialog
+          open={Boolean(detailsRow)}
+          onClose={closePreparationDetails}
+          fullWidth
+          maxWidth="sm"
+          PaperProps={{
+            sx: {
+              borderRadius: 3,
+              overflow: "hidden",
+            },
+          }}
+        >
+          <DialogTitle sx={{ p: 0 }}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{
+                px: 1.6,
+                py: 1.3,
+                color: "#fff",
+                background:
+                  "linear-gradient(115deg, #173f65 0%, #285f8d 100%)",
+              }}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    fontWeight: 900,
+                    fontSize: 18,
+                  }}
+                >
+                  تفاصيل التحضير
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.2,
+                    fontSize: 11.5,
+                    color:
+                      "rgba(255,255,255,.72)",
+                  }}
+                >
+                  {detailsRow
+                    ? `${detailsRow.subject.name}${detailsRow.subject.code ? ` - ${detailsRow.subject.code}` : ""}`
+                    : ""}
+                </Typography>
+              </Box>
+
+              <IconButton
+                onClick={
+                  closePreparationDetails
+                }
+                sx={{ color: "#fff" }}
+              >
+                <CloseRounded />
+              </IconButton>
+            </Stack>
+          </DialogTitle>
+
+          <DialogContent
+            dividers
+            sx={{ p: 1.6 }}
+          >
+            {detailsRow ? (
+              <Stack spacing={1.2}>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 1.25,
+                    borderRadius: 2.2,
+                    bgcolor: "#fbfcfd",
+                    borderColor:
+                      COLORS.border,
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={1}
+                  >
+                    <Box
+                      sx={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 2,
+                        display: "grid",
+                        placeItems: "center",
+                        color:
+                          COLORS.gold,
+                        bgcolor:
+                          COLORS.goldSoft,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <MenuBookRounded />
+                    </Box>
+
+                    <Box
+                      sx={{
+                        minWidth: 0,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color:
+                            COLORS.navyDark,
+                          fontWeight: 900,
+                          fontSize: 14,
+                        }}
+                      >
+                        {detailsRow.subject.name}
+                        {detailsRow.subject.code
+                          ? ` - ${detailsRow.subject.code}`
+                          : ""}
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          mt: 0.2,
+                          color:
+                            COLORS.muted,
+                          fontSize: 11.5,
+                        }}
+                      >
+                        {detailsRow.classData.label}
+                        {" • "}
+                        {getDayLabel(
+                          detailsRow.lecture
+                        )}
+                        {" • "}
+                        {getSlotLabel(
+                          detailsRow.lecture
+                        )}
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          mt: 0.2,
+                          color: "#9aa5b2",
+                          fontSize: 10.5,
+                        }}
+                      >
+                        {getPreparationDate(
+                          detailsRow.preparation
+                        )
+                          ? `آخر تحديث ${getPreparationDate(detailsRow.preparation)}`
+                          : ""}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Paper>
+
+                <Box>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    sx={{ mb: 0.8 }}
+                  >
+                    <Typography
+                      sx={{
+                        color:
+                          COLORS.navyDark,
+                        fontWeight: 900,
+                        fontSize: 14,
+                      }}
+                    >
+                      ملفات التحضير
+                    </Typography>
+
+                    <Chip
+                      size="small"
+                      label={`${getPreparationFiles(detailsRow.preparation).length} ملف`}
+                      sx={{
+                        color:
+                          COLORS.gold,
+                        bgcolor:
+                          COLORS.goldSoft,
+                        fontWeight: 900,
+                      }}
+                    />
+                  </Stack>
+
+                  <Stack
+                    divider={
+                      <Divider
+                        flexItem
+                      />
+                    }
+                    sx={{
+                      border:
+                        `1px solid ${COLORS.border}`,
+                      borderRadius: 2.2,
+                      overflow:
+                        "hidden",
+                    }}
+                  >
+                    {getPreparationFiles(
+                      detailsRow.preparation
+                    ).length ? (
+                      getPreparationFiles(
+                        detailsRow.preparation
+                      ).map(
+                        (
+                          file,
+                          index
+                        ) => (
+                          <Stack
+                            key={`${getPreparationFileLabel(file, index)}-${index}`}
+                            direction="row"
+                            alignItems="center"
+                            spacing={1}
+                            sx={{
+                              p: 1.1,
+                              bgcolor:
+                                "#fff",
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 1.7,
+                                display:
+                                  "grid",
+                                placeItems:
+                                  "center",
+                                color:
+                                  COLORS.navy,
+                                bgcolor:
+                                  COLORS.navySoft,
+                                flexShrink: 0,
+                              }}
+                            >
+                              <DescriptionRounded
+                                sx={{
+                                  fontSize: 19,
+                                }}
+                              />
+                            </Box>
+
+                            <Typography
+                              noWrap
+                              sx={{
+                                color:
+                                  COLORS.navyDark,
+                                fontWeight: 800,
+                                fontSize: 12,
+                                minWidth: 0,
+                              }}
+                            >
+                              {getPreparationFileLabel(
+                                file,
+                                index
+                              )}
+                            </Typography>
+                          </Stack>
+                        )
+                      )
+                    ) : (
+                      <Typography
+                        sx={{
+                          p: 1.4,
+                          textAlign:
+                            "center",
+                          color:
+                            COLORS.muted,
+                          fontSize: 12,
+                        }}
+                      >
+                        لا توجد ملفات مرفوعة
+                      </Typography>
+                    )}
+                  </Stack>
+                </Box>
+              </Stack>
+            ) : null}
+          </DialogContent>
+
+          <DialogActions
+            sx={{
+              px: 1.6,
+              py: 1.2,
+            }}
+          >
+            <Button
+              onClick={
+                closePreparationDetails
+              }
+              variant="contained"
+              sx={{
+                borderRadius: 2,
+                fontWeight: 900,
+                bgcolor:
+                  COLORS.navy,
+                "&:hover": {
+                  bgcolor:
+                    COLORS.navyDark,
+                },
+              }}
+            >
+              إغلاق
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Box>
   );

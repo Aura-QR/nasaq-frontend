@@ -67,6 +67,10 @@ import {
 } from "@/APIs/school/classes";
 
 import {
+  fetchStudents,
+} from "@/APIs/school/students";
+
+import {
   fetchMyTeacherProfile,
 } from "@/APIs/users/teachers";
 
@@ -312,6 +316,14 @@ const getClassId = (value) =>
   );
 
 const getClassStudentCount = (classItem) => {
+  const fetchedCount = Number(
+    classItem?.__studentCount
+  );
+
+  if (Number.isFinite(fetchedCount)) {
+    return fetchedCount;
+  }
+
   const arrayCandidates = [
     classItem?.students,
     classItem?.studentIds,
@@ -351,6 +363,62 @@ const getClassRowData = (classItem) => {
       : classData.name,
     students: getClassStudentCount(classItem),
   };
+};
+
+
+const attachStudentCountsToClasses = async (
+  classItems = []
+) => {
+  const uniqueMap = new Map();
+
+  (classItems || []).forEach((classItem) => {
+    const id = getClassId(classItem);
+
+    if (!id || uniqueMap.has(id)) {
+      return;
+    }
+
+    uniqueMap.set(id, classItem);
+  });
+
+  return Promise.all(
+    Array.from(uniqueMap.values()).map(
+      async (classItem) => {
+        const classId = getClassId(classItem);
+
+        try {
+          const response = await fetchStudents({
+            classId,
+            page: 1,
+            limit: 500,
+          });
+
+          const students =
+            response?.status === false ||
+            typeof response === "string"
+              ? []
+              : extractCollection(
+                  response,
+                  ["students"]
+                );
+
+          return {
+            ...classItem,
+            __studentCount:
+              students.length,
+          };
+        } catch {
+          return {
+            ...classItem,
+            __studentCount:
+              getClassStudentCount(
+                classItem
+              ),
+          };
+        }
+      }
+    )
+  );
 };
 
 const formatLocalDate = (date = new Date()) =>
@@ -813,6 +881,29 @@ const TeacherDashboard = () => {
                 ["classes"]
               );
 
+        /*
+         * بعض استجابات فصول المعلم لا تحتوي studentsCount.
+         * لذلك نحسب العدد الحقيقي من GET /students?classId=...
+         *
+         * ولو قائمة /classes الخاصة بالمعلم رجعت فارغة،
+         * نستخرج الفصول من حصص المعلم نفسها.
+         */
+        const classCandidates =
+          classList.length > 0
+            ? classList
+            : lectureList
+                .map(
+                  (lecture) =>
+                    lecture?.class ||
+                    lecture?.classId
+                )
+                .filter(Boolean);
+
+        const classesWithStudentCounts =
+          await attachStudentCountsToClasses(
+            classCandidates
+          );
+
         const examList =
           examsResponse?.status === false ||
           typeof examsResponse === "string"
@@ -843,7 +934,7 @@ const TeacherDashboard = () => {
         ]);
 
         setLectures(lectureList);
-        setClasses(classList);
+        setClasses(classesWithStudentCounts);
         setPreparations(preparationList);
         setExams(examList);
         setProjects(projectList);
@@ -1125,7 +1216,7 @@ const TeacherDashboard = () => {
             exam?.startDate ||
             exam?.endDate,
           path: getExamId(exam)
-            ? `/school/exams/${getExamId(exam)}`
+            ? `/teacher/exams?examId=${getExamId(exam)}`
             : "/teacher/exams",
         })),
         ...projects.map((project) => ({
@@ -1142,8 +1233,8 @@ const TeacherDashboard = () => {
             project?.createdAt ||
             project?.dueDate,
           path: getProjectId(project)
-            ? `/school/projects/${getProjectId(project)}`
-            : "/school/projects",
+            ? `/teacher/projects?projectId=${getProjectId(project)}`
+            : "/teacher/projects",
         })),
       ]
         .filter((item) => item.id)
@@ -2432,15 +2523,22 @@ const TeacherDashboard = () => {
                             onClick={() => {
                               if (hasPreparation) {
                                 navigate(
-                                  `/teacher/preparations/${getPreparationId(
+                                  `/teacher/preparations?preparationId=${getPreparationId(
                                     preparation
                                   )}`
                                 );
                                 return;
                               }
 
+                              const lectureId =
+                                getLectureId(
+                                  lecture
+                                );
+
                               navigate(
-                                `/teacher/schedule?mode=prepare`
+                                lectureId
+                                  ? `/teacher/schedule?mode=prepare&lectureId=${lectureId}`
+                                  : "/teacher/schedule?mode=prepare"
                               );
                             }}
                             sx={{
@@ -2578,7 +2676,7 @@ const TeacherDashboard = () => {
                               type="button"
                               onClick={() =>
                                 navigate(
-                                  `/teacher/preparations/${id}`
+                                  `/teacher/preparations?preparationId=${id}`
                                 )
                               }
                               sx={{
@@ -2716,7 +2814,7 @@ const TeacherDashboard = () => {
                 <Button
                   type="button"
                   onClick={() =>
-                    navigate("/school/projects")
+                    navigate("/teacher/projects")
                   }
                   sx={{
                     p: 1.5,
