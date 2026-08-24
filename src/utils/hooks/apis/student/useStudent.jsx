@@ -150,12 +150,18 @@ const normalizeStudentLectures = (
 // =====================================================
 // STUDENT CLASS
 //
-// Backend-aligned source:
-// GET /students/me
+// Source of truth:
+// 1) GET /students/me
+// 2) لو عندنا classId نحاول GET /classes/:id
 //
-// The student response already contains classId populated.
-// No request to /classes/student/me and no second
-// GET /classes/:id request.
+// السبب:
+// /students/me بيرجع class populated بشكل مختصر
+// مثل: _id / gender / roomNumber.
+// لذلك نحاول جلب تفاصيل الفصل الكاملة ثم ندمجها مع
+// بيانات class الموجودة في الطالب.
+//
+// لو GET /classes/:id غير متاح للطالب أو فشل لأي سبب،
+// لا نكسر الصفحة ونستخدم بيانات /students/me كما هي.
 // =====================================================
 
 const extractStudentClassFromProfile = (
@@ -165,22 +171,57 @@ const extractStudentClassFromProfile = (
     return null;
   }
 
-  const classData =
-    student?.classId ||
-    student?.class ||
-    student?.currentEnrollment?.classId ||
-    student?.currentEnrollment?.class ||
-    null;
+  const candidates = [
+    student?.class,
+    student?.classId,
+    student?.currentEnrollment?.class,
+    student?.currentEnrollment?.classId,
+  ];
+
+  return (
+    candidates.find(
+      (candidate) =>
+        candidate &&
+        typeof candidate === "object" &&
+        !Array.isArray(candidate)
+    ) || null
+  );
+};
+
+const extractClassDetailsResponse = (
+  response
+) => {
+  const payload =
+    response?.data ?? response;
 
   if (
-    classData &&
-    typeof classData === "object" &&
-    !Array.isArray(classData)
+    payload?.status === false
   ) {
-    return classData;
+    return null;
   }
 
-  return null;
+  const candidates = [
+    payload?.data?.class,
+    payload?.data,
+    payload?.class,
+    payload,
+  ];
+
+  return (
+    candidates.find(
+      (candidate) =>
+        candidate &&
+        typeof candidate === "object" &&
+        !Array.isArray(candidate) &&
+        (
+          candidate?._id ||
+          candidate?.id ||
+          candidate?.roomNumber ||
+          candidate?.gradeLevelId ||
+          candidate?.academicYearId
+        )
+    ) || null
+  );
 };
 
 export const useStudentClass = () => {
@@ -202,7 +243,7 @@ export const useStudentClass = () => {
   const [
     source,
     setSource,
-  ] = useState("students-me");
+  ] = useState("");
 
   const [
     error,
@@ -219,6 +260,11 @@ export const useStudentClass = () => {
           setError("");
         }
 
+        // ==========================================
+        // 1) STUDENT PROFILE
+        // GET /students/me
+        // ==========================================
+
         const response =
           await api.get(
             "/students/me"
@@ -227,11 +273,6 @@ export const useStudentClass = () => {
         if (!mounted) {
           return;
         }
-
-        const payload =
-          response?.data?.data ??
-          response?.data ??
-          null;
 
         if (
           response?.data?.status === false
@@ -242,18 +283,42 @@ export const useStudentClass = () => {
           );
         }
 
+        const payload =
+          response?.data?.data ??
+          response?.data ??
+          null;
+
         const student =
           payload &&
           typeof payload === "object"
             ? payload
             : null;
 
-        const resolvedClass =
+        if (!student) {
+          setClass(null);
+          setClassId("");
+          setSource(
+            "students-me-no-student"
+          );
+          setError(
+            "لم يتم العثور على بيانات الطالب"
+          );
+          return;
+        }
+
+        // ==========================================
+        // CLASS ID
+        // ==========================================
+
+        const profileClass =
           extractStudentClassFromProfile(
             student
           );
 
         const resolvedClassId =
+          normalizeId(
+            profileClass
+          ) ||
           normalizeId(
             student?.classId
           ) ||
@@ -269,11 +334,9 @@ export const useStudentClass = () => {
               ?.class
           );
 
-        if (!resolvedClass) {
+        if (!resolvedClassId) {
           setClass(null);
-          setClassId(
-            resolvedClassId
-          );
+          setClassId("");
           setSource(
             "students-me-no-class"
           );
@@ -283,15 +346,95 @@ export const useStudentClass = () => {
           return;
         }
 
-        setClass(
-          resolvedClass
-        );
+        /*
+         * نكوّن Base Object دائمًا.
+         * حتى لو classId رجع String فقط،
+         * الـ UI لن يستقبل String بدل Object.
+         */
+        const baseClass =
+          profileClass
+            ? {
+                ...profileClass,
+                _id:
+                  normalizeId(
+                    profileClass
+                  ) ||
+                  resolvedClassId,
+              }
+            : {
+                _id:
+                  resolvedClassId,
+              };
+
         setClassId(
-          resolvedClassId ||
-            normalizeId(
-              resolvedClass
-            )
+          resolvedClassId
         );
+
+        // ==========================================
+        // 2) FULL CLASS DETAILS
+        // GET /classes/:id
+        // ==========================================
+
+        try {
+          const classResponse =
+            await api.get(
+              `/classes/${resolvedClassId}`
+            );
+
+          if (!mounted) {
+            return;
+          }
+
+          const fullClass =
+            extractClassDetailsResponse(
+              classResponse
+            );
+
+          if (fullClass) {
+            setClass({
+              ...baseClass,
+              ...fullClass,
+              _id:
+                normalizeId(
+                  fullClass
+                ) ||
+                resolvedClassId,
+            });
+
+            setSource(
+              "classes-id"
+            );
+
+            return;
+          }
+        } catch (
+          classRequestError
+        ) {
+          /*
+           * مهم:
+           * فشل تفاصيل الفصل لا يجب أن يخفي الفصل بالكامل.
+           * نحتفظ ببيانات /students/me.
+           */
+          console.warn(
+            "[Student Class] GET /classes/:id fallback:",
+            classRequestError?.response
+              ?.status ||
+              classRequestError?.message
+          );
+        }
+
+        // ==========================================
+        // FALLBACK TO /students/me CLASS
+        // ==========================================
+
+        if (!mounted) {
+          return;
+        }
+
+        setClass(
+          baseClass
+        );
+
         setSource(
           "students-me"
         );
@@ -301,7 +444,7 @@ export const useStudentClass = () => {
         }
 
         console.error(
-          "[Student Class] /students/me ERROR:",
+          "[Student Class] ERROR:",
           requestError
         );
 
@@ -317,7 +460,13 @@ export const useStudentClass = () => {
 
         setError(message);
 
-        toast.error(message);
+        toast.error(
+          message,
+          {
+            toastId:
+              "student-class-error",
+          }
+        );
       } finally {
         if (mounted) {
           setLoading(false);
