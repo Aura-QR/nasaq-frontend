@@ -328,6 +328,18 @@ const normalizeTeacherPayload = (
   if (
     Object.prototype.hasOwnProperty.call(
       source,
+      "subjectOfferingIds"
+    )
+  ) {
+    result.subjectOfferingIds =
+      normalizeSubjectIds(
+        source.subjectOfferingIds
+      );
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      source,
       "password"
     )
   ) {

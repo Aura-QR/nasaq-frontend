@@ -40,97 +40,6 @@ import {
   isTeacherManager,
 } from "@/utils/school/teacherData";
 
-const getTeacherSubjectsStorageKey = (
-  teacherId
-) => {
-  const schoolId =
-    localStorage.getItem(
-      "schoolId"
-    ) || "school";
-
-  return `nasaq:teacher-subjects:${schoolId}:${teacherId}`;
-};
-
-const getStoredTeacherSubjectIds = (
-  teacher
-) => {
-  const teacherId =
-    getTeacherId(
-      teacher
-    );
-
-  if (!teacherId) {
-    return [];
-  }
-
-  try {
-    const stored =
-      JSON.parse(
-        localStorage.getItem(
-          getTeacherSubjectsStorageKey(
-            teacherId
-          )
-        ) || "[]"
-      );
-
-    return Array.isArray(stored)
-      ? Array.from(
-          new Set(
-            stored
-              .map(
-                (value) =>
-                  String(
-                    value || ""
-                  ).trim()
-              )
-              .filter(Boolean)
-          )
-        )
-      : [];
-  } catch {
-    return [];
-  }
-};
-
-const getTeacherSubjectIds = (
-  teacher
-) => {
-  const source =
-    Array.isArray(
-      teacher?.subjects
-    )
-      ? teacher.subjects
-      : Array.isArray(
-          teacher?.subject
-        )
-      ? teacher.subject
-      : Array.isArray(
-          teacher?.subjectIds
-        )
-      ? teacher.subjectIds
-      : [];
-
-  return Array.from(
-    new Set(
-      source
-        .map((subject) =>
-          typeof subject ===
-            "string"
-            ? subject
-            : subject?._id ||
-              subject?.id ||
-              ""
-        )
-        .map((value) =>
-          String(
-            value || ""
-          ).trim()
-        )
-        .filter(Boolean)
-    )
-  );
-};
-
 const getTeacherSubjectsSummary = (
   teacher
 ) => {
@@ -139,22 +48,8 @@ const getTeacherSubjectsSummary = (
       teacher
     );
 
-  const backendIds =
-    getTeacherSubjectIds(
-      teacher
-    );
-
-  const storedIds =
-    getStoredTeacherSubjectIds(
-      teacher
-    );
-
   const count =
-    Math.max(
-      names.length,
-      backendIds.length,
-      storedIds.length
-    );
+    names.length;
 
   return {
     names,
@@ -168,16 +63,12 @@ const getTeacherSubjectsSummary = (
     detailsLabel:
       names.length
         ? names.join("، ")
-        : count > 0
-        ? `${count} مادة محددة`
         : "بدون مواد",
 
     title:
       names.length
         ? names.join("، ")
-        : count > 0
-        ? "مواد محفوظة محليًا حتى يدعمها الخادم"
-        : "لا توجد مواد",
+        : "لا توجد مواد مسندة",
   };
 };
 
