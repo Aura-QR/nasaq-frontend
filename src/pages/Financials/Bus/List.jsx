@@ -91,10 +91,31 @@ const body = [
 const arr = (value) =>
   Array.isArray(value) ? value : [];
 
-const getAcademicYearLabel = (value) => {
+const normalizeEntityId = (value) => {
+  if (!value) return "";
+
+  if (
+    typeof value === "object"
+  ) {
+    return String(
+      value?._id ||
+        value?.id ||
+        ""
+    ).trim();
+  }
+
+  return String(value).trim();
+};
+
+const getAcademicYearLabel = (
+  value,
+  academicYears = []
+) => {
   if (!value) return "—";
 
-  if (typeof value === "object") {
+  if (
+    typeof value === "object"
+  ) {
     return (
       value?.name ||
       value?.label ||
@@ -103,10 +124,43 @@ const getAcademicYearLabel = (value) => {
     );
   }
 
-  return String(value);
+  const rawValue =
+    String(value).trim();
+
+  if (!rawValue) {
+    return "—";
+  }
+
+  const matchedYear =
+    academicYears.find(
+      (year) =>
+        normalizeEntityId(year) ===
+        rawValue
+    );
+
+  if (matchedYear) {
+    return (
+      matchedYear?.name ||
+      matchedYear?.label ||
+      matchedYear?.title ||
+      "—"
+    );
+  }
+
+  const looksLikeMongoId =
+    /^[a-f\d]{24}$/i.test(
+      rawValue
+    );
+
+  return looksLikeMongoId
+    ? "—"
+    : rawValue;
 };
 
-const mapRow = (item) => {
+const mapRow = (
+  item,
+  academicYears = []
+) => {
   const student =
     item?.student || {};
 
@@ -151,8 +205,16 @@ const mapRow = (item) => {
     academicYear:
       getAcademicYearLabel(
         item?.academicYear ||
+          item?.academicYearId ||
           cls?.academicYear ||
-          cls?.academicYearId
+          cls?.academicYearId ||
+          student?.academicYear ||
+          student?.academicYearId ||
+          student?.class?.academicYear ||
+          student?.class?.academicYearId ||
+          student?.classId?.academicYear ||
+          student?.classId?.academicYearId,
+        academicYears
       ),
 
     className:
@@ -247,7 +309,12 @@ const BusListPage = () => {
       () =>
         academicYears.find(
           (year) =>
-            year.id === yearId
+            normalizeEntityId(
+              year
+            ) ===
+            normalizeEntityId(
+              yearId
+            )
         )?.name || "",
       [
         academicYears,
@@ -260,7 +327,10 @@ const BusListPage = () => {
       () =>
         academicYears.map(
           (year) => ({
-            value: year.id,
+            value:
+              normalizeEntityId(
+                year
+              ),
             label:
               year.status ===
               "active"
@@ -348,9 +418,16 @@ const BusListPage = () => {
     useMemo(
       () =>
         arr(busRecords).map(
-          mapRow
+          (item) =>
+            mapRow(
+              item,
+              academicYears
+            )
         ),
-      [busRecords]
+      [
+        busRecords,
+        academicYears,
+      ]
     );
 
   const remaining =
