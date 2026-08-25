@@ -72,6 +72,19 @@ const normalizeRole = (
     : "MANAGER";
 };
 
+const normalizeManagerType = (
+  value
+) => {
+  const type =
+    normalizeText(value)
+      .toLowerCase();
+
+  return type === "admin" ||
+    type === "teacher"
+    ? type
+    : "";
+};
+
 const normalizePermissions = (
   permissions
 ) =>
@@ -331,11 +344,25 @@ export const demoteTeacherFromManager =
     }
   };
 
+/**
+ * Delete a manager account.
+ *
+ * Backend endpoint:
+ * DELETE /managers/:id?type=admin|teacher
+ */
 export const deleteManager =
-  async (managerId) => {
+  async (
+    managerId,
+    type
+  ) => {
     const normalizedManagerId =
       normalizeText(
         managerId
+      );
+
+    const normalizedType =
+      normalizeManagerType(
+        type
       );
 
     if (!normalizedManagerId) {
@@ -346,10 +373,24 @@ export const deleteManager =
       };
     }
 
+    if (!normalizedType) {
+      return {
+        status: false,
+        message:
+          "نوع الحساب الإداري غير محدد",
+      };
+    }
+
     try {
       const response =
         await api.delete(
-          `${MANAGERS_ENDPOINT}/${normalizedManagerId}`
+          `${MANAGERS_ENDPOINT}/${normalizedManagerId}`,
+          {
+            params: {
+              type:
+                normalizedType,
+            },
+          }
         );
 
       invalidateManagersCache();

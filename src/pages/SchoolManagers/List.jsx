@@ -101,6 +101,18 @@ const getManagerId = (item) =>
   item?.userId ||
   "";
 
+const getManagerType = (item) => {
+  const type =
+    String(item?.type || "")
+      .trim()
+      .toLowerCase();
+
+  return type === "admin" ||
+    type === "teacher"
+    ? type
+    : "";
+};
+
 const getManagerUsername = (
   item
 ) =>
@@ -320,7 +332,12 @@ const SchoolManagersList = () => {
           deleteTarget
         );
 
-      if (!id) {
+      const type =
+        getManagerType(
+          deleteTarget
+        );
+
+      if (!id || !type) {
         toast.error(
           "تعذر تحديد الحساب المطلوب حذفه"
         );
@@ -330,7 +347,10 @@ const SchoolManagersList = () => {
       setDeleting(true);
 
       const response =
-        await deleteManager(id);
+        await deleteManager(
+          id,
+          type
+        );
 
       if (
         !isSuccessfulResponse(
@@ -361,7 +381,9 @@ const SchoolManagersList = () => {
       setDeleting(false);
 
       toast.success(
-        "تم حذف الحساب الإداري بنجاح"
+        type === "teacher"
+          ? "تم إلغاء صلاحية المدير من المعلم بنجاح"
+          : "تم حذف الحساب الإداري بنجاح"
       );
     };
   return (
