@@ -215,7 +215,7 @@ const ModuleTripsListPage = () => {
                 data={mapped}
                 loading={loading}
                 edit={settingsPermissions?.edit}
-                profile={permissions?.read}
+               profile={true}
                 body={BODY}
               />
             </Box>

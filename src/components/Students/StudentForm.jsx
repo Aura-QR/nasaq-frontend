@@ -246,6 +246,8 @@ const StudentForm = ({
   setValue,
   mode = "add",
   defaultValues = null,
+  busPlanOptions = [],
+  busPlansLoading = false,
 }) => {
   const isEdit = mode === "edit";
 
@@ -458,7 +460,7 @@ const StudentForm = ({
         title="بيانات التسجيل والرسوم"
         description="إعدادات التسجيل وخطة السداد وحالة الحساب."
       >
-        <Grid item xs={12} sm={6} lg={3}>
+        <Grid item xs={12} md={4}>
           <Input
             register={register}
             registerName="previousSchool"
@@ -468,7 +470,7 @@ const StudentForm = ({
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} lg={3}>
+        <Grid item xs={12} md={4}>
           <Input
             register={register}
             registerName="registrationDate"
@@ -486,21 +488,7 @@ const StudentForm = ({
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} lg={3}>
-          <InstallmentPlanSelector
-            register={register}
-            errors={errors}
-            required={false}
-            {...(isEdit
-              ? {
-                  defaultInstallmentPlanId:
-                    defaultValues?.installmentPlanId || "",
-                }
-              : {})}
-          />
-        </Grid>
-
-        <Grid item xs={12} sm={6} lg={3}>
+        <Grid item xs={12} md={4}>
           <Select
             register={register}
             registerName="isActive"
@@ -514,6 +502,56 @@ const StudentForm = ({
             }
           />
         </Grid>
+
+        <Grid item xs={12} md={6}>
+          <InstallmentPlanSelector
+            register={register}
+            errors={errors}
+            required={false}
+            {...(isEdit
+              ? {
+                  defaultInstallmentPlanId:
+                    defaultValues?.installmentPlanId || "",
+                }
+              : {})}
+          />
+        </Grid>
+
+        {!isEdit && (
+          <Grid item xs={12} md={6}>
+            <Select
+              register={register}
+              registerName="busPlanId"
+              data={busPlanOptions.map(
+                (plan) => ({
+                  _id: plan.id,
+                  displayName: plan.label,
+                })
+              )}
+              name="displayName"
+              error={errors.busPlanId?.message}
+              label="خطة الباص"
+              defaultSelect="بلا باص"
+              disabled={busPlansLoading}
+            />
+
+            {!busPlansLoading &&
+              busPlanOptions.length === 0 && (
+                <Typography
+                  sx={{
+                    mt: 0.55,
+                    px: 0.5,
+                    color:
+                      "var(--color-muted)",
+                    fontSize: "9.5px",
+                  }}
+                >
+                  لا توجد خطط باص نشطة؛ سيُضاف الطالب بلا باص.
+                </Typography>
+              )}
+          </Grid>
+        )}
+
       </FormSection>
 
       <FormSection

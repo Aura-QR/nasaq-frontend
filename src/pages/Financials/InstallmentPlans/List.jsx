@@ -22,125 +22,277 @@ import {
 import { useInstallmentPlans } from "@/utils/hooks/apis/financials/useInstallmentPlans";
 import usePermissions from "@/utils/hooks/usePermissions";
 
-const HEADERS = ["اسم الخطة", "عدد الأقساط", "افتراضية", "الحالة"];
-const BODY = ["name", "numberOfInstallments", "isDefault", "isActive"];
+const HEADERS = [
+  "اسم الخطة",
+  "عدد الأقساط",
+  "افتراضية",
+  "الحالة",
+];
 
-const InstallmentPlansListPage = () => {
-  const { installmentPlans = [], loading, setInstallmentPlans } =
-    useInstallmentPlans();
-  const permissions = usePermissions("financial");
+const BODY = [
+  "name",
+  "numberOfInstallments",
+  "isDefault",
+  "isActive",
+];
 
-  const mappedPlans = installmentPlans.map((item) => ({
-    id: item?._id || item?.id,
-    name: item?.name || "—",
-    numberOfInstallments: `${Number(item?.numberOfInstallments || 0)} قسط`,
-    isDefault: item?.isDefault ? "نعم" : "لا",
-    isActive: item?.isActive ? "نشطة" : "غير نشطة",
-  }));
+const InstallmentPlansListPage =
+  () => {
+    const {
+      installmentPlans = [],
+      loading,
+      setInstallmentPlans,
+    } = useInstallmentPlans();
 
-  const activeCount = installmentPlans.filter((item) => item?.isActive).length;
-  const defaultPlan = installmentPlans.find((item) => item?.isDefault);
-  const totalInstallments = installmentPlans.reduce(
-    (sum, item) => sum + Number(item?.numberOfInstallments || 0),
-    0,
-  );
-
-  const handleDelete = async (id, setActive) => {
-    const response = await deleteInstallmentPlan(id);
-
-    if (response?.status) {
-      toast.success(response?.message || "تم حذف خطة التقسيط بنجاح");
-      setInstallmentPlans((previous) =>
-        previous.filter((item) => (item?._id || item?.id) !== id),
+    // صلاحيات إعدادات الأسعار والخطط
+    const permissions =
+      usePermissions(
+        "financialSettings"
       );
-      setActive(false);
-      return;
-    }
 
-    toast.error(response?.message || response || "حدث خطأ أثناء حذف خطة التقسيط");
-  };
+    const mappedPlans =
+      installmentPlans.map(
+        (item) => ({
+          id:
+            item?._id ||
+            item?.id,
 
-  const addAction = permissions?.add ? (
-    <Button
-      component={Link}
-      to="add"
-      variant="contained"
-      startIcon={<AddCircleOutlineRounded />}
-      sx={{
-        width: { xs: "100%", sm: 185 },
-        minHeight: 42,
-        borderRadius: "12px",
-        background:
-          "linear-gradient(135deg,var(--color-navy-light),var(--color-navy-dark))",
-        boxShadow: "0 9px 20px rgba(18,47,77,.16)",
-        fontSize: 12,
-        fontWeight: 800,
-        textTransform: "none",
-      }}
-    >
-      إضافة خطة تقسيط
-    </Button>
-  ) : null;
+          name:
+            item?.name || "—",
 
-  return (
-    <Container>
-      <Box dir="rtl" sx={{ width: "100%", minWidth: 0, pb: 4 }}>
-        <FinancialHeader
-          title="خطط التقسيط"
-          description="أنشئ خطط الأقساط وحدّد مواعيد الاستحقاق والخطة الافتراضية."
-          count={installmentPlans.length}
-          actions={addAction}
-        />
+          numberOfInstallments:
+            `${Number(
+              item?.numberOfInstallments ||
+                0
+            )} قسط`,
 
-        <StatsGrid>
-          <StatCard
-            label="إجمالي الخطط"
-            value={installmentPlans.length}
-            icon={<EventRepeatRounded />}
-          />
-          <StatCard
-            label="الخطط النشطة"
-            value={activeCount}
-            icon={<CheckCircleRounded />}
-          />
-          <StatCard
-            label="الخطة الافتراضية"
-            value={defaultPlan?.name || "لا توجد"}
-            icon={<StarRounded />}
-          />
-          <StatCard
-            label="إجمالي الأقساط"
-            value={totalInstallments}
-            icon={<CalendarMonthRounded />}
-          />
-        </StatsGrid>
+          isDefault:
+            item?.isDefault
+              ? "نعم"
+              : "لا",
 
-        <SectionCard
-          title="قائمة خطط التقسيط"
-          description="افتح الخطة لتعديل مواعيد الاستحقاق أو تعيينها افتراضية."
+          isActive:
+            item?.isActive
+              ? "نشطة"
+              : "غير نشطة",
+        })
+      );
+
+    const activeCount =
+      installmentPlans.filter(
+        (item) =>
+          item?.isActive
+      ).length;
+
+    const defaultPlan =
+      installmentPlans.find(
+        (item) =>
+          item?.isDefault
+      );
+
+    const totalInstallments =
+      installmentPlans.reduce(
+        (sum, item) =>
+          sum +
+          Number(
+            item?.numberOfInstallments ||
+              0
+          ),
+        0
+      );
+
+    const handleDelete =
+      async (
+        id,
+        setActive
+      ) => {
+        if (
+          !permissions?.delete
+        ) {
+          toast.error(
+            "ليس لديك صلاحية حذف خطة التقسيط"
+          );
+          return;
+        }
+
+        const response =
+          await deleteInstallmentPlan(
+            id
+          );
+
+        if (
+          response?.status
+        ) {
+          toast.success(
+            response?.message ||
+              "تم حذف خطة التقسيط بنجاح"
+          );
+
+          setInstallmentPlans(
+            (previous) =>
+              previous.filter(
+                (item) =>
+                  (item?._id ||
+                    item?.id) !==
+                  id
+              )
+          );
+
+          setActive?.(false);
+          return;
+        }
+
+        toast.error(
+          response?.message ||
+            response ||
+            "حدث خطأ أثناء حذف خطة التقسيط"
+        );
+      };
+
+    const addAction =
+      permissions?.add ? (
+        <Button
+          component={Link}
+          to="add"
+          variant="contained"
+          startIcon={
+            <AddCircleOutlineRounded />
+          }
+          sx={{
+            width: {
+              xs: "100%",
+              sm: 185,
+            },
+            minHeight: 42,
+            borderRadius:
+              "12px",
+            background:
+              "linear-gradient(135deg,var(--color-navy-light),var(--color-navy-dark))",
+            boxShadow:
+              "0 9px 20px rgba(18,47,77,.16)",
+            fontSize: 12,
+            fontWeight: 800,
+            textTransform:
+              "none",
+          }}
         >
-          {!loading && mappedPlans.length === 0 ? (
-            <EmptyState
-              icon={<EventRepeatRounded />}
-              title="لا توجد خطط تقسيط حتى الآن"
-              description="أضف أول خطة لتوزيع الرسوم على مواعيد استحقاق محددة."
+          إضافة خطة تقسيط
+        </Button>
+      ) : null;
+
+    return (
+      <Container>
+        <Box
+          dir="rtl"
+          sx={{
+            width: "100%",
+            minWidth: 0,
+            pb: 4,
+          }}
+        >
+          <FinancialHeader
+            title="خطط التقسيط"
+            description="أنشئ خطط الأقساط وحدّد مواعيد الاستحقاق والخطة الافتراضية."
+            count={
+              installmentPlans.length
+            }
+            actions={
+              addAction
+            }
+          />
+
+          <StatsGrid>
+            <StatCard
+              label="إجمالي الخطط"
+              value={
+                installmentPlans.length
+              }
+              icon={
+                <EventRepeatRounded />
+              }
             />
-          ) : (
-            <Box sx={{ p: { xs: 0.7, md: 1 } }}>
-              <Table
-                headers={HEADERS}
-                data={mappedPlans}
-                loading={loading}
-                edit={permissions?.edit}
-                body={BODY}
-                deleteFn={permissions?.delete ? handleDelete : undefined}
+
+            <StatCard
+              label="الخطط النشطة"
+              value={
+                activeCount
+              }
+              icon={
+                <CheckCircleRounded />
+              }
+            />
+
+            <StatCard
+              label="الخطة الافتراضية"
+              value={
+                defaultPlan?.name ||
+                "لا توجد"
+              }
+              icon={
+                <StarRounded />
+              }
+            />
+
+            <StatCard
+              label="إجمالي الأقساط"
+              value={
+                totalInstallments
+              }
+              icon={
+                <CalendarMonthRounded />
+              }
+            />
+          </StatsGrid>
+
+          <SectionCard
+            title="قائمة خطط التقسيط"
+            description="افتح الخطة لتعديل مواعيد الاستحقاق أو تعيينها افتراضية."
+          >
+            {!loading &&
+            mappedPlans.length ===
+              0 ? (
+              <EmptyState
+                icon={
+                  <EventRepeatRounded />
+                }
+                title="لا توجد خطط تقسيط حتى الآن"
+                description="أضف أول خطة لتوزيع الرسوم على مواعيد استحقاق محددة."
               />
-            </Box>
-          )}
-        </SectionCard>
-      </Box>
-    </Container>
-  );
-};
+            ) : (
+              <Box
+                sx={{
+                  p: {
+                    xs: 0.7,
+                    md: 1,
+                  },
+                }}
+              >
+                <Table
+                  headers={
+                    HEADERS
+                  }
+                  data={
+                    mappedPlans
+                  }
+                  loading={
+                    loading
+                  }
+                  edit={
+                    permissions?.edit
+                  }
+                  body={BODY}
+                  deleteFn={
+                    permissions?.delete
+                      ? handleDelete
+                      : undefined
+                  }
+                />
+              </Box>
+            )}
+          </SectionCard>
+        </Box>
+      </Container>
+    );
+  };
 
 export default InstallmentPlansListPage;
