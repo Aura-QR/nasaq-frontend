@@ -442,29 +442,9 @@ const usePermissions = (
   const authPermissionsAreEmpty =
     permissions === null ||
     (Array.isArray(permissions) &&
-      permissions.length === 0) ||
-    (
-      permissions &&
-      typeof permissions === "object" &&
-      !Array.isArray(permissions) &&
-      Object.keys(permissions).length === 0
-    );
+      permissions.length === 0);
 
-  /*
-   * MANAGER:
-   * Login.jsx يحفظ الـ effective permissions القادمة من الباك
-   * في localStorage. بعض إصدارات/حالات react-auth-kit قد ترجع
-   * permissions بشكل فارغ أو wrapper غير صالح للاستخدام هنا،
-   * لذلك نفضّل الـ flat array المخزنة إذا كانت موجودة.
-   */
-  if (
-    role === "MANAGER" &&
-    Array.isArray(storedPermissions) &&
-    storedPermissions.length > 0
-  ) {
-    permissions =
-      storedPermissions;
-  } else if (authPermissionsAreEmpty) {
+  if (authPermissionsAreEmpty) {
     permissions =
       storedPermissions;
   }

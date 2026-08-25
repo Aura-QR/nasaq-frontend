@@ -41,7 +41,16 @@ export const financialsRoutes = (
   <>
     <Route
       path="/financial/fee-configs"
-      element={<FeeConfigs_List />}
+      element={
+        <RequireAuth loginPath="/">
+          <RequirePermission
+            module="financialSettings"
+            operation="read"
+          >
+            <FeeConfigs_List />
+          </RequirePermission>
+        </RequireAuth>
+      }
     />
 
     <Route
@@ -49,7 +58,7 @@ export const financialsRoutes = (
       element={
         <RequireAuth loginPath="/">
           <RequirePermission
-            module="financial"
+            module="financialSettings"
             operation="add"
           >
             <FeeConfigs_Add />
@@ -63,7 +72,7 @@ export const financialsRoutes = (
       element={
         <RequireAuth loginPath="/">
           <RequirePermission
-            module="financial"
+            module="financialSettings"
             operation="edit"
           >
             <FeeConfigs_Edit />
@@ -77,7 +86,7 @@ export const financialsRoutes = (
       element={
         <RequireAuth loginPath="/">
           <RequirePermission
-            module="financial"
+            module="financialSettings"
             operation="read"
           >
             <InstallmentPlans_List />
@@ -91,7 +100,7 @@ export const financialsRoutes = (
       element={
         <RequireAuth loginPath="/">
           <RequirePermission
-            module="financial"
+            module="financialSettings"
             operation="add"
           >
             <InstallmentPlans_Add />
@@ -105,7 +114,7 @@ export const financialsRoutes = (
       element={
         <RequireAuth loginPath="/">
           <RequirePermission
-            module="financial"
+            module="financialSettings"
             operation="edit"
           >
             <InstallmentPlans_Edit />
@@ -273,7 +282,7 @@ export const financialsRoutes = (
       element={
         <RequireAuth loginPath="/">
           <RequirePermission
-            module="financial"
+            module="financialSettings"
             operation="read"
           >
             <BusPlans_List />
@@ -287,7 +296,7 @@ export const financialsRoutes = (
       element={
         <RequireAuth loginPath="/">
           <RequirePermission
-            module="financial"
+            module="financialSettings"
             operation="add"
           >
             <BusPlans_Add />
@@ -301,7 +310,7 @@ export const financialsRoutes = (
       element={
         <RequireAuth loginPath="/">
           <RequirePermission
-            module="financial"
+            module="financialSettings"
             operation="edit"
           >
             <BusPlans_Edit />
@@ -357,7 +366,7 @@ export const financialsRoutes = (
       element={
         <RequireAuth loginPath="/">
           <RequirePermission
-            module="financial"
+            module="financialSettings"
             operation="read"
           >
             <ModuleTrips_List />
@@ -371,7 +380,7 @@ export const financialsRoutes = (
       element={
         <RequireAuth loginPath="/">
           <RequirePermission
-            module="financial"
+            module="financialSettings"
             operation="add"
           >
             <ModuleTrips_Add />
@@ -385,7 +394,7 @@ export const financialsRoutes = (
       element={
         <RequireAuth loginPath="/">
           <RequirePermission
-            module="financial"
+            module="financialSettings"
             operation="edit"
           >
             <ModuleTrips_Edit />
@@ -399,7 +408,7 @@ export const financialsRoutes = (
       element={
         <RequireAuth loginPath="/">
           <RequirePermission
-            module="financial"
+            module="financialSettings"
             operation="read"
           >
             <ModuleTrips_Profile />
