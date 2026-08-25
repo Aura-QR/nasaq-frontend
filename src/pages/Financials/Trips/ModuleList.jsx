@@ -46,7 +46,7 @@ const asArray = (value) => {
 
 const ModuleTripsListPage = () => {
   const navigate = useNavigate();
-  const permissions = usePermissions("financial");
+  const settingsPermissions = usePermissions("financialSettings");
 
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState([]);
@@ -140,7 +140,7 @@ const ModuleTripsListPage = () => {
     (item) => item.isActive
   ).length;
 
-  const addAction = permissions?.add ? (
+  const addAction = settingsPermissions?.add ? (
     <Button
       type="button"
       onClick={() =>
@@ -214,7 +214,7 @@ const ModuleTripsListPage = () => {
                 headers={HEADERS}
                 data={mapped}
                 loading={loading}
-                edit={permissions?.edit}
+                edit={settingsPermissions?.edit}
                 profile={permissions?.read}
                 body={BODY}
               />

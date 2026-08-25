@@ -46,6 +46,7 @@ const HEADERS = [
   "نوع الخدمة",
   "الرسوم",
   "خطة التقسيط",
+  "عدد المشتركين",
   "الحالة",
 ];
 
@@ -54,6 +55,7 @@ const BODY = [
   "serviceType",
   "fee",
   "installmentPlan",
+  "enrolledCount",
   "status",
 ];
 
@@ -90,8 +92,8 @@ const getInstallmentPlanLabel = (value) => {
 
 const BusPlansListPage = () => {
   const navigate = useNavigate();
-  const permissions =
-    usePermissions("financial");
+  const settingsPermissions =
+    usePermissions("financialSettings");
 
   const [plans, setPlans] =
     useState([]);
@@ -158,6 +160,16 @@ const BusPlansListPage = () => {
           getInstallmentPlanLabel(
             plan?.installmentPlanId
           ),
+        enrolledCount:
+          plan?.enrolledCount ===
+            undefined ||
+          plan?.enrolledCount ===
+            null
+            ? "—"
+            : Number(
+                plan?.enrolledCount ||
+                  0
+              ),
         isActive:
           plan?.isActive !== false,
         status:
@@ -230,7 +242,7 @@ const BusPlansListPage = () => {
     };
 
   const addAction =
-    permissions?.add ? (
+    settingsPermissions?.add ? (
       <Button
         type="button"
         onClick={() =>
@@ -345,10 +357,10 @@ const BusPlansListPage = () => {
                 body={BODY}
                 loading={loading}
                 edit={
-                  permissions?.edit
+                  settingsPermissions?.edit
                 }
                 deleteFn={
-                  permissions?.delete
+                  settingsPermissions?.delete
                     ? handleDeactivate
                     : undefined
                 }

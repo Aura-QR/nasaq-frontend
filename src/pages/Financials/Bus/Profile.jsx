@@ -22,6 +22,7 @@ import {
   ReceiptLongRounded,
   RemoveCircleOutlineRounded,
   SchoolRounded,
+  SwapHorizRounded,
   UndoRounded,
 } from "@mui/icons-material";
 
@@ -48,6 +49,11 @@ import {
   applyDiscountToBus,
   removeDiscountFromBus,
 } from "@/APIs/financials/discounts";
+
+import {
+  fetchBusPlans,
+  switchBusPlan,
+} from "@/APIs/financials/busPlans";
 
 import Back from "@/components/Back/Back";
 import Container from "@/components/Container/Container";
@@ -255,6 +261,21 @@ const BusProfilePage = () => {
   ] = useState(false);
 
   const [
+    switchOpen,
+    setSwitchOpen,
+  ] = useState(false);
+
+  const [
+    busPlans,
+    setBusPlans,
+  ] = useState([]);
+
+  const [
+    busPlansLoading,
+    setBusPlansLoading,
+  ] = useState(false);
+
+  const [
     selected,
     setSelected,
   ] = useState(null);
@@ -282,6 +303,76 @@ const BusProfilePage = () => {
 
   const bus =
     busRecord?.bus || {};
+
+  useEffect(() => {
+    if (!switchOpen) {
+      return;
+    }
+
+    let mounted = true;
+
+    const loadBusPlans = async () => {
+      setBusPlansLoading(
+        true
+      );
+
+      try {
+        const response =
+          await fetchBusPlans();
+
+        if (!mounted) return;
+
+        if (
+          response?.status ===
+          false
+        ) {
+          setBusPlans([]);
+
+          toast.error(
+            getErrorMessage(
+              response,
+              "تعذر تحميل خطط الباص"
+            )
+          );
+          return;
+        }
+
+        const value =
+          response?.data ??
+          response;
+
+        const plans =
+          Array.isArray(value)
+            ? value
+            : Array.isArray(
+                value?.data
+              )
+            ? value.data
+            : [];
+
+        setBusPlans(
+          plans.filter(
+            (plan) =>
+              plan?.isActive !==
+              false
+          )
+        );
+      } finally {
+        if (mounted) {
+          setBusPlansLoading(
+            false
+          );
+        }
+      }
+    };
+
+    loadBusPlans();
+
+    return () => {
+      mounted = false;
+    };
+  }, [switchOpen]);
+
 
   const academicYearSource =
     getAcademicYearSource(
@@ -679,6 +770,59 @@ const BusProfilePage = () => {
       setDiscountLoading(false);
     };
 
+
+  const changeBusPlan =
+    async (data) => {
+      const nextBusPlanId =
+        normalizeId(
+          data?.busPlanId
+        );
+
+      if (!nextBusPlanId) {
+        toast.error(
+          "اختر خطة الباص الجديدة"
+        );
+        return;
+      }
+
+      setSaving(true);
+
+      const payload = {
+        busPlanId:
+          nextBusPlanId,
+      };
+
+      if (academicYearId) {
+        payload.academicYearId =
+          academicYearId;
+      }
+
+      const response =
+        await switchBusPlan(
+          studentId,
+          payload
+        );
+
+      if (response?.status) {
+        toast.success(
+          response?.message ||
+            "تم تغيير خطة الباص بنجاح"
+        );
+
+        setSwitchOpen(false);
+        await refetch();
+      } else {
+        toast.error(
+          getErrorMessage(
+            response,
+            "تعذر تغيير خطة الباص"
+          )
+        );
+      }
+
+      setSaving(false);
+    };
+
   const unenroll = async () => {
     setSaving(true);
 
@@ -752,6 +896,41 @@ const BusProfilePage = () => {
         item.statusRaw ===
         "paid"
     ).length;
+
+  const hasAnyPayment =
+    paid > 0 ||
+    installments.some(
+      (item) =>
+        Number(
+          item?.paidAmountRaw ||
+            0
+        ) > 0
+    );
+
+  const currentBusPlanId =
+    normalizeId(
+      bus?.busPlanId
+    );
+
+  const switchPlanOptions =
+    busPlans
+      .map((plan) => ({
+        id:
+          plan?._id ||
+          plan?.id,
+        label:
+          `${plan?.name || "خطة باص"} — ${mapBusServiceType(
+            plan?.serviceType
+          )} — ${formatMoney(
+            plan?.fee
+          )}`,
+      }))
+      .filter(
+        (plan) =>
+          plan.id &&
+          plan.id !==
+            currentBusPlanId
+      );
 
   return (
     <Container>
@@ -836,25 +1015,58 @@ const BusProfilePage = () => {
 
             {permissions?.edit &&
               bus?.enrolled && (
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={
-                    <RemoveCircleOutlineRounded />
-                  }
-                  onClick={() =>
-                    setUnenrollOpen(
-                      true
-                    )
-                  }
-                  sx={{
-                    borderRadius:
-                      "12px",
-                    fontWeight: 800,
+                <Stack
+                  direction={{
+                    xs: "column",
+                    sm: "row",
                   }}
+                  gap={1}
                 >
-                  إلغاء الاشتراك
-                </Button>
+                  {!hasAnyPayment && (
+                    <Button
+                      variant="contained"
+                      startIcon={
+                        <SwapHorizRounded />
+                      }
+                      onClick={() =>
+                        setSwitchOpen(
+                          true
+                        )
+                      }
+                      sx={{
+                        borderRadius:
+                          "12px",
+                        fontWeight: 800,
+                        textTransform:
+                          "none",
+                        background:
+                          "var(--color-navy)",
+                      }}
+                    >
+                      تغيير الخطة
+                    </Button>
+                  )}
+
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    startIcon={
+                      <RemoveCircleOutlineRounded />
+                    }
+                    onClick={() =>
+                      setUnenrollOpen(
+                        true
+                      )
+                    }
+                    sx={{
+                      borderRadius:
+                        "12px",
+                      fontWeight: 800,
+                    }}
+                  >
+                    إلغاء الاشتراك
+                  </Button>
+                </Stack>
               )}
           </Stack>
         </Paper>
@@ -977,6 +1189,23 @@ const BusProfilePage = () => {
               }
               icon={
                 <SchoolRounded />
+              }
+            />
+
+            <Detail
+              label="خطة الباص"
+              value={
+                bus?.planName ||
+                bus?.busPlanId
+                  ?.name ||
+                (
+                  bus?.busPlanId
+                    ? "خطة باص"
+                    : "غير مرتبطة بخطة"
+                )
+              }
+              icon={
+                <DirectionsBusRounded />
               }
             />
 
@@ -1398,6 +1627,25 @@ const BusProfilePage = () => {
           </SectionCard>
         )}
 
+
+        <SwitchBusPlanDialog
+          open={switchOpen}
+          onClose={() =>
+            !saving &&
+            setSwitchOpen(false)
+          }
+          onSubmit={
+            changeBusPlan
+          }
+          loading={
+            saving ||
+            busPlansLoading
+          }
+          plans={
+            switchPlanOptions
+          }
+        />
+
         <PayDialog
           open={payOpen}
           onClose={() =>
@@ -1437,6 +1685,125 @@ const BusProfilePage = () => {
         />
       </Box>
     </Container>
+  );
+};
+
+
+const SwitchBusPlanDialog = ({
+  open,
+  onClose,
+  onSubmit,
+  loading,
+  plans,
+}) => {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm({
+    defaultValues: {
+      busPlanId: "",
+    },
+  });
+
+  useEffect(() => {
+    if (open) {
+      reset({
+        busPlanId: "",
+      });
+    }
+  }, [open, reset]);
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      PaperProps={{
+        sx: {
+          overflow: "hidden",
+          borderRadius: "20px",
+          bgcolor:
+            "var(--color-cream)",
+        },
+      }}
+    >
+      <DialogHeader
+        icon={<SwapHorizRounded />}
+        title="تغيير خطة الباص"
+        description="يمكن تغيير الخطة فقط قبل تسجيل أي دفعة على اشتراك الباص."
+        loading={loading}
+        onClose={onClose}
+      />
+
+      <DialogContent
+        sx={{
+          ...formFieldsSx,
+          p: 2,
+        }}
+      >
+        <Box
+          component="form"
+          onSubmit={handleSubmit(
+            onSubmit
+          )}
+        >
+          <Stack spacing={1.5}>
+            <TextField
+              select
+              fullWidth
+              label="الخطة الجديدة"
+              defaultValue=""
+              error={Boolean(
+                errors.busPlanId
+              )}
+              helperText={
+                errors.busPlanId
+                  ?.message ||
+                (
+                  plans.length === 0
+                    ? "لا توجد خطة أخرى نشطة متاحة."
+                    : ""
+                )
+              }
+              {...register(
+                "busPlanId",
+                {
+                  required:
+                    "اختر خطة الباص الجديدة",
+                }
+              )}
+            >
+              <MenuItem value="">
+                اختر الخطة
+              </MenuItem>
+
+              {plans.map(
+                (plan) => (
+                  <MenuItem
+                    key={plan.id}
+                    value={plan.id}
+                  >
+                    {plan.label}
+                  </MenuItem>
+                )
+              )}
+            </TextField>
+
+            <FormActions
+              loading={loading}
+              onCancel={onClose}
+              label="تغيير الخطة"
+              disabled={
+                plans.length === 0
+              }
+            />
+          </Stack>
+        </Box>
+      </DialogContent>
+    </Dialog>
   );
 };
 

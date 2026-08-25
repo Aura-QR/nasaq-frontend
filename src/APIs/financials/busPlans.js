@@ -2,6 +2,7 @@ import { api } from "../Axios";
 import { apiError } from "./_helpers";
 
 const E = "/financial/bus-plans";
+const BUS = "/financial/bus";
 
 export const fetchBusPlans = async () => {
   try {
@@ -43,10 +44,31 @@ export const deactivateBusPlan = async (id) => {
   }
 };
 
+
+export const switchBusPlan = async (
+  studentId,
+  data
+) => {
+  try {
+    return (
+      await api.patch(
+        `${BUS}/${studentId}/switch-plan`,
+        data
+      )
+    ).data;
+  } catch (e) {
+    return apiError(
+      e,
+      "تعذر تغيير خطة الباص"
+    );
+  }
+};
+
 export default {
   fetchBusPlans,
   fetchBusPlan,
   createBusPlan,
   updateBusPlan,
   deactivateBusPlan,
+  switchBusPlan,
 };

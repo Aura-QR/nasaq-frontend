@@ -10,7 +10,6 @@ const STUDENT_FIELDS = [
   "birthDate",
   "gender",
   "nationality",
-  "nationalityCode",
   "phoneNumber",
   "email",
   "address",
@@ -20,6 +19,7 @@ const STUDENT_FIELDS = [
   "isActive",
   "password",
   "classId",
+  "busPlanId",
   "status",
 ];
 
@@ -29,6 +29,7 @@ const OPTIONAL_TEXT_FIELDS = new Set([
   "notes",
   "password",
   "classId",
+  "busPlanId",
   "status",
 ]);
 
@@ -84,7 +85,10 @@ export const normalizeStudentPayload = (
 
     let value = source[field];
 
-    if (field === "classId") {
+    if (
+      field === "classId" ||
+      field === "busPlanId"
+    ) {
       value = normalizeId(value);
     } else if (field === "isActive") {
       value = normalizeBoolean(value);
