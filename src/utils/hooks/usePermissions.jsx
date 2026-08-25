@@ -422,17 +422,51 @@ const usePermissions = (
           ?.permissions
     );
 
+  const storedPermissions =
+    normalizePermissionsValue(
+      getLocalStoragePermissions()
+    );
+
   let permissions =
     authPermissions;
 
   /*
    * LocalStorage مجرد fallback.
+   *
+   * مهم للـ MANAGER:
+   * أحيانًا react-auth-kit يحتفظ بـ permissions: []
+   * رغم إن localStorage يحتوي الصلاحيات الصحيحة القادمة
+   * من تسجيل الدخول. في الحالة دي لا نعتبر [] قيمة نهائية،
+   * ونستخدم الصلاحيات المخزنة محليًا بدلًا منها.
+   */
+  const authPermissionsAreEmpty =
+    permissions === null ||
+    (Array.isArray(permissions) &&
+      permissions.length === 0) ||
+    (
+      permissions &&
+      typeof permissions === "object" &&
+      !Array.isArray(permissions) &&
+      Object.keys(permissions).length === 0
+    );
+
+  /*
+   * MANAGER:
+   * Login.jsx يحفظ الـ effective permissions القادمة من الباك
+   * في localStorage. بعض إصدارات/حالات react-auth-kit قد ترجع
+   * permissions بشكل فارغ أو wrapper غير صالح للاستخدام هنا،
+   * لذلك نفضّل الـ flat array المخزنة إذا كانت موجودة.
    */
   if (
-    permissions === null
+    role === "MANAGER" &&
+    Array.isArray(storedPermissions) &&
+    storedPermissions.length > 0
   ) {
     permissions =
-      getLocalStoragePermissions();
+      storedPermissions;
+  } else if (authPermissionsAreEmpty) {
+    permissions =
+      storedPermissions;
   }
 
   /*
