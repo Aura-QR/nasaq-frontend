@@ -808,32 +808,7 @@ const SchoolManagersList = () => {
 
                         <td>
                           <Stack direction="row" spacing={0.65} justifyContent="center">
-                            {role === "MANAGER" && (
-                              <Tooltip title="تطبيق صلاحيات المدير الافتراضية">
-                                <span>
-                                  <IconButton
-                                    onClick={() => handleSyncPermissions(item)}
-                                    disabled={!id || syncingManagerId === id}
-                                    size="small"
-                                    sx={{
-                                      width: 36,
-                                      height: 36,
-                                      color: "#244A70",
-                                      bgcolor: "#EEF3F7",
-                                      border: "1px solid #DDE5EC",
-                                      "&:hover": { bgcolor: "#E2EAF1" },
-                                    }}
-                                  >
-                                    {syncingManagerId === id ? (
-                                      <CircularProgress size={18} />
-                                    ) : (
-                                      <SecurityRounded sx={{ fontSize: 20 }} />
-                                    )}
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
-                            )}
-
+                    
                             <Tooltip title="حذف الحساب">
                               <span>
                                 <IconButton
