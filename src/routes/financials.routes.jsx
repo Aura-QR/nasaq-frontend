@@ -25,9 +25,13 @@ import AdditionalFees_Add from "@/pages/Financials/AdditionalFees/Add";
 
 import Bus_List from "@/pages/Financials/Bus/List";
 import Bus_Profile from "@/pages/Financials/Bus/Profile";
+import BusPlans_List from "@/pages/Financials/BusPlans/List";
+import BusPlans_Add from "@/pages/Financials/BusPlans/Add";
+import BusPlans_Edit from "@/pages/Financials/BusPlans/Edit";
 
 import ModuleTrips_List from "@/pages/Financials/Trips/ModuleList";
 import ModuleTrips_Add from "@/pages/Financials/Trips/ModuleAdd";
+import ModuleTrips_Edit from "@/pages/Financials/Trips/ModuleEdit";
 import ModuleTrips_Profile from "@/pages/Financials/Trips/ModuleProfile";
 import Trips_List from "@/pages/Financials/Trips/List";
 import Trips_Add from "@/pages/Financials/Trips/Add";
@@ -265,6 +269,48 @@ export const financialsRoutes = (
     />
 
     <Route
+      path="/financial/bus-plans"
+      element={
+        <RequireAuth loginPath="/">
+          <RequirePermission
+            module="financial"
+            operation="read"
+          >
+            <BusPlans_List />
+          </RequirePermission>
+        </RequireAuth>
+      }
+    />
+
+    <Route
+      path="/financial/bus-plans/add"
+      element={
+        <RequireAuth loginPath="/">
+          <RequirePermission
+            module="financial"
+            operation="add"
+          >
+            <BusPlans_Add />
+          </RequirePermission>
+        </RequireAuth>
+      }
+    />
+
+    <Route
+      path="/financial/bus-plans/edit/:id"
+      element={
+        <RequireAuth loginPath="/">
+          <RequirePermission
+            module="financial"
+            operation="edit"
+          >
+            <BusPlans_Edit />
+          </RequirePermission>
+        </RequireAuth>
+      }
+    />
+
+    <Route
       path="/financial/bus"
       element={
         <RequireAuth loginPath="/">
@@ -329,6 +375,20 @@ export const financialsRoutes = (
             operation="add"
           >
             <ModuleTrips_Add />
+          </RequirePermission>
+        </RequireAuth>
+      }
+    />
+
+    <Route
+      path="/financial/trips/edit/:tripTemplateId"
+      element={
+        <RequireAuth loginPath="/">
+          <RequirePermission
+            module="financial"
+            operation="edit"
+          >
+            <ModuleTrips_Edit />
           </RequirePermission>
         </RequireAuth>
       }
