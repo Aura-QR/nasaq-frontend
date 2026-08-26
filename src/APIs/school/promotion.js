@@ -2,6 +2,12 @@ import { api } from "../Axios";
 
 const ENDPOINT = "/enrollments";
 
+const VALID_EXCLUSION_REASONS = new Set([
+  "graduated",
+  "transferred",
+  "withdrawn",
+]);
+
 const normalizeId = (value) => {
   if (value && typeof value === "object") {
     return String(
@@ -35,6 +41,10 @@ const normalizeFailure = (
   ),
   statusCode:
     error?.response?.status,
+  data:
+    error?.response?.data?.data ??
+    error?.response?.data ??
+    null,
 });
 
 /**
@@ -106,18 +116,24 @@ export const fetchPromotionPreview = async (
 /**
  * POST /enrollments/bulk-promote/:targetAcademicYearId
  *
- * Backend contract:
+ * New backend contract:
  * {
+ *   previousAcademicYearId: "...",
  *   promotions: [{ studentId, targetClassId }],
- *   excludedStudentIds: []
+ *   excludedStudents: [
+ *     { studentId, reason: "graduated" | "transferred" | "withdrawn" }
+ *   ]
  * }
  *
- * There is deliberately no "action" field per student.
+ * excludedStudentIds is still accepted by this frontend helper for
+ * compatibility with any old caller and is converted to "withdrawn".
  */
 export const bulkPromoteStudents = async (
   targetAcademicYearId,
   {
+    previousAcademicYearId,
     promotions = [],
+    excludedStudents = [],
     excludedStudentIds = [],
   } = {}
 ) => {
@@ -126,11 +142,32 @@ export const bulkPromoteStudents = async (
       targetAcademicYearId
     );
 
+  const sourceYearId =
+    normalizeId(
+      previousAcademicYearId
+    );
+
   if (!targetYearId) {
     return {
       status: false,
       message:
         "السنة الدراسية الهدف مطلوبة",
+    };
+  }
+
+  if (!sourceYearId) {
+    return {
+      status: false,
+      message:
+        "السنة الدراسية المصدر مطلوبة",
+    };
+  }
+
+  if (targetYearId === sourceYearId) {
+    return {
+      status: false,
+      message:
+        "السنة المصدر والسنة الهدف يجب أن تكونا مختلفتين",
     };
   }
 
@@ -152,22 +189,67 @@ export const bulkPromoteStudents = async (
           item.targetClassId
       );
 
-  const normalizedExcludedIds =
-    [
-      ...new Set(
-        excludedStudentIds
-          .map(normalizeId)
-          .filter(Boolean)
-      ),
-    ];
+  const excludedMap =
+    new Map();
+
+  excludedStudents.forEach(
+    (item) => {
+      const studentId =
+        normalizeId(
+          item?.studentId
+        );
+
+      const reason =
+        String(
+          item?.reason || ""
+        )
+          .trim()
+          .toLowerCase();
+
+      if (
+        studentId &&
+        VALID_EXCLUSION_REASONS.has(
+          reason
+        )
+      ) {
+        excludedMap.set(
+          studentId,
+          {
+            studentId,
+            reason,
+          }
+        );
+      }
+    }
+  );
+
+  // Compatibility for any old screen/caller still sending ids only.
+  excludedStudentIds
+    .map(normalizeId)
+    .filter(Boolean)
+    .forEach((studentId) => {
+      if (!excludedMap.has(studentId)) {
+        excludedMap.set(
+          studentId,
+          {
+            studentId,
+            reason: "withdrawn",
+          }
+        );
+      }
+    });
+
+  const normalizedExcludedStudents =
+    [...excludedMap.values()];
 
   if (
-    !normalizedPromotions.length
+    !normalizedPromotions.length &&
+    !normalizedExcludedStudents.length
   ) {
     return {
       status: false,
       message:
-        "لا يوجد طلاب صالحون للترقية",
+        "لا توجد تغييرات صالحة للتنفيذ",
     };
   }
 
@@ -176,10 +258,12 @@ export const bulkPromoteStudents = async (
       await api.post(
         `${ENDPOINT}/bulk-promote/${targetYearId}`,
         {
+          previousAcademicYearId:
+            sourceYearId,
           promotions:
             normalizedPromotions,
-          excludedStudentIds:
-            normalizedExcludedIds,
+          excludedStudents:
+            normalizedExcludedStudents,
         }
       );
 

@@ -281,6 +281,45 @@ const canStudentBePromoted = (
   row.availableTargetClasses
     .length > 0;
 
+const EXCLUSION_REASONS = [
+  {
+    value: "graduated",
+    label: "متخرج",
+  },
+  {
+    value: "transferred",
+    label: "انتقل لمدرسة أخرى",
+  },
+  {
+    value: "withdrawn",
+    label: "منسحب / مستبعد",
+  },
+];
+
+const getDefaultExclusionReason = (
+  student
+) =>
+  isGraduatingStudent(student)
+    ? "graduated"
+    : "withdrawn";
+
+const getExecutionErrorText = (
+  error,
+  index
+) => {
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return (
+    error?.message ||
+    error?.error ||
+    error?.reason ||
+    error?.studentName ||
+    `تعذر تحديث الطالب ${index + 1}`
+  );
+};
+
 const getDefaultTargetClassId = (
   row
 ) =>
@@ -342,6 +381,11 @@ const Promotion = () => {
     pageError,
     setPageError,
   ] = useState("");
+
+  const [
+    executionErrors,
+    setExecutionErrors,
+  ] = useState([]);
 
   const students =
     useMemo(
@@ -465,6 +509,10 @@ const Promotion = () => {
                     student
                   )
                 : "",
+            exclusionReason:
+              getDefaultExclusionReason(
+                student
+              ),
           };
         }
       );
@@ -626,6 +674,7 @@ const Promotion = () => {
         true
       );
       setPageError("");
+      setExecutionErrors([]);
 
       try {
         const response =
@@ -723,6 +772,13 @@ const Promotion = () => {
             getDefaultTargetClassId(
               student
             ),
+          exclusionReason:
+            current?.[
+              studentId
+            ]?.exclusionReason ||
+            getDefaultExclusionReason(
+              student
+            ),
         },
       })
     );
@@ -746,11 +802,37 @@ const Promotion = () => {
     );
   };
 
+  const updateExclusionReason = (
+    studentId,
+    value
+  ) => {
+    const allowed =
+      EXCLUSION_REASONS.some(
+        (item) =>
+          item.value === value
+      );
+
+    if (!allowed) {
+      return;
+    }
+
+    setChoices(
+      (current) => ({
+        ...current,
+        [studentId]: {
+          ...(current?.[
+            studentId
+          ] || {}),
+          exclusionReason: value,
+        },
+      })
+    );
+  };
+
   const payload =
     useMemo(() => {
       const promotions = [];
-      const excludedStudentIds =
-        [];
+      const excludedStudents = [];
 
       students.forEach(
         (student) => {
@@ -792,19 +874,27 @@ const Promotion = () => {
             return;
           }
 
-          excludedStudentIds.push(
-            studentId
-          );
+          excludedStudents.push({
+            studentId,
+            reason:
+              choice.exclusionReason ||
+              getDefaultExclusionReason(
+                student
+              ),
+          });
         }
       );
 
       return {
+        previousAcademicYearId:
+          sourceYearId,
         promotions,
-        excludedStudentIds,
+        excludedStudents,
       };
     }, [
       students,
       choices,
+      sourceYearId,
     ]);
 
   const invalidSelectedCount =
@@ -841,11 +931,11 @@ const Promotion = () => {
   const openConfirmation =
     () => {
       if (
-        !payload.promotions
-          .length
+        !payload.promotions.length &&
+        !payload.excludedStudents.length
       ) {
         toast.info(
-          "لا يوجد طلاب محددون للترقية"
+          "لا توجد تغييرات جاهزة للتنفيذ"
         );
         return;
       }
@@ -865,8 +955,8 @@ const Promotion = () => {
   const handleBulkPromote =
     async () => {
       if (
-        !payload.promotions
-          .length
+        !payload.promotions.length &&
+        !payload.excludedStudents.length
       ) {
         return;
       }
@@ -897,14 +987,51 @@ const Promotion = () => {
           false
         );
 
-        toast.success(
-          getErrorMessage(
-            response,
-            "تم تنفيذ ترقية الطلاب بنجاح"
+        const resultData =
+          unwrapData(response) || {};
+
+        const responseErrors =
+          Array.isArray(
+            resultData?.errors
           )
+            ? resultData.errors
+            : [];
+
+        setExecutionErrors(
+          responseErrors
         );
 
+        const promotedCount =
+          Number(
+            resultData?.promotedCount ??
+              resultData?.createdCount ??
+              resultData?.promoted ??
+              payload.promotions.length
+          ) || 0;
+
+        const excludedUpdated =
+          Number(
+            resultData?.excludedUpdated ??
+              payload.excludedStudents.length
+          ) || 0;
+
+        if (responseErrors.length) {
+          toast.warning(
+            `تمت العملية: ${promotedCount} ترقية، ${excludedUpdated} تحديث استبعاد، ويوجد ${responseErrors.length} خطأ يحتاج مراجعة`
+          );
+        } else {
+          toast.success(
+            `تمت ترقية ${promotedCount} طالب وتحديث حالة ${excludedUpdated} طالب مستبعد`
+          );
+        }
+
         await loadPreview();
+
+        if (responseErrors.length) {
+          setExecutionErrors(
+            responseErrors
+          );
+        }
       } catch (
         requestError
       ) {
@@ -924,6 +1051,7 @@ const Promotion = () => {
     setPreview(null);
     setChoices({});
     setPageError("");
+    setExecutionErrors([]);
   };
 
   return (
@@ -1302,6 +1430,54 @@ const Promotion = () => {
           </Alert>
         )}
 
+        {executionErrors.length > 0 && (
+          <Alert
+            severity="warning"
+            sx={{
+              mt: 1.2,
+              borderRadius:
+                "14px",
+            }}
+          >
+            <Typography
+              sx={{
+                fontWeight: 900,
+                fontSize: "11px",
+              }}
+            >
+              تمت العملية مع أخطاء تحتاج مراجعة:
+            </Typography>
+
+            <Stack
+              spacing={0.35}
+              sx={{ mt: 0.6 }}
+            >
+              {executionErrors
+                .slice(0, 6)
+                .map(
+                  (
+                    error,
+                    index
+                  ) => (
+                    <Typography
+                      key={index}
+                      sx={{
+                        fontSize:
+                          "10px",
+                      }}
+                    >
+                      •{" "}
+                      {getExecutionErrorText(
+                        error,
+                        index
+                      )}
+                    </Typography>
+                  )
+                )}
+            </Stack>
+          </Alert>
+        )}
+
         {loadingYears ? (
           <Box
             sx={{
@@ -1507,14 +1683,13 @@ const Promotion = () => {
                   "14px",
               }}
             >
-              الطلاب غير
-              المجتازين أو
-              المتخرجون أو من
-              لا يوجد لهم فصل
-              متاح في السنة
-              الجديدة لن يدخلوا
-              تلقائيًا في طلب
-              الترقية.
+              الطلاب الذين لن
+              تتم ترقيتهم سيظهر
+              لهم سبب استبعاد.
+              المتخرج يتم تعيينه
+              تلقائيًا كـ «متخرج»،
+              ويمكن تعديل سبب
+              الاستبعاد قبل التنفيذ.
             </Alert>
 
             <TableContainer
@@ -1533,7 +1708,7 @@ const Promotion = () => {
               <Table
                 size="small"
                 sx={{
-                  minWidth: 1080,
+                  minWidth: 1250,
                 }}
               >
                 <TableHead>
@@ -1551,6 +1726,7 @@ const Promotion = () => {
                       "تفاصيل المواد",
                       "الصف التالي",
                       "فصل السنة الجديدة",
+                      "سبب الاستبعاد",
                     ].map(
                       (
                         header
@@ -1996,6 +2172,77 @@ const Promotion = () => {
                               </Typography>
                             )}
                           </TableCell>
+
+                          <TableCell
+                            align="right"
+                          >
+                            {choice.included ===
+                            true ? (
+                              <Typography
+                                sx={{
+                                  color:
+                                    "#9AA6B2",
+                                  fontSize:
+                                    "10px",
+                                  fontWeight:
+                                    700,
+                                }}
+                              >
+                                —
+                              </Typography>
+                            ) : (
+                              <TextField
+                                select
+                                size="small"
+                                value={
+                                  choice.exclusionReason ||
+                                  getDefaultExclusionReason(
+                                    student
+                                  )
+                                }
+                                onChange={(
+                                  event
+                                ) =>
+                                  updateExclusionReason(
+                                    studentId,
+                                    event
+                                      .target
+                                      .value
+                                  )
+                                }
+                                sx={{
+                                  minWidth:
+                                    175,
+                                  "& .MuiOutlinedInput-root":
+                                    {
+                                      minHeight:
+                                        38,
+                                      borderRadius:
+                                        "10px",
+                                    },
+                                }}
+                              >
+                                {EXCLUSION_REASONS.map(
+                                  (
+                                    reason
+                                  ) => (
+                                    <MenuItem
+                                      key={
+                                        reason.value
+                                      }
+                                      value={
+                                        reason.value
+                                      }
+                                    >
+                                      {
+                                        reason.label
+                                      }
+                                    </MenuItem>
+                                  )
+                                )}
+                              </TextField>
+                            )}
+                          </TableCell>
                         </TableRow>
                       );
                     }
@@ -2112,7 +2359,7 @@ const Promotion = () => {
                   المستبعدون:{" "}
                   {
                     payload
-                      .excludedStudentIds
+                      .excludedStudents
                       .length
                   }{" "}
                   • الاستبعاد لا
@@ -2130,9 +2377,13 @@ const Promotion = () => {
                 }
                 disabled={
                   submitting ||
-                  !payload
-                    .promotions
-                    .length ||
+                  (
+                    !payload.promotions
+                      .length &&
+                    !payload
+                      .excludedStudents
+                      .length
+                  ) ||
                   invalidSelectedCount >
                     0
                 }
@@ -2278,7 +2529,7 @@ const Promotion = () => {
                 وسيتم إرسال{" "}
                 {
                   payload
-                    .excludedStudentIds
+                    .excludedStudents
                     .length
                 }{" "}
                 طالب ضمن قائمة
