@@ -18,6 +18,7 @@ import {
   FactCheckRounded,
   FlagRounded,
   InfoOutlined,
+  AccessTimeRounded,
   RestartAltRounded,
   SaveRounded,
   SettingsRounded,
@@ -78,6 +79,37 @@ const isValidPassingGrade = (value) =>
   Number.isFinite(value) &&
   value >= 0 &&
   value <= 100;
+
+const normalizeWorkStartTime = (value) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  const stringValue = String(value).trim();
+
+  if (!stringValue) {
+    return "";
+  }
+
+  // GET may return HH:mm, HH:mm:ss, or a full ISO value.
+  const directTimeMatch = stringValue.match(/^(\d{2}):(\d{2})/);
+
+  if (directTimeMatch) {
+    return `${directTimeMatch[1]}:${directTimeMatch[2]}`;
+  }
+
+  const isoTimeMatch = stringValue.match(/T(\d{2}):(\d{2})/);
+
+  if (isoTimeMatch) {
+    return `${isoTimeMatch[1]}:${isoTimeMatch[2]}`;
+  }
+
+  return "";
+};
+
+const isValidWorkStartTime = (value) =>
+  value === "" ||
+  /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 
 const getErrorMessage = (
   error,
@@ -334,6 +366,7 @@ const SchoolSettings = () => {
     defaultValues: {
       defaultPassingGrade:
         DEFAULT_PASSING_GRADE,
+      workStartTime: "",
       localNationalities: [],
     },
   });
@@ -364,6 +397,7 @@ const SchoolSettings = () => {
   ] = useState({
     defaultPassingGrade:
       DEFAULT_PASSING_GRADE,
+    workStartTime: "",
     localNationalities: [],
   });
 
@@ -373,6 +407,11 @@ const SchoolSettings = () => {
   const currentValue =
     normalizePassingGrade(
       watch("defaultPassingGrade")
+    );
+
+  const currentWorkStartTime =
+    normalizeWorkStartTime(
+      watch("workStartTime")
     );
 
   const currentLocalNationalities =
@@ -403,12 +442,15 @@ const SchoolSettings = () => {
     () =>
       currentValue !==
         savedSettings.defaultPassingGrade ||
+      currentWorkStartTime !==
+        savedSettings.workStartTime ||
       !sameStringArray(
         currentLocalNationalities,
         savedSettings.localNationalities
       ),
     [
       currentValue,
+      currentWorkStartTime,
       currentLocalNationalities,
       savedSettings,
     ]
@@ -435,6 +477,7 @@ const SchoolSettings = () => {
 
       let nextPassingGrade =
         DEFAULT_PASSING_GRADE;
+      let nextWorkStartTime = "";
       let nextLocalNationalities = [];
 
       if (
@@ -466,6 +509,11 @@ const SchoolSettings = () => {
             normalizePassingGrade(
               settings?.defaultPassingGrade ??
                 DEFAULT_PASSING_GRADE
+            );
+
+          nextWorkStartTime =
+            normalizeWorkStartTime(
+              settings?.workStartTime
             );
 
           nextLocalNationalities =
@@ -523,6 +571,8 @@ const SchoolSettings = () => {
       const normalizedSettings = {
         defaultPassingGrade:
           nextPassingGrade,
+        workStartTime:
+          nextWorkStartTime,
         localNationalities:
           nextLocalNationalities,
       };
@@ -617,6 +667,11 @@ const SchoolSettings = () => {
         formData.defaultPassingGrade
       );
 
+    const workStartTime =
+      normalizeWorkStartTime(
+        formData.workStartTime
+      );
+
     const localNationalities =
       normalizeNationalityCodes(
         formData.localNationalities
@@ -629,6 +684,13 @@ const SchoolSettings = () => {
     ) {
       toast.error(
         "درجة النجاح الافتراضية يجب أن تكون من 0 إلى 100"
+      );
+      return;
+    }
+
+    if (!isValidWorkStartTime(workStartTime)) {
+      toast.error(
+        "وقت بداية الدوام يجب أن يكون بصيغة HH:mm"
       );
       return;
     }
@@ -678,6 +740,8 @@ const SchoolSettings = () => {
       const response =
         await updateSchoolSettings({
           defaultPassingGrade,
+          workStartTime:
+            workStartTime || null,
           localNationalities,
         });
 
@@ -700,6 +764,11 @@ const SchoolSettings = () => {
             updatedSettings
               ?.defaultPassingGrade ??
               defaultPassingGrade
+          ),
+        workStartTime:
+          normalizeWorkStartTime(
+            updatedSettings?.workStartTime ??
+              workStartTime
           ),
         localNationalities:
           normalizeNationalityCodes(
@@ -781,7 +850,7 @@ const SchoolSettings = () => {
 
             <Chip
               icon={<SettingsRounded />}
-              label="النجاح والجنسيات"
+              label="الإعدادات العامة"
               sx={{
                 alignSelf: {
                   xs: "flex-start",
@@ -1258,6 +1327,140 @@ const SchoolSettings = () => {
                 </Stack>
               </Box>
             </Paper>
+          </Box>
+
+          <Divider
+            sx={{
+              borderColor:
+                "rgba(36,74,112,0.07)",
+            }}
+          />
+
+          <Box
+            sx={{
+              px: { xs: 1.4, md: 1.8 },
+              py: 1.25,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              background:
+                "linear-gradient(135deg, rgba(36,74,112,0.035), rgba(255,255,255,0.9))",
+            }}
+          >
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+                color:
+                  "var(--color-gold-dark)",
+                backgroundColor:
+                  "var(--color-gold-soft)",
+                borderRadius: "12px",
+              }}
+            >
+              <AccessTimeRounded />
+            </Box>
+
+            <Box sx={{ minWidth: 0 }}>
+              <Typography
+                sx={{
+                  color:
+                    "var(--color-navy-deep)",
+                  fontSize: {
+                    xs: "15px",
+                    md: "17px",
+                  },
+                  fontWeight: 900,
+                }}
+              >
+                دوام المعلمين
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.15,
+                  color:
+                    "var(--color-muted)",
+                  fontSize: "10px",
+                  lineHeight: 1.65,
+                }}
+              >
+                حددي وقت بداية الدوام ليحسب النظام تأخير المعلمين تلقائيًا.
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box
+            sx={{
+              p: { xs: 1.35, md: 1.8 },
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "minmax(280px, 0.55fr) minmax(0, 1fr)",
+              },
+              gap: 1.25,
+              alignItems: "start",
+            }}
+          >
+            <TextField
+              {...register("workStartTime")}
+              type="time"
+              label="وقت بداية دوام المعلمين"
+              value={currentWorkStartTime}
+              onChange={(event) =>
+                setValue(
+                  "workStartTime",
+                  event.target.value,
+                  {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  }
+                )
+              }
+              disabled={saving}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ step: 60 }}
+              helperText="اتركي الوقت فارغًا لإيقاف قياس التأخير."
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  minHeight: 52,
+                  borderRadius: "13px",
+                  backgroundColor:
+                    "var(--color-white)",
+                },
+                "& .MuiInputLabel-root": {
+                  fontSize: "12px",
+                  fontWeight: 700,
+                },
+                "& .MuiFormHelperText-root": {
+                  textAlign: "right",
+                  mx: 0.5,
+                  fontSize: "9.5px",
+                },
+              }}
+            />
+
+            <Alert
+              severity="info"
+              icon={<InfoOutlined />}
+              sx={{
+                py: 0.45,
+                borderRadius: "13px",
+                border:
+                  "1px solid rgba(36,74,112,0.1)",
+                backgroundColor:
+                  "rgba(36,74,112,0.035)",
+                color:
+                  "var(--color-navy-deep)",
+                fontSize: "10px",
+                lineHeight: 1.7,
+              }}
+            >
+              عند تركه بدون قيمة سيتم إرسال <b>null</b>، وبالتالي يكون التأخير غير مقاس وليس صفرًا. الوقت يُفسَّر حسب المنطقة الزمنية المضبوطة للمدرسة.
+            </Alert>
           </Box>
 
           <Divider

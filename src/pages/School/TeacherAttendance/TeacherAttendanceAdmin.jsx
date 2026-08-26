@@ -221,6 +221,24 @@ const formatTime = (value) => {
   return text;
 };
 
+const formatMinutes = (value, { duration = false } = {}) => {
+  if (value === null || value === undefined || value === "") return "—";
+
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes)) return "—";
+
+  if (!duration) return `${Math.max(0, Math.round(minutes))} د`;
+
+  const safeMinutes = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(safeMinutes / 60);
+  const remainingMinutes = safeMinutes % 60;
+
+  if (!hours) return `${remainingMinutes} د`;
+  if (!remainingMinutes) return `${hours} س`;
+
+  return `${hours} س ${remainingMinutes} د`;
+};
+
 const getVerification = (record) => ({
   gps: Boolean(record?.verification?.gps),
   network: Boolean(record?.verification?.network),
@@ -260,6 +278,7 @@ const TeacherAttendanceAdmin = () => {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [radius, setRadius] = useState(150);
+  const [workStartTime, setWorkStartTime] = useState("");
   const [networkIps, setNetworkIps] = useState([]);
   const [newIp, setNewIp] = useState("");
   const [detectingIp, setDetectingIp] = useState(false);
@@ -284,7 +303,7 @@ const TeacherAttendanceAdmin = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
-  const [editForm, setEditForm] = useState({ checkInAt: "", notes: "" });
+  const [editForm, setEditForm] = useState({ checkInAt: "", checkOutAt: "", notes: "" });
 
   // Delete
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -352,6 +371,11 @@ const TeacherAttendanceAdmin = () => {
     );
 
     setRadius(Number(settings?.checkInRadiusMeters) || 150);
+    setWorkStartTime(
+      settings?.workStartTime
+        ? String(settings.workStartTime).slice(0, 5)
+        : ""
+    );
     setNetworkIps(
       Array.isArray(settings?.schoolNetworkIps)
         ? settings.schoolNetworkIps.filter(Boolean)
@@ -533,6 +557,7 @@ const TeacherAttendanceAdmin = () => {
     const payload = {
       teacherCheckInEnabled,
       checkInRadiusMeters: numericRadius,
+      workStartTime: workStartTime || null,
       schoolNetworkIps: networkIps,
       ...(hasValidLocation
         ? {
@@ -594,7 +619,14 @@ const TeacherAttendanceAdmin = () => {
   const openEditDialog = (record) => {
     setSelectedRecord(record);
     setEditForm({
-      checkInAt: formatTime(record?.checkInAt) === "—" ? "" : formatTime(record?.checkInAt),
+      checkInAt:
+        formatTime(record?.checkInAt) === "—"
+          ? ""
+          : formatTime(record?.checkInAt),
+      checkOutAt:
+        formatTime(record?.checkOutAt) === "—"
+          ? ""
+          : formatTime(record?.checkOutAt),
       notes: record?.notes || "",
     });
     setEditOpen(true);
@@ -689,6 +721,46 @@ const TeacherAttendanceAdmin = () => {
           {teacherCheckInEnabled && !hasValidLocation && (
             <Alert severity="warning" sx={{ mt: 1.2, borderRadius: "12px" }}>
               حدد موقع المدرسة أولًا. الباك سيرفض التفعيل من غير Location.
+            </Alert>
+          )}
+        </Paper>
+
+        <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ xs: "stretch", sm: "center" }}
+            justifyContent="space-between"
+            gap={1.5}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
+                وقت بداية دوام المعلمين
+              </Typography>
+              <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
+                يستخدمه النظام لحساب دقائق التأخير. اترك الحقل فارغًا لإيقاف قياس التأخير.
+              </Typography>
+            </Box>
+
+            <TextField
+              type="time"
+              label="بداية الدوام"
+              value={workStartTime}
+              onChange={(event) => setWorkStartTime(event.target.value)}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ step: 60 }}
+              sx={{
+                width: { xs: "100%", sm: 190 },
+                flexShrink: 0,
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "12px",
+                },
+              }}
+            />
+          </Stack>
+
+          {!workStartTime && (
+            <Alert severity="info" sx={{ mt: 1.2, borderRadius: "12px" }}>
+              التأخير غير مقاس حاليًا. هذا لا يعني أن جميع المعلمين حضروا في الموعد.
             </Alert>
           )}
         </Paper>
@@ -1003,8 +1075,12 @@ const TeacherAttendanceAdmin = () => {
                 <TableRow sx={{ backgroundColor: "rgba(36,74,112,.035)" }}>
                   <TableCell align="right">المعلم</TableCell>
                   <TableCell align="right">التاريخ</TableCell>
-                  <TableCell align="right">الوقت</TableCell>
-                  <TableCell align="right">الطريقة</TableCell>
+                  <TableCell align="right">الحضور</TableCell>
+                  <TableCell align="right">الانصراف</TableCell>
+                  <TableCell align="right">التأخير</TableCell>
+                  <TableCell align="right">مدة العمل</TableCell>
+                  <TableCell align="right">طريقة الانصراف</TableCell>
+                  <TableCell align="right">طريقة الحضور</TableCell>
                   <TableCell align="right">GPS</TableCell>
                   <TableCell align="right">الشبكة</TableCell>
                   <TableCell align="right">المسافة</TableCell>
@@ -1015,7 +1091,7 @@ const TeacherAttendanceAdmin = () => {
               <TableBody>
                 {!visibleRecords.length ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 6, color: "#708198" }}>
+                    <TableCell colSpan={13} align="center" sx={{ py: 6, color: "#708198" }}>
                       لا توجد سجلات مطابقة للفلتر الحالي.
                     </TableCell>
                   </TableRow>
@@ -1051,6 +1127,16 @@ const TeacherAttendanceAdmin = () => {
                         </TableCell>
                         <TableCell align="right">{normalizeRecordDate(record) || "—"}</TableCell>
                         <TableCell align="right">{formatTime(record?.checkInAt)}</TableCell>
+                        <TableCell align="right">{formatTime(record?.checkOutAt)}</TableCell>
+                        <TableCell align="right">
+                          {record?.lateMinutes === null || record?.lateMinutes === undefined
+                            ? "غير مقاس"
+                            : formatMinutes(record.lateMinutes)}
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatMinutes(record?.workMinutes, { duration: true })}
+                        </TableCell>
+                        <TableCell align="right">{record?.checkOutMethod || "—"}</TableCell>
                         <TableCell align="right">
                           <Chip
                             size="small"
@@ -1267,16 +1353,46 @@ const TeacherAttendanceAdmin = () => {
         <DialogTitle>تعديل سجل الحضور</DialogTitle>
         <DialogContent>
           <Stack spacing={1.2} sx={{ pt: 0.5 }}>
-            <TextField
-              type="time"
-              label="وقت الحضور"
-              value={editForm.checkInAt}
-              onChange={(event) =>
-                setEditForm((previous) => ({ ...previous, checkInAt: event.target.value }))
-              }
-              InputLabelProps={{ shrink: true }}
-              fullWidth
-            />
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gap: 1,
+              }}
+            >
+              <TextField
+                type="time"
+                label="وقت الحضور"
+                value={editForm.checkInAt}
+                onChange={(event) =>
+                  setEditForm((previous) => ({
+                    ...previous,
+                    checkInAt: event.target.value,
+                  }))
+                }
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+
+              <TextField
+                type="time"
+                label="وقت الانصراف"
+                value={editForm.checkOutAt}
+                onChange={(event) =>
+                  setEditForm((previous) => ({
+                    ...previous,
+                    checkOutAt: event.target.value,
+                  }))
+                }
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+            </Box>
+
+            <Alert severity="info" sx={{ borderRadius: "12px" }}>
+              عند تعديل وقت الحضور أو الانصراف سيعيد السيرفر حساب التأخير ومدة العمل تلقائيًا.
+            </Alert>
+
             <TextField
               label="ملاحظات"
               value={editForm.notes}

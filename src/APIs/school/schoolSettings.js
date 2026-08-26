@@ -24,6 +24,12 @@ export const updateSchoolSettings = async (data) => {
       termsPerYear: data.termsPerYear,
       defaultPassingGrade: data.defaultPassingGrade,
 
+      workStartTime:
+        data.workStartTime === "" ||
+        data.workStartTime === undefined
+          ? null
+          : data.workStartTime,
+
       // الـ Backend مستني الاسم ده
       localNationalityCodes:
         data.localNationalityCodes ??
@@ -31,7 +37,10 @@ export const updateSchoolSettings = async (data) => {
         [],
     };
 
-    const response = await api.patch(ENDPOINT, payload);
+    const response = await api.patch(
+      ENDPOINT,
+      payload
+    );
 
     return response.data;
   } catch (error) {
