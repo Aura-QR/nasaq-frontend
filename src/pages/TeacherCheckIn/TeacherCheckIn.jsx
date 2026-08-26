@@ -33,6 +33,7 @@ import { toast } from "react-toastify";
 
 import {
   checkInTeacherAttendance,
+  checkOutTeacherAttendance,
   fetchMyTeacherAttendance,
 } from "@/APIs/school/teacherAttendance";
 
@@ -122,6 +123,31 @@ const formatTime = (value) => {
   return text;
 };
 
+const formatMinutes = (value, { duration = false } = {}) => {
+  if (value === null || value === undefined || value === "") return "";
+
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes)) return "";
+
+  const safeMinutes = Math.max(0, Math.round(minutes));
+
+  if (!duration) return `${safeMinutes} د`;
+
+  const hours = Math.floor(safeMinutes / 60);
+  const remainingMinutes = safeMinutes % 60;
+
+  if (!hours) return `${remainingMinutes} د`;
+  if (!remainingMinutes) return `${hours} س`;
+
+  return `${hours} س ${remainingMinutes} د`;
+};
+
+const hasMeasuredValue = (value) =>
+  value !== null &&
+  value !== undefined &&
+  value !== "" &&
+  Number.isFinite(Number(value));
+
 const getVerification = (record) => ({
   gps: Boolean(record?.verification?.gps),
   network: Boolean(record?.verification?.network),
@@ -187,6 +213,7 @@ const TeacherCheckIn = () => {
 
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
   const [history, setHistory] = useState([]);
   const [currentRecord, setCurrentRecord] = useState(null);
   const [locationState, setLocationState] = useState("idle");
@@ -222,6 +249,8 @@ const TeacherCheckIn = () => {
   const verification = getVerification(currentRecord);
   const fullyVerified = verification.gps && verification.network;
   const partiallyVerified = verification.gps !== verification.network;
+  const hasCheckedIn = Boolean(currentRecord?.checkInAt);
+  const hasCheckedOut = Boolean(currentRecord?.checkOutAt);
 
   const requestBrowserLocation = () =>
     new Promise((resolve, reject) => {
@@ -314,6 +343,89 @@ const TeacherCheckIn = () => {
     }
   };
 
+  const handleCheckOut = async () => {
+    if (!hasCheckedIn) {
+      toast.error("سجّل حضورك أولًا قبل تسجيل الانصراف");
+      return;
+    }
+
+    if (hasCheckedOut) {
+      toast.info(
+        `انصرافك مسجل بالفعل الساعة ${formatTime(currentRecord.checkOutAt)}`
+      );
+      return;
+    }
+
+    setCheckingOut(true);
+    setLocationState("loading");
+    setError("");
+
+    try {
+      const location = await requestBrowserLocation();
+      setLocationState("ready");
+
+      const response = await checkOutTeacherAttendance(location);
+
+      if (response?.status === false) {
+        if (
+          Number(response?.statusCode) === 409 &&
+          response?.data?.checkOutAt
+        ) {
+          const existing = {
+            ...currentRecord,
+            ...response.data,
+            date:
+              response.data.date ||
+              currentRecord?.date ||
+              today,
+          };
+
+          setCurrentRecord(existing);
+          toast.info(
+            `انصرافك مسجل بالفعل الساعة ${formatTime(existing.checkOutAt)}`
+          );
+          await loadHistory({ silent: true });
+          return;
+        }
+
+        setError(
+          response?.message ||
+            "تعذر تسجيل انصرافك"
+        );
+        toast.error(
+          response?.message ||
+            "تعذر تسجيل انصرافك"
+        );
+        return;
+      }
+
+      const record = extractRecord(response);
+
+      if (record) {
+        setCurrentRecord((previous) => ({
+          ...(previous || {}),
+          ...record,
+          date:
+            record?.date ||
+            previous?.date ||
+            today,
+        }));
+      }
+
+      toast.success("تم تسجيل انصرافك بنجاح");
+      await loadHistory({ silent: true });
+    } catch (locationError) {
+      setLocationState("error");
+      const message =
+        locationError?.message ||
+        "تعذر تحديد موقعك";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setCheckingOut(false);
+    }
+  };
+
   return (
     <Box
       dir="rtl"
@@ -360,10 +472,10 @@ const TeacherCheckIn = () => {
                 }}
               />
               <Typography sx={{ fontSize: { xs: 24, md: 32 }, fontWeight: 900 }}>
-                تسجيل الحضور
+                تسجيل الحضور والانصراف
               </Typography>
               <Typography sx={{ mt: 0.5, color: "rgba(255,255,255,.80)", fontSize: { xs: 12.5, md: 14 } }}>
-                صباح الخير، {teacherName}. يتم التحقق من الموقع وشبكة المدرسة عند التسجيل.
+                صباح الخير، {teacherName}. يتم التحقق من الموقع وشبكة المدرسة عند تسجيل الحضور والانصراف.
               </Typography>
             </Box>
 
@@ -443,9 +555,9 @@ const TeacherCheckIn = () => {
                   }}
                 >
                   <Box>
-                    {checkingIn ? (
+                    {checkingIn || checkingOut ? (
                       <CircularProgress size={34} sx={{ color: "#B78430" }} />
-                    ) : currentRecord ? (
+                    ) : hasCheckedIn ? (
                       <CheckCircleRounded sx={{ color: "#27966f", fontSize: 44 }} />
                     ) : locationState === "error" ? (
                       <LocationOffRounded sx={{ color: "#C94848", fontSize: 44 }} />
@@ -455,44 +567,108 @@ const TeacherCheckIn = () => {
 
                     <Typography sx={{ mt: 0.7, fontSize: 13, fontWeight: 900 }}>
                       {checkingIn
-                        ? "جارٍ التحقق..."
-                        : currentRecord
-                          ? "تم تسجيل الحضور"
-                          : "جاهز للتسجيل"}
+                        ? "جارٍ تسجيل الحضور..."
+                        : checkingOut
+                          ? "جارٍ تسجيل الانصراف..."
+                          : hasCheckedOut
+                            ? "تم تسجيل الحضور والانصراف"
+                            : hasCheckedIn
+                              ? "تم تسجيل الحضور"
+                              : "جاهز للتسجيل"}
                     </Typography>
 
-                    {currentRecord && (
-                      <Typography sx={{ mt: 0.3, color: "#237449", fontSize: 11, fontWeight: 800 }}>
-                        {formatTime(currentRecord.checkInAt)}
-                      </Typography>
+                    {hasCheckedIn && (
+                      <Stack spacing={0.2} sx={{ mt: 0.35 }}>
+                        <Typography sx={{ color: "#237449", fontSize: 10.5, fontWeight: 800 }}>
+                          حضور: {formatTime(currentRecord.checkInAt)}
+                        </Typography>
+
+                        {hasCheckedOut && (
+                          <Typography sx={{ color: "#237449", fontSize: 10.5, fontWeight: 800 }}>
+                            انصراف: {formatTime(currentRecord.checkOutAt)}
+                          </Typography>
+                        )}
+                      </Stack>
                     )}
                   </Box>
                 </Box>
 
-                <Button
-                  fullWidth
-                  variant="contained"
-                  disabled={checkingIn || Boolean(currentRecord)}
-                  onClick={handleCheckIn}
-                  startIcon={checkingIn ? <CircularProgress size={16} color="inherit" /> : <GpsFixedRounded />}
-                  sx={{
-                    minHeight: 48,
-                    borderRadius: "13px",
-                    color: "#122F4D",
-                    backgroundColor: "#F2D792",
-                    boxShadow: "none",
-                    fontWeight: 900,
-                    "&:hover": { backgroundColor: "#E8C96F", boxShadow: "none" },
-                  }}
-                >
-                  {currentRecord ? "الحضور مسجل بالفعل" : checkingIn ? "جارٍ تسجيل الحضور" : "تسجيل حضوري الآن"}
-                </Button>
+                {!hasCheckedIn ? (
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    disabled={checkingIn || checkingOut}
+                    onClick={handleCheckIn}
+                    startIcon={
+                      checkingIn
+                        ? <CircularProgress size={16} color="inherit" />
+                        : <GpsFixedRounded />
+                    }
+                    sx={{
+                      minHeight: 48,
+                      borderRadius: "13px",
+                      color: "#122F4D",
+                      backgroundColor: "#F2D792",
+                      boxShadow: "none",
+                      fontWeight: 900,
+                      "&:hover": {
+                        backgroundColor: "#E8C96F",
+                        boxShadow: "none",
+                      },
+                    }}
+                  >
+                    {checkingIn
+                      ? "جارٍ تسجيل الحضور"
+                      : "تسجيل حضوري الآن"}
+                  </Button>
+                ) : !hasCheckedOut ? (
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    disabled={checkingIn || checkingOut}
+                    onClick={handleCheckOut}
+                    startIcon={
+                      checkingOut
+                        ? <CircularProgress size={16} color="inherit" />
+                        : <GpsFixedRounded />
+                    }
+                    sx={{
+                      minHeight: 48,
+                      borderRadius: "13px",
+                      color: "#fff",
+                      backgroundColor: "#244A70",
+                      boxShadow: "none",
+                      fontWeight: 900,
+                      "&:hover": {
+                        backgroundColor: "#1B3D61",
+                        boxShadow: "none",
+                      },
+                    }}
+                  >
+                    {checkingOut
+                      ? "جارٍ تسجيل الانصراف"
+                      : "تسجيل انصرافي الآن"}
+                  </Button>
+                ) : (
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    disabled
+                    sx={{
+                      minHeight: 48,
+                      borderRadius: "13px",
+                      fontWeight: 900,
+                    }}
+                  >
+                    تم تسجيل الانصراف الساعة {formatTime(currentRecord.checkOutAt)}
+                  </Button>
+                )}
 
                 <Stack direction={{ xs: "column", sm: "row" }} gap={1} sx={{ mt: 1.5 }}>
                   <StatusBox
                     icon={<GpsFixedRounded />}
                     title="الموقع الجغرافي"
-                    waiting={!currentRecord}
+                    waiting={!hasCheckedIn}
                     passed={verification.gps}
                     details={verification.gps ? "داخل النطاق المسموح" : "لم ينجح تحقق GPS"}
                   />
@@ -500,13 +676,60 @@ const TeacherCheckIn = () => {
                   <StatusBox
                     icon={<RouterRounded />}
                     title="شبكة المدرسة"
-                    waiting={!currentRecord}
+                    waiting={!hasCheckedIn}
                     passed={verification.network}
                     details={verification.network ? "الشبكة مطابقة" : "الشبكة غير مطابقة"}
                   />
                 </Stack>
 
             
+
+                {currentRecord?.isWorkingDay === false && (
+                  <Alert
+                    severity="warning"
+                    icon={<WarningAmberRounded />}
+                    sx={{ mt: 1.4, borderRadius: "12px" }}
+                  >
+                    تم تسجيل حضورك في يوم إجازة رسمية للمدرسة، لذلك لا يتم قياس التأخير أو الخروج المبكر لهذا اليوم.
+                  </Alert>
+                )}
+
+                {hasMeasuredValue(currentRecord?.lateMinutes) && (
+                  <Alert severity="info" sx={{ mt: 1.4, borderRadius: "12px" }}>
+                    {Number(currentRecord.lateMinutes) > 0
+                      ? `تأخير اليوم: ${formatMinutes(currentRecord.lateMinutes)}`
+                      : "تم تسجيل حضورك في موعد بداية الدوام."}
+                  </Alert>
+                )}
+
+                {hasCheckedOut && hasMeasuredValue(currentRecord?.earlyLeaveMinutes) && (
+                  <Alert
+                    severity={Number(currentRecord.earlyLeaveMinutes) > 0 ? "warning" : "success"}
+                    sx={{ mt: 1.1, borderRadius: "12px" }}
+                  >
+                    {Number(currentRecord.earlyLeaveMinutes) > 0
+                      ? `الخروج المبكر: ${formatMinutes(currentRecord.earlyLeaveMinutes)}`
+                      : "تم تسجيل الانصراف في الموعد المحدد أو بعده."}
+                  </Alert>
+                )}
+
+                {hasCheckedOut && hasMeasuredValue(currentRecord?.workMinutes) && (
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    sx={{ mt: 1.4 }}
+                  >
+                    <Typography sx={{ color: "#708198", fontSize: 10 }}>
+                      مدة العمل المسجلة اليوم
+                    </Typography>
+                    <Chip
+                      label={formatMinutes(currentRecord.workMinutes, { duration: true })}
+                      size="small"
+                      sx={{ fontWeight: 800 }}
+                    />
+                  </Stack>
+                )}
 
                 {currentRecord?.distanceMeters !== undefined && currentRecord?.distanceMeters !== null && (
                   <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 1.4 }}>
@@ -551,7 +774,11 @@ const TeacherCheckIn = () => {
                 <TableHead>
                   <TableRow sx={{ backgroundColor: "rgba(36,74,112,.035)" }}>
                     <TableCell align="right">التاريخ</TableCell>
-                    <TableCell align="right">الوقت</TableCell>
+                    <TableCell align="right">الحضور</TableCell>
+                    <TableCell align="right">الانصراف</TableCell>
+                    <TableCell align="right">التأخير</TableCell>
+                    <TableCell align="right">خروج مبكر</TableCell>
+                    <TableCell align="right">مدة العمل</TableCell>
                     <TableCell align="right">الطريقة</TableCell>
                     <TableCell align="right">GPS</TableCell>
                     <TableCell align="right">الشبكة</TableCell>
@@ -561,7 +788,7 @@ const TeacherCheckIn = () => {
                 <TableBody>
                   {!history.length ? (
                     <TableRow>
-                      <TableCell colSpan={6} align="center" sx={{ py: 6, color: "#708198" }}>
+                      <TableCell colSpan={10} align="center" sx={{ py: 6, color: "#708198" }}>
                         لا توجد سجلات حضور حتى الآن.
                       </TableCell>
                     </TableRow>
@@ -579,6 +806,24 @@ const TeacherCheckIn = () => {
                               <AccessTimeRounded sx={{ fontSize: 16, color: "#708198" }} />
                               <span>{formatTime(record?.checkInAt)}</span>
                             </Stack>
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatTime(record?.checkOutAt)}
+                          </TableCell>
+                          <TableCell align="right">
+                            {hasMeasuredValue(record?.lateMinutes)
+                              ? formatMinutes(record.lateMinutes)
+                              : "—"}
+                          </TableCell>
+                          <TableCell align="right">
+                            {hasMeasuredValue(record?.earlyLeaveMinutes)
+                              ? formatMinutes(record.earlyLeaveMinutes)
+                              : "—"}
+                          </TableCell>
+                          <TableCell align="right">
+                            {hasMeasuredValue(record?.workMinutes)
+                              ? formatMinutes(record.workMinutes, { duration: true })
+                              : "—"}
                           </TableCell>
                           <TableCell align="right">
                             <Chip

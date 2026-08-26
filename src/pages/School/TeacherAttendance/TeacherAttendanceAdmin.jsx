@@ -161,13 +161,25 @@ const extractAttendancePage = (response) => {
 };
 
 const extractAbsent = (response) => {
-  if (!response || response?.status === false) return [];
+  if (!response || response?.status === false) {
+    return {
+      teachers: [],
+      isWorkingDay: true,
+      message: "",
+    };
+  }
+
   const payload = response?.data ?? response;
-  return Array.isArray(payload?.absentTeachers)
-    ? payload.absentTeachers
-    : Array.isArray(payload)
-      ? payload
-      : [];
+
+  return {
+    teachers: Array.isArray(payload?.absentTeachers)
+      ? payload.absentTeachers
+      : Array.isArray(payload)
+        ? payload
+        : [],
+    isWorkingDay: payload?.isWorkingDay !== false,
+    message: payload?.message || "",
+  };
 };
 
 const getTeacherEntity = (record) =>
@@ -249,6 +261,56 @@ const getRecordId = (record) => normalizeId(record);
 const isFailed = (response) =>
   response?.status === false || Number(response?.statusCode) >= 400;
 
+const WORK_WEEK_DAYS = [
+  { day: "sunday", label: "الأحد" },
+  { day: "monday", label: "الاثنين" },
+  { day: "tuesday", label: "الثلاثاء" },
+  { day: "wednesday", label: "الأربعاء" },
+  { day: "thursday", label: "الخميس" },
+  { day: "friday", label: "الجمعة" },
+  { day: "saturday", label: "السبت" },
+];
+
+const normalizeWorkSchedule = (value) => {
+  const incoming = Array.isArray(value) ? value : [];
+
+  return WORK_WEEK_DAYS.map(({ day }) => {
+    const saved = incoming.find(
+      (item) =>
+        String(item?.day || "")
+          .trim()
+          .toLowerCase() === day
+    );
+
+    if (!saved) {
+      // Empty/unconfigured schedule means every day is treated as a
+      // working day but without measured start/end times.
+      return {
+        day,
+        isWorkingDay: true,
+        startTime: "",
+        endTime: "",
+      };
+    }
+
+    const isWorkingDay =
+      saved?.isWorkingDay !== false;
+
+    return {
+      day,
+      isWorkingDay,
+      startTime:
+        isWorkingDay && saved?.startTime
+          ? String(saved.startTime).slice(0, 5)
+          : "",
+      endTime:
+        isWorkingDay && saved?.endTime
+          ? String(saved.endTime).slice(0, 5)
+          : "",
+    };
+  });
+};
+
 const pageCardSx = {
   border: "1px solid rgba(36,74,112,0.08)",
   borderRadius: "18px",
@@ -278,7 +340,7 @@ const TeacherAttendanceAdmin = () => {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [radius, setRadius] = useState(150);
-  const [workStartTime, setWorkStartTime] = useState("");
+  const [workSchedule, setWorkSchedule] = useState(() => normalizeWorkSchedule([]));
   const [networkIps, setNetworkIps] = useState([]);
   const [newIp, setNewIp] = useState("");
   const [detectingIp, setDetectingIp] = useState(false);
@@ -291,6 +353,10 @@ const TeacherAttendanceAdmin = () => {
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState("all");
   const [absentTeachers, setAbsentTeachers] = useState([]);
+  const [absentDayInfo, setAbsentDayInfo] = useState({
+    isWorkingDay: true,
+    message: "",
+  });
   const [showAbsent, setShowAbsent] = useState(false);
   const [teachers, setTeachers] = useState([]);
 
@@ -371,10 +437,8 @@ const TeacherAttendanceAdmin = () => {
     );
 
     setRadius(Number(settings?.checkInRadiusMeters) || 150);
-    setWorkStartTime(
-      settings?.workStartTime
-        ? String(settings.workStartTime).slice(0, 5)
-        : ""
+    setWorkSchedule(
+      normalizeWorkSchedule(settings?.workSchedule)
     );
     setNetworkIps(
       Array.isArray(settings?.schoolNetworkIps)
@@ -393,8 +457,22 @@ const TeacherAttendanceAdmin = () => {
 
   const loadAbsent = useCallback(async () => {
     const response = await fetchAbsentTeachers();
-    if (response?.status === false) return;
-    setAbsentTeachers(extractAbsent(response));
+
+    if (response?.status === false) {
+      return;
+    }
+
+    const absentData = extractAbsent(response);
+
+    setAbsentTeachers(absentData.teachers);
+    setAbsentDayInfo({
+      isWorkingDay: absentData.isWorkingDay,
+      message: absentData.message,
+    });
+
+    if (!absentData.isWorkingDay) {
+      setShowAbsent(false);
+    }
   }, []);
 
   const loadRecords = useCallback(async () => {
@@ -535,6 +613,29 @@ const TeacherAttendanceAdmin = () => {
     setNewIp("");
   };
 
+  const updateWorkScheduleDay = (
+    day,
+    changes
+  ) => {
+    setWorkSchedule((current) =>
+      current.map((item) => {
+        if (item.day !== day) return item;
+
+        const next = {
+          ...item,
+          ...changes,
+        };
+
+        if (changes?.isWorkingDay === false) {
+          next.startTime = "";
+          next.endTime = "";
+        }
+
+        return next;
+      })
+    );
+  };
+
   const saveSettings = async () => {
     const latitude = parseCoordinate(lat);
     const longitude = parseCoordinate(lng);
@@ -557,7 +658,18 @@ const TeacherAttendanceAdmin = () => {
     const payload = {
       teacherCheckInEnabled,
       checkInRadiusMeters: numericRadius,
-      workStartTime: workStartTime || null,
+      workSchedule: workSchedule.map((item) => ({
+        day: item.day,
+        isWorkingDay: Boolean(item.isWorkingDay),
+        startTime:
+          item.isWorkingDay && item.startTime
+            ? item.startTime
+            : null,
+        endTime:
+          item.isWorkingDay && item.endTime
+            ? item.endTime
+            : null,
+      })),
       schoolNetworkIps: networkIps,
       ...(hasValidLocation
         ? {
@@ -700,10 +812,10 @@ const TeacherAttendanceAdmin = () => {
           >
             <Box>
               <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
-                تفعيل تسجيل الحضور الذاتي
+                تفعيل تسجيل الحضور والانصراف الذاتي
               </Typography>
               <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
-                لا يمكن تفعيله قبل وجود موقع صالح للمدرسة. شبكة المدرسة اختيارية.
+                يستخدم نفس الإعداد للحضور والانصراف الذاتي. لا يمكن تفعيله قبل وجود موقع صالح للمدرسة، وشبكة المدرسة اختيارية.
               </Typography>
             </Box>
 
@@ -726,43 +838,153 @@ const TeacherAttendanceAdmin = () => {
         </Paper>
 
         <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            alignItems={{ xs: "stretch", sm: "center" }}
-            justifyContent="space-between"
-            gap={1.5}
-          >
-            <Box sx={{ minWidth: 0 }}>
-              <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
-                وقت بداية دوام المعلمين
-              </Typography>
-              <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
-                يستخدمه النظام لحساب دقائق التأخير. اترك الحقل فارغًا لإيقاف قياس التأخير.
-              </Typography>
-            </Box>
+          <Box>
+            <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
+              جدول دوام المعلمين الأسبوعي
+            </Typography>
+            <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
+              حدّد أيام العمل ووقت البداية والنهاية لكل يوم. اليوم غير المفعّل يُرسل بدون أوقات.
+            </Typography>
+          </Box>
 
-            <TextField
-              type="time"
-              label="بداية الدوام"
-              value={workStartTime}
-              onChange={(event) => setWorkStartTime(event.target.value)}
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ step: 60 }}
-              sx={{
-                width: { xs: "100%", sm: 190 },
-                flexShrink: 0,
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: "12px",
-                },
-              }}
-            />
+          <Stack spacing={0.9} sx={{ mt: 1.5 }}>
+            {WORK_WEEK_DAYS.map(({ day, label }) => {
+              const item =
+                workSchedule.find(
+                  (row) => row.day === day
+                ) || {
+                  day,
+                  isWorkingDay: true,
+                  startTime: "",
+                  endTime: "",
+                };
+
+              return (
+                <Paper
+                  key={day}
+                  elevation={0}
+                  sx={{
+                    p: 1.1,
+                    border:
+                      "1px solid rgba(36,74,112,.08)",
+                    borderRadius: "14px",
+                    backgroundColor: item.isWorkingDay
+                      ? "#fff"
+                      : "rgba(36,74,112,.025)",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "1fr",
+                        md: "180px minmax(0,1fr)",
+                      },
+                      alignItems: "center",
+                      gap: 1,
+                    }}
+                  >
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={item.isWorkingDay}
+                          onChange={(event) =>
+                            updateWorkScheduleDay(
+                              day,
+                              {
+                                isWorkingDay:
+                                  event.target.checked,
+                              }
+                            )
+                          }
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography
+                            sx={{
+                              fontSize: 11,
+                              fontWeight: 900,
+                              color: "#122F4D",
+                            }}
+                          >
+                            {label}
+                          </Typography>
+                          <Typography
+                            sx={{
+                              mt: 0.1,
+                              color: "#708198",
+                              fontSize: 8.5,
+                            }}
+                          >
+                            {item.isWorkingDay
+                              ? "يوم عمل"
+                              : "إجازة"}
+                          </Typography>
+                        </Box>
+                      }
+                      sx={{ m: 0 }}
+                    />
+
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          sm: "1fr 1fr",
+                        },
+                        gap: 1,
+                      }}
+                    >
+                      <TextField
+                        type="time"
+                        label="بداية الدوام"
+                        value={item.startTime}
+                        disabled={!item.isWorkingDay}
+                        onChange={(event) =>
+                          updateWorkScheduleDay(
+                            day,
+                            {
+                              startTime:
+                                event.target.value,
+                            }
+                          )
+                        }
+                        InputLabelProps={{ shrink: true }}
+                        inputProps={{ step: 60 }}
+                        fullWidth
+                        size="small"
+                      />
+
+                      <TextField
+                        type="time"
+                        label="نهاية الدوام"
+                        value={item.endTime}
+                        disabled={!item.isWorkingDay}
+                        onChange={(event) =>
+                          updateWorkScheduleDay(
+                            day,
+                            {
+                              endTime:
+                                event.target.value,
+                            }
+                          )
+                        }
+                        InputLabelProps={{ shrink: true }}
+                        inputProps={{ step: 60 }}
+                        fullWidth
+                        size="small"
+                      />
+                    </Box>
+                  </Box>
+                </Paper>
+              );
+            })}
           </Stack>
 
-          {!workStartTime && (
-            <Alert severity="info" sx={{ mt: 1.2, borderRadius: "12px" }}>
-              التأخير غير مقاس حاليًا. هذا لا يعني أن جميع المعلمين حضروا في الموعد.
-            </Alert>
-          )}
+          <Alert severity="info" sx={{ mt: 1.2, borderRadius: "12px" }}>
+            لو وقت البداية أو النهاية فارغ في يوم عمل، يعتبر اليوم يوم دوام لكن القياس المرتبط بهذا الوقت يكون غير متاح.
+          </Alert>
         </Paper>
 
         <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
@@ -992,11 +1214,11 @@ const TeacherAttendanceAdmin = () => {
 
       <Paper
         elevation={0}
-        onClick={() => setShowAbsent((value) => !value)}
+        onClick={() => absentDayInfo.isWorkingDay && setShowAbsent((value) => !value)}
         sx={{
           ...pageCardSx,
           p: 1.3,
-          cursor: "pointer",
+          cursor: absentDayInfo.isWorkingDay ? "pointer" : "default",
           borderColor: "rgba(201,79,79,.18)",
           backgroundColor: "rgba(253,234,234,.52)",
         }}
@@ -1006,17 +1228,31 @@ const TeacherAttendanceAdmin = () => {
             <PersonOffRounded sx={{ color: "#C94848" }} />
             <Box>
               <Typography sx={{ color: "#A23E3E", fontSize: 12, fontWeight: 900 }}>
-                {absentTeachers.length} معلم بدون سجل حضور اليوم
+                {absentDayInfo.isWorkingDay
+                  ? `${absentTeachers.length} معلم بدون سجل حضور اليوم`
+                  : absentDayInfo.message ||
+                    "هذا اليوم إجازة رسمية للمدرسة"}
               </Typography>
               <Typography sx={{ color: "#8B6262", fontSize: 9 }}>
-                اضغط لعرض القائمة
+                {absentDayInfo.isWorkingDay
+                  ? "اضغط لعرض القائمة"
+                  : "لا يتم احتساب غياب المعلمين في يوم الإجازة"}
               </Typography>
             </Box>
           </Stack>
-          <Chip label={showAbsent ? "إخفاء" : "عرض"} size="small" />
+          <Chip
+            label={
+              absentDayInfo.isWorkingDay
+                ? showAbsent
+                  ? "إخفاء"
+                  : "عرض"
+                : "إجازة"
+            }
+            size="small"
+          />
         </Stack>
 
-        <Collapse in={showAbsent}>
+        <Collapse in={absentDayInfo.isWorkingDay && showAbsent}>
           <Divider sx={{ my: 1 }} />
           <Stack direction="row" flexWrap="wrap" gap={0.7}>
             {!absentTeachers.length ? (

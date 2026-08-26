@@ -1,7 +1,6 @@
 import { api } from "../Axios";
 
 const ENDPOINT = "/teacher-attendance";
-
 const SCHOOL_SETTINGS_ENDPOINT = "/schools/me/settings";
 
 const getErrorResult = (
@@ -18,9 +17,7 @@ const getErrorResult = (
     error?.response?.data?.error ||
     error?.message ||
     fallbackMessage,
-
-  // مهم جدًا:
-  // duplicate self check-in يرجع record موجود داخل data مع 409.
+  // مهم جدًا: 409 في check-in/check-out يرجع بيانات السجل الحالي داخل data.
   data: error?.response?.data?.data ?? null,
   error,
 });
@@ -31,10 +28,7 @@ const getErrorResult = (
 
 export const fetchTeacherAttendanceSettings = async () => {
   try {
-    const response = await api.get(
-      SCHOOL_SETTINGS_ENDPOINT
-    );
-
+    const response = await api.get(SCHOOL_SETTINGS_ENDPOINT);
     return response.data;
   } catch (error) {
     return getErrorResult(
@@ -64,12 +58,8 @@ export const updateTeacherAttendanceSettings = async (
         : [],
 
       ...(data?.location &&
-      Number.isFinite(
-        Number(data.location.lat)
-      ) &&
-      Number.isFinite(
-        Number(data.location.lng)
-      )
+      Number.isFinite(Number(data.location.lat)) &&
+      Number.isFinite(Number(data.location.lng))
         ? {
             location: {
               lat: Number(data.location.lat),
@@ -78,25 +68,35 @@ export const updateTeacherAttendanceSettings = async (
           }
         : {}),
 
-      /*
-       * وقت بداية دوام المعلمين.
-       *
-       * "07:30" => قياس التأخير يبدأ من 07:30
-       * null    => إيقاف قياس التأخير
-       *
-       * لا نضيفه للـ payload إلا لو الشاشة
-       * أرسلته فعلًا، حتى لا نغير الإعداد بدون قصد.
-       */
+      // workSchedule يستبدل الجدول بالكامل في الباك،
+      // لذلك الصفحة ترسل الأيام السبعة كاملة عند الحفظ.
       ...(Object.prototype.hasOwnProperty.call(
         data,
-        "workStartTime"
+        "workSchedule"
       )
         ? {
-            workStartTime:
-              data.workStartTime === "" ||
-              data.workStartTime === null
-                ? null
-                : data.workStartTime,
+            workSchedule: Array.isArray(data.workSchedule)
+              ? data.workSchedule.map((item) => {
+                  const isWorkingDay = Boolean(
+                    item?.isWorkingDay
+                  );
+
+                  return {
+                    day: String(item?.day || "")
+                      .trim()
+                      .toLowerCase(),
+                    isWorkingDay,
+                    startTime:
+                      isWorkingDay && item?.startTime
+                        ? String(item.startTime).slice(0, 5)
+                        : null,
+                    endTime:
+                      isWorkingDay && item?.endTime
+                        ? String(item.endTime).slice(0, 5)
+                        : null,
+                  };
+                })
+              : [],
           }
         : {}),
     };
@@ -144,14 +144,12 @@ export const checkInTeacherAttendance = async ({
   mockLocationSuspected,
 }) => {
   try {
-    // لا نرسل checkInAt هنا نهائيًا؛
-    // السيرفر هو الذي يسجل الوقت.
+    // لا نرسل checkInAt؛ السيرفر هو الذي يسجل الوقت.
     const response = await api.post(
       `${ENDPOINT}/check-in`,
       {
         lat,
         lng,
-
         ...(mockLocationSuspected !== undefined
           ? {
               mockLocationSuspected: Boolean(
@@ -172,6 +170,42 @@ export const checkInTeacherAttendance = async ({
 };
 
 /* =========================================================
+   Teacher Self Check-out
+========================================================= */
+
+export const checkOutTeacherAttendance = async ({
+  lat,
+  lng,
+  mockLocationSuspected,
+}) => {
+  try {
+    // نفس تحقق الموقع والشبكة المستخدم في check-in.
+    // لا نرسل checkOutAt؛ السيرفر هو الذي يسجل الوقت.
+    const response = await api.post(
+      `${ENDPOINT}/check-out`,
+      {
+        lat,
+        lng,
+        ...(mockLocationSuspected !== undefined
+          ? {
+              mockLocationSuspected: Boolean(
+                mockLocationSuspected
+              ),
+            }
+          : {}),
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    return getErrorResult(
+      error,
+      "تعذر تسجيل انصرافك"
+    );
+  }
+};
+
+/* =========================================================
    My Attendance
 ========================================================= */
 
@@ -181,9 +215,7 @@ export const fetchMyTeacherAttendance = async (
   try {
     const response = await api.get(
       `${ENDPOINT}/me`,
-      {
-        params,
-      }
+      { params }
     );
 
     return response.data;
@@ -250,11 +282,8 @@ export const createManualTeacherAttendance = async ({
       teacherId,
       date,
       checkInAt,
-
       ...(String(notes || "").trim()
-        ? {
-            notes: String(notes).trim(),
-          }
+        ? { notes: String(notes).trim() }
         : {}),
     };
 
@@ -291,32 +320,12 @@ export const updateTeacherAttendance = async (
 
   try {
     const payload = {
-      /*
-       * يقبل:
-       * "07:45"
-       * أو ISO Date String
-       */
       ...(data?.checkInAt
-        ? {
-            checkInAt: data.checkInAt,
-          }
+        ? { checkInAt: data.checkInAt }
         : {}),
 
-      /*
-       * NEW
-       *
-       * يقبل:
-       * "14:00"
-       * أو ISO Date String
-       *
-       * لو checkOutAt أقدم من checkInAt
-       * الباك سيرجع 400 ورسالة الخطأ ستصل للـ UI
-       * عن طريق getErrorResult.
-       */
       ...(data?.checkOutAt
-        ? {
-            checkOutAt: data.checkOutAt,
-          }
+        ? { checkOutAt: data.checkOutAt }
         : {}),
 
       ...(data?.notes !== undefined
@@ -351,10 +360,6 @@ export const fetchTeacherAttendanceSummary = async ({
   dateTo,
   teacherId,
 } = {}) => {
-  /*
-   * الباك يشترط dateFrom و dateTo.
-   * نمنع الطلب من الفرونت أصلًا لو ناقصين.
-   */
   if (!dateFrom || !dateTo) {
     return {
       status: false,
@@ -369,19 +374,12 @@ export const fetchTeacherAttendanceSummary = async ({
     const params = {
       dateFrom,
       dateTo,
-
-      ...(teacherId
-        ? {
-            teacherId,
-          }
-        : {}),
+      ...(teacherId ? { teacherId } : {}),
     };
 
     const response = await api.get(
       `${ENDPOINT}/summary`,
-      {
-        params,
-      }
+      { params }
     );
 
     return response.data;
@@ -432,14 +430,12 @@ export default {
   updateTeacherAttendanceSettings,
   detectTeacherAttendanceIp,
   checkInTeacherAttendance,
+  checkOutTeacherAttendance,
   fetchMyTeacherAttendance,
   fetchTeacherAttendanceAdmin,
   fetchAbsentTeachers,
   createManualTeacherAttendance,
   updateTeacherAttendance,
-
-  // NEW
   fetchTeacherAttendanceSummary,
-
   deleteTeacherAttendance,
 };
