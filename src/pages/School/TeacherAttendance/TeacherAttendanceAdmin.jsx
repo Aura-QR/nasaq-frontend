@@ -33,6 +33,7 @@ import {
 
 import {
   AddRounded,
+  AssessmentRounded,
   DeleteOutlineRounded,
   EditRounded,
   GpsFixedRounded,
@@ -62,6 +63,7 @@ import {
   fetchAbsentTeachers,
   fetchTeacherAttendanceAdmin,
   fetchTeacherAttendanceSettings,
+  fetchTeacherAttendanceSummary,
   updateTeacherAttendance,
   updateTeacherAttendanceSettings,
 } from "@/APIs/school/teacherAttendance";
@@ -74,6 +76,13 @@ const todayKey = () => {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+};
+
+const monthStartKey = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}-01`;
 };
 
 const normalizeId = (value) => {
@@ -179,6 +188,57 @@ const extractAbsent = (response) => {
         : [],
     isWorkingDay: payload?.isWorkingDay !== false,
     message: payload?.message || "",
+  };
+};
+
+const extractAttendanceSummary = (response) => {
+  if (!response || response?.status === false) {
+    return {
+      rows: [],
+      totalTeachers: 0,
+      dateFrom: "",
+      dateTo: "",
+    };
+  }
+
+  let payload = response;
+
+  // يدعم الاستجابة المباشرة:
+  // { status, dateFrom, dateTo, totalTeachers, data: [...] }
+  // وأي wrapper محتمل حولها.
+  for (let index = 0; index < 3; index += 1) {
+    if (
+      payload &&
+      typeof payload === "object" &&
+      !Array.isArray(payload) &&
+      payload?.data &&
+      !Array.isArray(payload.data) &&
+      Array.isArray(payload.data?.data)
+    ) {
+      payload = payload.data;
+      continue;
+    }
+
+    break;
+  }
+
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload?.rows)
+        ? payload.rows
+        : [];
+
+  return {
+    rows,
+    totalTeachers: Number(
+      payload?.totalTeachers ??
+        payload?.meta?.totalTeachers ??
+        rows.length
+    ) || 0,
+    dateFrom: payload?.dateFrom || "",
+    dateTo: payload?.dateTo || "",
   };
 };
 
@@ -360,6 +420,17 @@ const TeacherAttendanceAdmin = () => {
   const [showAbsent, setShowAbsent] = useState(false);
   const [teachers, setTeachers] = useState([]);
 
+  // Summary report
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryLoaded, setSummaryLoaded] = useState(false);
+  const [summaryRows, setSummaryRows] = useState([]);
+  const [summaryTotalTeachers, setSummaryTotalTeachers] = useState(0);
+  const [summaryRange, setSummaryRange] = useState({
+    dateFrom: monthStartKey(),
+    dateTo: todayKey(),
+    teacherId: "",
+  });
+
   // Manual create
   const [manualOpen, setManualOpen] = useState(false);
   const [manualSaving, setManualSaving] = useState(false);
@@ -500,6 +571,43 @@ const TeacherAttendanceAdmin = () => {
     setRecordsLoading(false);
   }, [filter, page]);
 
+  const loadSummary = useCallback(async () => {
+    const dateFrom = String(summaryRange.dateFrom || "").trim();
+    const dateTo = String(summaryRange.dateTo || "").trim();
+
+    if (!dateFrom || !dateTo) {
+      toast.error("حدد تاريخ البداية وتاريخ النهاية");
+      return;
+    }
+
+    if (dateFrom > dateTo) {
+      toast.error("تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية");
+      return;
+    }
+
+    setSummaryLoading(true);
+
+    const response = await fetchTeacherAttendanceSummary({
+      dateFrom,
+      dateTo,
+      teacherId: summaryRange.teacherId || undefined,
+    });
+
+    setSummaryLoading(false);
+    setSummaryLoaded(true);
+
+    if (isFailed(response)) {
+      setSummaryRows([]);
+      setSummaryTotalTeachers(0);
+      toast.error(response?.message || "تعذر تحميل تقرير حضور المعلمين");
+      return;
+    }
+
+    const summary = extractAttendanceSummary(response);
+    setSummaryRows(summary.rows);
+    setSummaryTotalTeachers(summary.totalTeachers);
+  }, [summaryRange]);
+
   useEffect(() => {
     loadSettings();
     loadTeachers();
@@ -509,6 +617,12 @@ const TeacherAttendanceAdmin = () => {
     loadRecords();
     loadAbsent();
   }, [loadRecords, loadAbsent]);
+
+  useEffect(() => {
+    if (tab === 2 && !summaryLoaded) {
+      loadSummary();
+    }
+  }, [tab, summaryLoaded, loadSummary]);
 
   const visibleRecords = useMemo(() => {
     if (filter === "weak") {
@@ -529,6 +643,30 @@ const TeacherAttendanceAdmin = () => {
   const totalPages = Math.max(
     1,
     Number(meta?.totalPages || meta?.pages || meta?.lastPage || 1)
+  );
+
+  const summaryTotals = useMemo(
+    () =>
+      summaryRows.reduce(
+        (totals, row) => ({
+          daysPresent:
+            totals.daysPresent + (Number(row?.daysPresent) || 0),
+          daysLate:
+            totals.daysLate + (Number(row?.daysLate) || 0),
+          daysLeftEarly:
+            totals.daysLeftEarly + (Number(row?.daysLeftEarly) || 0),
+          daysMissingCheckOut:
+            totals.daysMissingCheckOut +
+            (Number(row?.daysMissingCheckOut) || 0),
+        }),
+        {
+          daysPresent: 0,
+          daysLate: 0,
+          daysLeftEarly: 0,
+          daysMissingCheckOut: 0,
+        }
+      ),
+    [summaryRows]
   );
 
   const handleUseMyLocation = () => {
@@ -1435,6 +1573,306 @@ const TeacherAttendanceAdmin = () => {
     </Stack>
   );
 
+
+  const renderSummary = () => (
+    <Stack spacing={1.5}>
+      <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          alignItems={{ xs: "stretch", md: "center" }}
+          justifyContent="space-between"
+          gap={1.2}
+        >
+          <Box>
+            <Typography sx={{ color: "#122F4D", fontSize: 16, fontWeight: 900 }}>
+              تقرير حضور المعلمين
+            </Typography>
+            <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10 }}>
+              ملخص الحضور والتأخير والخروج المبكر وساعات العمل خلال فترة محددة.
+            </Typography>
+          </Box>
+
+          <Button
+            variant="outlined"
+            onClick={loadSummary}
+            disabled={summaryLoading}
+            startIcon={
+              summaryLoading
+                ? <CircularProgress size={15} />
+                : <RefreshRounded />
+            }
+            sx={{ borderRadius: "11px" }}
+          >
+            {summaryLoading ? "جارٍ تحميل التقرير" : "تحديث التقرير"}
+          </Button>
+        </Stack>
+
+        <Box
+          sx={{
+            mt: 1.5,
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "1fr 1fr",
+              lg: "1fr 1fr 1.25fr auto",
+            },
+            gap: 1,
+            alignItems: "center",
+          }}
+        >
+          <TextField
+            type="date"
+            label="من تاريخ"
+            value={summaryRange.dateFrom}
+            onChange={(event) =>
+              setSummaryRange((current) => ({
+                ...current,
+                dateFrom: event.target.value,
+              }))
+            }
+            InputLabelProps={{ shrink: true }}
+            size="small"
+            fullWidth
+          />
+
+          <TextField
+            type="date"
+            label="إلى تاريخ"
+            value={summaryRange.dateTo}
+            onChange={(event) =>
+              setSummaryRange((current) => ({
+                ...current,
+                dateTo: event.target.value,
+              }))
+            }
+            InputLabelProps={{ shrink: true }}
+            size="small"
+            fullWidth
+          />
+
+          <TextField
+            select
+            label="المعلم"
+            value={summaryRange.teacherId}
+            onChange={(event) =>
+              setSummaryRange((current) => ({
+                ...current,
+                teacherId: event.target.value,
+              }))
+            }
+            size="small"
+            fullWidth
+          >
+            <MenuItem value="">كل المعلمين</MenuItem>
+            {teachers.map((teacher, index) => (
+              <MenuItem
+                key={normalizeId(teacher) || index}
+                value={normalizeId(teacher)}
+              >
+                {getTeacherName(teacher)}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <Button
+            variant="contained"
+            onClick={loadSummary}
+            disabled={summaryLoading}
+            startIcon={
+              summaryLoading
+                ? <CircularProgress size={15} color="inherit" />
+                : <AssessmentRounded />
+            }
+            sx={{
+              minHeight: 40,
+              px: 2.2,
+              color: "#122F4D",
+              backgroundColor: "#F2D792",
+              boxShadow: "none",
+              borderRadius: "11px",
+              fontWeight: 900,
+              "&:hover": {
+                backgroundColor: "#E8C96F",
+                boxShadow: "none",
+              },
+            }}
+          >
+            عرض التقرير
+          </Button>
+        </Box>
+      </Paper>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: {
+            xs: "1fr 1fr",
+            lg: "repeat(5,minmax(0,1fr))",
+          },
+          gap: 1,
+        }}
+      >
+        {[
+          ["المعلمين في التقرير", summaryTotalTeachers],
+          ["أيام الحضور", summaryTotals.daysPresent],
+          ["أيام التأخير", summaryTotals.daysLate],
+          ["أيام الخروج المبكر", summaryTotals.daysLeftEarly],
+          ["بدون انصراف", summaryTotals.daysMissingCheckOut],
+        ].map(([label, value]) => (
+          <Paper
+            key={label}
+            elevation={0}
+            sx={{
+              ...pageCardSx,
+              p: 1.35,
+              backgroundColor: "#fff",
+            }}
+          >
+            <Typography sx={{ color: "#708198", fontSize: 9, fontWeight: 800 }}>
+              {label}
+            </Typography>
+            <Typography
+              sx={{
+                mt: 0.25,
+                color: "#122F4D",
+                fontSize: 20,
+                fontWeight: 900,
+              }}
+            >
+              {value}
+            </Typography>
+          </Paper>
+        ))}
+      </Box>
+
+      <Alert severity="info" sx={{ borderRadius: "14px" }}>
+        "غير مقاس" لا يعني أن المعلم حضر أو انصرف في الموعد؛ بل يعني أن جدول
+        المدرسة لم يكن يحتوي على وقت بداية أو نهاية يمكن القياس عليه في ذلك اليوم.
+      </Alert>
+
+      <Paper elevation={0} sx={{ ...pageCardSx, overflow: "hidden" }}>
+        {summaryLoading ? (
+          <Box sx={{ minHeight: 320, display: "grid", placeItems: "center" }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <TableContainer>
+            <Table size="small" sx={{ minWidth: 1380 }}>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: "rgba(36,74,112,.035)" }}>
+                  <TableCell align="right">المعلم</TableCell>
+                  <TableCell align="center">الحالة</TableCell>
+                  <TableCell align="center">أيام الحضور</TableCell>
+                  <TableCell align="center">أيام التأخير</TableCell>
+                  <TableCell align="center">إجمالي التأخير</TableCell>
+                  <TableCell align="center">الخروج المبكر</TableCell>
+                  <TableCell align="center">إجمالي الخروج المبكر</TableCell>
+                  <TableCell align="right">العمل / المتوقع</TableCell>
+                  <TableCell align="center">بدون انصراف</TableCell>
+                  <TableCell align="center">تأخير غير مقاس</TableCell>
+                  <TableCell align="center">خروج غير مقاس</TableCell>
+                  <TableCell align="center">دوام في إجازة</TableCell>
+                </TableRow>
+              </TableHead>
+
+              <TableBody>
+                {!summaryLoaded ? (
+                  <TableRow>
+                    <TableCell colSpan={12} align="center" sx={{ py: 7, color: "#708198" }}>
+                      اختر الفترة ثم اضغط «عرض التقرير».
+                    </TableCell>
+                  </TableRow>
+                ) : !summaryRows.length ? (
+                  <TableRow>
+                    <TableCell colSpan={12} align="center" sx={{ py: 7, color: "#708198" }}>
+                      لا توجد بيانات حضور في الفترة المحددة.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  summaryRows.map((row, index) => (
+                    <TableRow
+                      key={normalizeId(row?.teacherId) || `${row?.teacherName || "teacher"}-${index}`}
+                      hover
+                    >
+                      <TableCell align="right">
+                        <Typography sx={{ color: "#122F4D", fontSize: 11, fontWeight: 900 }}>
+                          {row?.teacherName || "معلم"}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell align="center">
+                        <Chip
+                          size="small"
+                          label={row?.teacherDeleted ? "محذوف" : "حالي"}
+                          sx={{
+                            color: row?.teacherDeleted ? "#A44343" : "#237449",
+                            backgroundColor: row?.teacherDeleted
+                              ? "rgba(201,79,79,.12)"
+                              : "rgba(116,201,154,.17)",
+                            fontWeight: 800,
+                          }}
+                        />
+                      </TableCell>
+
+                      <TableCell align="center">
+                        {Number(row?.daysPresent) || 0}
+                      </TableCell>
+                      <TableCell align="center">
+                        {Number(row?.daysLate) || 0}
+                      </TableCell>
+                      <TableCell align="center">
+                        {formatMinutes(Number(row?.totalLateMinutes) || 0)}
+                      </TableCell>
+                      <TableCell align="center">
+                        {Number(row?.daysLeftEarly) || 0}
+                      </TableCell>
+                      <TableCell align="center">
+                        {formatMinutes(Number(row?.totalEarlyLeaveMinutes) || 0)}
+                      </TableCell>
+
+                      <TableCell align="right">
+                        <Typography sx={{ fontSize: 9.5, fontWeight: 800, whiteSpace: "nowrap" }}>
+                          {formatMinutes(row?.totalWorkMinutes, { duration: true })}
+                          {" من "}
+                          {formatMinutes(row?.totalExpectedWorkMinutes, { duration: true })}
+                          {" متوقعة"}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell align="center">
+                        <Chip
+                          size="small"
+                          label={Number(row?.daysMissingCheckOut) || 0}
+                          sx={{
+                            color: Number(row?.daysMissingCheckOut) > 0 ? "#A44343" : "#237449",
+                            backgroundColor: Number(row?.daysMissingCheckOut) > 0
+                              ? "rgba(201,79,79,.12)"
+                              : "rgba(116,201,154,.12)",
+                            fontWeight: 800,
+                          }}
+                        />
+                      </TableCell>
+
+                      <TableCell align="center">
+                        {Number(row?.daysLatenessNotTracked) || 0}
+                      </TableCell>
+                      <TableCell align="center">
+                        {Number(row?.daysEarlyLeaveNotTracked) || 0}
+                      </TableCell>
+                      <TableCell align="center">
+                        {Number(row?.daysOnDayOff) || 0}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Paper>
+    </Stack>
+  );
+
   return (
     <Container>
       <Box dir="rtl" sx={{ width: "100%", pb: 4 }}>
@@ -1457,7 +1895,7 @@ const TeacherAttendanceAdmin = () => {
             <Box>
               <Back title="حضور المعلمين" />
               <Typography sx={{ mt: 0.5, color: "#708198", fontSize: 10 }}>
-                إعداد التسجيل الذاتي ومراجعة سجل حضور المعلمين والإدخالات اليدوية.
+                إعداد التسجيل الذاتي ومراجعة سجل حضور المعلمين والإدخالات اليدوية والتقارير.
               </Typography>
             </Box>
 
@@ -1483,10 +1921,15 @@ const TeacherAttendanceAdmin = () => {
           >
             <Tab icon={<SettingsRounded />} iconPosition="start" label="إعدادات الحضور" />
             <Tab icon={<GpsFixedRounded />} iconPosition="start" label="سجل الحضور اليومي" />
+            <Tab icon={<AssessmentRounded />} iconPosition="start" label="تقرير الحضور" />
           </Tabs>
         </Paper>
 
-        {tab === 0 ? renderSettings() : renderLog()}
+        {tab === 0
+          ? renderSettings()
+          : tab === 1
+            ? renderLog()
+            : renderSummary()}
       </Box>
 
       <Dialog
