@@ -1268,6 +1268,62 @@ export const fetchMyClasses =
   };
 
 /* =========================================================
+   Copy classes from a previous academic year
+========================================================= */
+
+export const copyClassesFromYear =
+  async (
+    targetYearId,
+    sourceYearId
+  ) => {
+    const targetId = String(
+      targetYearId || ""
+    ).trim();
+
+    const sourceId = String(
+      sourceYearId || ""
+    ).trim();
+
+    if (
+      !targetId ||
+      !sourceId
+    ) {
+      return {
+        status: false,
+        message:
+          "اختر السنة الهدف والسنة المصدر",
+      };
+    }
+
+    if (
+      targetId === sourceId
+    ) {
+      return {
+        status: false,
+        message:
+          "لا يمكن النسخ من نفس السنة",
+      };
+    }
+
+    try {
+      const response =
+        await api.post(
+          `${ENDPOINT}/copy-from/${targetId}/${sourceId}`,
+          {}
+        );
+
+      return successResult(
+        response
+      );
+    } catch (error) {
+      return errorResult(
+        error,
+        "تعذر نسخ الفصول من السنة السابقة"
+      );
+    }
+  };
+
+/* =========================================================
    Default export
 ========================================================= */
 
@@ -1285,6 +1341,7 @@ export default {
   getTeacherClasses,
   getCurrentStudentClass,
   getCurrentStudentClassmates,
+  copyClassesFromYear,
 
   fetchClasses,
   fetchClassesList,

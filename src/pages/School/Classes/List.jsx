@@ -1,6 +1,7 @@
 import {
   AddRounded,
   CheckCircleRounded,
+  ContentCopyRounded,
   DeleteOutlineRounded,
   EditRounded,
   EventSeatRounded,
@@ -45,6 +46,7 @@ import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
 import {
+  copyClassesFromYear,
   deleteSchoolClass,
   getSchoolClasses,
   toggleSchoolClassActive,
@@ -81,6 +83,34 @@ const stageIdOfGrade = (grade) =>
         : grade?.stageId || grade?.stage
   );
 
+const getAcademicYearSortValue = (year) => {
+  const candidates = [
+    year?.startDate,
+    year?.startAt,
+    year?.startYear,
+    year?.year,
+    year?.name,
+    year?.createdAt,
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate === null || candidate === undefined || candidate === "") continue;
+
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return candidate;
+    }
+
+    const text = String(candidate);
+    const yearMatch = text.match(/(?:19|20)\d{2}/);
+    if (yearMatch) return Number(yearMatch[0]);
+
+    const dateValue = Date.parse(text);
+    if (!Number.isNaN(dateValue)) return dateValue;
+  }
+
+  return 0;
+};
+
 const StatCard = ({ label, value, icon }) => (
   <Paper elevation={0} sx={{ minHeight: 82, p: 1.25, display: "flex", alignItems: "center", gap: .9, border: "1px solid #ded8cd", borderRadius: "15px", backgroundColor: "#fff", boxShadow: "0 7px 20px rgba(36,74,112,.035)" }}>
     <Box sx={{ width: 40, height: 40, display: "grid", placeItems: "center", color: "#b78430", backgroundColor: "#fbf0d8", borderRadius: "11px" }}>{icon}</Box>
@@ -113,6 +143,9 @@ const List = () => {
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [copyLoading, setCopyLoading] = useState(false);
+  const [sourceYearId, setSourceYearId] = useState("");
+  const [targetClassState, setTargetClassState] = useState("idle");
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [yearId, setYearId] = useState("");
@@ -134,6 +167,77 @@ const List = () => {
     };
     loadOptions();
   }, []);
+
+  const sourceYears = useMemo(
+    () =>
+      years
+        .filter((year) => getEntityId(year) !== yearId)
+        .slice()
+        .sort(
+          (a, b) =>
+            getAcademicYearSortValue(b) -
+            getAcademicYearSortValue(a)
+        ),
+    [years, yearId]
+  );
+
+  useEffect(() => {
+    if (!yearId) {
+      setSourceYearId("");
+      return;
+    }
+
+    const sourceStillValid = sourceYears.some(
+      (year) => getEntityId(year) === sourceYearId
+    );
+
+    if (!sourceStillValid) {
+      setSourceYearId(
+        getEntityId(sourceYears[0]) || ""
+      );
+    }
+  }, [yearId, sourceYearId, sourceYears]);
+
+  useEffect(() => {
+    let active = true;
+
+    const checkTargetYear = async () => {
+      if (!yearId) {
+        setTargetClassState("idle");
+        return;
+      }
+
+      setTargetClassState("loading");
+
+      const response = await getSchoolClasses({
+        page: 1,
+        limit: 1,
+        academicYearId: yearId,
+      });
+
+      if (!active) return;
+
+      if (response?.status === false) {
+        setTargetClassState("error");
+        return;
+      }
+
+      const targetRows = extractApiList(
+        response,
+        ["classes"]
+      );
+
+      setTargetClassState(
+        targetRows.length ? "has" : "empty"
+      );
+    };
+
+    checkTargetYear();
+
+    return () => {
+      active = false;
+    };
+  }, [yearId]);
 
   const load = useCallback(async ({ force = false } = {}) => {
     setLoading(true);
@@ -189,6 +293,61 @@ const List = () => {
     seats: visible.reduce((sum, item) => sum + getClassAvailableSeats(item), 0),
   }), [visible, total]);
 
+  const copyDisabledReason = useMemo(() => {
+    if (!yearId) return "اختر السنة الهدف من فلتر السنة أولًا";
+    if (targetClassState === "loading") return "جارٍ التحقق من فصول السنة الهدف";
+    if (targetClassState === "error") return "تعذر التحقق من فصول السنة الهدف";
+    if (targetClassState === "has") return "السنة الهدف تحتوي على فصول بالفعل";
+    if (!sourceYearId) return "لا توجد سنة مصدر متاحة للنسخ";
+    return "";
+  }, [yearId, sourceYearId, targetClassState]);
+
+  const handleCopyClasses = async () => {
+    if (copyDisabledReason) {
+      toast.info(copyDisabledReason);
+      return;
+    }
+
+    setCopyLoading(true);
+
+    const result = await copyClassesFromYear(
+      yearId,
+      sourceYearId
+    );
+
+    setCopyLoading(false);
+
+    if (!result?.status) {
+      toast.error(
+        result?.message ||
+          "تعذر نسخ الفصول"
+      );
+
+      if (Number(result?.statusCode) === 409) {
+        setTargetClassState("has");
+      }
+
+      return;
+    }
+
+    const data =
+      result?.data?.data ??
+      result?.data ??
+      {};
+
+    const createdCount = Number(
+      data?.createdCount ?? 0
+    );
+
+    toast.success(
+      `تم نسخ ${createdCount} فصل`
+    );
+
+    setTargetClassState("has");
+    setPage(0);
+    await load({ force: true });
+  };
+
   const resetFilters = () => {
     setSearch(""); setYearId(""); setStageId(""); setGradeId(""); setGender(""); setStatus(""); setPage(0);
   };
@@ -217,12 +376,120 @@ const List = () => {
         <Paper elevation={0} sx={{ p: { xs: 1.7, md: 2.1 }, border: "1px solid rgba(36,74,112,.08)", borderRadius: "18px", background: "linear-gradient(135deg,rgba(255,252,247,.98),rgba(251,240,216,.44))", boxShadow: "0 10px 24px rgba(18,47,77,.06)" }}>
           <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "stretch", md: "center" }} justifyContent="space-between" gap={1.2}>
             <Box><Stack direction="row" alignItems="center" spacing={.7}><Typography component="h1" sx={{ color: "#122f4d", fontSize: { xs: "21px", md: "25px" }, fontWeight: 800 }}>إدارة الفصول</Typography><Chip size="small" label={stats.total} sx={{ color: "#b78430", backgroundColor: "#fbf0d8", fontWeight: 800 }} /></Stack><Typography sx={{ mt: .35, color: "#7e8791", fontSize: "10px" }}>الفصول مرتبطة بالسنة الدراسية والصف ضمن الهيكل الأكاديمي.</Typography></Box>
-            <Stack direction={{ xs: "column", sm: "row" }} gap={.8}>
-              <Button variant="outlined" startIcon={<RefreshRounded />} onClick={() => load({ force: true })}>تحديث</Button>
-              {permissions.add && <Button component={Link} to="/school/classes/add" variant="contained" startIcon={<AddRounded />} sx={{ backgroundColor: "#244a70", boxShadow: "none", "&:hover": { backgroundColor: "#1b3d61", boxShadow: "none" } }}>إضافة فصل جديد</Button>}
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              gap={0.8}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              flexWrap="wrap"
+            >
+              <Button
+                variant="outlined"
+                startIcon={<RefreshRounded />}
+                onClick={() => load({ force: true })}
+              >
+                تحديث
+              </Button>
+
+              {permissions.add && (
+                <>
+                  <TextField
+                    select
+                    size="small"
+                    label="نسخ من سنة"
+                    value={sourceYearId}
+                    onChange={(event) =>
+                      setSourceYearId(event.target.value)
+                    }
+                    disabled={
+                      !yearId ||
+                      copyLoading ||
+                      targetClassState === "has"
+                    }
+                    sx={{
+                      minWidth: { xs: "100%", sm: 190 },
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: "11px",
+                        backgroundColor: "#fff",
+                      },
+                    }}
+                  >
+                    {!sourceYears.length ? (
+                      <MenuItem value="" disabled>
+                        لا توجد سنة أخرى
+                      </MenuItem>
+                    ) : (
+                      sourceYears.map((year) => (
+                        <MenuItem
+                          key={getEntityId(year)}
+                          value={getEntityId(year)}
+                        >
+                          {year?.name || "سنة دراسية"}
+                        </MenuItem>
+                      ))
+                    )}
+                  </TextField>
+
+                  <Tooltip
+                    title={
+                      copyDisabledReason ||
+                      "نسخ كل فصول السنة المصدر إلى السنة الهدف"
+                    }
+                  >
+                    <span>
+                      <Button
+                        variant="outlined"
+                        startIcon={
+                          copyLoading ? (
+                            <CircularProgress size={16} />
+                          ) : (
+                            <ContentCopyRounded />
+                          )
+                        }
+                        onClick={handleCopyClasses}
+                        disabled={
+                          copyLoading ||
+                          Boolean(copyDisabledReason)
+                        }
+                        sx={{
+                          minHeight: 40,
+                          borderRadius: "11px",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {copyLoading
+                          ? "جارٍ النسخ"
+                          : "نسخ الفصول"}
+                      </Button>
+                    </span>
+                  </Tooltip>
+
+                  <Button
+                    component={Link}
+                    to="/school/classes/add"
+                    variant="contained"
+                    startIcon={<AddRounded />}
+                    sx={{
+                      backgroundColor: "#244a70",
+                      boxShadow: "none",
+                      "&:hover": {
+                        backgroundColor: "#1b3d61",
+                        boxShadow: "none",
+                      },
+                    }}
+                  >
+                    إضافة فصل جديد
+                  </Button>
+                </>
+              )}
             </Stack>
           </Stack>
         </Paper>
+
+        {permissions.add && yearId && targetClassState === "empty" && sourceYearId && (
+          <Alert severity="info" sx={{ mt: 1.25, borderRadius: "14px" }}>
+            السنة الهدف لا تحتوي على فصول حاليًا. يمكنك نسخ الفصول من السنة المحددة، وسيتم الحفاظ على أسماء الفصول والصفوف والسعة والغرف كما هي.
+          </Alert>
+        )}
 
         <Box sx={{ mt: 1.25, display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(4,minmax(0,1fr))" }, gap: 1 }}>
           <StatCard label="إجمالي الفصول" value={stats.total} icon={<MeetingRoomRounded />} />
