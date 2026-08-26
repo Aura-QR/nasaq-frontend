@@ -4,6 +4,10 @@ const ENDPOINT = "/classes";
 const ENROLLMENTS_ENDPOINT = "/enrollments";
 const STUDENTS_ENDPOINT = "/students";
 
+/* =========================================================
+   Helpers
+========================================================= */
+
 const getErrorMessage = (
   error,
   fallbackMessage = "حدث خطأ ما"
@@ -32,6 +36,10 @@ const errorResult = (
   error,
 });
 
+/* =========================================================
+   API data helpers
+========================================================= */
+
 const unwrapApiData = (value) => {
   let payload = value;
 
@@ -40,7 +48,10 @@ const unwrapApiData = (value) => {
       payload &&
       typeof payload === "object" &&
       !Array.isArray(payload) &&
-      Object.prototype.hasOwnProperty.call(payload, "data")
+      Object.prototype.hasOwnProperty.call(
+        payload,
+        "data"
+      )
     ) {
       payload = payload.data;
       continue;
@@ -56,50 +67,450 @@ const normalizeId = (value) => {
   if (!value) return "";
 
   if (typeof value === "object") {
-    return String(value?._id || value?.id || "").trim();
+    return String(
+      value?._id ||
+        value?.id ||
+        ""
+    ).trim();
   }
 
   return String(value).trim();
 };
 
-const extractAcademicYearId = (classPayload) => {
-  const classData = unwrapApiData(classPayload);
+/* =========================================================
+   Academic year helpers
+========================================================= */
+
+const extractAcademicYearId = (
+  classPayload
+) => {
+  const classData =
+    unwrapApiData(classPayload);
 
   return normalizeId(
     classData?.academicYearId ||
       classData?.academicYear ||
-      classData?.termId?.academicYearId ||
-      classData?.term?.academicYearId
+      classData?.termId
+        ?.academicYearId ||
+      classData?.term
+        ?.academicYearId
   );
 };
 
-const extractEnrollmentRows = (response) => {
-  const payload = unwrapApiData(response?.data ?? response);
+/* =========================================================
+   Enrollments helpers
+========================================================= */
 
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload?.docs)) return payload.docs;
-  if (Array.isArray(payload?.results)) return payload.results;
-  if (Array.isArray(payload?.enrollments)) return payload.enrollments;
+const extractEnrollmentRows = (
+  response
+) => {
+  const payload =
+    unwrapApiData(
+      response?.data ?? response
+    );
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
+  }
+
+  if (Array.isArray(payload?.items)) {
+    return payload.items;
+  }
+
+  if (Array.isArray(payload?.docs)) {
+    return payload.docs;
+  }
+
+  if (Array.isArray(payload?.results)) {
+    return payload.results;
+  }
+
+  if (
+    Array.isArray(
+      payload?.enrollments
+    )
+  ) {
+    return payload.enrollments;
+  }
 
   return [];
 };
+
+/*
+ * نحاول نقرأ العدد الإجمالي من pagination لو الـ API بيرجعه.
+ * لو مش موجود نستخدم عدد الـ rows نفسها.
+ */
+const extractEnrollmentCount = (
+  response
+) => {
+  const payload =
+    response?.data ?? response;
+
+  const possibleCounts = [
+    payload?.pagination?.total,
+    payload?.pagination?.totalDocs,
+    payload?.pagination?.totalItems,
+    payload?.pagination?.count,
+
+    payload?.meta?.total,
+    payload?.meta?.totalDocs,
+    payload?.meta?.totalItems,
+
+    payload?.data?.pagination?.total,
+    payload?.data?.pagination
+      ?.totalDocs,
+    payload?.data?.pagination
+      ?.totalItems,
+
+    payload?.data?.meta?.total,
+    payload?.data?.meta
+      ?.totalDocs,
+    payload?.data?.meta
+      ?.totalItems,
+
+    payload?.total,
+    payload?.totalDocs,
+    payload?.totalItems,
+  ];
+
+  const validCount =
+    possibleCounts.find((value) => {
+      if (
+        value === undefined ||
+        value === null ||
+        value === ""
+      ) {
+        return false;
+      }
+
+      const numberValue =
+        Number(value);
+
+      return Number.isFinite(
+        numberValue
+      );
+    });
+
+  if (
+    validCount !== undefined
+  ) {
+    return Number(validCount);
+  }
+
+  return extractEnrollmentRows(
+    response
+  ).length;
+};
+
+/* =========================================================
+   Classes response helpers
+========================================================= */
+
+/*
+ * نطلع Array الفصول مهما كان شكل Response:
+ *
+ * [...]
+ *
+ * أو:
+ *
+ * {
+ *   status: true,
+ *   data: [...]
+ * }
+ *
+ * أو:
+ *
+ * {
+ *   data: {
+ *     classes: [...]
+ *   }
+ * }
+ */
+const extractClassRows = (
+  value,
+  depth = 0
+) => {
+  if (depth > 5) return [];
+
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (
+    !value ||
+    typeof value !== "object"
+  ) {
+    return [];
+  }
+
+  const candidates = [
+    value?.classes,
+    value?.items,
+    value?.docs,
+    value?.results,
+    value?.records,
+  ];
+
+  const directArray =
+    candidates.find(
+      Array.isArray
+    );
+
+  if (directArray) {
+    return directArray;
+  }
+
+  if (Array.isArray(value?.data)) {
+    return value.data;
+  }
+
+  if (
+    value?.data &&
+    typeof value.data === "object"
+  ) {
+    return extractClassRows(
+      value.data,
+      depth + 1
+    );
+  }
+
+  return [];
+};
+
+/*
+ * نرجّع الـ classes المعدلة لنفس مكانها
+ * بدون ما نكسر شكل Response الباك.
+ */
+const replaceClassRows = (
+  value,
+  rows,
+  depth = 0
+) => {
+  if (depth > 5) return value;
+
+  if (Array.isArray(value)) {
+    return rows;
+  }
+
+  if (
+    !value ||
+    typeof value !== "object"
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value.classes)) {
+    return {
+      ...value,
+      classes: rows,
+    };
+  }
+
+  if (Array.isArray(value.items)) {
+    return {
+      ...value,
+      items: rows,
+    };
+  }
+
+  if (Array.isArray(value.docs)) {
+    return {
+      ...value,
+      docs: rows,
+    };
+  }
+
+  if (Array.isArray(value.results)) {
+    return {
+      ...value,
+      results: rows,
+    };
+  }
+
+  if (Array.isArray(value.records)) {
+    return {
+      ...value,
+      records: rows,
+    };
+  }
+
+  if (Array.isArray(value.data)) {
+    return {
+      ...value,
+      data: rows,
+    };
+  }
+
+  if (
+    value.data &&
+    typeof value.data === "object"
+  ) {
+    return {
+      ...value,
+      data: replaceClassRows(
+        value.data,
+        rows,
+        depth + 1
+      ),
+    };
+  }
+
+  return value;
+};
+
+/* =========================================================
+   Student count fix
+========================================================= */
+
+/*
+ * المشكلة:
+ *
+ * GET /classes لا يرجع studentsCount
+ * ولا students ولا enrollments.
+ *
+ * لذلك نجيب enrollments لكل فصل
+ * ونضيف العدد الحقيقي على بيانات الفصل.
+ */
+const enrichClassesWithStudentCounts =
+  async (classes = []) => {
+    if (
+      !Array.isArray(classes) ||
+      !classes.length
+    ) {
+      return [];
+    }
+
+    return Promise.all(
+      classes.map(
+        async (classItem) => {
+          const classId =
+            normalizeId(classItem);
+
+          if (!classId) {
+            return {
+              ...classItem,
+              studentsCount: 0,
+              enrollments: [],
+            };
+          }
+
+          try {
+            const response =
+              await api.get(
+                ENROLLMENTS_ENDPOINT,
+                {
+                  params: {
+                    classId,
+                  },
+                }
+              );
+
+            const enrollments =
+              extractEnrollmentRows(
+                response
+              );
+
+            const studentsCount =
+              extractEnrollmentCount(
+                response
+              );
+
+            return {
+              ...classItem,
+
+              /*
+               * تستخدمها getClassStudentCount
+               */
+              studentsCount,
+
+              /*
+               * نخزن الـ enrollments أيضًا
+               * حتى تقدر classData تستخدمها.
+               */
+              enrollments,
+            };
+          } catch (error) {
+            console.error(
+              `Failed to load enrollments for class ${classId}`,
+              error
+            );
+
+            /*
+             * لو فشل طلب فصل واحد،
+             * ما نكسرش قائمة الفصول كلها.
+             */
+            return {
+              ...classItem,
+              studentsCount: 0,
+              enrollments: [],
+            };
+          }
+        }
+      )
+    );
+  };
+
+/*
+ * بياخد Axios response بتاع /classes
+ * ويضيف studentsCount لكل فصل.
+ */
+const enrichClassesResponse =
+  async (response) => {
+    if (!response) {
+      return response;
+    }
+
+    const classes =
+      extractClassRows(
+        response?.data
+      );
+
+    if (!classes.length) {
+      return response;
+    }
+
+    const enrichedClasses =
+      await enrichClassesWithStudentCounts(
+        classes
+      );
+
+    return {
+      ...response,
+      data: replaceClassRows(
+        response.data,
+        enrichedClasses
+      ),
+    };
+  };
+
+/* =========================================================
+   Resolve academic year
+========================================================= */
 
 const resolveAcademicYearId = async (
   classId,
   academicYearId
 ) => {
-  const explicitId = normalizeId(academicYearId);
-  if (explicitId) return explicitId;
+  const explicitId =
+    normalizeId(academicYearId);
 
-  const classResponse = await api.get(
-    `${ENDPOINT}/${classId}`
-  );
+  if (explicitId) {
+    return explicitId;
+  }
 
-  const resolvedId = extractAcademicYearId(
-    classResponse?.data
-  );
+  const classResponse =
+    await api.get(
+      `${ENDPOINT}/${classId}`
+    );
+
+  const resolvedId =
+    extractAcademicYearId(
+      classResponse?.data
+    );
 
   if (!resolvedId) {
     throw new Error(
@@ -109,6 +520,10 @@ const resolveAcademicYearId = async (
 
   return resolvedId;
 };
+
+/* =========================================================
+   Find enrollment
+========================================================= */
 
 const findEnrollmentId = async (
   classId,
@@ -124,62 +539,103 @@ const findEnrollmentId = async (
     }
   );
 
-  const targetStudentId = normalizeId(studentId);
+  const targetStudentId =
+    normalizeId(studentId);
 
-  const enrollment = extractEnrollmentRows(
-    response
-  ).find((row) => {
-    const rowStudentId = normalizeId(
-      row?.studentId || row?.student
-    );
+  const enrollment =
+    extractEnrollmentRows(
+      response
+    ).find((row) => {
+      const rowStudentId =
+        normalizeId(
+          row?.studentId ||
+            row?.student
+        );
 
-    return rowStudentId === targetStudentId;
-  });
+      return (
+        rowStudentId ===
+        targetStudentId
+      );
+    });
 
   return normalizeId(enrollment);
 };
 
 /* =========================================================
    Modern API functions
-   تستخدمها صفحات SchoolClasses وSchoolClassDetails الجديدة.
+
+   تستخدمها صفحات:
+   SchoolClasses
+   SchoolClassDetails
+
    ترجع دائمًا:
    { status: true, data }
+
    أو:
    { status: false, message }
 ========================================================= */
 
-export const getSchoolClasses = async ({
-  page = 1,
-  limit = 10,
-  ...filters
-} = {}) => {
-  try {
-    const response = await api.get(
-      ENDPOINT,
-      {
-        params: {
-          page,
-          limit,
-          ...filters,
-        },
-      }
-    );
+/* =========================================================
+   Get classes
+========================================================= */
 
-    return successResult(response);
-  } catch (error) {
-    return errorResult(
-      error,
-      "تعذر تحميل الفصول"
-    );
-  }
-};
+export const getSchoolClasses =
+  async ({
+    page = 1,
+    limit = 10,
+    ...filters
+  } = {}) => {
+    try {
+      /*
+       * 1) تحميل الفصول
+       */
+      const response =
+        await api.get(
+          ENDPOINT,
+          {
+            params: {
+              page,
+              limit,
+              ...filters,
+            },
+          }
+        );
+
+      /*
+       * 2) إضافة عدد الطلاب الحقيقي
+       * لكل فصل من enrollments.
+       */
+      const enrichedResponse =
+        await enrichClassesResponse(
+          response
+        );
+
+      /*
+       * 3) الحفاظ على نفس شكل
+       * Modern API.
+       */
+      return successResult(
+        enrichedResponse
+      );
+    } catch (error) {
+      return errorResult(
+        error,
+        "تعذر تحميل الفصول"
+      );
+    }
+  };
+
+/* =========================================================
+   Classes list
+========================================================= */
 
 export const getSchoolClassesList =
   async () => {
     try {
-      const response = await api.get(
-        `${ENDPOINT}/list`
-      );
+      const response =
+        await api.get(
+          `${ENDPOINT}/list`
+        );
 
       return successResult(response);
     } catch (error) {
@@ -190,12 +646,17 @@ export const getSchoolClassesList =
     }
   };
 
+/* =========================================================
+   Single class
+========================================================= */
+
 export const getSchoolClassById =
   async (classId) => {
     try {
-      const response = await api.get(
-        `${ENDPOINT}/${classId}`
-      );
+      const response =
+        await api.get(
+          `${ENDPOINT}/${classId}`
+        );
 
       return successResult(response);
     } catch (error) {
@@ -206,18 +667,26 @@ export const getSchoolClassById =
     }
   };
 
+/* =========================================================
+   Class students
+========================================================= */
+
 export const getSchoolClassStudents =
-  async (classId, params = {}) => {
+  async (
+    classId,
+    params = {}
+  ) => {
     try {
-      const response = await api.get(
-        ENROLLMENTS_ENDPOINT,
-        {
-          params: {
-            classId,
-            ...params,
-          },
-        }
-      );
+      const response =
+        await api.get(
+          ENROLLMENTS_ENDPOINT,
+          {
+            params: {
+              classId,
+              ...params,
+            },
+          }
+        );
 
       return successResult(response);
     } catch (error) {
@@ -228,13 +697,18 @@ export const getSchoolClassStudents =
     }
   };
 
+/* =========================================================
+   Create class
+========================================================= */
+
 export const createSchoolClass =
   async (payload) => {
     try {
-      const response = await api.post(
-        ENDPOINT,
-        payload
-      );
+      const response =
+        await api.post(
+          ENDPOINT,
+          payload
+        );
 
       return successResult(response);
     } catch (error) {
@@ -245,16 +719,21 @@ export const createSchoolClass =
     }
   };
 
+/* =========================================================
+   Update class
+========================================================= */
+
 export const updateSchoolClass =
   async (
     classId,
     payload
   ) => {
     try {
-      const response = await api.patch(
-        `${ENDPOINT}/${classId}`,
-        payload
-      );
+      const response =
+        await api.patch(
+          `${ENDPOINT}/${classId}`,
+          payload
+        );
 
       return successResult(response);
     } catch (error) {
@@ -265,12 +744,17 @@ export const updateSchoolClass =
     }
   };
 
+/* =========================================================
+   Delete class
+========================================================= */
+
 export const deleteSchoolClass =
   async (classId) => {
     try {
-      const response = await api.delete(
-        `${ENDPOINT}/${classId}`
-      );
+      const response =
+        await api.delete(
+          `${ENDPOINT}/${classId}`
+        );
 
       return successResult(response);
     } catch (error) {
@@ -281,12 +765,17 @@ export const deleteSchoolClass =
     }
   };
 
+/* =========================================================
+   Toggle class active
+========================================================= */
+
 export const toggleSchoolClassActive =
   async (classId) => {
     try {
-      const response = await api.patch(
-        `${ENDPOINT}/${classId}/toggle-active`
-      );
+      const response =
+        await api.patch(
+          `${ENDPOINT}/${classId}/toggle-active`
+        );
 
       return successResult(response);
     } catch (error) {
@@ -296,6 +785,10 @@ export const toggleSchoolClassActive =
       );
     }
   };
+
+/* =========================================================
+   Add student to class
+========================================================= */
 
 export const addStudentToSchoolClass =
   async (
@@ -310,15 +803,16 @@ export const addStudentToSchoolClass =
           academicYearId
         );
 
-      const response = await api.post(
-        ENROLLMENTS_ENDPOINT,
-        {
-          studentId,
-          classId,
-          academicYearId:
-            resolvedAcademicYearId,
-        }
-      );
+      const response =
+        await api.post(
+          ENROLLMENTS_ENDPOINT,
+          {
+            studentId,
+            classId,
+            academicYearId:
+              resolvedAcademicYearId,
+          }
+        );
 
       return successResult(response);
     } catch (error) {
@@ -328,6 +822,10 @@ export const addStudentToSchoolClass =
       );
     }
   };
+
+/* =========================================================
+   Remove student from class
+========================================================= */
 
 export const removeStudentFromSchoolClass =
   async (
@@ -349,9 +847,10 @@ export const removeStudentFromSchoolClass =
         };
       }
 
-      const response = await api.delete(
-        `${ENROLLMENTS_ENDPOINT}/${enrollmentId}`
-      );
+      const response =
+        await api.delete(
+          `${ENROLLMENTS_ENDPOINT}/${enrollmentId}`
+        );
 
       return successResult(response);
     } catch (error) {
@@ -362,12 +861,17 @@ export const removeStudentFromSchoolClass =
     }
   };
 
+/* =========================================================
+   Teacher classes
+========================================================= */
+
 export const getTeacherClasses =
   async () => {
     try {
-      const response = await api.get(
-        `${ENDPOINT}/teacher/me`
-      );
+      const response =
+        await api.get(
+          `${ENDPOINT}/teacher/me`
+        );
 
       return successResult(response);
     } catch (error) {
@@ -378,16 +882,22 @@ export const getTeacherClasses =
     }
   };
 
+/* =========================================================
+   Current student class
+========================================================= */
+
 export const getCurrentStudentClass =
   async () => {
     try {
-      const response = await api.get(
-        `${STUDENTS_ENDPOINT}/me`
-      );
+      const response =
+        await api.get(
+          `${STUDENTS_ENDPOINT}/me`
+        );
 
-      const student = unwrapApiData(
-        response?.data
-      );
+      const student =
+        unwrapApiData(
+          response?.data
+        );
 
       return {
         status: true,
@@ -404,6 +914,10 @@ export const getCurrentStudentClass =
     }
   };
 
+/* =========================================================
+   Student classmates
+========================================================= */
+
 export const getCurrentStudentClassmates =
   async () => ({
     status: false,
@@ -414,11 +928,17 @@ export const getCurrentStudentClassmates =
 
 /* =========================================================
    Legacy API functions
-   نحافظ عليها لأن صفحات ومكونات المشروع القديمة ما زالت
-   تستورد الأسماء التالية مثل ClassFilter.jsx.
+
+   نحافظ عليها لأن صفحات ومكونات المشروع القديمة
+   ما زالت تستورد الأسماء التالية مثل ClassFilter.jsx.
 
    هذه الدوال ترجع response.data مباشرة مثل الملف القديم،
-   وفي الخطأ ترجع كائنًا موحدًا { status: false, message }.
+   وفي الخطأ ترجع:
+   { status: false, message }
+========================================================= */
+
+/* =========================================================
+   Legacy fetch classes
 ========================================================= */
 
 export const fetchClasses =
@@ -428,30 +948,53 @@ export const fetchClasses =
         typeof filters === "string"
           ? {
               /*
-               * يدعم القيمة القديمة، لكن عند تمرير MongoID
-               * يتم إرسال الاسم الصحيح حسب الباك الجديد.
+               * يدعم القيمة القديمة،
+               * لكن عند تمرير MongoID
+               * يتم إرسال الاسم الصحيح
+               * حسب الباك الجديد.
                */
-              ...( /^[a-f\d]{24}$/i.test(filters)
-                ? {
-                    academicYearId:
-                      filters,
-                  }
-                : {
-                    academicYear:
-                      filters,
-                  } ),
+              ...(
+                /^[a-f\d]{24}$/i.test(
+                  filters
+                )
+                  ? {
+                      academicYearId:
+                        filters,
+                    }
+                  : {
+                      academicYear:
+                        filters,
+                    }
+              ),
             }
           : filters || {};
 
-      const response = await api.get(
-        ENDPOINT,
-        {
-          params:
-            normalizedFilters,
-        }
-      );
+      /*
+       * 1) تحميل الفصول
+       */
+      const response =
+        await api.get(
+          ENDPOINT,
+          {
+            params:
+              normalizedFilters,
+          }
+        );
 
-      return response.data;
+      /*
+       * 2) إضافة عدد الطلاب
+       * الحقيقي لكل فصل.
+       */
+      const enrichedResponse =
+        await enrichClassesResponse(
+          response
+        );
+
+      /*
+       * نحافظ على نفس شكل
+       * Legacy API القديم.
+       */
+      return enrichedResponse.data;
     } catch (error) {
       return errorResult(
         error,
@@ -459,13 +1002,18 @@ export const fetchClasses =
       );
     }
   };
+
+/* =========================================================
+   Legacy classes list
+========================================================= */
 
 export const fetchClassesList =
   async () => {
     try {
-      const response = await api.get(
-        `${ENDPOINT}/list`
-      );
+      const response =
+        await api.get(
+          `${ENDPOINT}/list`
+        );
 
       return response.data;
     } catch (error) {
@@ -475,13 +1023,18 @@ export const fetchClassesList =
       );
     }
   };
+
+/* =========================================================
+   Legacy single class
+========================================================= */
 
 export const fetchSingleClass =
   async (id) => {
     try {
-      const response = await api.get(
-        `${ENDPOINT}/${id}`
-      );
+      const response =
+        await api.get(
+          `${ENDPOINT}/${id}`
+        );
 
       return response.data;
     } catch (error) {
@@ -491,19 +1044,27 @@ export const fetchSingleClass =
       );
     }
   };
+
+/* =========================================================
+   Legacy class students
+========================================================= */
 
 export const fetchClassStudents =
-  async (classId, params = {}) => {
+  async (
+    classId,
+    params = {}
+  ) => {
     try {
-      const response = await api.get(
-        ENROLLMENTS_ENDPOINT,
-        {
-          params: {
-            classId,
-            ...params,
-          },
-        }
-      );
+      const response =
+        await api.get(
+          ENROLLMENTS_ENDPOINT,
+          {
+            params: {
+              classId,
+              ...params,
+            },
+          }
+        );
 
       return response.data;
     } catch (error) {
@@ -513,14 +1074,19 @@ export const fetchClassStudents =
       );
     }
   };
+
+/* =========================================================
+   Legacy add class
+========================================================= */
 
 export const addClass =
   async (data) => {
     try {
-      const response = await api.post(
-        ENDPOINT,
-        data
-      );
+      const response =
+        await api.post(
+          ENDPOINT,
+          data
+        );
 
       return response.data;
     } catch (error) {
@@ -530,6 +1096,10 @@ export const addClass =
       );
     }
   };
+
+/* =========================================================
+   Legacy edit class
+========================================================= */
 
 export const editClass =
   async (
@@ -537,10 +1107,11 @@ export const editClass =
     id
   ) => {
     try {
-      const response = await api.patch(
-        `${ENDPOINT}/${id}`,
-        data
-      );
+      const response =
+        await api.patch(
+          `${ENDPOINT}/${id}`,
+          data
+        );
 
       return response.data;
     } catch (error) {
@@ -550,13 +1121,18 @@ export const editClass =
       );
     }
   };
+
+/* =========================================================
+   Legacy delete class
+========================================================= */
 
 export const deleteClass =
   async (id) => {
     try {
-      const response = await api.delete(
-        `${ENDPOINT}/${id}`
-      );
+      const response =
+        await api.delete(
+          `${ENDPOINT}/${id}`
+        );
 
       return response.data;
     } catch (error) {
@@ -566,13 +1142,18 @@ export const deleteClass =
       );
     }
   };
+
+/* =========================================================
+   Legacy toggle active
+========================================================= */
 
 export const toggleActiveClass =
   async (id) => {
     try {
-      const response = await api.patch(
-        `${ENDPOINT}/${id}/toggle-active`
-      );
+      const response =
+        await api.patch(
+          `${ENDPOINT}/${id}/toggle-active`
+        );
 
       return response.data;
     } catch (error) {
@@ -582,6 +1163,10 @@ export const toggleActiveClass =
       );
     }
   };
+
+/* =========================================================
+   Legacy add student
+========================================================= */
 
 export const addStudentToClass =
   async (
@@ -596,15 +1181,16 @@ export const addStudentToClass =
           academicYearId
         );
 
-      const response = await api.post(
-        ENROLLMENTS_ENDPOINT,
-        {
-          studentId,
-          classId,
-          academicYearId:
-            resolvedAcademicYearId,
-        }
-      );
+      const response =
+        await api.post(
+          ENROLLMENTS_ENDPOINT,
+          {
+            studentId,
+            classId,
+            academicYearId:
+              resolvedAcademicYearId,
+          }
+        );
 
       return response.data;
     } catch (error) {
@@ -614,6 +1200,10 @@ export const addStudentToClass =
       );
     }
   };
+
+/* =========================================================
+   Legacy delete student
+========================================================= */
 
 export const deleteStudentFromClass =
   async (
@@ -635,9 +1225,10 @@ export const deleteStudentFromClass =
         };
       }
 
-      const response = await api.delete(
-        `${ENROLLMENTS_ENDPOINT}/${enrollmentId}`
-      );
+      const response =
+        await api.delete(
+          `${ENROLLMENTS_ENDPOINT}/${enrollmentId}`
+        );
 
       return response.data;
     } catch (error) {
@@ -648,17 +1239,24 @@ export const deleteStudentFromClass =
     }
   };
 
-/* أسماء إضافية للتوافق مع أي مكونات تستخدم صياغات مختلفة. */
+/* =========================================================
+   Aliases
+========================================================= */
 
 export const fetchClass =
   fetchSingleClass;
 
+/* =========================================================
+   My classes
+========================================================= */
+
 export const fetchMyClasses =
   async () => {
     try {
-      const response = await api.get(
-        `${ENDPOINT}/teacher/me`
-      );
+      const response =
+        await api.get(
+          `${ENDPOINT}/teacher/me`
+        );
 
       return response.data;
     } catch (error) {
@@ -668,6 +1266,10 @@ export const fetchMyClasses =
       );
     }
   };
+
+/* =========================================================
+   Default export
+========================================================= */
 
 export default {
   getSchoolClasses,
