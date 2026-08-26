@@ -98,7 +98,7 @@ const SchoolHeader = ({
     dashboardPage
       ? "لوحة المدرسة"
       : managersPage
-      ? "المديرون والمشرفون"
+      ? "المديرون والمساعدون"
       : studentDetailsPage
       ? "تفاصيل الطالب"
       : studentsPage

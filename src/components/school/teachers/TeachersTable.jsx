@@ -464,7 +464,7 @@ const TeacherIdentity = ({
         {manager && (
           <Chip
             size="small"
-            label="مدير"
+            label="مساعد إداري"
             sx={{
               height: 22,
 

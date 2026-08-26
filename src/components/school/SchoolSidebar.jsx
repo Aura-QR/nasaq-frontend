@@ -545,7 +545,7 @@ const SchoolSidebar = ({
               <SidebarLink
                 item={{
                   label:
-                    "المديرون والمشرفون",
+                    "المديرون والمساعدون",
                   path:
                     "/school/managers",
                   icon:

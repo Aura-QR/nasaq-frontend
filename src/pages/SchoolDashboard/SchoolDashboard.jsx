@@ -116,11 +116,11 @@ const displaySignedMoney = (value) => {
 
 const roleTitle = (role) => {
   if (role === "MANAGER") {
-    return "لوحة المدير";
+    return "لوحة مساعد إداري";
   }
 
   if (role === "SUPERVISOR") {
-    return "لوحة المشرف";
+    return "لوحة مدير المدرسة";
   }
 
   return "لوحة مالك المدرسة";
@@ -613,7 +613,7 @@ const SchoolDashboard = () => {
     },
     {
       to: "/school/managers",
-      title: "المديرون والمشرفون",
+      title: "المديرون والمساعدون",
       description: "إدارة الحسابات الإدارية",
       icon: <GroupsRounded />,
     },

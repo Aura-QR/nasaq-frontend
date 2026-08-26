@@ -612,7 +612,7 @@ const SchoolTeacherDetails =
           "الدور الإداري",
         value:
           manager
-            ? "مدير"
+            ? "مساعد إداري"
             : "معلم",
         icon:
           <AdminPanelSettingsRounded />,
@@ -733,7 +733,7 @@ const SchoolTeacherDetails =
                 {manager && (
                   <Chip
                     size="small"
-                    label="مدير"
+                    label="مساعد إداري"
                     sx={{
                       height: 23,
                       color:

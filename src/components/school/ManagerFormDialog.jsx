@@ -442,7 +442,7 @@ const ManagerFormDialog = ({
                   ROLES.MANAGER
                 }
               >
-                مدير
+                مساعد إداري
               </MenuItem>
 
               {canCreateSupervisor && (
@@ -451,7 +451,7 @@ const ManagerFormDialog = ({
                     ROLES.SUPERVISOR
                   }
                 >
-                  مشرف
+                  مدير المدرسة
                 </MenuItem>
               )}
             </Select>
@@ -515,8 +515,8 @@ const ManagerFormDialog = ({
               >
                 {form.role ===
                 ROLES.SUPERVISOR
-                  ? "المشرف يحصل على صلاحيات كاملة داخل المدرسة."
-                  : "حدد صلاحيات المدير حسب مسؤولياته."}
+                  ? "يحصل على صلاحيات كاملة داخل المدرسة."
+                  : "صلاحيات المساعد الإداري معرّفة على مستوى المدرسة من صفحة الصلاحيات."}
               </Typography>
             </Box>
 

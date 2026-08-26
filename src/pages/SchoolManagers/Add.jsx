@@ -205,8 +205,8 @@ const SchoolManagerAdd = () => {
 
     toast.success(
       role === "SUPERVISOR"
-        ? "تم إنشاء حساب المشرف بنجاح"
-        : "تم إنشاء حساب المدير بنجاح"
+        ? "تم إنشاء حساب مدير المدرسة بنجاح"
+        : "تم إنشاء حساب مساعد إداري بنجاح"
     );
 
     navigate(
@@ -399,19 +399,19 @@ const SchoolManagerAdd = () => {
                     >
                       <ToggleButton
                         value="SUPERVISOR"
-                        aria-label="مشرف"
+                        aria-label="مدير المدرسة"
                       >
                         <SupervisorAccountRounded
                           sx={{
                             fontSize: 18,
                           }}
                         />
-                        مشرف
+                        مدير المدرسة
                       </ToggleButton>
 
                       <ToggleButton
                         value="MANAGER"
-                        aria-label="مدير"
+                        aria-label="مساعد إداري"
                       >
                         <AdminPanelSettingsRounded
                           sx={{
@@ -501,8 +501,8 @@ const SchoolManagerAdd = () => {
                     أنشئ بيانات دخول جديدة لحساب{" "}
                     {selectedRole ===
                     "SUPERVISOR"
-                      ? "مشرف"
-                      : "مدير"}
+                      ? "مدير المدرسة"
+                      : "مساعد إداري"}
                     .
                   </Typography>
                 </Box>
@@ -551,8 +551,8 @@ const SchoolManagerAdd = () => {
                 >
                   {selectedRole ===
                   "SUPERVISOR"
-                    ? "سيُنشأ الحساب بصلاحيات تشغيلية كاملة، دون صلاحية رؤية أو إدارة الحسابات الإدارية."
-                    : `سيتم تطبيق ${MANAGER_DEFAULT_PERMISSIONS.length} صلاحية إدارية وأكاديمية لدور المدير، دون المالية والمصروفات.`}
+                    ? "سيُنشأ الحساب بصلاحيات كاملة داخل المدرسة، ويستطيع إنشاء حسابات المساعدين الإداريين وإدارتها. لا يستطيع إنشاء مدير آخر."
+                    : "سيُنشأ الحساب بصلاحيات المساعد الإداري المعرّفة على مستوى المدرسة: يستطيع تحصيل المدفوعات، ولا يستطيع تعديل الرسوم أو خطط التقسيط."}
                 </Typography>
               </Box>
 
@@ -850,9 +850,9 @@ const SchoolManagerAdd = () => {
                     />
                   ) : selectedRole ===
                     "SUPERVISOR" ? (
-                    "إنشاء حساب مشرف"
+                    "إنشاء حساب مدير المدرسة"
                   ) : (
-                    "إنشاء حساب مدير"
+                    "إنشاء حساب مساعد إداري"
                   )}
                 </Button>
               </Stack>

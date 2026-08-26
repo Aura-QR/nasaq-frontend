@@ -52,8 +52,8 @@ const ROLES = [
   { value: "TEACHER", label: "معلم" },
   { value: "STUDENT", label: "طالب" },
   { value: "OWNER", label: "مالك المدرسة" },
-  { value: "MANAGER", label: "مدير" },
-  { value: "SUPERVISOR", label: "مشرف" },
+  { value: "MANAGER", label: "مساعد إداري" },
+  { value: "SUPERVISOR", label: "مدير المدرسة" },
 ];
 
 const STEP_REQUEST = "request";

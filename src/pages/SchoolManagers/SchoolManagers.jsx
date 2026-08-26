@@ -443,7 +443,7 @@ const EmptyState = ({
       >
         {searched
           ? "جرّب البحث باسم مستخدم أو بريد إلكتروني مختلف."
-          : "أضف أول مدير أو مشرف لتوزيع المسؤوليات والصلاحيات داخل المدرسة."}
+          : "أضف أول مدير المدرسة أو مساعد إداري لتوزيع المسؤوليات والصلاحيات داخل المدرسة."}
       </Typography>
 
       <Button
@@ -721,7 +721,7 @@ const SchoolManagers = () => {
       toast.success(
         payload.role ===
           ROLES.SUPERVISOR
-          ? "تم إنشاء المشرف بنجاح"
+          ? "تم إنشاء مدير المدرسة بنجاح"
           : "تم إنشاء المدير بنجاح"
       );
 
@@ -856,7 +856,7 @@ const SchoolManagers = () => {
 
     {
       label:
-        "المشرفون",
+        "مديرو المدرسة",
 
       value:
         stats.supervisors,
@@ -1436,8 +1436,8 @@ const SchoolManagers = () => {
                                 size="small"
                                 label={
                                   isSupervisor
-                                    ? "مشرف"
-                                    : "مدير"
+                                    ? "مدير المدرسة"
+                                    : "مساعد إداري"
                                 }
                                 sx={{
                                   color:

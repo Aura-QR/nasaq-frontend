@@ -123,8 +123,8 @@ const getDisplayName = (user) => {
 
 const ROLE_LABELS = {
   OWNER: "مالك المدرسة",
-  SUPERVISOR: "مشرف المدرسة",
-  MANAGER: "مدير المدرسة",
+  SUPERVISOR: "مدير المدرسة",
+  MANAGER: "مساعد إداري",
   TEACHER: "معلم",
   STUDENT: "طالب",
   SUPER_ADMIN: "مدير المنصة",
@@ -245,7 +245,7 @@ const Sidebar = ({ active, setActive }) => {
             show: teachersPermissions.read,
           },
           {
-            name: "المديرون والمشرفون",
+            name: "المديرون والمساعدون",
             Icon: ManageAccountsRounded,
             iconType: "mui",
             to: "/school/managers",

@@ -193,7 +193,7 @@ export const fetchManagers =
         .catch((error) =>
           getApiError(
             error,
-            "تعذر تحميل المديرين والمشرفين"
+            "تعذر تحميل المديرين والمساعدين"
           )
         )
         .finally(() => {

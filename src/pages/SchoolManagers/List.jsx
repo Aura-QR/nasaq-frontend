@@ -43,8 +43,8 @@ import {
 
 const ROLE_LABELS = {
   OWNER: "مالك المدرسة",
-  SUPERVISOR: "مشرف",
-  MANAGER: "مدير",
+  SUPERVISOR: "مدير المدرسة",
+  MANAGER: "مساعد إداري",
 };
 
 const normalizeRole = (role) =>
@@ -195,7 +195,7 @@ const SchoolManagersList = () => {
       toast.error(
         getResponseMessage(
           response,
-          "تعذر تحميل المديرين والمشرفين"
+          "تعذر تحميل المديرين والمساعدين"
         )
       );
 
@@ -415,7 +415,7 @@ const SchoolManagersList = () => {
                   lineHeight: 1.25,
                 }}
               >
-                إدارة المديرين والمشرفين
+                إدارة المديرين والمساعدين
               </Typography>
 
               <Box
@@ -525,12 +525,12 @@ const SchoolManagersList = () => {
             icon={<CheckCircleRounded />}
           />
           <StatCard
-            label="المديرون"
+            label="المساعدون الإداريون"
             value={managersCount}
             icon={<ManageAccountsRounded />}
           />
           <StatCard
-            label="المشرفون"
+            label="مديرو المدرسة"
             value={supervisorsCount}
             icon={<SupervisorAccountRounded />}
           />
@@ -598,8 +598,8 @@ const SchoolManagersList = () => {
               }}
             >
               <MenuItem value="">كل الأدوار</MenuItem>
-              <MenuItem value="MANAGER">مدير</MenuItem>
-              <MenuItem value="SUPERVISOR">مشرف</MenuItem>
+              <MenuItem value="MANAGER">مساعد إداري</MenuItem>
+              <MenuItem value="SUPERVISOR">مدير المدرسة</MenuItem>
             </TextField>
           </Stack>
         </Box>
