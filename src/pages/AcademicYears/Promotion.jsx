@@ -273,7 +273,6 @@ const isGraduatingStudent = (
 const canStudentBePromoted = (
   row
 ) =>
-  row?.overallPassed === true &&
   !isGraduatingStudent(row) &&
   Array.isArray(
     row?.availableTargetClasses
@@ -502,7 +501,10 @@ const Promotion = () => {
             );
 
           next[studentId] = {
-            included: eligible,
+            included:
+              eligible &&
+              student?.overallPassed ===
+                true,
             targetClassId:
               eligible
                 ? getDefaultTargetClassId(
@@ -1683,13 +1685,14 @@ const Promotion = () => {
                   "14px",
               }}
             >
-              الطلاب الذين لن
-              تتم ترقيتهم سيظهر
-              لهم سبب استبعاد.
-              المتخرج يتم تعيينه
-              تلقائيًا كـ «متخرج»،
-              ويمكن تعديل سبب
-              الاستبعاد قبل التنفيذ.
+              يمكن للإدارة ترقية
+              الطالب غير المجتاز
+              يدويًا إذا كان له فصل
+              متاح في السنة الجديدة.
+              لن يتم تحديده تلقائيًا؛
+              فعّل خانة الترقية بنفسك.
+              الطلاب غير المرقّين
+              سيظهر لهم سبب استبعاد.
             </Alert>
 
             <TableContainer
@@ -1826,13 +1829,13 @@ const Promotion = () => {
                             <Tooltip
                               title={
                                 eligible
-                                  ? "تضمين الطالب في الترقية"
+                                  ? student?.overallPassed ===
+                                      false
+                                    ? "ترقية يدوية رغم أن الطالب غير مجتاز"
+                                    : "تضمين الطالب في الترقية"
                                   : graduating
                                     ? "طالب متخرج"
-                                    : student?.overallPassed ===
-                                        false
-                                      ? "الطالب غير مجتاز"
-                                      : "لا يوجد فصل هدف متاح"
+                                    : "لا يوجد فصل هدف متاح"
                               }
                             >
                               <span>
@@ -1938,18 +1941,40 @@ const Promotion = () => {
                                 }}
                               />
                             ) : (
-                              <Chip
-                                size="small"
-                                label="غير مجتاز"
-                                sx={{
-                                  color:
-                                    "#A93434",
-                                  backgroundColor:
-                                    "rgba(196,69,69,.10)",
-                                  fontWeight:
-                                    900,
-                                }}
-                              />
+                              <Stack
+                                direction="row"
+                                gap={0.5}
+                                flexWrap="wrap"
+                              >
+                                <Chip
+                                  size="small"
+                                  label="غير مجتاز"
+                                  sx={{
+                                    color:
+                                      "#A93434",
+                                    backgroundColor:
+                                      "rgba(196,69,69,.10)",
+                                    fontWeight:
+                                      900,
+                                  }}
+                                />
+
+                                {choice.included ===
+                                  true && (
+                                  <Chip
+                                    size="small"
+                                    label="ترقية يدوية"
+                                    sx={{
+                                      color:
+                                        "#9A6B12",
+                                      backgroundColor:
+                                        "#FFF3D8",
+                                      fontWeight:
+                                        900,
+                                    }}
+                                  />
+                                )}
+                              </Stack>
                             )}
                           </TableCell>
 
@@ -2165,10 +2190,7 @@ const Promotion = () => {
                               >
                                 {graduating
                                   ? "لا يحتاج فصلًا جديدًا"
-                                  : student?.overallPassed ===
-                                      false
-                                    ? "موقوف بسبب النتيجة"
-                                    : "لا يوجد فصل متاح"}
+                                  : "لا يوجد فصل متاح"}
                               </Typography>
                             )}
                           </TableCell>
