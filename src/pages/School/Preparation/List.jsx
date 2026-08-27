@@ -4,6 +4,8 @@ import {
   Chip,
   Paper,
   Stack,
+  TextField,
+  MenuItem,
   Typography,
 } from "@mui/material";
 
@@ -11,6 +13,7 @@ import {
   AddCircleOutlineOutlined,
   AutoStoriesRounded,
   FileDownloadOutlined,
+  FilterAltRounded,
   MenuBookRounded,
   PersonRounded,
   RestartAltRounded,
@@ -54,6 +57,29 @@ const SCHOOL_ADMIN_ROLES = [
   "MANAGER",
   "ADMIN",
 ];
+
+const REVIEW_STATUS_OPTIONS = [
+  {
+    id: "pending",
+    name: "قيد المراجعة",
+  },
+  {
+    id: "approved",
+    name: "معتمد",
+  },
+  {
+    id: "needs_revision",
+    name: "يحتاج تعديل",
+  },
+];
+
+const EMPTY_FILTER_OPTIONS = {
+  teachers: [],
+  classes: [],
+  terms: [],
+  subjects: [],
+  lectures: [],
+};
 
 const getAuthUserData = (
   authUser
@@ -102,12 +128,40 @@ const getResponseList = (
     return payload;
   }
 
-  return (
-    payload?.docs ||
-    payload?.items ||
-    payload?.results ||
-    []
-  );
+  const knownLists = [
+    payload?.docs,
+    payload?.items,
+    payload?.results,
+    payload?.teachers,
+    payload?.classes,
+    payload?.terms,
+    payload?.lectures,
+    payload?.subjectOfferings,
+    payload?.offerings,
+  ];
+
+  const knownList =
+    knownLists.find(Array.isArray);
+
+  if (knownList) {
+    return knownList;
+  }
+
+  if (
+    payload &&
+    typeof payload === "object"
+  ) {
+    const firstArray =
+      Object.values(payload).find(
+        Array.isArray
+      );
+
+    if (firstArray) {
+      return firstArray;
+    }
+  }
+
+  return [];
 };
 
 const getResponseId = (
@@ -742,6 +796,105 @@ const mapLectureOptions = (
     }
   );
 
+const getTeacherOptionLabel = (
+  teacher
+) =>
+  teacher?.name ||
+  teacher?.user?.name ||
+  teacher?.username ||
+  teacher?.email ||
+  "معلم";
+
+const getClassOptionLabel = (
+  classItem
+) => {
+  const academicYear =
+    getNestedName(
+      classItem?.academicYearId ||
+        classItem?.academicYear
+    );
+
+  const roomNumber =
+    classItem?.roomNumber ||
+    classItem?.name ||
+    classItem?.title ||
+    "";
+
+  const gender =
+    classItem?.gender
+      ? translateGender(
+          classItem.gender,
+          "class"
+        )
+      : "";
+
+  return (
+    [
+      academicYear,
+      roomNumber,
+      gender,
+    ]
+      .filter(Boolean)
+      .join(" - ") ||
+    "فصل"
+  );
+};
+
+const getTermOptionLabel = (
+  term
+) =>
+  term?.name ||
+  term?.title ||
+  term?.termName ||
+  `ترم ${term?.number || ""}`.trim() ||
+  "ترم";
+
+const getSubjectOptionLabel = (
+  offering
+) => {
+  const subject =
+    offering?.subjectId ||
+    offering?.subject ||
+    offering;
+
+  const subjectName =
+    subject?.subjectName ||
+    subject?.name ||
+    offering?.subjectName ||
+    offering?.name ||
+    "مادة";
+
+  const code =
+    subject?.subjectCode ||
+    subject?.code ||
+    offering?.subjectCode ||
+    offering?.code ||
+    "";
+
+  return code
+    ? `${subjectName} - ${code}`
+    : subjectName;
+};
+
+const fetchFilterList = async (
+  endpoint
+) => {
+  try {
+    const response = await api.get(
+      endpoint,
+      {
+        params: {
+          limit: 500,
+        },
+      }
+    );
+
+    return getResponseList(response);
+  } catch {
+    return [];
+  }
+};
+
 const validatePdf = (
   file
 ) => {
@@ -921,9 +1074,6 @@ const List = () => {
   const [page, setPage] =
     useState(1);
 
-  const [teacher, setTeacher] =
-    useState("");
-
   const [limit, setLimit] =
     useState(10);
 
@@ -932,20 +1082,154 @@ const List = () => {
     setLocalPagination,
   ] = useState(null);
 
-  const debouncedSearch =
+  const [
+    filterOptions,
+    setFilterOptions,
+  ] = useState(
+    EMPTY_FILTER_OPTIONS
+  );
+
+  const [
+    filtersLoading,
+    setFiltersLoading,
+  ] = useState(false);
+
+  const [teacherName, setTeacherName] =
+    useState("");
+
+  const [teacherId, setTeacherId] =
+    useState("");
+
+  const [classId, setClassId] =
+    useState("");
+
+  const [termId, setTermId] =
+    useState("");
+
+  const [subjectId, setSubjectId] =
+    useState("");
+
+  const [lectureId, setLectureId] =
+    useState("");
+
+  const [weekOf, setWeekOf] =
+    useState("");
+
+  const [weekFrom, setWeekFrom] =
+    useState("");
+
+  const [weekTo, setWeekTo] =
+    useState("");
+
+  const [
+    lessonTitle,
+    setLessonTitle,
+  ] = useState("");
+
+  const [
+    reviewStatus,
+    setReviewStatus,
+  ] = useState("");
+
+  const debouncedTeacherName =
     useDebounce(
-      teacher,
+      teacherName,
+      700
+    );
+
+  const debouncedLessonTitle =
+    useDebounce(
+      lessonTitle,
       700
     );
 
   const filters = useMemo(
-    () => ({
-      page,
-      limit,
-    }),
+    () => {
+      const params = {
+        page,
+        limit,
+      };
+
+      if (
+        canSearchTeachers &&
+        teacherId
+      ) {
+        params.teacherId =
+          teacherId;
+      }
+
+      if (
+        canSearchTeachers &&
+        debouncedTeacherName.trim()
+      ) {
+        params.name =
+          debouncedTeacherName.trim();
+      }
+
+      if (classId) {
+        params.classId =
+          classId;
+      }
+
+      if (termId) {
+        params.termId =
+          termId;
+      }
+
+      if (subjectId) {
+        params.subject =
+          subjectId;
+      }
+
+      if (lectureId) {
+        params.lectureId =
+          lectureId;
+      }
+
+      if (weekOf) {
+        params.weekOf =
+          weekOf;
+      } else {
+        if (weekFrom) {
+          params.weekFrom =
+            weekFrom;
+        }
+
+        if (weekTo) {
+          params.weekTo =
+            weekTo;
+        }
+      }
+
+      if (
+        debouncedLessonTitle.trim()
+      ) {
+        params.lessonTitle =
+          debouncedLessonTitle.trim();
+      }
+
+      if (reviewStatus) {
+        params.reviewStatus =
+          reviewStatus;
+      }
+
+      return params;
+    },
     [
       page,
       limit,
+      canSearchTeachers,
+      teacherId,
+      debouncedTeacherName,
+      classId,
+      termId,
+      subjectId,
+      lectureId,
+      weekOf,
+      weekFrom,
+      weekTo,
+      debouncedLessonTitle,
+      reviewStatus,
     ]
   );
 
@@ -995,27 +1279,7 @@ const List = () => {
             hydrated
           );
 
-        const query =
-          String(
-            debouncedSearch || ""
-          )
-            .trim()
-            .toLowerCase();
-
-        setItems(
-          canSearchTeachers &&
-          query
-            ? mapped.filter(
-                (item) =>
-                  String(
-                    item.teacherName ||
-                    ""
-                  )
-                    .toLowerCase()
-                    .includes(query)
-              )
-            : mapped
-        );
+        setItems(mapped);
       };
 
     hydratePreparations();
@@ -1025,9 +1289,62 @@ const List = () => {
     };
   }, [
     preparations,
-    debouncedSearch,
-    canSearchTeachers,
   ]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadFilterOptions =
+      async () => {
+        setFiltersLoading(true);
+
+        const [
+          teachers,
+          classes,
+          terms,
+          subjects,
+          lectures,
+        ] = await Promise.all([
+          canSearchTeachers
+            ? fetchFilterList(
+                "/teachers"
+              )
+            : Promise.resolve([]),
+          fetchFilterList(
+            "/classes"
+          ),
+          fetchFilterList(
+            "/terms"
+          ),
+          fetchFilterList(
+            "/subject-offerings"
+          ),
+          fetchFilterList(
+            "/lectures"
+          ),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        setFilterOptions({
+          teachers,
+          classes,
+          terms,
+          subjects,
+          lectures,
+        });
+
+        setFiltersLoading(false);
+      };
+
+    loadFilterOptions();
+
+    return () => {
+      active = false;
+    };
+  }, [canSearchTeachers]);
 
   useEffect(() => {
     if (pagination) {
@@ -1041,18 +1358,40 @@ const List = () => {
     setPage(1);
   }, [
     limit,
-    debouncedSearch,
+    teacherId,
+    debouncedTeacherName,
+    classId,
+    termId,
+    subjectId,
+    lectureId,
+    weekOf,
+    weekFrom,
+    weekTo,
+    debouncedLessonTitle,
+    reviewStatus,
   ]);
 
   const currentPagination =
     localPagination ||
     pagination;
 
-  const activeFiltersCount =
-    canSearchTeachers &&
-    teacher
-      ? 1
-      : 0;
+  const activeFiltersCount = [
+    canSearchTeachers
+      ? teacherId
+      : "",
+    canSearchTeachers
+      ? teacherName
+      : "",
+    classId,
+    termId,
+    subjectId,
+    lectureId,
+    weekOf,
+    weekFrom,
+    weekTo,
+    lessonTitle,
+    reviewStatus,
+  ].filter(Boolean).length;
 
   const stats = useMemo(
     () => ({
@@ -1114,8 +1453,39 @@ const List = () => {
   );
 
   const resetFilters = () => {
-    setTeacher("");
+    setTeacherName("");
+    setTeacherId("");
+    setClassId("");
+    setTermId("");
+    setSubjectId("");
+    setLectureId("");
+    setWeekOf("");
+    setWeekFrom("");
+    setWeekTo("");
+    setLessonTitle("");
+    setReviewStatus("");
     setPage(1);
+  };
+
+  const handleWeekOfChange = (
+    value
+  ) => {
+    setWeekOf(value);
+
+    if (value) {
+      setWeekFrom("");
+      setWeekTo("");
+    }
+  };
+
+  const handleWeekRangeChange = (
+    setter
+  ) => (event) => {
+    setter(event.target.value);
+
+    if (event.target.value) {
+      setWeekOf("");
+    }
   };
 
   const handleDelete = async (
@@ -1520,118 +1890,459 @@ const List = () => {
           ))}
         </Box>
 
-        {canSearchTeachers && (
-          <Paper
-            elevation={0}
-            sx={{
-              mb: 1.25,
-              px: {
-                xs: 1.5,
-                md: 1.9,
-              },
-              py: 1.45,
-              border:
-                "1px solid rgba(36,74,112,0.08)",
-              borderRadius: "18px",
-              backgroundColor:
-                "var(--color-cream)",
-              boxShadow:
-                "0 9px 22px rgba(18,47,77,0.05)",
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 1.25,
+            px: {
+              xs: 1.5,
+              md: 1.9,
+            },
+            py: 1.45,
+            border:
+              "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "18px",
+            backgroundColor:
+              "var(--color-cream)",
+            boxShadow:
+              "0 9px 22px rgba(18,47,77,0.05)",
 
-              "& .MuiInputBase-root, & .MuiOutlinedInput-root":
-                {
-                  minHeight: 50,
-                  height: 50,
-                  backgroundColor:
-                    "var(--color-white)",
-                  borderRadius: "12px",
-                },
+            "& .MuiInputBase-root, & .MuiOutlinedInput-root":
+              {
+                minHeight: 48,
+                backgroundColor:
+                  "var(--color-white)",
+                borderRadius: "12px",
+                fontSize: "12px",
+              },
+
+            "& .MuiInputLabel-root":
+              {
+                fontSize: "12px",
+              },
+          }}
+        >
+          <Stack
+            direction={{
+              xs: "column",
+              sm: "row",
             }}
+            alignItems={{
+              xs: "stretch",
+              sm: "center",
+            }}
+            justifyContent="space-between"
+            gap={1}
+            sx={{ mb: 1.25 }}
           >
             <Stack
-              direction={{
-                xs: "column",
-                sm: "row",
-              }}
-              alignItems={{
-                xs: "stretch",
-                sm: "center",
-              }}
-              justifyContent="space-between"
-              gap={1.5}
+              direction="row"
+              alignItems="center"
+              spacing={0.7}
             >
-              <Box
+              <FilterAltRounded
                 sx={{
-                  width: {
-                    xs: "100%",
-                    sm: 410,
-                  },
-                  maxWidth: "100%",
+                  color:
+                    "var(--color-gold-dark)",
+                  fontSize: 21,
+                }}
+              />
+
+              <Typography
+                sx={{
+                  color:
+                    "var(--color-navy-deep)",
+                  fontSize: "15px",
+                  fontWeight: 800,
                 }}
               >
-                <Typography
+                فلترة التحاضير
+              </Typography>
+
+              {activeFiltersCount >
+                0 && (
+                <Chip
+                  size="small"
+                  label={
+                    activeFiltersCount
+                  }
                   sx={{
-                    mb: 0.75,
+                    height: 24,
                     color:
-                      "var(--color-navy-deep)",
-                    fontSize: "15px",
+                      "var(--color-gold-dark)",
+                    backgroundColor:
+                      "var(--color-gold-soft)",
+                    fontSize: "10px",
                     fontWeight: 800,
                   }}
-                >
-                  البحث عن تحضير
-                </Typography>
+                />
+              )}
+            </Stack>
 
+            <Button
+              type="button"
+              disabled={
+                activeFiltersCount === 0
+              }
+              onClick={resetFilters}
+              variant="text"
+              startIcon={
+                <RestartAltRounded />
+              }
+              sx={{
+                minHeight: 36,
+                px: 1.25,
+                color:
+                  "var(--color-navy)",
+                backgroundColor:
+                  "rgba(36,74,112,0.055)",
+                border:
+                  "1px solid rgba(36,74,112,0.075)",
+                borderRadius: "11px",
+                fontSize: "10px",
+                fontWeight: 800,
+                textTransform: "none",
+
+                "& .MuiButton-startIcon":
+                  {
+                    marginLeft: "5px",
+                    marginRight: 0,
+                  },
+              }}
+            >
+              مسح الفلاتر
+            </Button>
+          </Stack>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs:
+                  "minmax(0, 1fr)",
+                sm:
+                  "repeat(2, minmax(0, 1fr))",
+                lg:
+                  "repeat(4, minmax(0, 1fr))",
+              },
+              gap: 1,
+            }}
+          >
+            {canSearchTeachers && (
+              <TextField
+                select
+                label="المعلم"
+                value={teacherId}
+                onChange={(event) =>
+                  setTeacherId(
+                    event.target.value
+                  )
+                }
+                disabled={
+                  filtersLoading
+                }
+                fullWidth
+              >
+                <MenuItem value="">
+                  كل المعلمين
+                </MenuItem>
+
+                {filterOptions.teachers.map(
+                  (teacherItem) => {
+                    const id =
+                      getEntityId(
+                        teacherItem
+                      );
+
+                    if (!id) {
+                      return null;
+                    }
+
+                    return (
+                      <MenuItem
+                        key={id}
+                        value={id}
+                      >
+                        {getTeacherOptionLabel(
+                          teacherItem
+                        )}
+                      </MenuItem>
+                    );
+                  }
+                )}
+              </TextField>
+            )}
+
+            {canSearchTeachers && (
+              <Box>
                 <SearchFilter
-                  value={teacher}
+                  value={teacherName}
                   onChange={
-                    setTeacher
+                    setTeacherName
                   }
                   placeholder="ابحث باسم المعلم..."
                 />
               </Box>
+            )}
 
-              <Button
-                type="button"
-                disabled={
-                  activeFiltersCount ===
-                  0
-                }
-                onClick={resetFilters}
-                variant="text"
-                startIcon={
-                  <RestartAltRounded />
-                }
-                sx={{
-                  alignSelf: {
-                    xs: "stretch",
-                    sm: "flex-end",
-                  },
-                  minHeight: 38,
-                  px: 1.25,
-                  color:
-                    "var(--color-navy)",
-                  backgroundColor:
-                    "rgba(36,74,112,0.055)",
-                  border:
-                    "1px solid rgba(36,74,112,0.075)",
-                  borderRadius: "11px",
-                  fontSize: "10px",
-                  fontWeight: 800,
-                  textTransform: "none",
+            <TextField
+              select
+              label="الفصل"
+              value={classId}
+              onChange={(event) =>
+                setClassId(
+                  event.target.value
+                )
+              }
+              disabled={filtersLoading}
+              fullWidth
+            >
+              <MenuItem value="">
+                كل الفصول
+              </MenuItem>
 
-                  "& .MuiButton-startIcon":
-                    {
-                      marginLeft:
-                        "5px",
-                      marginRight: 0,
-                    },
-                }}
-              >
-                مسح البحث
-              </Button>
-            </Stack>
-          </Paper>
-        )}
+              {filterOptions.classes.map(
+                (classItem) => {
+                  const id =
+                    getEntityId(
+                      classItem
+                    );
+
+                  if (!id) {
+                    return null;
+                  }
+
+                  return (
+                    <MenuItem
+                      key={id}
+                      value={id}
+                    >
+                      {getClassOptionLabel(
+                        classItem
+                      )}
+                    </MenuItem>
+                  );
+                }
+              )}
+            </TextField>
+
+            <TextField
+              select
+              label="الفصل الدراسي"
+              value={termId}
+              onChange={(event) =>
+                setTermId(
+                  event.target.value
+                )
+              }
+              disabled={filtersLoading}
+              fullWidth
+            >
+              <MenuItem value="">
+                كل الفصول الدراسية
+              </MenuItem>
+
+              {filterOptions.terms.map(
+                (term) => {
+                  const id =
+                    getEntityId(term);
+
+                  if (!id) {
+                    return null;
+                  }
+
+                  return (
+                    <MenuItem
+                      key={id}
+                      value={id}
+                    >
+                      {getTermOptionLabel(
+                        term
+                      )}
+                    </MenuItem>
+                  );
+                }
+              )}
+            </TextField>
+
+            <TextField
+              select
+              label="المادة"
+              value={subjectId}
+              onChange={(event) =>
+                setSubjectId(
+                  event.target.value
+                )
+              }
+              disabled={filtersLoading}
+              fullWidth
+            >
+              <MenuItem value="">
+                كل المواد
+              </MenuItem>
+
+              {filterOptions.subjects.map(
+                (offering) => {
+                  const id =
+                    getEntityId(
+                      offering
+                    );
+
+                  if (!id) {
+                    return null;
+                  }
+
+                  return (
+                    <MenuItem
+                      key={id}
+                      value={id}
+                    >
+                      {getSubjectOptionLabel(
+                        offering
+                      )}
+                    </MenuItem>
+                  );
+                }
+              )}
+            </TextField>
+
+            <TextField
+              select
+              label="الحصة"
+              value={lectureId}
+              onChange={(event) =>
+                setLectureId(
+                  event.target.value
+                )
+              }
+              disabled={filtersLoading}
+              fullWidth
+            >
+              <MenuItem value="">
+                كل الحصص
+              </MenuItem>
+
+              {mapLectureOptions(
+                filterOptions.lectures
+              ).map((lecture) => (
+                <MenuItem
+                  key={lecture.id}
+                  value={lecture.id}
+                >
+                  {lecture.name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              label="عنوان الدرس"
+              value={lessonTitle}
+              onChange={(event) =>
+                setLessonTitle(
+                  event.target.value
+                )
+              }
+              placeholder="مثال: حل المعادلات"
+              fullWidth
+            />
+
+            <TextField
+              select
+              label="حالة المراجعة"
+              value={reviewStatus}
+              onChange={(event) =>
+                setReviewStatus(
+                  event.target.value
+                )
+              }
+              fullWidth
+            >
+              <MenuItem value="">
+                كل الحالات
+              </MenuItem>
+
+              {REVIEW_STATUS_OPTIONS.map(
+                (option) => (
+                  <MenuItem
+                    key={option.id}
+                    value={option.id}
+                  >
+                    {option.name}
+                  </MenuItem>
+                )
+              )}
+            </TextField>
+
+            <TextField
+              type="date"
+              label="أسبوع محدد"
+              value={weekOf}
+              onChange={(event) =>
+                handleWeekOfChange(
+                  event.target.value
+                )
+              }
+              InputLabelProps={{
+                shrink: true,
+              }}
+              inputProps={{
+                max: weekTo || undefined,
+              }}
+              fullWidth
+            />
+
+            <TextField
+              type="date"
+              label="من أسبوع"
+              value={weekFrom}
+              onChange={handleWeekRangeChange(
+                setWeekFrom
+              )}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              inputProps={{
+                max:
+                  weekTo ||
+                  undefined,
+              }}
+              fullWidth
+            />
+
+            <TextField
+              type="date"
+              label="إلى أسبوع"
+              value={weekTo}
+              onChange={handleWeekRangeChange(
+                setWeekTo
+              )}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              inputProps={{
+                min:
+                  weekFrom ||
+                  undefined,
+              }}
+              fullWidth
+            />
+          </Box>
+
+          <Typography
+            sx={{
+              mt: 1,
+              color:
+                "var(--color-muted)",
+              fontSize: "9.5px",
+              lineHeight: 1.6,
+            }}
+          >
+            يمكنك اختيار أسبوع واحد أو
+            استخدام نطاق من/إلى. عند
+            اختيار أسبوع محدد يتم إلغاء
+            النطاق تلقائيًا.
+          </Typography>
+        </Paper>
 
         <Paper
           elevation={0}
@@ -1735,7 +2446,7 @@ const List = () => {
                   }}
                 >
                   {hasFilters
-                    ? "لا توجد تحاضير مطابقة للبحث"
+                    ? "لا توجد تحاضير مطابقة للفلاتر"
                     : "لا توجد تحاضير حتى الآن"}
                 </Typography>
 
@@ -1749,7 +2460,7 @@ const List = () => {
                   }}
                 >
                   {hasFilters
-                    ? "غيّر اسم المعلم أو امسح البحث لعرض نتائج أخرى."
+                    ? "غيّر الفلاتر أو امسحها لعرض نتائج أخرى."
                     : "أضف أول تحضير مرتبط بإحدى الحصص الدراسية."}
                 </Typography>
 
@@ -1778,7 +2489,7 @@ const List = () => {
                         "none",
                     }}
                   >
-                    مسح البحث
+                    مسح الفلاتر
                   </Button>
                 ) : (
                   permissions.add && (
