@@ -1002,7 +1002,7 @@ const TABLE_HEADERS = [
   "المادة",
   "اليوم",
   "الحصة",
-  "تاريخ الإنشاء",
+  "تاريخ الدرس",
 ];
 
 const TABLE_BODY = [
@@ -1011,7 +1011,7 @@ const TABLE_BODY = [
   "subjectName",
   "dayOfWeek",
   "slot",
-  "createdAt",
+  "lessonDate",
 ];
 
 const mapPreparations = (
@@ -1033,10 +1033,14 @@ const mapPreparations = (
         getDayLabel(item),
       slot:
         getSlotLabel(item),
-      createdAt:
-        formatDate(
-          item?.createdAt
-        ),
+      lessonDate:
+        `${
+          item?.isWeekEstimated
+            ? "~"
+            : ""
+        }${formatDate(
+          item?.lessonDate
+        )}`,
       filesCount:
         getArray(
           item?.files
@@ -1445,8 +1449,8 @@ const List = () => {
             item.dayOfWeek,
           الحصة:
             item.slot,
-          "تاريخ الإنشاء":
-            item.createdAt,
+          "تاريخ الدرس":
+            item.lessonDate,
         })
       ),
     [items]
