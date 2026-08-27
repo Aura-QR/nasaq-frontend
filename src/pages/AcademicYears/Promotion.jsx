@@ -1062,33 +1062,43 @@ const Promotion = () => {
         dir="rtl"
         sx={{
           width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
           pb: 4,
+          color:
+            "var(--color-text)",
         }}
       >
         <Paper
           elevation={0}
           sx={{
-            p: {
-              xs: 2,
-              md: 2.5,
+            px: {
+              xs: 1.5,
+              sm: 2,
+              md: 2.4,
             },
+            py: {
+              xs: 1.4,
+              md: 1.6,
+            },
+            border:
+              "1px solid rgba(36,74,112,0.08)",
             borderRadius:
-              "22px",
-            color: "#fff",
+              "18px",
             background:
-              "linear-gradient(120deg, #173B5E 0%, #244F78 58%, #2C5C87 100%)",
+              "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.42))",
             boxShadow:
-              "0 18px 45px rgba(18,47,77,.16)",
+              "0 10px 24px rgba(18,47,77,0.06)",
           }}
         >
           <Stack
             direction={{
               xs: "column",
-              md: "row",
+              sm: "row",
             }}
             alignItems={{
               xs: "stretch",
-              md: "center",
+              sm: "center",
             }}
             justifyContent="space-between"
             gap={1.5}
@@ -1096,36 +1106,43 @@ const Promotion = () => {
             <Stack
               direction="row"
               alignItems="center"
-              spacing={1.3}
+              spacing={1}
             >
               <Box
                 sx={{
-                  width: 50,
-                  height: 50,
-                  display:
-                    "grid",
-                  placeItems:
-                    "center",
-                  borderRadius:
-                    "14px",
+                  width: 44,
+                  height: 44,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
                   color:
-                    "#122F4D",
+                    "var(--color-gold-dark)",
                   backgroundColor:
-                    "#F2D792",
+                    "var(--color-gold-soft)",
+                  border:
+                    "1px solid rgba(211,164,79,0.22)",
+                  borderRadius:
+                    "12px",
+                  "& svg": {
+                    fontSize: 22,
+                  },
                 }}
               >
                 <UpgradeRounded />
               </Box>
 
-              <Box>
+              <Box sx={{ minWidth: 0 }}>
                 <Typography
+                  component="h1"
                   sx={{
+                    color:
+                      "var(--color-navy-deep)",
                     fontSize: {
-                      xs: 21,
-                      md: 26,
+                      xs: "21px",
+                      md: "25px",
                     },
-                    fontWeight:
-                      900,
+                    fontWeight: 800,
+                    lineHeight: 1.3,
                   }}
                 >
                   ترقية الطلاب
@@ -1133,11 +1150,12 @@ const Promotion = () => {
 
                 <Typography
                   sx={{
-                    mt: 0.3,
+                    mt: 0.35,
                     color:
-                      "rgba(255,255,255,.72)",
+                      "var(--color-muted)",
                     fontSize:
-                      "12px",
+                      "10.5px",
+                    lineHeight: 1.6,
                   }}
                 >
                   راجع نتيجة
@@ -1161,22 +1179,25 @@ const Promotion = () => {
                 )
               }
               sx={{
-                minHeight: 42,
-                px: 1.6,
-                color: "#fff",
+                minHeight: 40,
+                px: 1.5,
+                color:
+                  "var(--color-navy)",
+                backgroundColor:
+                  "rgba(255,252,247,0.84)",
                 borderColor:
-                  "rgba(255,255,255,.28)",
+                  "rgba(36,74,112,0.16)",
                 borderRadius:
-                  "12px",
-                fontWeight:
-                  800,
+                  "11px",
+                fontSize: "11px",
+                fontWeight: 800,
                 textTransform:
                   "none",
                 "&:hover": {
                   borderColor:
-                    "rgba(255,255,255,.55)",
+                    "rgba(36,74,112,0.28)",
                   backgroundColor:
-                    "rgba(255,255,255,.07)",
+                    "var(--color-white)",
                 },
                 "& .MuiButton-startIcon":
                   {
@@ -1200,11 +1221,17 @@ const Promotion = () => {
               md: 2,
             },
             border:
-              "1px solid rgba(36,74,112,.10)",
+              "1px solid rgba(36,74,112,0.08)",
             borderRadius:
               "18px",
             backgroundColor:
-              "#fff",
+              "var(--color-cream)",
+            boxShadow:
+              "0 9px 22px rgba(18,47,77,0.05)",
+            "& .MuiOutlinedInput-root": {
+              backgroundColor:
+                "var(--color-white)",
+            },
           }}
         >
           <Stack
@@ -1375,19 +1402,21 @@ const Promotion = () => {
                 px: 2.3,
                 borderRadius:
                   "12px",
-                backgroundColor:
-                  "#244A70",
+                color:
+                  "var(--color-white)",
+                background:
+                  "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
                 boxShadow:
-                  "none",
+                  "0 8px 18px rgba(18,47,77,0.14)",
                 fontWeight:
                   900,
                 textTransform:
                   "none",
                 "&:hover": {
-                  backgroundColor:
-                    "#1B3D61",
+                  background:
+                    "linear-gradient(135deg, var(--color-navy), var(--color-navy-deep))",
                   boxShadow:
-                    "none",
+                    "0 10px 22px rgba(18,47,77,0.18)",
                 },
                 "& .MuiButton-startIcon":
                   {
@@ -1405,7 +1434,7 @@ const Promotion = () => {
             sx={{
               mt: 1,
               color:
-                "#7B8794",
+                "var(--color-muted)",
               fontSize:
                 "11px",
             }}
@@ -1493,7 +1522,7 @@ const Promotion = () => {
               size={30}
               sx={{
                 color:
-                  "#244A70",
+                  "var(--color-navy)",
               }}
             />
           </Box>
@@ -1539,7 +1568,7 @@ const Promotion = () => {
                   icon:
                     <GroupsRounded />,
                   color:
-                    "#244A70",
+                    "var(--color-navy)",
                 },
                 {
                   label:
@@ -1610,16 +1639,26 @@ const Promotion = () => {
                       border:
                         "1px solid rgba(36,74,112,.08)",
                       borderRadius:
-                        "16px",
+                        "18px",
                       backgroundColor:
-                        "#fff",
+                        "var(--color-cream)",
+                      boxShadow:
+                        "0 10px 24px rgba(18,47,77,0.05)",
+                      transition:
+                        "transform 180ms ease, box-shadow 180ms ease",
+                      "&:hover": {
+                        transform:
+                          "translateY(-2px)",
+                        boxShadow:
+                          "0 15px 28px rgba(18,47,77,0.08)",
+                      },
                     }}
                   >
                     <Box>
                       <Typography
                         sx={{
                           color:
-                            "#7B8794",
+                            "var(--color-muted)",
                           fontSize:
                             "10px",
                           fontWeight:
@@ -1634,9 +1673,9 @@ const Promotion = () => {
                         sx={{
                           mt: 0.2,
                           color:
-                            "#122F4D",
+                            "var(--color-navy-deep)",
                           fontSize:
-                            "24px",
+                            "21px",
                           fontWeight:
                             900,
                         }}
@@ -1706,6 +1745,10 @@ const Promotion = () => {
                   "18px",
                 overflowX:
                   "auto",
+                backgroundColor:
+                  "var(--color-cream)",
+                boxShadow:
+                  "0 14px 32px rgba(18,47,77,0.055)",
               }}
             >
               <Table
@@ -1718,7 +1761,7 @@ const Promotion = () => {
                   <TableRow
                     sx={{
                       backgroundColor:
-                        "#F7F9FB",
+                        "rgba(36,74,112,0.055)",
                     }}
                   >
                     {[
@@ -1742,7 +1785,7 @@ const Promotion = () => {
                           sx={{
                             py: 1.3,
                             color:
-                              "#52606D",
+                              "var(--color-text)",
                             fontWeight:
                               900,
                             fontSize:
@@ -1817,6 +1860,12 @@ const Promotion = () => {
                           }
                           hover
                           sx={{
+                            backgroundColor:
+                              "var(--color-cream)",
+                            "&:hover": {
+                              backgroundColor:
+                                "rgba(251,240,216,0.28) !important",
+                            },
                             "&:last-child td":
                               {
                                 borderBottom: 0,
@@ -1877,7 +1926,7 @@ const Promotion = () => {
                             <Typography
                               sx={{
                                 color:
-                                  "#122F4D",
+                                  "var(--color-navy-deep)",
                                 fontSize:
                                   "12px",
                                 fontWeight:
@@ -1897,7 +1946,7 @@ const Promotion = () => {
                             <Typography
                               sx={{
                                 color:
-                                  "#52606D",
+                                  "var(--color-text)",
                                 fontSize:
                                   "11px",
                                 fontWeight:
@@ -2101,7 +2150,7 @@ const Promotion = () => {
                                 color:
                                   graduating
                                     ? "#6247A6"
-                                    : "#52606D",
+                                    : "var(--color-text)",
                                 fontSize:
                                   "11px",
                                 fontWeight:
@@ -2289,7 +2338,9 @@ const Promotion = () => {
                   borderRadius:
                     "18px",
                   backgroundColor:
-                    "#fff",
+                    "var(--color-cream)",
+                  boxShadow:
+                    "0 10px 24px rgba(18,47,77,0.05)",
                 }}
               >
                 <Stack
@@ -2307,7 +2358,7 @@ const Promotion = () => {
                   <Typography
                     sx={{
                       color:
-                        "#122F4D",
+                        "var(--color-navy-deep)",
                       fontWeight:
                         900,
                     }}
@@ -2342,18 +2393,20 @@ const Promotion = () => {
                   "space-between",
                 gap: 1.3,
                 border:
-                  "1px solid rgba(211,164,79,.24)",
+                  "1px solid rgba(36,74,112,0.08)",
                 borderRadius:
                   "18px",
                 backgroundColor:
-                  "rgba(242,215,146,.10)",
+                  "var(--color-cream)",
+                boxShadow:
+                  "0 10px 24px rgba(18,47,77,0.05)",
               }}
             >
               <Box>
                 <Typography
                   sx={{
                     color:
-                      "#122F4D",
+                      "var(--color-navy-deep)",
                     fontSize:
                       "13px",
                     fontWeight:
@@ -2373,7 +2426,7 @@ const Promotion = () => {
                   sx={{
                     mt: 0.3,
                     color:
-                      "#7B8794",
+                      "var(--color-muted)",
                     fontSize:
                       "10px",
                   }}
@@ -2416,22 +2469,22 @@ const Promotion = () => {
                   minHeight: 44,
                   px: 2.4,
                   color:
-                    "#122F4D",
-                  backgroundColor:
-                    "#F2D792",
+                    "var(--color-white)",
+                  background:
+                    "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
                   borderRadius:
                     "12px",
                   boxShadow:
-                    "none",
+                    "0 8px 18px rgba(18,47,77,0.14)",
                   fontWeight:
                     900,
                   textTransform:
                     "none",
                   "&:hover": {
-                    backgroundColor:
-                      "#E8C96F",
+                    background:
+                      "linear-gradient(135deg, var(--color-navy), var(--color-navy-deep))",
                     boxShadow:
-                      "none",
+                      "0 10px 22px rgba(18,47,77,0.18)",
                   },
                   "& .MuiButton-startIcon":
                     {
@@ -2461,8 +2514,14 @@ const Promotion = () => {
           maxWidth="sm"
           PaperProps={{
             sx: {
+              border:
+                "1px solid rgba(36,74,112,0.08)",
               borderRadius:
-                "20px",
+                "18px",
+              backgroundColor:
+                "var(--color-cream)",
+              boxShadow:
+                "0 18px 45px rgba(18,47,77,0.14)",
             },
           }}
         >
@@ -2471,7 +2530,7 @@ const Promotion = () => {
               fontWeight:
                 900,
               color:
-                "#122F4D",
+                "var(--color-navy-deep)",
             }}
           >
             تأكيد ترقية
@@ -2500,7 +2559,7 @@ const Promotion = () => {
               <Typography
                 sx={{
                   color:
-                    "#52606D",
+                    "var(--color-text)",
                   fontSize:
                     "12px",
                 }}
@@ -2524,7 +2583,7 @@ const Promotion = () => {
               <Typography
                 sx={{
                   color:
-                    "#122F4D",
+                    "var(--color-navy-deep)",
                   fontSize:
                     "13px",
                   fontWeight:
@@ -2543,7 +2602,7 @@ const Promotion = () => {
               <Typography
                 sx={{
                   color:
-                    "#7B8794",
+                    "var(--color-muted)",
                   fontSize:
                     "11px",
                 }}
@@ -2611,8 +2670,10 @@ const Promotion = () => {
               sx={{
                 borderRadius:
                   "10px",
-                backgroundColor:
-                  "#244A70",
+                color:
+                  "var(--color-white)",
+                background:
+                  "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
                 boxShadow:
                   "none",
                 fontWeight:
@@ -2620,8 +2681,8 @@ const Promotion = () => {
                 textTransform:
                   "none",
                 "&:hover": {
-                  backgroundColor:
-                    "#1B3D61",
+                  background:
+                    "linear-gradient(135deg, var(--color-navy), var(--color-navy-deep))",
                   boxShadow:
                     "none",
                 },
