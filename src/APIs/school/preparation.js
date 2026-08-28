@@ -53,6 +53,17 @@ const normalizeSuccess = (
     typeof payload === "object" &&
     !Array.isArray(payload)
   ) {
+    /*
+     * الباك بيرد { data: [...], totalDocs, totalPages } لما يتبعتله page/limit.
+     * الهوك بيدور على `pagination`، فمن غير السطر ده كان بيلاقي null
+     * وأزرار الصفحات مكانتش بتظهر — المستخدم يشوف أول ١٠ وخلاص.
+     */
+    const hasPageInfo =
+      payload.totalDocs !==
+        undefined ||
+      payload.totalPages !==
+        undefined;
+
     return {
       ...payload,
       status:
@@ -61,6 +72,14 @@ const normalizeSuccess = (
       data:
         payload.data ??
         payload,
+      pagination: hasPageInfo
+        ? {
+            totalDocs:
+              payload.totalDocs,
+            totalPages:
+              payload.totalPages,
+          }
+        : payload.pagination,
     };
   }
 

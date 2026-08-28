@@ -98,14 +98,44 @@ const normalizeSuccess = (
     };
   }
 
+  const payload =
+    envelope?.data ??
+    envelope;
+
+  /*
+   * الباك بيرد بالشكل ده لما يتبعتله page/limit:
+   *   { data: [...], totalDocs, totalPages }
+   *
+   * كنا بناخد `data` بس ونرمي الباقي، فمعلومات الترقيم كانت بتضيع
+   * وأزرار الصفحات مكانتش بتظهر خالص — المستخدم يشوف أول ١٠ وخلاص.
+   * بنسيبها هنا جنب `data` عشان الشكل اللي بيستهلكه باقي الملفات ميتغيرش.
+   */
+  const hasPageInfo =
+    envelope &&
+    typeof envelope ===
+      "object" &&
+    !Array.isArray(
+      envelope
+    ) &&
+    (envelope.totalDocs !==
+      undefined ||
+      envelope.totalPages !==
+        undefined);
+
   return {
     status: true,
     message:
       envelope?.message ||
       "Success",
-    data:
-      envelope?.data ??
-      envelope,
+    data: payload,
+    pagination: hasPageInfo
+      ? {
+          totalDocs:
+            envelope.totalDocs,
+          totalPages:
+            envelope.totalPages,
+        }
+      : undefined,
   };
 };
 
