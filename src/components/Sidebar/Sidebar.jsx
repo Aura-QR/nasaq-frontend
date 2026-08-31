@@ -17,6 +17,8 @@ import {
   DashboardRounded,
   GroupsRounded,
   HowToRegRounded,
+  ShieldRounded,
+  EventBusyRounded,
   FactCheckRounded,
   AssignmentTurnedInRounded,
   AccountCircleRounded,
@@ -372,6 +374,20 @@ const Sidebar = ({ active, setActive }) => {
             show: canManageSchoolSettings,
           },
           {
+            name: "الاحتياطي والمناوبة",
+            Icon: ShieldRounded,
+            iconType: "mui",
+            to: "/school/duty",
+            show: canManageSchoolSettings,
+          },
+          {
+            name: "طلبات الاستئذان",
+            Icon: EventBusyRounded,
+            iconType: "mui",
+            to: "/school/leave-requests",
+            show: canManageSchoolSettings,
+          },
+          {
             name: "إدارة التحضير",
             icon: preparationIcon,
             to: "/school/preparation",
@@ -610,6 +626,13 @@ const Sidebar = ({ active, setActive }) => {
               Icon: HowToRegRounded,
               iconType: "mui",
               to: "/teacher/check-in",
+              show: true,
+            },
+            {
+              name: "الاستئذان والاحتياطي",
+              Icon: EventBusyRounded,
+              iconType: "mui",
+              to: "/teacher/duty",
               show: true,
             },
             {

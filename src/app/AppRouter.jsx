@@ -35,6 +35,9 @@ import TeacherCheckIn from "@/pages/TeacherCheckIn/TeacherCheckIn";
 // School Pages
 // =========================
 import TeacherAttendanceAdmin from "@/pages/School/TeacherAttendance/TeacherAttendanceAdmin";
+import CoverageBoard from "@/pages/School/Duty/CoverageBoard";
+import LeaveRequests from "@/pages/School/Duty/LeaveRequests";
+import TeacherDuty from "@/pages/TeacherDuty/TeacherDuty";
 
 import SchoolManagersList from "@/pages/SchoolManagers/List";
 import SchoolManagerAdd from "@/pages/SchoolManagers/Add";
@@ -241,6 +244,16 @@ const AppRouter = () => {
             path="/school/teacher-attendance"
             element={<TeacherAttendanceAdmin />}
           />
+
+          <Route
+            path="/school/duty"
+            element={<CoverageBoard />}
+          />
+
+          <Route
+            path="/school/leave-requests"
+            element={<LeaveRequests />}
+          />
         </Route>
 
         {/* =====================================================
@@ -284,6 +297,11 @@ const AppRouter = () => {
           <Route
             path="/teacher/attendance"
             element={<TeacherAttendance />}
+          />
+
+          <Route
+            path="/teacher/duty"
+            element={<TeacherDuty />}
           />
 
           <Route
