@@ -6,6 +6,7 @@ import {
   PersonRounded,
   RefreshRounded,
   SearchRounded,
+  UploadFileRounded,
 } from "@mui/icons-material";
 
 import {
@@ -1193,6 +1194,668 @@ const AssignmentDialog = ({
   );
 };
 
+
+const AssignmentImportDialog = ({
+  open,
+  termId,
+  onClose,
+  onImported,
+}) => {
+  const [text, setText] =
+    useState("");
+  const [preview, setPreview] =
+    useState(null);
+  const [loading, setLoading] =
+    useState(false);
+  const [
+    committing,
+    setCommitting,
+  ] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+
+    setText("");
+    setPreview(null);
+  }, [open, termId]);
+
+  const runImport = async (
+    dryRun
+  ) => {
+    if (!termId) {
+      toast.error(
+        "اختر الترم أولًا"
+      );
+      return null;
+    }
+
+    if (!text.trim()) {
+      toast.error(
+        "الصق بيانات الإسنادات أولًا"
+      );
+      return null;
+    }
+
+    const setBusy = dryRun
+      ? setLoading
+      : setCommitting;
+
+    setBusy(true);
+
+    try {
+      const response =
+        await api.post(
+          "/teacher-assignments/import",
+          {
+            termId,
+            text: text.trim(),
+            dryRun,
+          }
+        );
+
+      const payload =
+        unwrap(response?.data) || {};
+
+      if (dryRun) {
+        setPreview(payload);
+
+        if (
+          Number(
+            payload?.errors || 0
+          ) > 0
+        ) {
+          toast.warning(
+            "تمت المعاينة ويوجد سطور تحتاج مراجعة"
+          );
+        } else {
+          toast.success(
+            "المعاينة جاهزة — راجع الإسنادات ثم أكّد الحفظ"
+          );
+        }
+      }
+
+      return payload;
+    } catch (error) {
+      toast.error(
+        error?.response?.data
+          ?.message ||
+          error?.response?.data
+            ?.error ||
+          error?.message ||
+          (dryRun
+            ? "تعذر معاينة الإسنادات"
+            : "تعذر استيراد الإسنادات")
+      );
+
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handlePreview =
+    async () => {
+      await runImport(true);
+    };
+
+  const handleCommit =
+    async () => {
+      if (!preview) {
+        toast.info(
+          "اعمل معاينة للإسنادات أولًا"
+        );
+        return;
+      }
+
+      if (
+        Number(
+          preview?.errors || 0
+        ) > 0
+      ) {
+        toast.error(
+          "صحّح السطور التي بها أخطاء ثم أعد المعاينة قبل الحفظ"
+        );
+        return;
+      }
+
+      const result =
+        await runImport(false);
+
+      if (!result) return;
+
+      toast.success(
+        `تم استيراد الإسنادات${
+          Number(
+            result?.written || 0
+          )
+            ? ` — ${result.written} إسناد محفوظ`
+            : ""
+        }`
+      );
+
+      await onImported?.(
+        result
+      );
+
+      onClose();
+    };
+
+  const rows = Array.isArray(
+    preview?.results
+  )
+    ? preview.results
+    : [];
+
+  const hasErrors =
+    Number(
+      preview?.errors || 0
+    ) > 0;
+
+  const getStatusMeta = (
+    status
+  ) => {
+    switch (status) {
+      case "assigned":
+        return {
+          label: "سيتم الإسناد",
+          bgcolor:
+            "rgba(22,134,95,0.10)",
+          color: COLORS.green,
+        };
+
+      case "skipped":
+        return {
+          label: "موجود مسبقًا",
+          bgcolor:
+            "rgba(183,132,48,0.12)",
+          color: COLORS.gold,
+        };
+
+      case "error":
+        return {
+          label: "خطأ",
+          bgcolor:
+            "rgba(209,67,67,0.10)",
+          color: COLORS.red,
+        };
+
+      default:
+        return {
+          label:
+            status || "نتيجة",
+          bgcolor: "#f2f4f6",
+          color: COLORS.muted,
+        };
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={
+        loading || committing
+          ? undefined
+          : onClose
+      }
+      fullWidth
+      maxWidth="md"
+      dir="rtl"
+      PaperProps={{
+        sx: {
+          borderRadius:
+            "18px",
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          pb: 0.7,
+          color: COLORS.navy,
+          fontWeight: 900,
+          fontSize: 21,
+        }}
+      >
+        استيراد إسنادات المعلمين
+      </DialogTitle>
+
+      <DialogContent>
+        <Typography
+          sx={{
+            color: COLORS.muted,
+            fontSize: 11,
+            lineHeight: 1.8,
+            mb: 1.2,
+          }}
+        >
+          الصق ثلاثة أعمدة:
+          المعلم، المادة، الصف.
+          يمكن كتابة أكثر من صف
+          في نفس السطر باستخدام +
+          أو /. المعاينة لا تحفظ
+          أي شيء.
+        </Typography>
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: 1.1,
+            mb: 1.2,
+            border:
+              "1px solid rgba(36,74,112,0.08)",
+            borderRadius:
+              "11px",
+            bgcolor:
+              "rgba(36,74,112,0.035)",
+          }}
+        >
+          <Typography
+            sx={{
+              color: COLORS.muted,
+              fontSize: 9,
+            }}
+          >
+            الترم
+          </Typography>
+
+          <Typography
+            sx={{
+              color: COLORS.navy,
+              fontSize: 11,
+              fontWeight: 900,
+            }}
+          >
+            سيتم الاستيراد للترم
+            المختار في الصفحة
+          </Typography>
+        </Paper>
+
+        <TextField
+          fullWidth
+          multiline
+          minRows={6}
+          maxRows={11}
+          label="الصق الإسنادات"
+          placeholder={
+            "اروى\tالرياضيات\tالصف الأول متوسط\nهيا الخالدي\tالرياضيات\tالصف الأول متوسط\nفاطمة\tعلوم\tالصف الأول متوسط + الصف الثاني متوسط"
+          }
+          value={text}
+          onChange={(event) => {
+            setText(
+              event.target.value
+            );
+            setPreview(null);
+          }}
+          sx={{
+            "& .MuiOutlinedInput-root":
+              {
+                borderRadius:
+                  "13px",
+                alignItems:
+                  "flex-start",
+              },
+
+            "& textarea": {
+              fontFamily:
+                "inherit",
+              fontSize: 13,
+              lineHeight: 1.8,
+            },
+          }}
+        />
+
+        {preview ? (
+          <Box mt={1.5}>
+            <Stack
+              direction="row"
+              gap={0.7}
+              flexWrap="wrap"
+              mb={1}
+            >
+              <Chip
+                size="small"
+                label={`السطور: ${
+                  preview?.totalLines ??
+                  rows.length
+                }`}
+              />
+
+              <Chip
+                size="small"
+                label={`إسناد: ${
+                  preview?.assigned ??
+                  0
+                }`}
+                sx={{
+                  bgcolor:
+                    "rgba(22,134,95,0.09)",
+                  color:
+                    COLORS.green,
+                }}
+              />
+
+              <Chip
+                size="small"
+                label={`تخطي: ${
+                  preview?.skipped ??
+                  0
+                }`}
+                sx={{
+                  bgcolor:
+                    "rgba(183,132,48,0.11)",
+                  color:
+                    COLORS.gold,
+                }}
+              />
+
+              <Chip
+                size="small"
+                label={`أخطاء: ${
+                  preview?.errors ??
+                  0
+                }`}
+                sx={{
+                  bgcolor:
+                    hasErrors
+                      ? "rgba(209,67,67,0.10)"
+                      : "rgba(22,134,95,0.08)",
+                  color:
+                    hasErrors
+                      ? COLORS.red
+                      : COLORS.green,
+                }}
+              />
+            </Stack>
+
+            {hasErrors ? (
+              <Alert
+                severity="warning"
+                sx={{
+                  mb: 1,
+                  borderRadius:
+                    "11px",
+                }}
+              >
+                يوجد سطر أو أكثر
+                يحتاج تصحيح. لو اسم
+                المعلم يطابق أكثر من
+                شخص، استخدم الاسم
+                الكامل.
+              </Alert>
+            ) : (
+              <Alert
+                severity="success"
+                sx={{
+                  mb: 1,
+                  borderRadius:
+                    "11px",
+                }}
+              >
+                المعاينة سليمة. لم يتم
+                حفظ أي إسناد بعد.
+              </Alert>
+            )}
+
+            <Paper
+              elevation={0}
+              sx={{
+                border: `1px solid ${COLORS.border}`,
+                borderRadius:
+                  "12px",
+                overflow:
+                  "hidden",
+                maxHeight: 330,
+                overflowY:
+                  "auto",
+              }}
+            >
+              {rows.length ? (
+                rows.map(
+                  (
+                    row,
+                    index
+                  ) => {
+                    const meta =
+                      getStatusMeta(
+                        row?.status
+                      );
+
+                    return (
+                      <Stack
+                        key={`assignment-import-${
+                          row?.line ??
+                          index
+                        }-${
+                          row?.subjectOfferingId ||
+                          ""
+                        }-${
+                          row?.gradeName ||
+                          ""
+                        }`}
+                        direction={{
+                          xs: "column",
+                          md: "row",
+                        }}
+                        alignItems={{
+                          xs: "stretch",
+                          md: "center",
+                        }}
+                        gap={1}
+                        sx={{
+                          px: 1.2,
+                          py: 0.9,
+                          borderBottom:
+                            index <
+                            rows.length -
+                              1
+                              ? `1px solid ${COLORS.border}`
+                              : "none",
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            minWidth: 36,
+                            color:
+                              COLORS.muted,
+                            fontSize: 10,
+                            fontWeight: 800,
+                          }}
+                        >
+                          #{row?.line ??
+                            index + 1}
+                        </Typography>
+
+                        <Box
+                          sx={{
+                            flex: 1,
+                            minWidth: 0,
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              color:
+                                COLORS.navy,
+                              fontSize: 12,
+                              fontWeight: 900,
+                            }}
+                          >
+                            {row?.teacherName ||
+                              "—"}{" "}
+                            ←{" "}
+                            {row?.subjectName ||
+                              "—"}
+                          </Typography>
+
+                          <Typography
+                            sx={{
+                              mt: 0.2,
+                              color:
+                                row?.reason
+                                  ? COLORS.red
+                                  : COLORS.muted,
+                              fontSize: 9.5,
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {row?.reason ||
+                              `${
+                                row?.gradeName ||
+                                "—"
+                              }${
+                                Number.isFinite(
+                                  Number(
+                                    row?.periodsPerWeek
+                                  )
+                                )
+                                  ? ` — ${row.periodsPerWeek} حصة أسبوعيًا`
+                                  : ""
+                              }`}
+                          </Typography>
+                        </Box>
+
+                        <Chip
+                          size="small"
+                          label={
+                            meta.label
+                          }
+                          sx={{
+                            bgcolor:
+                              meta.bgcolor,
+                            color:
+                              meta.color,
+                            fontWeight: 800,
+                            fontSize: 9,
+                          }}
+                        />
+                      </Stack>
+                    );
+                  }
+                )
+              ) : (
+                <Typography
+                  sx={{
+                    p: 2,
+                    textAlign:
+                      "center",
+                    color:
+                      COLORS.muted,
+                    fontSize: 11,
+                  }}
+                >
+                  لا توجد نتائج لعرضها
+                </Typography>
+              )}
+            </Paper>
+          </Box>
+        ) : null}
+      </DialogContent>
+
+      <DialogActions
+        sx={{
+          px: 3,
+          pb: 2.2,
+          gap: 0.8,
+        }}
+      >
+        <Button
+          variant="contained"
+          onClick={
+            handlePreview
+          }
+          disabled={
+            loading ||
+            committing ||
+            !termId ||
+            !text.trim()
+          }
+          sx={{
+            minHeight: 44,
+            borderRadius:
+              "11px",
+            bgcolor:
+              COLORS.navy,
+            fontWeight: 900,
+            boxShadow: "none",
+
+            "&:hover": {
+              bgcolor:
+                COLORS.navy2,
+              boxShadow:
+                "none",
+            },
+          }}
+        >
+          {loading ? (
+            <CircularProgress
+              size={19}
+              color="inherit"
+            />
+          ) : (
+            "معاينة الإسنادات"
+          )}
+        </Button>
+
+        <Button
+          variant="contained"
+          onClick={
+            handleCommit
+          }
+          disabled={
+            committing ||
+            loading ||
+            !preview ||
+            hasErrors
+          }
+          sx={{
+            minHeight: 44,
+            borderRadius:
+              "11px",
+            bgcolor:
+              COLORS.green,
+            fontWeight: 900,
+            boxShadow: "none",
+
+            "&:hover": {
+              bgcolor:
+                "#127250",
+              boxShadow:
+                "none",
+            },
+          }}
+        >
+          {committing ? (
+            <CircularProgress
+              size={19}
+              color="inherit"
+            />
+          ) : (
+            "تأكيد وحفظ"
+          )}
+        </Button>
+
+        <Button
+          variant="outlined"
+          onClick={onClose}
+          disabled={
+            loading ||
+            committing
+          }
+          sx={{
+            minHeight: 44,
+            borderRadius:
+              "11px",
+            borderColor:
+              "#d7dde3",
+            color: COLORS.navy,
+            fontWeight: 800,
+          }}
+        >
+          إلغاء
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 const Assignments = () => {
   const [
     assignments,
@@ -1232,6 +1895,11 @@ const Assignments = () => {
   const [
     dialogOpen,
     setDialogOpen,
+  ] = useState(false);
+
+  const [
+    importDialogOpen,
+    setImportDialogOpen,
   ] = useState(false);
 
   const [search, setSearch] =
@@ -2115,6 +2783,42 @@ const Assignments = () => {
                 </Button>
 
                 <Button
+                  variant="outlined"
+                  startIcon={
+                    <UploadFileRounded />
+                  }
+                  onClick={() =>
+                    setImportDialogOpen(
+                      true
+                    )
+                  }
+                  disabled={
+                    loading ||
+                    !selectedTermId
+                  }
+                  sx={{
+                    borderRadius:
+                      "11px",
+                    borderColor:
+                      "rgba(183,132,48,0.42)",
+                    color:
+                      COLORS.gold,
+                    fontWeight: 800,
+                    bgcolor:
+                      "rgba(251,240,216,0.34)",
+
+                    "&:hover": {
+                      borderColor:
+                        COLORS.gold,
+                      bgcolor:
+                        COLORS.goldSoft,
+                    },
+                  }}
+                >
+                  استيراد الإسنادات
+                </Button>
+
+                <Button
                   variant="contained"
                   startIcon={
                     <AddRounded />
@@ -2780,6 +3484,26 @@ const Assignments = () => {
             )}
           </Paper>
         </Box>
+
+        <AssignmentImportDialog
+          open={
+            importDialogOpen
+          }
+          termId={
+            selectedTermId
+          }
+          onClose={() =>
+            setImportDialogOpen(
+              false
+            )
+          }
+          onImported={async () => {
+            setSearch("");
+            await loadAssignments(
+              selectedTermId
+            );
+          }}
+        />
 
         <AssignmentDialog
           open={dialogOpen}
