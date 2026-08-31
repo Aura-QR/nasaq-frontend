@@ -329,8 +329,31 @@ export const cancelLeaveRequest = async (id) => {
   }
 };
 
+/**
+ * GET /duty/cover-report
+ *
+ * مين شايل الاحتياطي على مدى فترة. الباك بيرجّعهم مرتّبين بالأتقل، وبيعلّم
+ * على اللي شايل ضعف الباقين — فمفيش إعادة ترتيب ولا حساب هنا.
+ */
+export const fetchCoverReport = async ({ from, to } = {}) => {
+  if (!from || !to) {
+    return { status: false, message: "تاريخ البداية والنهاية مطلوبين" };
+  }
+
+  try {
+    const response = await api.get(`${ENDPOINT}/cover-report`, {
+      params: { from, to },
+    });
+
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeFailure(error, "تعذر تحميل تقرير الاحتياطي");
+  }
+};
+
 export default {
   fetchCoverage,
+  fetchCoverReport,
   assignSubstitute,
   removeSubstitute,
   fetchSubstitutions,

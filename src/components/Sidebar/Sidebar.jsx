@@ -19,6 +19,7 @@ import {
   HowToRegRounded,
   ShieldRounded,
   EventBusyRounded,
+  InsightsRounded,
   FactCheckRounded,
   AssignmentTurnedInRounded,
   AccountCircleRounded,
@@ -385,6 +386,13 @@ const Sidebar = ({ active, setActive }) => {
             Icon: EventBusyRounded,
             iconType: "mui",
             to: "/school/leave-requests",
+            show: canManageSchoolSettings,
+          },
+          {
+            name: "تقرير الاحتياطي",
+            Icon: InsightsRounded,
+            iconType: "mui",
+            to: "/school/cover-report",
             show: canManageSchoolSettings,
           },
           {

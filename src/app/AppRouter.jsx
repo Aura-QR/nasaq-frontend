@@ -37,6 +37,7 @@ import TeacherCheckIn from "@/pages/TeacherCheckIn/TeacherCheckIn";
 import TeacherAttendanceAdmin from "@/pages/School/TeacherAttendance/TeacherAttendanceAdmin";
 import CoverageBoard from "@/pages/School/Duty/CoverageBoard";
 import LeaveRequests from "@/pages/School/Duty/LeaveRequests";
+import CoverReport from "@/pages/School/Duty/CoverReport";
 import TeacherDuty from "@/pages/TeacherDuty/TeacherDuty";
 
 import SchoolManagersList from "@/pages/SchoolManagers/List";
@@ -253,6 +254,11 @@ const AppRouter = () => {
           <Route
             path="/school/leave-requests"
             element={<LeaveRequests />}
+          />
+
+          <Route
+            path="/school/cover-report"
+            element={<CoverReport />}
           />
         </Route>
 
