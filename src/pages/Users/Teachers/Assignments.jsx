@@ -46,6 +46,8 @@ import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
 
+import { api } from "@/APIs/Axios";
+
 import { fetchClassesList } from "@/APIs/school/classes";
 
 import {
@@ -135,6 +137,25 @@ const extractList = (value) => {
   return [];
 };
 
+const extractEntity = (value) => {
+  const root = unwrap(value);
+
+  if (
+    !root ||
+    Array.isArray(root) ||
+    typeof root !== "object"
+  ) {
+    return null;
+  }
+
+  return (
+    root?.academicYear ||
+    root?.year ||
+    root?.term ||
+    root
+  );
+};
+
 const isFailed = (value) =>
   value?.status === false;
 
@@ -152,11 +173,64 @@ const getTeacherValue = (assignment) =>
   assignment?.teacher ||
   null;
 
-const teacherNameOf = (value) =>
-  value?.name ||
-  value?.username ||
-  value?.email ||
-  "معلم";
+const teacherNameOf = (value) => {
+  const directName =
+    value?.name ||
+    value?.teacherName ||
+    value?.fullName ||
+    value?.displayName ||
+    value?.label ||
+    value?.user?.name ||
+    value?.userId?.name ||
+    value?.profile?.name;
+
+  if (
+    directName &&
+    String(directName).trim()
+  ) {
+    return String(directName).trim();
+  }
+
+  const splitName = [
+    value?.firstName,
+    value?.fatherName,
+    value?.familyName,
+  ]
+    .filter(Boolean)
+    .map((part) =>
+      String(part).trim()
+    )
+    .filter(Boolean)
+    .join(" ");
+
+  if (splitName) {
+    return splitName;
+  }
+
+  const nestedSplitName = [
+    value?.user?.firstName,
+    value?.user?.fatherName,
+    value?.user?.familyName,
+  ]
+    .filter(Boolean)
+    .map((part) =>
+      String(part).trim()
+    )
+    .filter(Boolean)
+    .join(" ");
+
+  if (nestedSplitName) {
+    return nestedSplitName;
+  }
+
+  return (
+    value?.username ||
+    value?.user?.username ||
+    value?.email ||
+    value?.user?.email ||
+    "معلم"
+  );
+};
 
 const getOfferingValue = (assignment) =>
   assignment?.subjectOfferingId ||
@@ -206,6 +280,25 @@ const offeringLabelOf = (offering) =>
   `${subjectNameOf(offering)} — ${gradeNameOf(
     offering
   )}`;
+
+const termLabelOf = (term) => {
+  if (!term) {
+    return "";
+  }
+
+  if (typeof term !== "object") {
+    return "";
+  }
+
+  return (
+    term?.name ||
+    term?.title ||
+    term?.label ||
+    (term?.order
+      ? `الترم ${term.order}`
+      : "")
+  );
+};
 
 const classGradeIdOf = (classItem) =>
   idOf(
@@ -284,11 +377,14 @@ const AssignmentDialog = ({
   teachers,
   offerings,
   classes,
+  terms,
+  assignments,
   onClose,
   onSubmit,
 }) => {
   const [form, setForm] =
     useState({
+      termId: "",
       teacherId: "",
       subjectOfferingId: "",
       classId: "",
@@ -305,12 +401,24 @@ const AssignmentDialog = ({
       error: "",
     });
 
+  const defaultTermId = useMemo(
+    () =>
+      terms.find(
+        (item) =>
+          item?.status === "active"
+      )?.id ||
+      terms[0]?.id ||
+      "",
+    [terms]
+  );
+
   useEffect(() => {
     if (!open) {
       return;
     }
 
     setForm({
+      termId: defaultTermId,
       teacherId: "",
       subjectOfferingId: "",
       classId: "",
@@ -324,7 +432,36 @@ const AssignmentDialog = ({
       addedLoad: 0,
       error: "",
     });
-  }, [open]);
+  }, [open, defaultTermId]);
+
+  useEffect(() => {
+    if (
+      open &&
+      !form.termId &&
+      defaultTermId
+    ) {
+      setForm((current) => ({
+        ...current,
+        termId: defaultTermId,
+        subjectOfferingId: "",
+        classId: "",
+      }));
+    }
+  }, [
+    open,
+    form.termId,
+    defaultTermId,
+  ]);
+
+  const filteredOfferings = useMemo(
+    () =>
+      offerings.filter(
+        (item) =>
+          !form.termId ||
+          item.termId === form.termId
+      ),
+    [offerings, form.termId]
+  );
 
   const selectedOffering =
     useMemo(
@@ -359,11 +496,64 @@ const AssignmentDialog = ({
       ]
     );
 
+  const selectedTerm =
+    useMemo(
+      () =>
+        terms.find(
+          (item) =>
+            item.id === form.termId
+        ) || null,
+      [terms, form.termId]
+    );
+
+  const duplicateAssignment =
+    useMemo(() => {
+      if (
+        !form.teacherId ||
+        !form.subjectOfferingId
+      ) {
+        return null;
+      }
+
+      return (
+        assignments.find((item) => {
+          if (
+            item.teacherId !==
+              form.teacherId ||
+            item.offeringId !==
+              form.subjectOfferingId
+          ) {
+            return false;
+          }
+
+          // اختيار "كل الفصول" يتداخل مع أي
+          // إسناد موجود لنفس المعلم والمادة.
+          if (!form.classId) {
+            return true;
+          }
+
+          // إسناد عام موجود بالفعل يغطي الفصل
+          // المحدد، أو نفس الفصل مسند مسبقًا.
+          return (
+            !item.classId ||
+            item.classId ===
+              form.classId
+          );
+        }) || null
+      );
+    }, [
+      assignments,
+      form.teacherId,
+      form.subjectOfferingId,
+      form.classId,
+    ]);
+
   useEffect(() => {
     if (
       !open ||
       !form.teacherId ||
-      !selectedOffering?.termId
+      !selectedOffering?.termId ||
+      duplicateAssignment
     ) {
       setLiveCapacity({
         loading: false,
@@ -479,6 +669,7 @@ const AssignmentDialog = ({
     form.classId,
     selectedOffering,
     availableClasses.length,
+    duplicateAssignment,
   ]);
 
   const projectedOverCapacity =
@@ -487,11 +678,24 @@ const AssignmentDialog = ({
       liveCapacity.capacity;
 
   const valid =
+    Boolean(form.termId) &&
     Boolean(form.teacherId) &&
     Boolean(
       form.subjectOfferingId
     ) &&
+    !duplicateAssignment &&
     !projectedOverCapacity;
+
+  const handleTermChange = (
+    value
+  ) => {
+    setForm((current) => ({
+      ...current,
+      termId: value,
+      subjectOfferingId: "",
+      classId: "",
+    }));
+  };
 
   const handleOfferingChange = (
     value
@@ -566,6 +770,36 @@ const AssignmentDialog = ({
           <TextField
             select
             fullWidth
+            label="الترم"
+            value={form.termId}
+            onChange={(event) =>
+              handleTermChange(
+                event.target.value
+              )
+            }
+            disabled={loading}
+            helperText="اختر الترم أولًا حتى تظهر عروض المواد الصحيحة وخطة الحصص الخاصة به."
+            sx={{
+              "& .MuiOutlinedInput-root":
+                {
+                  borderRadius:
+                    "12px",
+                },
+            }}
+          >
+            {terms.map((term) => (
+              <MenuItem
+                key={term.id}
+                value={term.id}
+              >
+                {term.label}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            fullWidth
             label="المعلم"
             value={form.teacherId}
             onChange={(event) =>
@@ -611,7 +845,14 @@ const AssignmentDialog = ({
                 event.target.value
               )
             }
-            disabled={loading}
+            disabled={
+              loading || !form.termId
+            }
+            helperText={
+              form.termId
+                ? `${filteredOfferings.length} عرض مادة في ${selectedTerm?.label || "الترم المختار"}`
+                : "اختر الترم أولًا"
+            }
             sx={{
               "& .MuiOutlinedInput-root":
                 {
@@ -620,13 +861,16 @@ const AssignmentDialog = ({
                 },
             }}
           >
-            {offerings.map(
+            {filteredOfferings.map(
               (offering) => (
                 <MenuItem
                   key={offering.id}
                   value={offering.id}
                 >
                   {offering.label}
+                  {offering.termLabel
+                    ? ` — ${offering.termLabel}`
+                    : ""}
                 </MenuItem>
               )
             )}
@@ -679,6 +923,21 @@ const AssignmentDialog = ({
               )
             )}
           </TextField>
+
+          {duplicateAssignment ? (
+            <Alert
+              severity="error"
+              sx={{
+                borderRadius: "12px",
+                fontSize: 9.5,
+                fontWeight: 700,
+              }}
+            >
+              {duplicateAssignment.classId
+                ? "هذا المعلم لديه إسناد لهذه المادة على هذا الفصل بالفعل."
+                : "هذا المعلم لديه إسناد عام لهذه المادة بالفعل ويغطي كل فصول الصف."}
+            </Alert>
+          ) : null}
 
           {form.teacherId &&
           form.subjectOfferingId ? (
@@ -934,6 +1193,9 @@ const Assignments = () => {
   const [classes, setClasses] =
     useState([]);
 
+  const [terms, setTerms] =
+    useState([]);
+
   const [loading, setLoading] =
     useState(true);
 
@@ -992,6 +1254,10 @@ const Assignments = () => {
             item?.termId ||
               item?.term
           ),
+          termLabel: termLabelOf(
+            item?.termId ||
+              item?.term
+          ),
           periodsPerWeek:
             Number.isFinite(
               Number(
@@ -1013,6 +1279,30 @@ const Assignments = () => {
         }))
         .filter(
           (item) => item.id
+        );
+    }, []);
+
+  const normalizeTerms =
+    useCallback((rows) => {
+      return rows
+        .map((item) => ({
+          raw: item,
+          id: idOf(item),
+          label:
+            termLabelOf(item) ||
+            "ترم دراسي",
+          status:
+            item?.status || "",
+          order: Number(
+            item?.order || 0
+          ),
+        }))
+        .filter(
+          (item) => item.id
+        )
+        .sort(
+          (a, b) =>
+            a.order - b.order
         );
     }, []);
 
@@ -1064,6 +1354,7 @@ const Assignments = () => {
           teachersResult,
           offeringsResult,
           classesResult,
+          activeYearResponse,
         ] = await Promise.all([
           fetchTeacherAssignments(
             {},
@@ -1081,7 +1372,86 @@ const Assignments = () => {
           ),
 
           fetchClassesList(),
+
+          api
+            .get(
+              "/academic-years/active"
+            )
+            .catch(() => null),
         ]);
+
+        const normalizedOfferingRows =
+          offeringsResult?.status ===
+            false
+            ? []
+            : normalizeOfferings(
+                extractList(
+                  offeringsResult
+                )
+              );
+
+        let termOptions = [];
+
+        try {
+          const activeYear =
+            extractEntity(
+              activeYearResponse?.data
+            );
+
+          const activeYearId =
+            idOf(activeYear);
+
+          if (activeYearId) {
+            const termsResponse =
+              await api.get(
+                `/terms/by-year/${activeYearId}`
+              );
+
+            termOptions =
+              normalizeTerms(
+                extractList(
+                  termsResponse?.data
+                )
+              );
+          }
+        } catch {
+          termOptions = [];
+        }
+
+        if (!termOptions.length) {
+          const uniqueTerms =
+            new Map();
+
+          normalizedOfferingRows.forEach(
+            (offering) => {
+              if (
+                !offering.termId ||
+                uniqueTerms.has(
+                  offering.termId
+                )
+              ) {
+                return;
+              }
+
+              uniqueTerms.set(
+                offering.termId,
+                {
+                  id: offering.termId,
+                  label:
+                    offering.termLabel ||
+                    "ترم دراسي",
+                  status: "",
+                  order: 0,
+                }
+              );
+            }
+          );
+
+          termOptions =
+            Array.from(
+              uniqueTerms.values()
+            );
+        }
 
         const failures = [];
 
@@ -1152,15 +1522,10 @@ const Assignments = () => {
         );
 
         setOfferings(
-          offeringsResult
-            ?.status === false
-            ? []
-            : normalizeOfferings(
-                extractList(
-                  offeringsResult
-                )
-              )
+          normalizedOfferingRows
         );
+
+        setTerms(termOptions);
 
         setClasses(
           classesResult?.status ===
@@ -1192,6 +1557,7 @@ const Assignments = () => {
       normalizeClasses,
       normalizeOfferings,
       normalizeTeachers,
+      normalizeTerms,
     ]);
 
   useEffect(() => {
@@ -1366,6 +1732,39 @@ const Assignments = () => {
       ) {
         toast.error(
           "اختر المعلم والمادة"
+        );
+        return;
+      }
+
+      const duplicate =
+        normalizedAssignments.find(
+          (item) => {
+            if (
+              item.teacherId !==
+                form.teacherId ||
+              item.offeringId !==
+                form.subjectOfferingId
+            ) {
+              return false;
+            }
+
+            if (!form.classId) {
+              return true;
+            }
+
+            return (
+              !item.classId ||
+              item.classId ===
+                form.classId
+            );
+          }
+        );
+
+      if (duplicate) {
+        toast.error(
+          duplicate.classId
+            ? "هذا المعلم لديه إسناد لهذه المادة على هذا الفصل بالفعل"
+            : "هذا المعلم لديه إسناد عام لهذه المادة بالفعل"
         );
         return;
       }
@@ -2186,6 +2585,10 @@ const Assignments = () => {
           teachers={teachers}
           offerings={offerings}
           classes={classes}
+          terms={terms}
+          assignments={
+            normalizedAssignments
+          }
           onClose={() =>
             setDialogOpen(false)
           }

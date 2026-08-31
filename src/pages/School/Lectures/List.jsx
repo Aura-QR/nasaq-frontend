@@ -41,8 +41,9 @@ import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
 import Popup from "@/components/Popup/Popup";
-import ClassFilter from "@/components/Filters/ClassFilter";
 import FeasibilityPanel from "./FeasibilityPanel";
+
+import { api } from "@/APIs/Axios";
 
 import {
   copyLectureSchedule,
@@ -575,42 +576,93 @@ const List = () => {
     const loadClasses = async () => {
       setClassesLoading(true);
 
-      const classesResponse =
-        await fetchClassesList();
+      try {
+        const [
+          classesResponse,
+          activeYearResponse,
+        ] = await Promise.all([
+          fetchClassesList(),
+          api
+            .get(
+              "/academic-years/active"
+            )
+            .catch(() => null),
+        ]);
 
-      if (!mounted) {
-        return;
-      }
+        if (!mounted) {
+          return;
+        }
 
-      if (
-        classesResponse?.status ===
-        false
-      ) {
+        if (
+          classesResponse?.status ===
+          false
+        ) {
+          setClassRows([]);
+          setClassesLoading(false);
+          return;
+        }
+
+        const allRows =
+          extractList(classesResponse);
+
+        const activeYear =
+          unwrapData(
+            activeYearResponse
+          );
+
+        const activeYearId =
+          getId(activeYear);
+
+        const rows = activeYearId
+          ? allRows.filter(
+              (item) =>
+                getId(
+                  getAcademicYear(
+                    item
+                  )
+                ) ===
+                activeYearId
+            )
+          : allRows;
+
+        setClassRows(rows);
+
+        if (
+          classFilter &&
+          !rows.some(
+            (item) =>
+              getId(item) ===
+              classFilter
+          )
+        ) {
+          setClassFilter("");
+          setTermId("");
+          setDefaultTermId("");
+
+          localStorage.removeItem(
+            "nasaq:lectures:lastClassId"
+          );
+
+          localStorage.removeItem(
+            "nasaq:lectures:lastTermId"
+          );
+        }
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+
         setClassRows([]);
-        setClassesLoading(false);
-        return;
-      }
-
-      const rows =
-        extractList(classesResponse);
-
-      setClassRows(rows);
-
-      if (
-        classFilter &&
-        !rows.some(
-          (item) =>
-            getId(item) ===
-            classFilter
-        )
-      ) {
-        setClassFilter("");
-        localStorage.removeItem(
-          "nasaq:lectures:lastClassId"
+        toast.error(
+          error?.response?.data
+            ?.message ||
+            "تعذر تحميل فصول السنة الدراسية الحالية"
         );
+      } finally {
+        if (mounted) {
+          setClassesLoading(false);
+        }
       }
-
-      setClassesLoading(false);
     };
 
     loadClasses();
@@ -620,15 +672,31 @@ const List = () => {
     };
   }, [classFilter]);
 
+  const safeClassFilter =
+    useMemo(
+      () =>
+        classRows.some(
+          (item) =>
+            getId(item) ===
+            classFilter
+        )
+          ? classFilter
+          : "",
+      [classRows, classFilter]
+    );
+
   const selectedClass =
     useMemo(
       () =>
         classRows.find(
           (item) =>
             getId(item) ===
-            classFilter
+            safeClassFilter
         ) || null,
-      [classRows, classFilter]
+      [
+        classRows,
+        safeClassFilter,
+      ]
     );
 
   const selectedClassLabel =
@@ -1685,13 +1753,19 @@ const List = () => {
                   },
               }}
             >
-              <ClassFilter
-                classId={
-                  classFilter
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="الفصل"
+                value={safeClassFilter}
+                disabled={
+                  classesLoading
                 }
-                setClassId={(value) => {
+                onChange={(event) => {
                   const nextValue =
-                    value || "";
+                    event.target.value ||
+                    "";
 
                   setClassFilter(
                     nextValue
@@ -1706,7 +1780,44 @@ const List = () => {
                     "nasaq:lectures:lastTermId"
                   );
                 }}
-              />
+                SelectProps={{
+                  MenuProps: {
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 320,
+                      },
+                    },
+                  },
+                }}
+              >
+                <MenuItem value="">
+                  <em>
+                    اختر الفصل
+                  </em>
+                </MenuItem>
+
+                {classRows.map(
+                  (classItem) => {
+                    const classId =
+                      getId(
+                        classItem
+                      );
+
+                    return (
+                      <MenuItem
+                        key={classId}
+                        value={
+                          classId
+                        }
+                      >
+                        {getClassLabel(
+                          classItem
+                        )}
+                      </MenuItem>
+                    );
+                  }
+                )}
+              </TextField>
             </Box>
 
             {classFilter &&

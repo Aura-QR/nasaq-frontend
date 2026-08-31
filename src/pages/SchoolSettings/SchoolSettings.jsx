@@ -1058,10 +1058,8 @@ const SchoolSettings = () => {
 
       const nextWorkSchedule =
         normalizeWorkSchedule(
-          updatedSettings?.workSchedule ??
-            workSchedule,
-          updatedSettings?.workStartTime ??
-            workStartTime
+          workSchedule,
+          workStartTime
         );
 
       const nextSettings = {
@@ -1073,14 +1071,12 @@ const SchoolSettings = () => {
           ),
         periodsPerDay:
           normalizePeriodsPerDay(
-            updatedSettings?.periodsPerDay ??
-              periodsPerDay
+            periodsPerDay
           ),
         workStartTime:
           getFirstWorkingStartTime(
             nextWorkSchedule,
-            updatedSettings?.workStartTime ??
-              workStartTime
+            workStartTime
           ),
         workSchedule:
           nextWorkSchedule,

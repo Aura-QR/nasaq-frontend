@@ -1106,10 +1106,11 @@ const FeasibilityPanel = ({
                       index
                     ) => (
                       <Box
-                        key={
-                          item?.subjectOfferingId ||
-                          `unassigned-${index}`
-                        }
+                        key={`${item?.subjectOfferingId || "offering"}-${
+                          item?.classId ||
+                          item?.className ||
+                          "class"
+                        }-${index}`}
                         sx={{
                           px: 1.1,
                           py: 0.9,
