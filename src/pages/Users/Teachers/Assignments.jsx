@@ -379,6 +379,7 @@ const AssignmentDialog = ({
   classes,
   terms,
   assignments,
+  selectedTermId,
   onClose,
   onSubmit,
 }) => {
@@ -402,14 +403,28 @@ const AssignmentDialog = ({
     });
 
   const defaultTermId = useMemo(
-    () =>
-      terms.find(
-        (item) =>
-          item?.status === "active"
-      )?.id ||
-      terms[0]?.id ||
-      "",
-    [terms]
+    () => {
+      const selectedExists =
+        terms.some(
+          (item) =>
+            item.id ===
+            selectedTermId
+        );
+
+      if (selectedExists) {
+        return selectedTermId;
+      }
+
+      return (
+        terms.find(
+          (item) =>
+            item?.status === "active"
+        )?.id ||
+        terms[0]?.id ||
+        ""
+      );
+    },
+    [terms, selectedTermId]
   );
 
   useEffect(() => {
@@ -1196,6 +1211,11 @@ const Assignments = () => {
   const [terms, setTerms] =
     useState([]);
 
+  const [
+    selectedTermId,
+    setSelectedTermId,
+  ] = useState("");
+
   const [loading, setLoading] =
     useState(true);
 
@@ -1314,6 +1334,11 @@ const Assignments = () => {
           id: idOf(item),
           gradeLevelId:
             classGradeIdOf(item),
+          academicYearId:
+            idOf(
+              item?.academicYearId ||
+                item?.academicYear
+            ),
           name:
             classLabelOf(item),
         }))
@@ -1323,44 +1348,57 @@ const Assignments = () => {
     }, []);
 
   const loadAssignments =
-    useCallback(async () => {
-      const result =
-        await fetchTeacherAssignments(
-          {},
-          { force: true }
-        );
+    useCallback(
+      async (termId) => {
+        const normalizedTermId =
+          idOf(termId);
 
-      if (result?.status === false) {
-        setAssignments([]);
-        throw new Error(
-          result?.message ||
-            "تعذر تحميل إسنادات المعلمين"
-        );
-      }
+        if (!normalizedTermId) {
+          setAssignments([]);
+          return [];
+        }
 
-      setAssignments(
-        extractList(result)
-      );
-    }, []);
+        const result =
+          await fetchTeacherAssignments(
+            {
+              termId:
+                normalizedTermId,
+            },
+            { force: true }
+          );
+
+        if (result?.status === false) {
+          setAssignments([]);
+          throw new Error(
+            result?.message ||
+              "تعذر تحميل إسنادات المعلمين"
+          );
+        }
+
+        const rows =
+          extractList(result);
+
+        setAssignments(rows);
+
+        return rows;
+      },
+      []
+    );
 
   const loadPage =
-    useCallback(async () => {
+    useCallback(async (
+      preferredTermId = ""
+    ) => {
       setLoading(true);
       setError("");
 
       try {
         const [
-          assignmentsResult,
           teachersResult,
           offeringsResult,
           classesResult,
           activeYearResponse,
         ] = await Promise.all([
-          fetchTeacherAssignments(
-            {},
-            { force: true }
-          ),
-
           fetchTeachersList(),
 
           fetchAllSubjectOfferings(
@@ -1391,6 +1429,7 @@ const Assignments = () => {
               );
 
         let termOptions = [];
+        let activeYearId = "";
 
         try {
           const activeYear =
@@ -1398,7 +1437,7 @@ const Assignments = () => {
               activeYearResponse?.data
             );
 
-          const activeYearId =
+          activeYearId =
             idOf(activeYear);
 
           if (activeYearId) {
@@ -1450,6 +1489,44 @@ const Assignments = () => {
           termOptions =
             Array.from(
               uniqueTerms.values()
+            );
+        }
+
+        const preferredTermExists =
+          termOptions.some(
+            (item) =>
+              item.id ===
+              preferredTermId
+          );
+
+        const nextSelectedTermId =
+          preferredTermExists
+            ? preferredTermId
+            : termOptions.find(
+                (item) =>
+                  item.status ===
+                  "active"
+              )?.id ||
+              termOptions[0]?.id ||
+              "";
+
+        setSelectedTermId(
+          nextSelectedTermId
+        );
+
+        let assignmentsResult = {
+          status: true,
+          data: [],
+        };
+
+        if (nextSelectedTermId) {
+          assignmentsResult =
+            await fetchTeacherAssignments(
+              {
+                termId:
+                  nextSelectedTermId,
+              },
+              { force: true }
             );
         }
 
@@ -1527,7 +1604,7 @@ const Assignments = () => {
 
         setTerms(termOptions);
 
-        setClasses(
+        const normalizedClassRows =
           classesResult?.status ===
             false
             ? []
@@ -1535,7 +1612,17 @@ const Assignments = () => {
                 extractList(
                   classesResult
                 )
+              );
+
+        setClasses(
+          activeYearId
+            ? normalizedClassRows.filter(
+                (item) =>
+                  !item.academicYearId ||
+                  item.academicYearId ===
+                    activeYearId
               )
+            : normalizedClassRows
         );
 
         if (failures.length) {
@@ -1635,6 +1722,15 @@ const Assignments = () => {
                       ?.teacherName ||
                     "—",
               offeringId,
+              termId:
+                mappedOffering
+                  ?.termId ||
+                idOf(
+                  assignment?.termId ||
+                    assignment?.term ||
+                    rawOffering?.termId ||
+                    rawOffering?.term
+                ),
               subjectName:
                 mappedOffering
                   ?.subjectName ||
@@ -1668,6 +1764,22 @@ const Assignments = () => {
       ]
     );
 
+  const termAssignments =
+    useMemo(
+      () =>
+        normalizedAssignments.filter(
+          (item) =>
+            !selectedTermId ||
+            !item.termId ||
+            item.termId ===
+              selectedTermId
+        ),
+      [
+        normalizedAssignments,
+        selectedTermId,
+      ]
+    );
+
   const visibleAssignments =
     useMemo(() => {
       const query =
@@ -1676,10 +1788,10 @@ const Assignments = () => {
           .toLowerCase();
 
       if (!query) {
-        return normalizedAssignments;
+        return termAssignments;
       }
 
-      return normalizedAssignments.filter(
+      return termAssignments.filter(
         (item) =>
           [
             item.teacherName,
@@ -1695,17 +1807,17 @@ const Assignments = () => {
           )
       );
     }, [
-      normalizedAssignments,
+      termAssignments,
       search,
     ]);
 
   const statistics = useMemo(
     () => ({
       assignments:
-        normalizedAssignments.length,
+        termAssignments.length,
 
       teachers: new Set(
-        normalizedAssignments
+        termAssignments
           .map(
             (item) =>
               item.teacherId
@@ -1714,14 +1826,14 @@ const Assignments = () => {
       ).size,
 
       classSpecific:
-        normalizedAssignments.filter(
+        termAssignments.filter(
           (item) =>
             Boolean(
               item.classId
             )
         ).length,
     }),
-    [normalizedAssignments]
+    [termAssignments]
   );
 
   const createAssignment =
@@ -1737,7 +1849,7 @@ const Assignments = () => {
       }
 
       const duplicate =
-        normalizedAssignments.find(
+        termAssignments.find(
           (item) => {
             if (
               item.teacherId !==
@@ -1805,7 +1917,13 @@ const Assignments = () => {
 
         setDialogOpen(false);
 
-        await loadAssignments();
+        setSelectedTermId(
+          form.termId
+        );
+
+        await loadAssignments(
+          form.termId
+        );
       } catch (requestError) {
         toast.error(
           requestError?.message ||
@@ -1977,7 +2095,11 @@ const Assignments = () => {
                   startIcon={
                     <RefreshRounded />
                   }
-                  onClick={loadPage}
+                  onClick={() =>
+                    loadPage(
+                      selectedTermId
+                    )
+                  }
                   disabled={loading}
                   sx={{
                     borderRadius:
@@ -2212,10 +2334,89 @@ const Assignments = () => {
                 "15px",
             }}
           >
-            <TextField
-              fullWidth
-              size="small"
-              value={search}
+            <Stack
+              direction={{
+                xs: "column",
+                md: "row",
+              }}
+              gap={1}
+            >
+              <TextField
+                select
+                size="small"
+                label="الترم"
+                value={
+                  selectedTermId
+                }
+                disabled={
+                  loading ||
+                  !terms.length
+                }
+                onChange={async (
+                  event
+                ) => {
+                  const nextTermId =
+                    event.target
+                      .value || "";
+
+                  setSelectedTermId(
+                    nextTermId
+                  );
+
+                  setSearch("");
+
+                  try {
+                    setLoading(true);
+                    setError("");
+
+                    await loadAssignments(
+                      nextTermId
+                    );
+                  } catch (
+                    requestError
+                  ) {
+                    const message =
+                      requestError
+                        ?.message ||
+                      "تعذر تحميل إسنادات الترم";
+
+                    setError(message);
+                    toast.error(
+                      message
+                    );
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                sx={{
+                  minWidth: {
+                    xs: "100%",
+                    md: 240,
+                  },
+
+                  "& .MuiOutlinedInput-root":
+                    {
+                      borderRadius:
+                        "11px",
+                    },
+                }}
+              >
+                {terms.map(
+                  (term) => (
+                    <MenuItem
+                      key={term.id}
+                      value={term.id}
+                    >
+                      {term.label}
+                    </MenuItem>
+                  )
+                )}
+              </TextField>
+
+              <TextField
+                fullWidth
+                size="small"
+                value={search}
               onChange={(event) =>
                 setSearch(
                   event.target
@@ -2243,6 +2444,7 @@ const Assignments = () => {
                   },
               }}
             />
+            </Stack>
           </Paper>
 
           <Paper
@@ -2287,6 +2489,8 @@ const Assignments = () => {
                       fontSize: 9.5,
                     }}
                   >
+                    الإسنادات المعروضة تخص
+                    الترم المختار فقط.
                     «كل الفصول» يعني أن
                     الإسناد يشمل جميع
                     فصول الصف.
@@ -2355,7 +2559,7 @@ const Assignments = () => {
                 >
                   {search
                     ? "لا توجد إسنادات مطابقة"
-                    : "لا توجد إسنادات معلمين حتى الآن"}
+                    : "لا توجد إسنادات معلمين في هذا الترم"}
                 </Typography>
 
                 {!search ? (
@@ -2587,7 +2791,10 @@ const Assignments = () => {
           classes={classes}
           terms={terms}
           assignments={
-            normalizedAssignments
+            termAssignments
+          }
+          selectedTermId={
+            selectedTermId
           }
           onClose={() =>
             setDialogOpen(false)
