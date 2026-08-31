@@ -7,6 +7,8 @@ import Teachers_Profile from "../pages/Users/Teachers/Profile";
 import Teachers_Add from "../pages/Users/Teachers/Add";
 import Teachers_Edit from "../pages/Users/Teachers/Edit";
 import Teachers_Schedule from "../pages/Users/Teachers/Schedule";
+import Teachers_Assignments from "../pages/Users/Teachers/Assignments";
+
 import RequirePermission from "@/components/RequirePermission";
 
 export const teachersRoutes = (
@@ -14,7 +16,7 @@ export const teachersRoutes = (
     <Route
       path="/users/teachers"
       element={
-        <RequireAuth loginPath="/">
+        <RequireAuth loginPath="/login">
           <RequirePermission module="teachers" operation="read">
             <Teachers_List />
           </RequirePermission>
@@ -23,9 +25,20 @@ export const teachersRoutes = (
     />
 
     <Route
+      path="/users/teachers/assignments"
+      element={
+        <RequireAuth loginPath="/login">
+          <RequirePermission module="teachers" operation="edit">
+            <Teachers_Assignments />
+          </RequirePermission>
+        </RequireAuth>
+      }
+    />
+
+    <Route
       path="/users/teachers/:id"
       element={
-        <RequireAuth loginPath="/">
+        <RequireAuth loginPath="/login">
           <RequirePermission module="teachers" operation="read">
             <Teachers_Profile />
           </RequirePermission>
@@ -36,7 +49,7 @@ export const teachersRoutes = (
     <Route
       path="/users/teachers/edit/:id"
       element={
-        <RequireAuth loginPath="/">
+        <RequireAuth loginPath="/login">
           <RequirePermission module="teachers" operation="edit">
             <Teachers_Edit />
           </RequirePermission>
@@ -47,7 +60,7 @@ export const teachersRoutes = (
     <Route
       path="/users/teachers/add"
       element={
-        <RequireAuth loginPath="/">
+        <RequireAuth loginPath="/login">
           <RequirePermission module="teachers" operation="add">
             <Teachers_Add />
           </RequirePermission>
@@ -58,7 +71,7 @@ export const teachersRoutes = (
     <Route
       path="/users/teachers/:id/schedule"
       element={
-        <RequireAuth loginPath="/">
+        <RequireAuth loginPath="/login">
           <RequirePermission module="lectures" operation="read">
             <Teachers_Schedule />
           </RequirePermission>

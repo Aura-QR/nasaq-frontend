@@ -3,6 +3,7 @@ import {
   Autocomplete,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Divider,
@@ -50,7 +51,18 @@ import {
 } from "@/APIs/school/nationalities";
 
 const DEFAULT_PASSING_GRADE = 50;
+const DEFAULT_PERIODS_PER_DAY = 7;
 const QUICK_VALUES = [40, 50, 60, 70];
+
+const WEEK_DAYS = [
+  { day: "sunday", label: "الأحد" },
+  { day: "monday", label: "الاثنين" },
+  { day: "tuesday", label: "الثلاثاء" },
+  { day: "wednesday", label: "الأربعاء" },
+  { day: "thursday", label: "الخميس" },
+  { day: "friday", label: "الجمعة" },
+  { day: "saturday", label: "السبت" },
+];
 
 const unwrapResponse = (response) =>
   response?.data?.data ??
@@ -110,6 +122,168 @@ const normalizeWorkStartTime = (value) => {
 const isValidWorkStartTime = (value) =>
   value === "" ||
   /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+
+const normalizePeriodsPerDay = (value) => {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) {
+    return DEFAULT_PERIODS_PER_DAY;
+  }
+
+  return Math.min(
+    10,
+    Math.max(1, Math.round(numberValue))
+  );
+};
+
+const isValidPeriodsPerDay = (value) =>
+  Number.isInteger(value) &&
+  value >= 1 &&
+  value <= 10;
+
+const createDefaultWorkSchedule = (
+  workStartTime = "07:00"
+) => {
+  const startTime =
+    normalizeWorkStartTime(workStartTime) ||
+    "07:00";
+
+  return WEEK_DAYS.map(({ day }) => {
+    const isWorkingDay = ![
+      "friday",
+      "saturday",
+    ].includes(day);
+
+    return {
+      day,
+      isWorkingDay,
+      startTime: isWorkingDay
+        ? startTime
+        : null,
+      endTime: isWorkingDay
+        ? "14:00"
+        : null,
+    };
+  });
+};
+
+const normalizeWorkSchedule = (
+  value,
+  fallbackStartTime = "07:00"
+) => {
+  if (!Array.isArray(value) || !value.length) {
+    return createDefaultWorkSchedule(
+      fallbackStartTime
+    );
+  }
+
+  const byDay = new Map(
+    value
+      .map((item) => [
+        String(item?.day || "")
+          .trim()
+          .toLowerCase(),
+        item,
+      ])
+      .filter(([day]) => day)
+  );
+
+  return WEEK_DAYS.map(({ day }) => {
+    const item = byDay.get(day);
+
+    if (!item) {
+      return {
+        day,
+        isWorkingDay: false,
+        startTime: null,
+        endTime: null,
+      };
+    }
+
+    const isWorkingDay = Boolean(
+      item?.isWorkingDay
+    );
+
+    return {
+      day,
+      isWorkingDay,
+      startTime: isWorkingDay
+        ? normalizeWorkStartTime(
+            item?.startTime
+          ) || null
+        : null,
+      endTime: isWorkingDay
+        ? normalizeWorkStartTime(
+            item?.endTime
+          ) || null
+        : null,
+    };
+  });
+};
+
+const sameWorkSchedule = (first, second) =>
+  JSON.stringify(
+    normalizeWorkSchedule(first)
+  ) ===
+  JSON.stringify(
+    normalizeWorkSchedule(second)
+  );
+
+const getFirstWorkingStartTime = (
+  workSchedule,
+  fallback = ""
+) => {
+  const firstWorkingDay =
+    normalizeWorkSchedule(
+      workSchedule,
+      fallback
+    ).find(
+      (item) =>
+        item.isWorkingDay &&
+        item.startTime
+    );
+
+  return (
+    firstWorkingDay?.startTime ||
+    normalizeWorkStartTime(fallback) ||
+    ""
+  );
+};
+
+const validateWorkSchedule = (workSchedule) => {
+  const normalized =
+    normalizeWorkSchedule(workSchedule);
+
+  const workingDays = normalized.filter(
+    (item) => item.isWorkingDay
+  );
+
+  if (!workingDays.length) {
+    return "يجب تحديد يوم عمل واحد على الأقل";
+  }
+
+  for (const item of workingDays) {
+    const dayLabel =
+      WEEK_DAYS.find(
+        (day) => day.day === item.day
+      )?.label || item.day;
+
+    if (
+      !item.startTime ||
+      !item.endTime ||
+      !isValidWorkStartTime(item.startTime) ||
+      !isValidWorkStartTime(item.endTime)
+    ) {
+      return `حددي وقت بداية ونهاية صحيحين ليوم ${dayLabel}`;
+    }
+
+    if (item.startTime >= item.endTime) {
+      return `وقت نهاية دوام ${dayLabel} يجب أن يكون بعد وقت البداية`;
+    }
+  }
+
+  return "";
+};
 
 const getErrorMessage = (
   error,
@@ -366,7 +540,11 @@ const SchoolSettings = () => {
     defaultValues: {
       defaultPassingGrade:
         DEFAULT_PASSING_GRADE,
+      periodsPerDay:
+        DEFAULT_PERIODS_PER_DAY,
       workStartTime: "",
+      workSchedule:
+        createDefaultWorkSchedule(),
       localNationalities: [],
     },
   });
@@ -397,7 +575,11 @@ const SchoolSettings = () => {
   ] = useState({
     defaultPassingGrade:
       DEFAULT_PASSING_GRADE,
+    periodsPerDay:
+      DEFAULT_PERIODS_PER_DAY,
     workStartTime: "",
+    workSchedule:
+      createDefaultWorkSchedule(),
     localNationalities: [],
   });
 
@@ -413,6 +595,26 @@ const SchoolSettings = () => {
     normalizeWorkStartTime(
       watch("workStartTime")
     );
+
+  const currentPeriodsPerDay =
+    normalizePeriodsPerDay(
+      watch("periodsPerDay")
+    );
+
+  const currentWorkSchedule =
+    normalizeWorkSchedule(
+      watch("workSchedule"),
+      currentWorkStartTime
+    );
+
+  const workingDaysCount =
+    currentWorkSchedule.filter(
+      (item) => item.isWorkingDay
+    ).length;
+
+  const weeklySlots =
+    workingDaysCount *
+    currentPeriodsPerDay;
 
   const currentLocalNationalities =
     normalizeNationalityCodes(
@@ -442,15 +644,20 @@ const SchoolSettings = () => {
     () =>
       currentValue !==
         savedSettings.defaultPassingGrade ||
-      currentWorkStartTime !==
-        savedSettings.workStartTime ||
+      currentPeriodsPerDay !==
+        savedSettings.periodsPerDay ||
+      !sameWorkSchedule(
+        currentWorkSchedule,
+        savedSettings.workSchedule
+      ) ||
       !sameStringArray(
         currentLocalNationalities,
         savedSettings.localNationalities
       ),
     [
       currentValue,
-      currentWorkStartTime,
+      currentPeriodsPerDay,
+      currentWorkSchedule,
       currentLocalNationalities,
       savedSettings,
     ]
@@ -477,7 +684,11 @@ const SchoolSettings = () => {
 
       let nextPassingGrade =
         DEFAULT_PASSING_GRADE;
+      let nextPeriodsPerDay =
+        DEFAULT_PERIODS_PER_DAY;
       let nextWorkStartTime = "";
+      let nextWorkSchedule =
+        createDefaultWorkSchedule();
       let nextLocalNationalities = [];
 
       if (
@@ -511,9 +722,21 @@ const SchoolSettings = () => {
                 DEFAULT_PASSING_GRADE
             );
 
+          nextPeriodsPerDay =
+            normalizePeriodsPerDay(
+              settings?.periodsPerDay ??
+                DEFAULT_PERIODS_PER_DAY
+            );
+
           nextWorkStartTime =
             normalizeWorkStartTime(
               settings?.workStartTime
+            );
+
+          nextWorkSchedule =
+            normalizeWorkSchedule(
+              settings?.workSchedule,
+              nextWorkStartTime
             );
 
           nextLocalNationalities =
@@ -571,8 +794,15 @@ const SchoolSettings = () => {
       const normalizedSettings = {
         defaultPassingGrade:
           nextPassingGrade,
+        periodsPerDay:
+          nextPeriodsPerDay,
         workStartTime:
-          nextWorkStartTime,
+          getFirstWorkingStartTime(
+            nextWorkSchedule,
+            nextWorkStartTime
+          ),
+        workSchedule:
+          nextWorkSchedule,
         localNationalities:
           nextLocalNationalities,
       };
@@ -661,14 +891,71 @@ const SchoolSettings = () => {
     );
   };
 
+  const updateWorkScheduleDay = (
+    day,
+    changes
+  ) => {
+    const nextSchedule =
+      currentWorkSchedule.map((item) => {
+        if (item.day !== day) {
+          return item;
+        }
+
+        const next = {
+          ...item,
+          ...changes,
+        };
+
+        if (!next.isWorkingDay) {
+          return {
+            ...next,
+            startTime: null,
+            endTime: null,
+          };
+        }
+
+        return {
+          ...next,
+          startTime:
+            normalizeWorkStartTime(
+              next.startTime
+            ) || "07:00",
+          endTime:
+            normalizeWorkStartTime(
+              next.endTime
+            ) || "14:00",
+        };
+      });
+
+    setValue(
+      "workSchedule",
+      nextSchedule,
+      {
+        shouldDirty: true,
+        shouldValidate: true,
+      }
+    );
+  };
+
   const onSubmit = async (formData) => {
     const defaultPassingGrade =
       normalizePassingGrade(
         formData.defaultPassingGrade
       );
 
+    const periodsPerDay = Number(
+      formData.periodsPerDay
+    );
+
+    const workSchedule =
+      normalizeWorkSchedule(
+        formData.workSchedule,
+        formData.workStartTime
+      );
+
     const workStartTime =
-      normalizeWorkStartTime(
+      getFirstWorkingStartTime(
+        workSchedule,
         formData.workStartTime
       );
 
@@ -688,10 +975,18 @@ const SchoolSettings = () => {
       return;
     }
 
-    if (!isValidWorkStartTime(workStartTime)) {
+    if (!isValidPeriodsPerDay(periodsPerDay)) {
       toast.error(
-        "وقت بداية الدوام يجب أن يكون بصيغة HH:mm"
+        "عدد الحصص في اليوم يجب أن يكون رقمًا صحيحًا من 1 إلى 10"
       );
+      return;
+    }
+
+    const workScheduleError =
+      validateWorkSchedule(workSchedule);
+
+    if (workScheduleError) {
+      toast.error(workScheduleError);
       return;
     }
 
@@ -740,6 +1035,9 @@ const SchoolSettings = () => {
       const response =
         await updateSchoolSettings({
           defaultPassingGrade,
+          periodsPerDay,
+          workSchedule,
+          // Compatibility shim for older attendance logic.
           workStartTime:
             workStartTime || null,
           localNationalities,
@@ -758,6 +1056,14 @@ const SchoolSettings = () => {
       const updatedSettings =
         extractSettings(response);
 
+      const nextWorkSchedule =
+        normalizeWorkSchedule(
+          updatedSettings?.workSchedule ??
+            workSchedule,
+          updatedSettings?.workStartTime ??
+            workStartTime
+        );
+
       const nextSettings = {
         defaultPassingGrade:
           normalizePassingGrade(
@@ -765,11 +1071,19 @@ const SchoolSettings = () => {
               ?.defaultPassingGrade ??
               defaultPassingGrade
           ),
+        periodsPerDay:
+          normalizePeriodsPerDay(
+            updatedSettings?.periodsPerDay ??
+              periodsPerDay
+          ),
         workStartTime:
-          normalizeWorkStartTime(
+          getFirstWorkingStartTime(
+            nextWorkSchedule,
             updatedSettings?.workStartTime ??
               workStartTime
           ),
+        workSchedule:
+          nextWorkSchedule,
         localNationalities:
           normalizeNationalityCodes(
             updatedSettings
@@ -1342,111 +1656,348 @@ const SchoolSettings = () => {
               py: 1.25,
               display: "flex",
               alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
               gap: 1,
               background:
                 "linear-gradient(135deg, rgba(36,74,112,0.035), rgba(255,255,255,0.9))",
             }}
           >
-            <Box
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1}
+            >
+              <Box
+                sx={{
+                  width: 40,
+                  height: 40,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                  color:
+                    "var(--color-gold-dark)",
+                  backgroundColor:
+                    "var(--color-gold-soft)",
+                  borderRadius: "12px",
+                }}
+              >
+                <AccessTimeRounded />
+              </Box>
+
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  sx={{
+                    color:
+                      "var(--color-navy-deep)",
+                    fontSize: {
+                      xs: "15px",
+                      md: "17px",
+                    },
+                    fontWeight: 900,
+                  }}
+                >
+                  الجدول الأسبوعي والحصص
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.15,
+                    color:
+                      "var(--color-muted)",
+                    fontSize: "10px",
+                    lineHeight: 1.65,
+                  }}
+                >
+                  حددي عدد الحصص اليومية وأيام العمل وأوقات البداية والنهاية لكل يوم.
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Chip
+              label={`${weeklySlots} خانة أسبوعيًا — ${workingDaysCount} أيام × ${currentPeriodsPerDay} حصص`}
+              size="small"
               sx={{
-                width: 40,
-                height: 40,
-                display: "grid",
-                placeItems: "center",
-                flexShrink: 0,
+                height: 29,
                 color:
-                  "var(--color-gold-dark)",
+                  "var(--color-navy-deep)",
                 backgroundColor:
                   "var(--color-gold-soft)",
-                borderRadius: "12px",
+                border:
+                  "1px solid rgba(211,164,79,0.22)",
+                fontSize: "9.5px",
+                fontWeight: 800,
               }}
-            >
-              <AccessTimeRounded />
-            </Box>
-
-            <Box sx={{ minWidth: 0 }}>
-              <Typography
-                sx={{
-                  color:
-                    "var(--color-navy-deep)",
-                  fontSize: {
-                    xs: "15px",
-                    md: "17px",
-                  },
-                  fontWeight: 900,
-                }}
-              >
-                دوام المعلمين
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 0.15,
-                  color:
-                    "var(--color-muted)",
-                  fontSize: "10px",
-                  lineHeight: 1.65,
-                }}
-              >
-                حددي وقت بداية الدوام ليحسب النظام تأخير المعلمين تلقائيًا.
-              </Typography>
-            </Box>
+            />
           </Box>
 
           <Box
             sx={{
               p: { xs: 1.35, md: 1.8 },
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                md: "minmax(280px, 0.55fr) minmax(0, 1fr)",
-              },
-              gap: 1.25,
-              alignItems: "start",
             }}
           >
-            <TextField
-              {...register("workStartTime")}
-              type="time"
-              label="وقت بداية دوام المعلمين"
-              value={currentWorkStartTime}
-              onChange={(event) =>
-                setValue(
-                  "workStartTime",
-                  event.target.value,
-                  {
-                    shouldDirty: true,
-                    shouldValidate: true,
-                  }
-                )
-              }
-              disabled={saving}
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ step: 60 }}
-              helperText="اتركي الوقت فارغًا لإيقاف قياس التأخير."
+            <Paper
+              elevation={0}
               sx={{
-                "& .MuiOutlinedInput-root": {
-                  minHeight: 52,
-                  borderRadius: "13px",
-                  backgroundColor:
-                    "var(--color-white)",
-                },
-                "& .MuiInputLabel-root": {
-                  fontSize: "12px",
-                  fontWeight: 700,
-                },
-                "& .MuiFormHelperText-root": {
-                  textAlign: "right",
-                  mx: 0.5,
-                  fontSize: "9.5px",
-                },
+                p: { xs: 1.25, md: 1.5 },
+                mb: 1.25,
+                border:
+                  "1px solid rgba(36,74,112,0.09)",
+                borderRadius: "15px",
+                backgroundColor:
+                  "var(--color-white)",
               }}
-            />
+            >
+              <Stack
+                direction={{
+                  xs: "column",
+                  md: "row",
+                }}
+                alignItems={{
+                  xs: "stretch",
+                  md: "center",
+                }}
+                justifyContent="space-between"
+                gap={1.2}
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      color:
+                        "var(--color-navy-deep)",
+                      fontSize: "12px",
+                      fontWeight: 900,
+                    }}
+                  >
+                    عدد الحصص في اليوم
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.2,
+                      color:
+                        "var(--color-muted)",
+                      fontSize: "9.5px",
+                    }}
+                  >
+                    من 1 إلى 10 حصص. القيمة الافتراضية 7.
+                  </Typography>
+                </Box>
+
+                <TextField
+                  {...register("periodsPerDay", {
+                    valueAsNumber: true,
+                  })}
+                  type="number"
+                  label="عدد الحصص"
+                  disabled={saving}
+                  inputProps={{
+                    min: 1,
+                    max: 10,
+                    step: 1,
+                  }}
+                  sx={{
+                    width: {
+                      xs: "100%",
+                      md: 220,
+                    },
+                    "& .MuiOutlinedInput-root": {
+                      minHeight: 50,
+                      borderRadius: "13px",
+                      backgroundColor:
+                        "var(--color-white)",
+                    },
+                  }}
+                />
+              </Stack>
+            </Paper>
+
+            <Stack spacing={0.8}>
+              {WEEK_DAYS.map(({ day, label }) => {
+                const item =
+                  currentWorkSchedule.find(
+                    (row) => row.day === day
+                  ) || {
+                    day,
+                    isWorkingDay: false,
+                    startTime: null,
+                    endTime: null,
+                  };
+
+                return (
+                  <Paper
+                    key={day}
+                    elevation={0}
+                    sx={{
+                      p: 1,
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "1fr",
+                        sm: "minmax(130px, 0.8fr) minmax(150px, 1fr) minmax(150px, 1fr)",
+                      },
+                      gap: 1,
+                      alignItems: "center",
+                      border: `1px solid ${
+                        item.isWorkingDay
+                          ? "rgba(211,164,79,0.22)"
+                          : "rgba(36,74,112,0.08)"
+                      }`,
+                      borderRadius: "13px",
+                      backgroundColor:
+                        item.isWorkingDay
+                          ? "rgba(251,240,216,0.26)"
+                          : "rgba(36,74,112,0.018)",
+                    }}
+                  >
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      spacing={0.7}
+                    >
+                      <Checkbox
+                        checked={
+                          item.isWorkingDay
+                        }
+                        onChange={(event) =>
+                          updateWorkScheduleDay(
+                            day,
+                            {
+                              isWorkingDay:
+                                event.target
+                                  .checked,
+                            }
+                          )
+                        }
+                        disabled={saving}
+                        size="small"
+                        sx={{
+                          p: 0.4,
+                          color:
+                            "rgba(36,74,112,0.35)",
+                          "&.Mui-checked": {
+                            color:
+                              "var(--color-gold-dark)",
+                          },
+                        }}
+                      />
+
+                      <Typography
+                        sx={{
+                          color:
+                            "var(--color-navy-deep)",
+                          fontSize: "11px",
+                          fontWeight: 900,
+                        }}
+                      >
+                        {label}
+                      </Typography>
+
+                      <Chip
+                        size="small"
+                        label={
+                          item.isWorkingDay
+                            ? "يوم عمل"
+                            : "إجازة"
+                        }
+                        sx={{
+                          height: 23,
+                          fontSize: "8.5px",
+                          fontWeight: 800,
+                          color:
+                            item.isWorkingDay
+                              ? "#1f805f"
+                              : "var(--color-muted)",
+                          backgroundColor:
+                            item.isWorkingDay
+                              ? "rgba(39,150,111,0.1)"
+                              : "rgba(36,74,112,0.05)",
+                        }}
+                      />
+                    </Stack>
+
+                    <TextField
+                      type="time"
+                      label="بداية الدوام"
+                      value={
+                        item.startTime || ""
+                      }
+                      onChange={(event) =>
+                        updateWorkScheduleDay(
+                          day,
+                          {
+                            startTime:
+                              event.target.value,
+                          }
+                        )
+                      }
+                      disabled={
+                        saving ||
+                        !item.isWorkingDay
+                      }
+                      InputLabelProps={{
+                        shrink: true,
+                      }}
+                      inputProps={{ step: 60 }}
+                      sx={{
+                        "& .MuiOutlinedInput-root": {
+                          minHeight: 46,
+                          borderRadius: "11px",
+                          backgroundColor:
+                            "var(--color-white)",
+                        },
+                        "& .MuiInputLabel-root": {
+                          fontSize: "10.5px",
+                          fontWeight: 700,
+                        },
+                      }}
+                    />
+
+                    <TextField
+                      type="time"
+                      label="نهاية الدوام"
+                      value={
+                        item.endTime || ""
+                      }
+                      onChange={(event) =>
+                        updateWorkScheduleDay(
+                          day,
+                          {
+                            endTime:
+                              event.target.value,
+                          }
+                        )
+                      }
+                      disabled={
+                        saving ||
+                        !item.isWorkingDay
+                      }
+                      InputLabelProps={{
+                        shrink: true,
+                      }}
+                      inputProps={{ step: 60 }}
+                      sx={{
+                        "& .MuiOutlinedInput-root": {
+                          minHeight: 46,
+                          borderRadius: "11px",
+                          backgroundColor:
+                            "var(--color-white)",
+                        },
+                        "& .MuiInputLabel-root": {
+                          fontSize: "10.5px",
+                          fontWeight: 700,
+                        },
+                      }}
+                    />
+                  </Paper>
+                );
+              })}
+            </Stack>
 
             <Alert
               severity="info"
               icon={<InfoOutlined />}
               sx={{
+                mt: 1.15,
                 py: 0.45,
                 borderRadius: "13px",
                 border:
@@ -1459,7 +2010,7 @@ const SchoolSettings = () => {
                 lineHeight: 1.7,
               }}
             >
-              عند تركه بدون قيمة سيتم إرسال <b>null</b>، وبالتالي يكون التأخير غير مقاس وليس صفرًا. الوقت يُفسَّر حسب المنطقة الزمنية المضبوطة للمدرسة.
+              السعة الأسبوعية للجدول = عدد أيام العمل × عدد الحصص في اليوم. سيتم إرسال <b>workSchedule</b> كاملًا، مع <b>workStartTime</b> للتوافق مع الأجزاء القديمة.
             </Alert>
           </Box>
 

@@ -42,6 +42,7 @@ import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import Popup from "@/components/Popup/Popup";
 import ClassFilter from "@/components/Filters/ClassFilter";
+import FeasibilityPanel from "./FeasibilityPanel";
 
 import {
   copyLectureSchedule,
@@ -1739,6 +1740,17 @@ const List = () => {
               )}
           </Stack>
         </Paper>
+
+        {/* =========================================
+            FEASIBILITY
+        ========================================= */}
+
+        <FeasibilityPanel
+          termId={termId}
+          termLabel={selectedTermLabel}
+          classId={classFilter}
+          classLabel={selectedClassLabel}
+        />
 
         {/* =========================================
             SCHEDULE

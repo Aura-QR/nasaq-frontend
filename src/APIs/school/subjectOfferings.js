@@ -2,7 +2,10 @@ import { api } from "../Axios";
 
 const ENDPOINT = "/subject-offerings";
 
-const normalizeSubjectOfferingMessage = (message, fallback = "حدث خطأ ما") => {
+const normalizeSubjectOfferingMessage = (
+  message,
+  fallback = "حدث خطأ ما"
+) => {
   const value = String(message || "").trim();
 
   if (!value) return fallback;
@@ -47,9 +50,15 @@ const ok = (response) => {
 
   return {
     status: true,
-    message: normalizeSubjectOfferingMessage(payload?.message, "Success"),
+    message: normalizeSubjectOfferingMessage(
+      payload?.message,
+      "Success"
+    ),
     data: payload?.data ?? payload,
-    pagination: payload?.pagination || payload?.meta || payload?.paging,
+    pagination:
+      payload?.pagination ||
+      payload?.meta ||
+      payload?.paging,
   };
 };
 
@@ -63,11 +72,29 @@ const fail = (error, fallback) => ({
 const cleanId = (value) =>
   String(value?._id || value?.id || value || "").trim();
 
-export const buildSubjectOfferingPayload = (payload = {}) => ({
-  subjectId: cleanId(payload?.subjectId),
-  gradeLevelId: cleanId(payload?.gradeLevelId),
-  termId: cleanId(payload?.termId),
-});
+/**
+ * يبني payload إنشاء/تعديل عرض المادة.
+ *
+ * periodsPerWeek اختياري:
+ * - لو غير موجود لا يتم إرساله.
+ * - لو موجود يتم تحويله إلى Number.
+ */
+export const buildSubjectOfferingPayload = (payload = {}) => {
+  const result = {
+    subjectId: cleanId(payload?.subjectId),
+    gradeLevelId: cleanId(payload?.gradeLevelId),
+    termId: cleanId(payload?.termId),
+  };
+
+  if (
+    payload?.periodsPerWeek !== undefined &&
+    payload?.periodsPerWeek !== ""
+  ) {
+    result.periodsPerWeek = Number(payload.periodsPerWeek);
+  }
+
+  return result;
+};
 
 /**
  * الباك الموثق يدعم /by-term/:termId، بينما بعض النسخ القديمة
@@ -90,7 +117,9 @@ export const fetchSubjectOfferings = async (
       try {
         return ok(
           await api.get(`${ENDPOINT}/by-term/${termId}`, {
-            params: gradeLevelId ? { gradeLevelId } : {},
+            params: gradeLevelId
+              ? { gradeLevelId }
+              : {},
           })
         );
       } catch (error) {
@@ -117,19 +146,44 @@ export const fetchSingleSubjectOffering = async (id) => {
   }
 
   try {
-    return ok(await api.get(`${ENDPOINT}/${offeringId}`));
+    return ok(
+      await api.get(`${ENDPOINT}/${offeringId}`)
+    );
   } catch (error) {
-    return fail(error, "تعذر تحميل بيانات عرض المادة");
+    return fail(
+      error,
+      "تعذر تحميل بيانات عرض المادة"
+    );
   }
 };
 
 export const addSubjectOffering = async (payload) => {
   const body = buildSubjectOfferingPayload(payload);
 
-  if (!body.subjectId || !body.gradeLevelId || !body.termId) {
+  if (
+    !body.subjectId ||
+    !body.gradeLevelId ||
+    !body.termId
+  ) {
     return {
       status: false,
-      message: "اختر المادة والصف الدراسي والترم",
+      message:
+        "اختر المادة والصف الدراسي والترم",
+    };
+  }
+
+  if (
+    body.periodsPerWeek !== undefined &&
+    (
+      !Number.isFinite(body.periodsPerWeek) ||
+      body.periodsPerWeek < 0 ||
+      body.periodsPerWeek > 20
+    )
+  ) {
+    return {
+      status: false,
+      message:
+        "عدد الحصص الأسبوعية يجب أن يكون من 0 إلى 20",
     };
   }
 
@@ -140,7 +194,149 @@ export const addSubjectOffering = async (payload) => {
   }
 };
 
-export const deleteSubjectOffering = async (id) => {
+/**
+ * تعديل عدد الحصص الأسبوعية لعرض مادة واحد.
+ *
+ * PATCH /subject-offerings/:id
+ * body: { periodsPerWeek }
+ */
+export const updateSubjectOffering = async (
+  id,
+  payload = {}
+) => {
+  const offeringId = cleanId(id);
+
+  if (!offeringId) {
+    return {
+      status: false,
+      message: "معرّف عرض المادة غير موجود",
+    };
+  }
+
+  const periodsPerWeek = Number(
+    payload?.periodsPerWeek
+  );
+
+  if (
+    payload?.periodsPerWeek === undefined ||
+    payload?.periodsPerWeek === "" ||
+    !Number.isFinite(periodsPerWeek)
+  ) {
+    return {
+      status: false,
+      message:
+        "عدد الحصص الأسبوعية غير صالح",
+    };
+  }
+
+  if (
+    periodsPerWeek < 0 ||
+    periodsPerWeek > 20
+  ) {
+    return {
+      status: false,
+      message:
+        "عدد الحصص الأسبوعية يجب أن يكون من 0 إلى 20",
+    };
+  }
+
+  try {
+    return ok(
+      await api.patch(
+        `${ENDPOINT}/${offeringId}`,
+        {
+          periodsPerWeek,
+        }
+      )
+    );
+  } catch (error) {
+    return fail(
+      error,
+      "تعذر تحديث عدد الحصص الأسبوعية"
+    );
+  }
+};
+
+/**
+ * حفظ خطة التدريس بالكامل دفعة واحدة.
+ *
+ * PATCH /subject-offerings/plan
+ * body:
+ * {
+ *   entries: [
+ *     {
+ *       subjectOfferingId: "...",
+ *       periodsPerWeek: 6
+ *     }
+ *   ]
+ * }
+ */
+export const saveTeachingPlan = async (
+  entries = []
+) => {
+  if (!Array.isArray(entries)) {
+    return {
+      status: false,
+      message: "بيانات خطة التدريس غير صالحة",
+    };
+  }
+
+  if (!entries.length) {
+    return {
+      status: false,
+      message: "لا توجد تغييرات لحفظها",
+    };
+  }
+
+  const normalizedEntries = entries.map(
+    (entry) => ({
+      subjectOfferingId: cleanId(
+        entry?.subjectOfferingId ||
+          entry?._id ||
+          entry?.id
+      ),
+      periodsPerWeek: Number(
+        entry?.periodsPerWeek
+      ),
+    })
+  );
+
+  const hasInvalidEntry =
+    normalizedEntries.some(
+      (entry) =>
+        !entry.subjectOfferingId ||
+        !Number.isFinite(
+          entry.periodsPerWeek
+        ) ||
+        entry.periodsPerWeek < 0 ||
+        entry.periodsPerWeek > 20
+    );
+
+  if (hasInvalidEntry) {
+    return {
+      status: false,
+      message:
+        "تأكد أن كل عرض مادة له معرّف صحيح وأن عدد الحصص من 0 إلى 20",
+    };
+  }
+
+  try {
+    return ok(
+      await api.patch(`${ENDPOINT}/plan`, {
+        entries: normalizedEntries,
+      })
+    );
+  } catch (error) {
+    return fail(
+      error,
+      "تعذر حفظ خطة التدريس"
+    );
+  }
+};
+
+export const deleteSubjectOffering = async (
+  id
+) => {
   const offeringId = cleanId(id);
 
   if (!offeringId) {
@@ -151,44 +347,60 @@ export const deleteSubjectOffering = async (id) => {
   }
 
   try {
-    return ok(await api.delete(`${ENDPOINT}/${offeringId}`));
+    return ok(
+      await api.delete(
+        `${ENDPOINT}/${offeringId}`
+      )
+    );
   } catch (error) {
     return fail(error, "تعذر حذف عرض المادة");
   }
 };
 
-export const copySubjectOfferingsFromYear = async (
-  targetYearId,
-  sourceYearId
-) => {
-  const targetId = cleanId(targetYearId);
-  const sourceId = cleanId(sourceYearId);
+export const copySubjectOfferingsFromYear =
+  async (
+    targetYearId,
+    sourceYearId
+  ) => {
+    const targetId = cleanId(targetYearId);
+    const sourceId = cleanId(sourceYearId);
 
-  if (!targetId || !sourceId) {
-    return {
-      status: false,
-      message: "اختر السنة المصدر والسنة المستهدفة",
-    };
-  }
+    if (!targetId || !sourceId) {
+      return {
+        status: false,
+        message:
+          "اختر السنة المصدر والسنة المستهدفة",
+      };
+    }
 
-  if (targetId === sourceId) {
-    return {
-      status: false,
-      message: "لا يمكن النسخ من نفس السنة الدراسية",
-    };
-  }
+    if (targetId === sourceId) {
+      return {
+        status: false,
+        message:
+          "لا يمكن النسخ من نفس السنة الدراسية",
+      };
+    }
 
-  try {
-    return ok(await api.post(`${ENDPOINT}/copy-from/${targetId}/${sourceId}`));
-  } catch (error) {
-    return fail(error, "تعذر نسخ عروض المواد");
-  }
-};
+    try {
+      return ok(
+        await api.post(
+          `${ENDPOINT}/copy-from/${targetId}/${sourceId}`
+        )
+      );
+    } catch (error) {
+      return fail(
+        error,
+        "تعذر نسخ عروض المواد"
+      );
+    }
+  };
 
 export default {
   fetchSubjectOfferings,
   fetchSingleSubjectOffering,
   addSubjectOffering,
+  updateSubjectOffering,
+  saveTeachingPlan,
   deleteSubjectOffering,
   copySubjectOfferingsFromYear,
   buildSubjectOfferingPayload,

@@ -3,8 +3,10 @@ import {
   CalendarMonthRounded,
   ContentCopyRounded,
   DeleteOutlineRounded,
+  FactCheckRounded,
   MenuBookRounded,
   RefreshRounded,
+  SaveRounded,
   SchoolRounded,
   SearchOffRounded,
   SearchRounded,
@@ -51,7 +53,12 @@ import {
   copySubjectOfferingsFromYear,
   deleteSubjectOffering,
   fetchSubjectOfferings,
+  saveTeachingPlan,
 } from "@/APIs/school/subjectOfferings";
+
+import {
+  fetchLectureFeasibility,
+} from "@/APIs/school/lectures";
 
 const COLORS = {
   navy: "#122f4d",
@@ -456,6 +463,7 @@ const SubjectOfferings = () => {
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [loadingOfferings, setLoadingOfferings] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
   const [deletingId, setDeletingId] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState("");
@@ -466,6 +474,9 @@ const SubjectOfferings = () => {
   const [subjects, setSubjects] = useState([]);
   const [gradeLevels, setGradeLevels] = useState([]);
   const [offerings, setOfferings] = useState([]);
+  const [planDraft, setPlanDraft] = useState({});
+  const [slotsPerWeek, setSlotsPerWeek] = useState(null);
+  const [capacityLoading, setCapacityLoading] = useState(false);
 
   const [selectedYearId, setSelectedYearId] = useState("");
   const [selectedTermId, setSelectedTermId] = useState("");
@@ -586,6 +597,7 @@ const SubjectOfferings = () => {
   const loadOfferings = useCallback(async () => {
     if (!selectedTermId) {
       setOfferings([]);
+      setPlanDraft({});
       return;
     }
 
@@ -604,9 +616,25 @@ const SubjectOfferings = () => {
       return;
     }
 
-    setOfferings(extractList(result?.data));
+    const loadedOfferings = extractList(result?.data);
+
+    setOfferings(loadedOfferings);
+    setPlanDraft(
+      Object.fromEntries(
+        loadedOfferings
+          .map((item) => {
+            const offeringId = idOf(item);
+            const rawValue = Number(item?.periodsPerWeek ?? 0);
+            const periodsPerWeek = Number.isFinite(rawValue) ? rawValue : 0;
+
+            return offeringId ? [offeringId, periodsPerWeek] : null;
+          })
+          .filter(Boolean)
+      )
+    );
     setLoadingOfferings(false);
   }, [selectedGradeId, selectedTermId]);
+
 
   useEffect(() => {
     loadInitial();
@@ -616,6 +644,47 @@ const SubjectOfferings = () => {
     if (loadingInitial) return;
     loadOfferings();
   }, [loadingInitial, loadOfferings]);
+
+
+  useEffect(() => {
+    if (loadingInitial || !selectedTermId) {
+      setSlotsPerWeek(null);
+      setCapacityLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+
+    const timer = window.setTimeout(async () => {
+      setCapacityLoading(true);
+
+      const result = await fetchLectureFeasibility(
+        { termId: selectedTermId },
+        { force: true }
+      );
+
+      if (!active) return;
+
+      if (result?.status === false) {
+        setSlotsPerWeek(null);
+        setCapacityLoading(false);
+        return;
+      }
+
+      const payload = unwrap(result?.data);
+      const capacity = Number(payload?.slotsPerWeek);
+
+      setSlotsPerWeek(
+        Number.isFinite(capacity) ? capacity : null
+      );
+      setCapacityLoading(false);
+    }, 500);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [loadingInitial, selectedTermId, planDraft]);
 
   const normalizedOfferings = useMemo(
     () =>
@@ -653,6 +722,9 @@ const SubjectOfferings = () => {
               subject?.subjectCode || subject?.code || item?.subjectCode || "",
             gradeLabel: labelOfGrade(grade || {}),
             termLabel: labelOfTerm(term || {}),
+            periodsPerWeek: Number.isFinite(Number(item?.periodsPerWeek))
+              ? Number(item?.periodsPerWeek)
+              : 0,
           };
         })
         .filter((item) => item.id),
@@ -684,6 +756,153 @@ const SubjectOfferings = () => {
     });
   }, [normalizedOfferings, search, selectedGradeId]);
 
+  const changedPlanEntries = useMemo(
+    () =>
+      normalizedOfferings
+        .filter((item) => {
+          const draftValue = planDraft[item.id];
+
+          if (draftValue === "" || draftValue === undefined) {
+            return false;
+          }
+
+          return Number(draftValue) !== Number(item.periodsPerWeek || 0);
+        })
+        .map((item) => ({
+          subjectOfferingId: item.id,
+          periodsPerWeek: Number(planDraft[item.id]),
+        })),
+    [normalizedOfferings, planDraft]
+  );
+
+  const hasInvalidPlanValue = useMemo(
+    () =>
+      normalizedOfferings.some((item) => {
+        const value = planDraft[item.id];
+
+        if (value === "" || value === undefined) return true;
+
+        const numericValue = Number(value);
+
+        return (
+          !Number.isFinite(numericValue) ||
+          numericValue < 0 ||
+          numericValue > 20
+        );
+      }),
+    [normalizedOfferings, planDraft]
+  );
+
+  const gradePlanTotals = useMemo(() => {
+    const totals = new Map();
+
+    normalizedOfferings.forEach((item) => {
+      if (!item.gradeLevelId) return;
+
+      const value = Number(
+        planDraft[item.id] === "" || planDraft[item.id] === undefined
+          ? 0
+          : planDraft[item.id]
+      );
+
+      const current = totals.get(item.gradeLevelId) || {
+        gradeLevelId: item.gradeLevelId,
+        gradeLabel: item.gradeLabel,
+        total: 0,
+      };
+
+      current.total += Number.isFinite(value) ? value : 0;
+      totals.set(item.gradeLevelId, current);
+    });
+
+    return Array.from(totals.values());
+  }, [normalizedOfferings, planDraft]);
+
+  const hasOverCapacityGrade = useMemo(
+    () =>
+      Number.isFinite(slotsPerWeek) &&
+      gradePlanTotals.some(
+        (grade) =>
+          grade.total > slotsPerWeek
+      ),
+    [gradePlanTotals, slotsPerWeek]
+  );
+
+  const updatePlanValue = (offeringId, value) => {
+    if (value === "") {
+      setPlanDraft((current) => ({
+        ...current,
+        [offeringId]: "",
+      }));
+      return;
+    }
+
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) return;
+
+    setPlanDraft((current) => ({
+      ...current,
+      [offeringId]: Math.max(0, Math.min(20, numericValue)),
+    }));
+  };
+
+  const savePlan = async () => {
+    if (!changedPlanEntries.length) {
+      toast.info("لا توجد تغييرات في خطة التدريس لحفظها");
+      return;
+    }
+
+    if (hasInvalidPlanValue) {
+      toast.error("تأكد أن عدد الحصص الأسبوعية لكل مادة من 0 إلى 20");
+      return;
+    }
+
+    if (hasOverCapacityGrade) {
+      toast.error(
+        "لا يمكن حفظ الخطة لأن أحد الصفوف تجاوز السعة الأسبوعية"
+      );
+      return;
+    }
+
+    setSavingPlan(true);
+
+    try {
+      const result = await saveTeachingPlan(changedPlanEntries);
+
+      if (result?.status === false) {
+        toast.error(result?.message || "تعذر حفظ خطة التدريس");
+        return;
+      }
+
+      const changedMap = new Map(
+        changedPlanEntries.map((entry) => [
+          entry.subjectOfferingId,
+          entry.periodsPerWeek,
+        ])
+      );
+
+      setOfferings((current) =>
+        current.map((offering) => {
+          const offeringId = idOf(offering);
+
+          if (!changedMap.has(offeringId)) return offering;
+
+          return {
+            ...offering,
+            periodsPerWeek: changedMap.get(offeringId),
+          };
+        })
+      );
+
+      toast.success(result?.message || "تم حفظ خطة التدريس بنجاح");
+    } catch (requestError) {
+      toast.error(getMessage(requestError, "تعذر حفظ خطة التدريس"));
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
   const statistics = useMemo(
     () => ({
       total: normalizedOfferings.length,
@@ -703,6 +922,8 @@ const SubjectOfferings = () => {
     setActiveYear(selected);
     setSelectedGradeId("");
     setOfferings([]);
+    setPlanDraft({});
+    setSlotsPerWeek(null);
 
     try {
       await loadTerms(yearId);
@@ -821,6 +1042,11 @@ const SubjectOfferings = () => {
     setOfferings((current) =>
       current.filter((offering) => idOf(offering) !== item.id)
     );
+    setPlanDraft((current) => {
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
   };
 
   const copyFromPreviousYear = async () => {
@@ -1229,15 +1455,180 @@ const SubjectOfferings = () => {
                 </Typography>
               </Box>
 
-              <Chip
-                label={`${visibleOfferings.length} عرض`}
-                size="small"
-                sx={{ fontWeight: 800, bgcolor: "#eef3f7", color: COLORS.navy }}
-              />
+              <Stack
+                direction="row"
+                alignItems="center"
+                gap={0.8}
+                flexWrap="wrap"
+                justifyContent="flex-end"
+              >
+                <Chip
+                  label={`${visibleOfferings.length} عرض`}
+                  size="small"
+                  sx={{ fontWeight: 800, bgcolor: "#eef3f7", color: COLORS.navy }}
+                />
+
+                {changedPlanEntries.length ? (
+                  <Chip
+                    label={`${changedPlanEntries.length} تعديل غير محفوظ`}
+                    size="small"
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: COLORS.goldSoft,
+                      color: COLORS.gold,
+                    }}
+                  />
+                ) : null}
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={
+                    <FactCheckRounded />
+                  }
+                  onClick={() =>
+                    navigate("/school/lectures")
+                  }
+                  disabled={!selectedTermId}
+                  sx={{
+                    minHeight: 34,
+                    borderRadius: "10px",
+                    color: COLORS.navy,
+                    borderColor:
+                      "rgba(36,74,112,0.16)",
+                    fontWeight: 800,
+                    textTransform: "none",
+                    "& .MuiButton-startIcon": {
+                      marginLeft: "5px",
+                      marginRight: 0,
+                    },
+                  }}
+                >
+                  فحص قابلية الجدول
+                </Button>
+
+                <Button
+                  size="small"
+                  variant="contained"
+                  startIcon={
+                    savingPlan ? (
+                      <CircularProgress size={16} color="inherit" />
+                    ) : (
+                      <SaveRounded />
+                    )
+                  }
+                  onClick={savePlan}
+                  disabled={
+                    savingPlan ||
+                    loadingOfferings ||
+                    !changedPlanEntries.length ||
+                    hasInvalidPlanValue ||
+                    hasOverCapacityGrade
+                  }
+                  sx={{
+                    minHeight: 34,
+                    borderRadius: "10px",
+                    bgcolor: COLORS.navy,
+                    fontWeight: 800,
+                    boxShadow: "none",
+                    "&:hover": {
+                      bgcolor: COLORS.navy2,
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  حفظ الخطة
+                </Button>
+              </Stack>
             </Stack>
           </Box>
 
           <Divider />
+
+          {!loadingInitial &&
+          !loadingOfferings &&
+          selectedTermId &&
+          gradePlanTotals.length ? (
+            <Box
+              sx={{
+                px: 2,
+                py: 1.15,
+                bgcolor: "#fafbfd",
+                borderBottom: `1px solid ${COLORS.border}`,
+              }}
+            >
+              <Stack
+                direction="row"
+                alignItems="center"
+                gap={0.8}
+                flexWrap="wrap"
+              >
+                <Typography
+                  sx={{
+                    color: COLORS.muted,
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    ml: 0.5,
+                  }}
+                >
+                  إجمالي الخطة:
+                </Typography>
+
+
+                <Chip
+                  size="small"
+                  label={
+                    capacityLoading
+                      ? "جاري تحديث السعة..."
+                      : hasOverCapacityGrade
+                      ? "تجاوز السعة — الحفظ متوقف"
+                      : Number.isFinite(slotsPerWeek)
+                      ? "السعة محدثة مباشرة"
+                      : "تعذر قراءة السعة"
+                  }
+                  sx={{
+                    height: 25,
+                    color: hasOverCapacityGrade
+                      ? COLORS.red
+                      : COLORS.navy,
+                    bgcolor: hasOverCapacityGrade
+                      ? "#fff0f0"
+                      : "#eef3f7",
+                    fontSize: 9,
+                    fontWeight: 800,
+                  }}
+                />
+
+                {gradePlanTotals.map((grade) => {
+                  const overCapacity =
+                    Number.isFinite(slotsPerWeek) &&
+                    grade.total > slotsPerWeek;
+
+                  return (
+                    <Chip
+                      key={grade.gradeLevelId}
+                      size="small"
+                      label={
+                        Number.isFinite(slotsPerWeek)
+                          ? `${grade.gradeLabel} — الخطة: ${grade.total} حصة / ${slotsPerWeek} خانة في الأسبوع`
+                          : `${grade.gradeLabel} — الخطة: ${grade.total} حصة في الأسبوع`
+                      }
+                      sx={{
+                        height: 26,
+                        fontSize: 10,
+                        fontWeight: 800,
+                        bgcolor: overCapacity ? "#fff0f0" : "#eef3f7",
+                        color: overCapacity ? COLORS.red : COLORS.navy,
+                        border: overCapacity
+                          ? `1px solid ${COLORS.red}22`
+                          : "1px solid transparent",
+                      }}
+                    />
+                  );
+                })}
+              </Stack>
+            </Box>
+          ) : null}
 
           {loadingInitial || loadingOfferings ? (
             <Grid container spacing={1.2} sx={{ p: 1.6 }}>
@@ -1379,6 +1770,44 @@ const SubjectOfferings = () => {
                         />
                       </Stack>
                     </Box>
+
+                    <TextField
+                      type="number"
+                      size="small"
+                      label="الحصص / الأسبوع"
+                      value={planDraft[item.id] ?? item.periodsPerWeek ?? 0}
+                      onChange={(event) =>
+                        updatePlanValue(item.id, event.target.value)
+                      }
+                      inputProps={{
+                        min: 0,
+                        max: 20,
+                        step: 1,
+                        inputMode: "numeric",
+                      }}
+                      error={
+                        planDraft[item.id] === "" ||
+                        Number(planDraft[item.id]) < 0 ||
+                        Number(planDraft[item.id]) > 20
+                      }
+                      sx={{
+                        width: { xs: 110, sm: 125 },
+                        flexShrink: 0,
+                        "& .MuiOutlinedInput-root": {
+                          borderRadius: "10px",
+                          bgcolor: "#fff",
+                        },
+                        "& input": {
+                          textAlign: "center",
+                          fontWeight: 900,
+                          color: COLORS.navy,
+                          py: 1,
+                        },
+                        "& .MuiInputLabel-root": {
+                          fontSize: 11,
+                        },
+                      }}
+                    />
 
                     <Tooltip title="حذف العرض">
                       <span>

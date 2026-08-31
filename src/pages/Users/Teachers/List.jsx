@@ -10,6 +10,7 @@ import {
 
 import {
   AddCircleOutlineOutlined,
+  AssignmentIndRounded,
   CheckCircleRounded,
   FileDownloadOutlined,
   Groups2Rounded,
@@ -586,6 +587,73 @@ const List = () => {
                   تصدير
                 </Button>
               </Box>
+
+              {permissions.edit && (
+                <Button
+                  component={Link}
+                  to="/users/teachers/assignments"
+                  variant="outlined"
+                  startIcon={
+                    <AssignmentIndRounded />
+                  }
+                  sx={{
+                    width: {
+                      xs: "100%",
+                      sm: 168,
+                    },
+                    minHeight: 42,
+                    px: 1.8,
+
+                    borderRadius:
+                      "12px",
+
+                    color:
+                      "var(--color-navy)",
+                    backgroundColor:
+                      "rgba(255, 252, 247, 0.84)",
+                    borderColor:
+                      "rgba(36, 74, 112, 0.16)",
+
+                    boxShadow: "none",
+
+                    transition:
+                      "transform 180ms ease, box-shadow 180ms ease, color 180ms ease, background-color 180ms ease, border-color 180ms ease",
+
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    whiteSpace:
+                      "nowrap",
+                    textTransform:
+                      "none",
+
+                    "& .MuiButton-startIcon":
+                      {
+                        marginLeft:
+                          "7px",
+                        marginRight: 0,
+                      },
+
+                    "& svg": {
+                      fontSize: "19px",
+                    },
+
+                    "&:hover": {
+                      color:
+                        "var(--color-gold-dark)",
+                      backgroundColor:
+                        "var(--color-gold-soft)",
+                      borderColor:
+                        "rgba(211, 164, 79, 0.42)",
+                      boxShadow:
+                        "0 7px 16px rgba(18, 47, 77, 0.08)",
+                      transform:
+                        "translateY(-1px)",
+                    },
+                  }}
+                >
+                  إسنادات المعلمين
+                </Button>
+              )}
 
               {permissions.add && (
                 <Button

@@ -230,16 +230,86 @@ export const fetchSubjectOfferings = async (
   );
 };
 
+
+/**
+ * GET /lectures/feasibility
+ *
+ * Params:
+ * - termId: required
+ * - classIds: optional, comma-separated
+ *
+ * If classIds is omitted the backend checks all active classes in the term.
+ */
+export const fetchLectureFeasibility = async (
+  { termId, classIds = [] } = {},
+  options = {}
+) => {
+  const normalizedTermId =
+    normalizeId(termId);
+
+  if (!normalizedTermId) {
+    return {
+      status: false,
+      message: "اختر الترم أولًا",
+    };
+  }
+
+  const normalizedClassIds = Array.from(
+    new Set(
+      (
+        Array.isArray(classIds)
+          ? classIds
+          : String(classIds || "").split(",")
+      )
+        .map(normalizeId)
+        .filter(Boolean)
+    )
+  );
+
+  return getCached(
+    `${ENDPOINT}/feasibility`,
+    {
+      termId: normalizedTermId,
+      ...(normalizedClassIds.length
+        ? {
+            classIds:
+              normalizedClassIds.join(","),
+          }
+        : {}),
+    },
+    "تعذر فحص قابلية الجدول",
+    {
+      ...options,
+      // نتيجة الفحص تشغيلية وتتغير مع الخطة والإسنادات والحصص.
+      force: options.force ?? true,
+    }
+  );
+};
+
 export const fetchTeacherAssignments = async (
   filters = {},
   options = {}
-) =>
-  getCached(
+) => {
+  const {
+    classId: rawClassId,
+    class: rawClass,
+    ...restFilters
+  } = filters;
+
+  const classId = normalizeId(
+    rawClassId || rawClass
+  );
+
+  return getCached(
     "/teacher-assignments",
-    filters,
+    {
+      ...restFilters,
+      ...(classId ? { classId } : {}),
+    },
     "تعذر تحميل إسنادات المعلمين",
     options
   );
+};
 
 export const addTeacherAssignment = async (
   data = {}
@@ -251,6 +321,10 @@ export const addTeacherAssignment = async (
   const subjectOfferingId = normalizeId(
     data?.subjectOfferingId ||
       data?.subjectOffering
+  );
+
+  const classId = normalizeId(
+    data?.classId || data?.class
   );
 
   if (!teacherId || !subjectOfferingId) {
@@ -267,6 +341,7 @@ export const addTeacherAssignment = async (
       {
         teacherId,
         subjectOfferingId,
+        ...(classId ? { classId } : {}),
       }
     );
 
