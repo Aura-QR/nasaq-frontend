@@ -42,6 +42,7 @@ import {
 } from "@/APIs/users/teachers";
 
 import nasaqLogo from "../../images/wadq-logo.png";
+import NotificationBell from "@/components/Notifications/NotificationBell";
 
 const NAV_ITEMS = [
   {
@@ -374,6 +375,16 @@ const TeacherLayout = () => {
                 </Typography>
               </Box>
             </Stack>
+
+            <NotificationBell
+              sx={{
+                width: 36,
+                height: 36,
+                color: "var(--color-navy-deep)",
+                border: "1px solid #dfe5eb",
+                backgroundColor: "#fffdfa",
+              }}
+            />
 
             <Tooltip title="تسجيل الخروج">
               <IconButton

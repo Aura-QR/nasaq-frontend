@@ -1,7 +1,6 @@
 import {
   CalendarMonthRounded,
   MenuRounded,
-  NotificationsNoneRounded,
 } from "@mui/icons-material";
 
 import {
@@ -23,6 +22,8 @@ import {
   getSchoolRoleLabel,
   getSchoolSessionInfo,
 } from "@/utils/school/schoolSession";
+
+import NotificationBell from "@/components/Notifications/NotificationBell";
 
 const getArabicDate = () =>
   new Intl.DateTimeFormat(
@@ -315,8 +316,7 @@ const SchoolHeader = ({
           zIndex: 1,
         }}
       >
-        <IconButton
-          aria-label="الإشعارات"
+        <NotificationBell
           sx={{
             width: 40,
             height: 40,
@@ -327,9 +327,7 @@ const SchoolHeader = ({
             border:
               "1px solid rgba(255,255,255,0.16)",
           }}
-        >
-          <NotificationsNoneRounded />
-        </IconButton>
+        />
 
         <Stack
           direction="row"
