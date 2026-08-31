@@ -42,6 +42,7 @@ import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import Popup from "@/components/Popup/Popup";
 import FeasibilityPanel from "./FeasibilityPanel";
+import GenerateTimetablePanel from "./GenerateTimetablePanel";
 
 import { api } from "@/APIs/Axios";
 
@@ -1861,6 +1862,41 @@ const List = () => {
           termLabel={selectedTermLabel}
           classId={classFilter}
           classLabel={selectedClassLabel}
+        />
+
+        {/* =========================================
+            GENERATE / PREVIEW / COMMIT
+        ========================================= */}
+
+        <GenerateTimetablePanel
+          termId={termId}
+          termLabel={selectedTermLabel}
+          classId={classFilter}
+          classLabel={selectedClassLabel}
+          onCommitted={async () => {
+            const refreshed =
+              await fetchLectures(
+                {
+                  page: 1,
+                  limit: 1000,
+                  classId:
+                    classFilter ||
+                    undefined,
+                  termId:
+                    termId ||
+                    undefined,
+                },
+                { force: true }
+              );
+
+            if (refreshed?.status) {
+              setItems(
+                mapLectures(
+                  refreshed?.data
+                )
+              );
+            }
+          }}
         />
 
         {/* =========================================

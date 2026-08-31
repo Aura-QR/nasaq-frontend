@@ -286,6 +286,101 @@ export const fetchLectureFeasibility = async (
   );
 };
 
+/**
+ * POST /lectures/generate
+ *
+ * mode="preview" does not write anything.
+ * mode="commit" writes the generated lectures.
+ */
+export const generateTimetable = async (
+  {
+    termId,
+    classIds = [],
+    mode = "preview",
+    onExisting = "skip",
+    maxSamePerDay = 1,
+    includeUnstaffed = true,
+  } = {}
+) => {
+  const normalizedTermId =
+    normalizeId(termId);
+
+  if (!normalizedTermId) {
+    return {
+      status: false,
+      message: "اختر الترم أولًا",
+    };
+  }
+
+  const normalizedClassIds = Array.from(
+    new Set(
+      (
+        Array.isArray(classIds)
+          ? classIds
+          : String(classIds || "").split(",")
+      )
+        .map(normalizeId)
+        .filter(Boolean)
+    )
+  );
+
+  const normalizedMode =
+    mode === "commit"
+      ? "commit"
+      : "preview";
+
+  const normalizedOnExisting =
+    onExisting === "replace"
+      ? "replace"
+      : "skip";
+
+  const normalizedMaxSamePerDay =
+    Number.isFinite(Number(maxSamePerDay)) &&
+    Number(maxSamePerDay) > 0
+      ? Math.max(
+          1,
+          Math.floor(Number(maxSamePerDay))
+        )
+      : 1;
+
+  try {
+    const response = await api.post(
+      `${ENDPOINT}/generate`,
+      {
+        termId: normalizedTermId,
+        ...(normalizedClassIds.length
+          ? { classIds: normalizedClassIds }
+          : {}),
+        mode: normalizedMode,
+        onExisting:
+          normalizedOnExisting,
+        maxSamePerDay:
+          normalizedMaxSamePerDay,
+        includeUnstaffed:
+          Boolean(includeUnstaffed),
+      }
+    );
+
+    if (normalizedMode === "commit") {
+      invalidateLecturesCache();
+    }
+
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeFailure(
+      getApiError(
+        error,
+        normalizedMode === "commit"
+          ? "تعذر اعتماد الجدول الدراسي"
+          : "تعذر إنشاء معاينة الجدول الدراسي"
+      ),
+      normalizedMode === "commit"
+        ? "تعذر اعتماد الجدول الدراسي"
+        : "تعذر إنشاء معاينة الجدول الدراسي"
+    );
+  }
+};
+
 export const fetchTeacherAssignments = async (
   filters = {},
   options = {}
