@@ -31,6 +31,8 @@ export const NOTIFICATION_ICONS = {
   leave_rejected: "close",
   cover_assigned: "person",
   cover_removed: "undo",
+  duty_assigned: "shield",
+  duty_removed: "undo",
 };
 
 export const NOTIFICATION_COLORS = {
@@ -38,6 +40,8 @@ export const NOTIFICATION_COLORS = {
   leave_rejected: "error",
   cover_assigned: "info",
   cover_removed: "warning",
+  duty_assigned: "info",
+  duty_removed: "warning",
 };
 
 /**
