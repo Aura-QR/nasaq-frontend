@@ -39,12 +39,6 @@ import {
   fetchManagers,
 } from "@/APIs/school/managers";
 
-import {
-  getSchoolPermissions,
-  updateSchoolRolePermissions,
-} from "@/APIs/school/permissions";
-
-import SchoolRolePermissionsDialog from "@/components/school/SchoolRolePermissionsDialog";
 
 const ROLE_LABELS = {
   OWNER: "مالك المدرسة",
@@ -177,26 +171,6 @@ const SchoolManagersList = () => {
     setDeleting,
   ] = useState(false);
 
-  const [
-    permissionsOpen,
-    setPermissionsOpen,
-  ] = useState(false);
-
-  const [
-    permissionsLoading,
-    setPermissionsLoading,
-  ] = useState(false);
-
-  const [
-    permissionsSaving,
-    setPermissionsSaving,
-  ] = useState(false);
-
-  const [
-    managerPermissions,
-    setManagerPermissions,
-  ] = useState({});
-
   const loadManagers = async (
     force = false
   ) => {
@@ -299,117 +273,6 @@ const SchoolManagersList = () => {
         getManagerStatus(item) ===
         "active"
     ).length;
-
-  const unwrapPermissionsPayload = (value) => {
-    let current = value;
-
-    for (let index = 0; index < 6; index += 1) {
-      if (
-        !current ||
-        typeof current !== "object" ||
-        Array.isArray(current)
-      ) {
-        break;
-      }
-
-      const next =
-        current.data ??
-        current.result ??
-        current.payload;
-
-      if (!next || next === current) {
-        break;
-      }
-
-      current = next;
-    }
-
-    return current;
-  };
-
-  const loadManagerPermissions = async () => {
-    setPermissionsLoading(true);
-
-    const response =
-      await getSchoolPermissions();
-
-    if (response?.status === false) {
-      toast.error(
-        response?.message ||
-          "تعذر تحميل صلاحيات المساعدين الإداريين"
-      );
-      setManagerPermissions({});
-      setPermissionsLoading(false);
-      return false;
-    }
-
-    const payload =
-      unwrapPermissionsPayload(
-        response?.data ?? response
-      );
-
-    const nextPermissions =
-      payload?.MANAGER ||
-      payload?.manager ||
-      {};
-
-    setManagerPermissions(
-      nextPermissions &&
-        typeof nextPermissions === "object" &&
-        !Array.isArray(nextPermissions)
-        ? nextPermissions
-        : {}
-    );
-    setPermissionsLoading(false);
-    return true;
-  };
-
-  const openManagerPermissions = async () => {
-    setPermissionsOpen(true);
-    await loadManagerPermissions();
-  };
-
-  const saveManagerPermissions = async (permissions) => {
-    setPermissionsSaving(true);
-
-    const response =
-      await updateSchoolRolePermissions(
-        "MANAGER",
-        permissions
-      );
-
-    if (response?.status === false) {
-      toast.error(
-        response?.message ||
-          "تعذر تحديث صلاحيات المساعدين الإداريين"
-      );
-      setPermissionsSaving(false);
-      return;
-    }
-
-    const payload =
-      unwrapPermissionsPayload(
-        response?.data ?? response
-      );
-
-    if (payload?.permissions) {
-      setManagerPermissions(
-        payload.permissions
-      );
-    } else {
-      setManagerPermissions(
-        permissions
-      );
-    }
-
-    setPermissionsSaving(false);
-    setPermissionsOpen(false);
-
-    toast.success(
-      payload?.note ||
-        "تم تحديث صلاحيات المساعدين. تسري الصلاحيات الجديدة بعد تسجيل الدخول مرة أخرى."
-    );
-  };
 
   const handleDelete =
     async () => {
@@ -542,7 +405,11 @@ const SchoolManagersList = () => {
             <Button
               variant="outlined"
               startIcon={<SecurityRounded />}
-              onClick={openManagerPermissions}
+              onClick={() =>
+                navigate(
+                  "/school/permissions?role=MANAGER"
+                )
+              }
               sx={{
                 minHeight: 48,
                 px: 2,
@@ -949,19 +816,6 @@ const SchoolManagersList = () => {
         </Box>
       </Box>
 
-      <SchoolRolePermissionsDialog
-        open={permissionsOpen}
-        permissions={managerPermissions}
-        loading={permissionsLoading}
-        saving={permissionsSaving}
-        onClose={() => {
-          if (!permissionsSaving) {
-            setPermissionsOpen(false);
-          }
-        }}
-        onSave={saveManagerPermissions}
-      />
-
       <Dialog
         open={Boolean(deleteTarget)}
         onClose={() => {
@@ -993,7 +847,7 @@ const SchoolManagersList = () => {
               lineHeight: 1.8,
             }}
           >
-            سيتم حذف حساب "{getManagerUsername(deleteTarget)}" نهائيًا. لا يمكن التراجع عن هذه العملية.
+            سيتم حذف حساب «{getManagerUsername(deleteTarget)}» نهائيًا. لا يمكن التراجع عن هذه العملية.
           </Typography>
         </DialogContent>
 

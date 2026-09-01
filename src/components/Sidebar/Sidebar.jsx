@@ -201,12 +201,6 @@ const Sidebar = ({ active, setActive }) => {
   const roleLabel =
     ROLE_LABELS[role] || "مستخدم";
 
-  const userId =
-    user?._id ||
-    user?.id ||
-    user?.userId ||
-    "";
-
   const isTeacher = role === "TEACHER";
 
   const canManageAcademicYears =
@@ -252,6 +246,15 @@ const Sidebar = ({ active, setActive }) => {
             Icon: ManageAccountsRounded,
             iconType: "mui",
             to: "/school/managers",
+            show:
+              role === "OWNER" ||
+              role === "SUPERVISOR",
+          },
+          {
+            name: "إدارة الصلاحيات",
+            Icon: ShieldRounded,
+            iconType: "mui",
+            to: "/school/permissions",
             show:
               role === "OWNER" ||
               role === "SUPERVISOR",
@@ -695,6 +698,7 @@ const Sidebar = ({ active, setActive }) => {
 
     return baseCategories;
   }, [
+    role,
     isTeacher,
     canManageAcademicYears,
     canManageSchoolSettings,

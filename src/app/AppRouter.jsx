@@ -42,6 +42,7 @@ import TeacherDuty from "@/pages/TeacherDuty/TeacherDuty";
 
 import SchoolManagersList from "@/pages/SchoolManagers/List";
 import SchoolManagerAdd from "@/pages/SchoolManagers/Add";
+import SchoolPermissions from "@/pages/SchoolPermissions/SchoolPermissions";
 
 import SubjectOfferings from "@/pages/SubjectOfferings/SubjectOfferings";
 import SchoolSettings from "@/pages/SchoolSettings/SchoolSettings";
@@ -212,6 +213,11 @@ const AppRouter = () => {
           <Route
             path="/school/managers/add"
             element={<SchoolManagerAdd />}
+          />
+
+          <Route
+            path="/school/permissions"
+            element={<SchoolPermissions />}
           />
         </Route>
 

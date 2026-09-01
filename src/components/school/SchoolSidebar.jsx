@@ -22,6 +22,7 @@ import {
   ReceiptLongRounded,
   RouteRounded,
   SchoolRounded,
+  SecurityRounded,
   SupervisorAccountRounded,
   ViewListRounded,
 } from "@mui/icons-material";
@@ -545,22 +546,41 @@ const SchoolSidebar = ({
             />
 
             {canManageManagers && (
-              <SidebarLink
-                item={{
-                  label:
-                    "المديرون والمساعدون",
-                  path:
-                    "/school/managers",
-                  icon:
-                    <SupervisorAccountRounded />,
-                }}
-                mobile={
-                  mobile
-                }
-                onClose={
-                  onClose
-                }
-              />
+              <>
+                <SidebarLink
+                  item={{
+                    label:
+                      "المديرون والمساعدون",
+                    path:
+                      "/school/managers",
+                    icon:
+                      <SupervisorAccountRounded />,
+                  }}
+                  mobile={
+                    mobile
+                  }
+                  onClose={
+                    onClose
+                  }
+                />
+
+                <SidebarLink
+                  item={{
+                    label:
+                      "إدارة الصلاحيات",
+                    path:
+                      "/school/permissions",
+                    icon:
+                      <SecurityRounded />,
+                  }}
+                  mobile={
+                    mobile
+                  }
+                  onClose={
+                    onClose
+                  }
+                />
+              </>
             )}
           </Box>
 
