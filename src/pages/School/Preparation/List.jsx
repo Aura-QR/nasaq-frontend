@@ -1302,45 +1302,105 @@ const List = () => {
       async () => {
         setFiltersLoading(true);
 
-        const [
-          teachers,
-          classes,
-          terms,
-          subjects,
-          lectures,
-        ] = await Promise.all([
-          canSearchTeachers
-            ? fetchFilterList(
-                "/teachers"
+        try {
+          /*
+           * الترمات مرتبطة بالسنة الدراسية، لذلك لا نطلب:
+           * GET /terms?limit=500
+           *
+           * نحمل السنة الدراسية النشطة أولًا ثم نطلب:
+           * GET /terms/by-year/:academicYearId
+           */
+          const [
+            teachers,
+            classes,
+            activeAcademicYearResponse,
+            subjects,
+            lectures,
+          ] = await Promise.all([
+            canSearchTeachers
+              ? fetchFilterList(
+                  "/teachers"
+                )
+              : Promise.resolve([]),
+            fetchFilterList(
+              "/classes"
+            ),
+            api
+              .get(
+                "/academic-years/active"
               )
-            : Promise.resolve([]),
-          fetchFilterList(
-            "/classes"
-          ),
-          fetchFilterList(
-            "/terms"
-          ),
-          fetchFilterList(
-            "/subject-offerings"
-          ),
-          fetchFilterList(
-            "/lectures"
-          ),
-        ]);
+              .catch(() => null),
+            fetchFilterList(
+              "/subject-offerings"
+            ),
+            fetchFilterList(
+              "/lectures"
+            ),
+          ]);
 
-        if (!active) {
-          return;
+          const activeAcademicYear =
+            getResponseData(
+              activeAcademicYearResponse
+            );
+
+          const activeAcademicYearId =
+            getEntityId(
+              activeAcademicYear
+            );
+
+          let terms = [];
+
+          if (
+            activeAcademicYearId
+          ) {
+            try {
+              const termsResponse =
+                await api.get(
+                  `/terms/by-year/${activeAcademicYearId}`
+                );
+
+              terms =
+                getResponseList(
+                  termsResponse
+                );
+            } catch (error) {
+              console.error(
+                "Failed to load terms for active academic year:",
+                error
+              );
+              terms = [];
+            }
+          }
+
+          if (!active) {
+            return;
+          }
+
+          setFilterOptions({
+            teachers,
+            classes,
+            terms,
+            subjects,
+            lectures,
+          });
+        } catch (error) {
+          if (!active) {
+            return;
+          }
+
+          console.error(
+            "Failed to load preparation filters:",
+            error
+          );
+
+          setFilterOptions(
+            EMPTY_FILTER_OPTIONS
+          );
+        } finally {
+          if (active) {
+            setFiltersLoading(false);
+          }
         }
-
-        setFilterOptions({
-          teachers,
-          classes,
-          terms,
-          subjects,
-          lectures,
-        });
-
-        setFiltersLoading(false);
       };
 
     loadFilterOptions();
