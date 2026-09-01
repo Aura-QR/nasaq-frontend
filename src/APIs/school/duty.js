@@ -100,10 +100,7 @@ export const fetchCoverage = async (date) => {
 
     return normalizeSuccess(response);
   } catch (error) {
-    return normalizeFailure(
-      getApiError(error, "تعذر تحميل لوحة الاحتياطي"),
-      "تعذر تحميل لوحة الاحتياطي"
-    );
+    return getApiError(error, "تعذر تحميل لوحة الاحتياطي");
   }
 };
 
@@ -202,7 +199,7 @@ export const setDutySupervisors = async ({ date, teacherIds, notes } = {}) => {
       teacherIds: (Array.isArray(teacherIds) ? teacherIds : [])
         .map(normalizeId)
         .filter(Boolean),
-      ...(notes ? { notes } : {}),
+      ...(notes !== undefined ? { notes: String(notes ?? "") } : {}),
     });
 
     return normalizeSuccess(response);

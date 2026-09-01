@@ -4,7 +4,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Container,
   Dialog,
   DialogActions,
   DialogContent,
@@ -26,7 +25,7 @@ import {
   toDateInput,
 } from "@/APIs/school/duty";
 import { fetchMyDay } from "@/APIs/school/notifications";
-import NotificationBell from "@/components/Notifications/NotificationBell";
+import AppContainer from "@/components/Container/Container";
 
 const STATUS_COLORS = {
   pending: "warning",
@@ -105,7 +104,17 @@ const TeacherDuty = () => {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 3 }} dir="rtl">
+    <AppContainer>
+      <Box
+        dir="rtl"
+        sx={{
+          width: "100%",
+          maxWidth: 1280,
+          mx: "auto",
+          py: { xs: 1, md: 1.5 },
+          pb: 4,
+        }}
+      >
       <Stack
         direction="row"
         justifyContent="space-between"
@@ -121,13 +130,6 @@ const TeacherDuty = () => {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
-          <NotificationBell
-            sx={{
-              color: "var(--color-navy, #244a70)",
-              backgroundColor: "rgba(36,74,112,0.05)",
-              border: "1px solid rgba(36,74,112,0.08)",
-            }}
-          />
           <Button
             variant="contained"
             startIcon={<AddRounded />}
@@ -278,7 +280,8 @@ const TeacherDuty = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+      </Box>
+    </AppContainer>
   );
 };
 

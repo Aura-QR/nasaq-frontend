@@ -56,7 +56,8 @@ const EMPTY_CREATE_FORM = {
  * وهي اللي بتقول للوحة الاحتياطي أنهي حصص محتاجة بديل.
  */
 const LeaveRequests = () => {
-  const [status, setStatus] = useState("pending");
+  const [status, setStatus] = useState("");
+  const [teacherId, setTeacherId] = useState("");
   const [from, setFrom] = useState(() => toDateInput());
   const [to, setTo] = useState("");
   const [rows, setRows] = useState([]);
@@ -75,6 +76,7 @@ const LeaveRequests = () => {
 
     const response = await fetchLeaveRequests({
       status: status || undefined,
+      teacherId: teacherId || undefined,
       from: from || undefined,
       to: to || undefined,
     });
@@ -87,7 +89,7 @@ const LeaveRequests = () => {
     }
 
     setLoading(false);
-  }, [status, from, to]);
+  }, [status, teacherId, from, to]);
 
   useEffect(() => {
     load();
@@ -222,6 +224,22 @@ const LeaveRequests = () => {
         </Stack>
 
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+          <TextField
+            select
+            size="small"
+            label="المعلم"
+            value={teacherId}
+            onChange={(event) => setTeacherId(event.target.value)}
+            sx={{ minWidth: 190 }}
+            disabled={teachersLoading}
+          >
+            <MenuItem value="">كل المعلمين</MenuItem>
+            {sortedTeachers.map((teacher) => (
+              <MenuItem key={teacher.id} value={teacher.id}>
+                {teacher.name}
+              </MenuItem>
+            ))}
+          </TextField>
           <TextField
             select
             size="small"

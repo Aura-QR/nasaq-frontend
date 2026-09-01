@@ -22,6 +22,7 @@ import {
   CheckCircleRounded,
   DeleteOutlineRounded,
   ErrorOutlineRounded,
+  HistoryRounded,
   PersonAddAlt1Rounded,
   RefreshRounded,
   ShieldRounded,
@@ -35,6 +36,7 @@ import {
   COVER_REASON_LABELS,
   DAY_NAMES,
   fetchCoverage,
+  fetchDutySupervisors,
   removeSubstitute,
   setDutySupervisors,
   toDateInput,
@@ -56,16 +58,74 @@ const CoverageBoard = () => {
   const [teachers, setTeachers] = useState([]);
   const [supervisorDialog, setSupervisorDialog] = useState(false);
   const [supervisorIds, setSupervisorIds] = useState([]);
+  const [supervisorNotes, setSupervisorNotes] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyFrom, setHistoryFrom] = useState(() => {
+    const value = new Date();
+    value.setDate(value.getDate() - 6);
+    return toDateInput(value);
+  });
+  const [historyTo, setHistoryTo] = useState(() => toDateInput());
+
+  const normalizeSupervisorRows = useCallback((payload) => {
+    if (!payload) return [];
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.items)) return payload.items;
+    if (Array.isArray(payload?.data)) return payload.data;
+    return [payload];
+  }, []);
+
+  const getSupervisorRecord = useCallback(
+    (payload) => normalizeSupervisorRows(payload).find(Boolean) ?? null,
+    [normalizeSupervisorRows]
+  );
 
   const load = useCallback(
     async ({ silent = false } = {}) => {
       if (!silent) setLoading(true);
 
-      const response = await fetchCoverage(date);
+      const [response, supervisorsResponse] = await Promise.all([
+        fetchCoverage(date),
+        fetchDutySupervisors({ date }),
+      ]);
 
       if (response.status) {
-        setBoard(response.data);
-        setSupervisorIds(response.data?.supervisors?.teacherIds ?? []);
+        const supervisorRecord = supervisorsResponse.status
+          ? getSupervisorRecord(supervisorsResponse.data)
+          : null;
+        const coverageSupervisors = response.data?.supervisors ?? null;
+
+        setBoard({
+          ...response.data,
+          supervisors: supervisorRecord
+            ? {
+                ...coverageSupervisors,
+                ...supervisorRecord,
+                teacherIds:
+                  supervisorRecord?.teacherIds ??
+                  coverageSupervisors?.teacherIds ??
+                  [],
+                teacherNames:
+                  supervisorRecord?.teacherNames ??
+                  coverageSupervisors?.teacherNames ??
+                  [],
+              }
+            : coverageSupervisors,
+        });
+        setSupervisorIds(
+          supervisorRecord?.teacherIds ??
+            coverageSupervisors?.teacherIds ??
+            []
+        );
+        setSupervisorNotes(
+          String(
+            supervisorRecord?.notes ??
+              coverageSupervisors?.notes ??
+              ""
+          )
+        );
       } else {
         setBoard(null);
         toast.error(response.message);
@@ -73,7 +133,7 @@ const CoverageBoard = () => {
 
       setLoading(false);
     },
-    [date]
+    [date, getSupervisorRecord]
   );
 
   useEffect(() => {
@@ -150,6 +210,7 @@ const CoverageBoard = () => {
     const response = await setDutySupervisors({
       date,
       teacherIds: supervisorIds,
+      notes: supervisorNotes,
     });
     setBusy(false);
 
@@ -160,6 +221,30 @@ const CoverageBoard = () => {
     } else {
       toast.error(response.message);
     }
+  };
+
+  const loadSupervisorHistory = useCallback(async () => {
+    if (!historyFrom || !historyTo) return;
+
+    setHistoryLoading(true);
+    const response = await fetchDutySupervisors({
+      from: historyFrom,
+      to: historyTo,
+    });
+
+    if (response.status) {
+      setHistoryRows(normalizeSupervisorRows(response.data));
+    } else {
+      setHistoryRows([]);
+      toast.error(response.message);
+    }
+
+    setHistoryLoading(false);
+  }, [historyFrom, historyTo, normalizeSupervisorRows]);
+
+  const openSupervisorHistory = async () => {
+    setHistoryOpen(true);
+    await loadSupervisorHistory();
   };
 
   return (
@@ -200,6 +285,14 @@ const CoverageBoard = () => {
                 </IconButton>
               </span>
             </Tooltip>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<HistoryRounded />}
+              onClick={openSupervisorHistory}
+            >
+              سجل المناوبات
+            </Button>
           </Stack>
         </Stack>
       </Paper>
@@ -281,8 +374,22 @@ const CoverageBoard = () => {
         teachers={teachers}
         value={supervisorIds}
         onChange={setSupervisorIds}
+        notes={supervisorNotes}
+        onNotesChange={setSupervisorNotes}
         onClose={() => setSupervisorDialog(false)}
         onSave={handleSaveSupervisors}
+      />
+
+      <SupervisorHistoryDialog
+        open={historyOpen}
+        loading={historyLoading}
+        rows={historyRows}
+        from={historyFrom}
+        to={historyTo}
+        onFromChange={setHistoryFrom}
+        onToChange={setHistoryTo}
+        onRefresh={loadSupervisorHistory}
+        onClose={() => setHistoryOpen(false)}
       />
     </Box>
     </AppContainer>
@@ -390,6 +497,11 @@ const SummaryRow = ({ board, stats, coveredRatio, onEditSupervisors }) => (
             <Chip key={`${name}-${index}`} size="small" color="primary" label={name} />
           ))}
         </Stack>
+      )}
+      {board.supervisors?.notes && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+          ملاحظة: {board.supervisors.notes}
+        </Typography>
       )}
     </Paper>
   </Stack>
@@ -564,6 +676,8 @@ const SupervisorsDialog = ({
   teachers,
   value,
   onChange,
+  notes,
+  onNotesChange,
   onClose,
   onSave,
 }) => (
@@ -573,33 +687,168 @@ const SupervisorsDialog = ({
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         اختار مناوب أو اتنين. الحفظ بيستبدل مناوبة اليوم كلها.
       </Typography>
-      <TextField
-        select
-        fullWidth
-        size="small"
-        label="المناوبون"
-        SelectProps={{
-          multiple: true,
-          value,
-          onChange: (event) => onChange(event.target.value),
-          renderValue: (selected) =>
-            selected
-              .map((id) => teachers.find((t) => t.id === id)?.name ?? id)
-              .join("، "),
-        }}
-      >
-        {teachers.map((teacher) => (
-          <MenuItem key={teacher.id} value={teacher.id}>
-            {teacher.name}
-          </MenuItem>
-        ))}
-      </TextField>
+      <Stack spacing={2}>
+        <TextField
+          select
+          fullWidth
+          size="small"
+          label="المناوبون"
+          SelectProps={{
+            multiple: true,
+            value,
+            onChange: (event) => onChange(event.target.value),
+            renderValue: (selected) =>
+              selected
+                .map((id) => teachers.find((t) => t.id === id)?.name ?? id)
+                .join("، "),
+          }}
+        >
+          {teachers.map((teacher) => (
+            <MenuItem key={teacher.id} value={teacher.id}>
+              {teacher.name}
+            </MenuItem>
+          ))}
+        </TextField>
+
+        <TextField
+          fullWidth
+          size="small"
+          label="ملاحظات المناوبة (اختياري)"
+          value={notes}
+          onChange={(event) => onNotesChange(event.target.value)}
+          multiline
+          minRows={2}
+        />
+      </Stack>
     </DialogContent>
     <DialogActions>
       <Button onClick={onClose}>إلغاء</Button>
       <Button variant="contained" onClick={onSave} disabled={busy}>
         حفظ
       </Button>
+    </DialogActions>
+  </Dialog>
+);
+
+const getHistoryTeacherNames = (row) => {
+  const values =
+    row?.teacherNames ??
+    row?.supervisors?.teacherNames ??
+    row?.teachers ??
+    [];
+
+  if (!Array.isArray(values)) return [];
+
+  return values
+    .map((teacher) =>
+      typeof teacher === "string"
+        ? teacher
+        : teacher?.name || teacher?.fullName || ""
+    )
+    .filter(Boolean);
+};
+
+const SupervisorHistoryDialog = ({
+  open,
+  loading,
+  rows,
+  from,
+  to,
+  onFromChange,
+  onToChange,
+  onRefresh,
+  onClose,
+}) => (
+  <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" dir="rtl">
+    <DialogTitle>سجل المناوبات</DialogTitle>
+    <DialogContent dividers>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={1.5}
+        sx={{ mb: 2 }}
+      >
+        <TextField
+          type="date"
+          size="small"
+          label="من"
+          value={from}
+          onChange={(event) => onFromChange(event.target.value)}
+          InputLabelProps={{ shrink: true }}
+          fullWidth
+        />
+        <TextField
+          type="date"
+          size="small"
+          label="إلى"
+          value={to}
+          onChange={(event) => onToChange(event.target.value)}
+          InputLabelProps={{ shrink: true }}
+          fullWidth
+        />
+        <Button
+          variant="outlined"
+          onClick={onRefresh}
+          disabled={loading || !from || !to}
+          startIcon={<RefreshRounded />}
+          sx={{ whiteSpace: "nowrap" }}
+        >
+          تحديث
+        </Button>
+      </Stack>
+
+      {loading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
+          <CircularProgress size={28} />
+        </Box>
+      ) : rows.length === 0 ? (
+        <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ py: 4 }}>
+          مفيش مناوبات في الفترة دي.
+        </Typography>
+      ) : (
+        <Stack spacing={1}>
+          {rows.map((row, index) => {
+            const teacherNames = getHistoryTeacherNames(row);
+            const rowDate = row?.date ?? row?.day ?? "—";
+
+            return (
+              <Paper
+                key={row?._id || `${rowDate}-${index}`}
+                variant="outlined"
+                sx={{ p: 1.5, borderRadius: 2 }}
+              >
+                <Typography variant="body2" fontWeight={700} sx={{ mb: 0.75 }}>
+                  {rowDate}
+                </Typography>
+                <Stack direction="row" flexWrap="wrap" gap={0.75}>
+                  {teacherNames.length > 0 ? (
+                    teacherNames.map((name, teacherIndex) => (
+                      <Chip
+                        key={`${name}-${teacherIndex}`}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                        label={name}
+                      />
+                    ))
+                  ) : (
+                    <Typography variant="caption" color="text.secondary">
+                      بدون مناوبين
+                    </Typography>
+                  )}
+                </Stack>
+                {row?.notes && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: "block" }}>
+                    {row.notes}
+                  </Typography>
+                )}
+              </Paper>
+            );
+          })}
+        </Stack>
+      )}
+    </DialogContent>
+    <DialogActions>
+      <Button onClick={onClose}>إغلاق</Button>
     </DialogActions>
   </Dialog>
 );

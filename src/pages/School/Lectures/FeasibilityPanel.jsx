@@ -116,15 +116,26 @@ const getProblemText = (problem = {}) => {
           : ""
       }.`;
 
-    case "subject_unassigned":
+    case "subject_unassigned": {
+      const count = asNumber(problem?.count);
+
+      if (count > 0) {
+        return `${count} ${count === 1 ? "مادة بدون معلم" : "مواد بدون معلم"} — ستُجدول كفراغات ظاهرة حتى يتم إسناد معلم.`;
+      }
+
       return `${subjectName} في ${className} بدون معلم${
         periodsPerWeek
           ? ` (${periodsPerWeek} حصص أسبوعيًا)`
           : ""
       }. ستظهر الحصص كفراغات حتى يتم إسناد معلم.`;
+    }
 
-    case "assignment_shared":
-      return `${className}: يوجد أكثر من معلم على نفس الصف بدون تحديد الفصول لكل معلم. راجع الإسنادات لتجنب تقسيم غير مقصود.`;
+    case "assignment_shared": {
+      const teacherCount = asNumber(problem?.teacherCount);
+      const countText = teacherCount > 0 ? ` (${teacherCount} معلمين)` : "";
+
+      return `${className}: يوجد أكثر من معلم على نفس الصف بدون تحديد الفصول لكل معلم${countText}. راجع الإسنادات لتجنب تقسيم غير مقصود.`;
+    }
 
     default:
       return "توجد ملاحظة تحتاج مراجعة قبل اعتماد الجدول.";
