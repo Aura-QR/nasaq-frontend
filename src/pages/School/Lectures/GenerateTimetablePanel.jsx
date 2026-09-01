@@ -74,7 +74,7 @@ const normalizeResult = (result) => {
     ),
     placed: numberOf(data?.placed),
     unplaced: numberOf(data?.unplaced),
-    written: data?.written,
+    written: numberOf(data?.written),
     failed: numberOf(data?.failed),
     deleted: numberOf(data?.deleted),
     skippedClasses: numberOf(
@@ -105,8 +105,13 @@ const getCellContent = (slot) => {
     };
   }
 
+  const unstaffed = !String(
+    slot?.teacherName || ""
+  ).trim();
+
   return {
     empty: false,
+    unstaffed,
     subject:
       slot?.subjectName || "مادة",
     teacher:
@@ -255,13 +260,15 @@ const GenerateTimetablePanel = ({
 
       if (data.failed > 0) {
         toast.warning(
-          `تم الاعتماد مع ${data.failed} تعارض. أعد المعاينة قبل المحاولة مرة أخرى.`
+          `تم الاعتماد — اتكتب: ${data.written} · اتعارض: ${data.failed}${
+            data.deleted > 0 ? ` · اتمسح: ${data.deleted}` : ""
+          }`
         );
       } else {
         toast.success(
-          `تم اعتماد الجدول — ${numberOf(
-            data.written
-          )} حصة محفوظة`
+          `تم اعتماد الجدول — اتكتب: ${data.written} · اتعارض: 0${
+            data.deleted > 0 ? ` · اتمسح: ${data.deleted}` : ""
+          }`
         );
       }
 
@@ -708,7 +715,7 @@ const GenerateTimetablePanel = ({
                 {preview.skippedClasses > 0 && (
                   <Chip
                     size="small"
-                    label={`${preview.skippedClasses} فصل تم تجاهله`}
+                    label={`فصول متسابة: ${preview.skippedClasses}`}
                     sx={{
                       fontSize: "8px",
                       fontWeight: 800,
@@ -717,16 +724,36 @@ const GenerateTimetablePanel = ({
                 )}
 
                 {committed && (
-                  <Chip
-                    size="small"
-                    label={`${numberOf(
-                      preview.written
-                    )} حصة محفوظة`}
-                    sx={{
-                      fontSize: "8px",
-                      fontWeight: 900,
-                    }}
-                  />
+                  <>
+                    <Chip
+                      size="small"
+                      label={`اتكتب: ${preview.written}`}
+                      sx={{
+                        fontSize: "8px",
+                        fontWeight: 900,
+                      }}
+                    />
+
+                    <Chip
+                      size="small"
+                      label={`اتعارض: ${preview.failed}`}
+                      sx={{
+                        fontSize: "8px",
+                        fontWeight: 900,
+                      }}
+                    />
+
+                    {preview.deleted > 0 && (
+                      <Chip
+                        size="small"
+                        label={`اتمسح: ${preview.deleted}`}
+                        sx={{
+                          fontSize: "8px",
+                          fontWeight: 900,
+                        }}
+                      />
+                    )}
+                  </>
                 )}
               </Stack>
 
@@ -999,7 +1026,13 @@ const GenerateTimetablePanel = ({
                                                 backgroundColor:
                                                   cell.empty
                                                     ? "rgba(36,74,112,0.025)"
+                                                    : cell.unstaffed
+                                                    ? "rgba(209,67,67,0.10)"
                                                     : "rgba(251,240,216,0.42)",
+                                                border:
+                                                  cell.unstaffed
+                                                    ? "1px solid rgba(209,67,67,0.20)"
+                                                    : "1px solid transparent",
                                               }}
                                             >
                                               <Typography
@@ -1007,6 +1040,8 @@ const GenerateTimetablePanel = ({
                                                   color:
                                                     cell.empty
                                                       ? "var(--color-muted)"
+                                                      : cell.unstaffed
+                                                      ? "var(--color-danger)"
                                                       : "var(--color-navy-deep)",
                                                   fontSize:
                                                     "8.5px",
@@ -1023,9 +1058,15 @@ const GenerateTimetablePanel = ({
                                                 sx={{
                                                   mt: 0.15,
                                                   color:
-                                                    "var(--color-muted)",
+                                                    cell.unstaffed
+                                                      ? "var(--color-danger)"
+                                                      : "var(--color-muted)",
                                                   fontSize:
                                                     "6.8px",
+                                                  fontWeight:
+                                                    cell.unstaffed
+                                                      ? 800
+                                                      : 400,
                                                 }}
                                               >
                                                 {cell.teacher}

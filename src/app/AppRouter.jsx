@@ -56,7 +56,6 @@ import PlatformSchools from "@/pages/PlatformSchools/PlatformSchools";
 import PlatformSchoolDetails from "@/pages/PlatformSchoolDetails/PlatformSchoolDetails";
 
 import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
-import NotificationRouteShell from "@/components/Notifications/NotificationRouteShell";
 
 // =========================
 // Guards
@@ -149,7 +148,6 @@ const AppRouter = () => {
           />
         }
       >
-        <Route element={<NotificationRouteShell />}>
         {/* =====================================================
             PLATFORM ADMIN
         ===================================================== */}
@@ -447,8 +445,6 @@ const AppRouter = () => {
         ===================================================== */}
 
         {appRoutes}
-
-        </Route>
       </Route>
 
       {/* =========================================================

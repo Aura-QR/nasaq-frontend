@@ -3,7 +3,6 @@ import {
   Box,
   Chip,
   CircularProgress,
-  Container,
   LinearProgress,
   Paper,
   Stack,
@@ -17,6 +16,8 @@ import {
 } from "@mui/material";
 import { WarningAmberRounded } from "@mui/icons-material";
 import { toast } from "react-toastify";
+
+import AppContainer from "@/components/Container/Container";
 
 import { fetchCoverReport, toDateInput } from "@/APIs/school/duty";
 
@@ -58,11 +59,14 @@ const CoverReport = () => {
   }, [load]);
 
   const totals = report?.totals ?? {};
-  const rows = report?.teachers ?? [];
+  const rows = (report?.teachers ?? []).filter(
+    (row) => Number(row.covered ?? 0) > 0
+  );
   const heaviest = rows[0]?.covered ?? 0;
 
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }} dir="rtl">
+    <AppContainer>
+      <Box dir="rtl" sx={{ width: "100%", maxWidth: 1280, mx: "auto", pb: 4 }}>
       <Paper elevation={0} sx={{ p: 3, mb: 2, borderRadius: 3, bgcolor: "#FFFCF7" }}>
         <Typography variant="h5" fontWeight={700}>
           تقرير الاحتياطي
@@ -193,7 +197,8 @@ const CoverReport = () => {
           </Paper>
         </>
       )}
-    </Container>
+    </Box>
+    </AppContainer>
   );
 };
 

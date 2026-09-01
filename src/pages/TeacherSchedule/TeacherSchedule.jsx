@@ -59,6 +59,7 @@ import {
 } from "@/APIs/school/preparation";
 
 import nasaqLogo from "../../images/wadq-logo.png";
+import NotificationBell from "@/components/Notifications/NotificationBell";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
 
@@ -1836,6 +1837,17 @@ const TeacherSchedule = () => {
               >
                 لوحة التحكم
               </Button>
+
+              <NotificationBell
+                sx={{
+                  width: 36,
+                  height: 36,
+                  color: "#fff",
+                  border: "1px solid rgba(255,255,255,.28)",
+                  borderRadius: 2.2,
+                  "&:hover": { bgcolor: "rgba(255,255,255,.06)" },
+                }}
+              />
 
               <Tooltip title="تحديث الجدول">
                 <span>

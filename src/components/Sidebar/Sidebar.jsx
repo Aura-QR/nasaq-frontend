@@ -1,6 +1,7 @@
 import "./Sidebar.scss";
 
 import {
+  Box,
   Collapse,
   Stack,
   Typography,
@@ -77,6 +78,7 @@ import preparationIcon from "@/icons/preparation.json";
 
 import HoverLottie from "../HoverLottie";
 import usePermissions from "@/utils/hooks/usePermissions";
+import NotificationBell from "@/components/Notifications/NotificationBell";
 
 const normalizeRole = (role) =>
   String(role || "")
@@ -631,7 +633,7 @@ const Sidebar = ({ active, setActive }) => {
               show: true,
             },
             {
-              name: "طلبات الاستئذان",
+              name: "الاستئذان والاحتياطي",
               Icon: EventBusyRounded,
               iconType: "mui",
               to: "/teacher/duty",
@@ -784,6 +786,21 @@ const Sidebar = ({ active, setActive }) => {
               <strong>{displayName}</strong>
               <small>{roleLabel}</small>
             </span>
+
+            <Box sx={{ flexShrink: 0, mr: "auto" }}>
+              <NotificationBell
+                sx={{
+                  width: 36,
+                  height: 36,
+                  color: "var(--color-navy, #244a70)",
+                  backgroundColor: "rgba(36,74,112,0.05)",
+                  border: "1px solid rgba(36,74,112,0.08)",
+                  "&:hover": {
+                    backgroundColor: "var(--color-gold-soft, #fbf0d8)",
+                  },
+                }}
+              />
+            </Box>
           </div>
 
           <button

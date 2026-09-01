@@ -37,6 +37,8 @@ import {
   fetchMyTeacherAttendance,
 } from "@/APIs/school/teacherAttendance";
 
+import NotificationBell from "@/components/Notifications/NotificationBell";
+
 const DATE_LOCALE = "ar-EG-u-nu-latn";
 
 const todayKey = () => {
@@ -477,7 +479,19 @@ const TeacherCheckIn = () => {
               </Typography>
             </Box>
 
-            <Button
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <NotificationBell
+                sx={{
+                  width: 40,
+                  height: 40,
+                  color: "#fff",
+                  border: "1px solid rgba(255,255,255,.28)",
+                  backgroundColor: "rgba(255,255,255,.06)",
+                  "&:hover": { backgroundColor: "rgba(255,255,255,.12)" },
+                }}
+              />
+
+              <Button
               onClick={() => loadHistory()}
               startIcon={<RefreshRounded />}
               variant="outlined"
@@ -493,6 +507,7 @@ const TeacherCheckIn = () => {
             >
               تحديث
             </Button>
+            </Stack>
           </Stack>
         </Paper>
 

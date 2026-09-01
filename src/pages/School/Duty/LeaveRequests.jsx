@@ -4,7 +4,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Container,
   Dialog,
   DialogActions,
   DialogContent,
@@ -23,6 +22,8 @@ import {
   RefreshRounded,
 } from "@mui/icons-material";
 import { toast } from "react-toastify";
+
+import AppContainer from "@/components/Container/Container";
 
 import {
   cancelLeaveRequest,
@@ -191,7 +192,8 @@ const LeaveRequests = () => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }} dir="rtl">
+    <AppContainer>
+      <Box dir="rtl" sx={{ width: "100%", maxWidth: 1280, mx: "auto", pb: 4 }}>
       <Paper elevation={0} sx={{ p: 3, mb: 2, borderRadius: 3, bgcolor: "#FFFCF7" }}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
@@ -534,7 +536,8 @@ const LeaveRequests = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </Box>
+    </AppContainer>
   );
 };
 

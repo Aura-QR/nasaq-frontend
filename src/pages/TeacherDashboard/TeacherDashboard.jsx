@@ -84,6 +84,7 @@ import {
 } from "@/APIs/school/projects";
 
 import nasaqLogo from "../../images/wadq-logo.png";
+import NotificationBell from "@/components/Notifications/NotificationBell";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
 
@@ -1362,6 +1363,14 @@ const TeacherDashboard = () => {
           navigate("/teacher/check-in"),
       },
       {
+        title: "الاستئذان والاحتياطي",
+        description:
+          "قدّم طلب استئذان وتابع حالته وحصص الاحتياطي المكلف بها",
+        icon: <EventAvailableRounded />,
+        onClick: () =>
+          navigate("/teacher/duty"),
+      },
+      {
         title: "تحضيراتي",
         description:
           "راجع ملفات التحضير الحالية وافتح تفاصيلها",
@@ -1654,6 +1663,19 @@ const TeacherDashboard = () => {
                   </Typography>
                 </Box>
               </Stack>
+
+              <NotificationBell
+                sx={{
+                  width: 42,
+                  height: 42,
+                  color: "var(--color-white)",
+                  backgroundColor: "rgba(255,255,255,0.08)",
+                  border: "1px solid rgba(255,255,255,0.14)",
+                  "&:hover": {
+                    backgroundColor: "rgba(255,255,255,0.16)",
+                  },
+                }}
+              />
 
               <Tooltip title="تحديث البيانات">
                 <span>

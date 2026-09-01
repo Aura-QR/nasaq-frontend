@@ -4,7 +4,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Container,
   Dialog,
   DialogActions,
   DialogContent,
@@ -28,6 +27,8 @@ import {
   ShieldRounded,
 } from "@mui/icons-material";
 import { toast } from "react-toastify";
+
+import AppContainer from "@/components/Container/Container";
 
 import {
   assignSubstitute,
@@ -162,7 +163,8 @@ const CoverageBoard = () => {
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 3 }} dir="rtl">
+    <AppContainer>
+      <Box dir="rtl" sx={{ width: "100%", maxWidth: 1280, mx: "auto", pb: 4 }}>
       <Paper
         elevation={0}
         sx={{ p: 3, mb: 2, borderRadius: 3, bgcolor: "#FFFCF7" }}
@@ -282,7 +284,8 @@ const CoverageBoard = () => {
         onClose={() => setSupervisorDialog(false)}
         onSave={handleSaveSupervisors}
       />
-    </Container>
+    </Box>
+    </AppContainer>
   );
 };
 
