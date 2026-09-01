@@ -33,6 +33,7 @@ import {
   SaveRounded,
   ScheduleRounded,
   SearchRounded,
+  ShieldRounded,
   WarningAmberRounded,
 } from "@mui/icons-material";
 
@@ -51,6 +52,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 
+import { api } from "@/APIs/Axios";
 import { fetchLectures } from "@/APIs/school/lectures";
 import { fetchMyDay } from "@/APIs/school/notifications";
 import {
@@ -183,6 +185,104 @@ const extractCollection = (response, extraKeys = []) => {
   ];
 
   return candidates.find(Array.isArray) || [];
+};
+
+
+const extractDutySupervisorAssignment = (response, date) => {
+  const payload = unwrapResponse(response);
+
+  if (!payload) return null;
+
+  const collections = Array.isArray(payload)
+    ? payload
+    : [
+        payload?.docs,
+        payload?.items,
+        payload?.results,
+        payload?.records,
+        payload?.assignments,
+        payload?.dutySupervisors,
+        payload?.data,
+      ].find(Array.isArray);
+
+  if (Array.isArray(collections)) {
+    return (
+      collections.find(
+        (item) => String(item?.date || "").slice(0, 10) === date
+      ) ||
+      collections[0] ||
+      null
+    );
+  }
+
+  return typeof payload === "object" ? payload : null;
+};
+
+const getDutySupervisorEntries = (assignment) => {
+  if (!assignment || typeof assignment !== "object") return [];
+
+  const source = [
+    assignment?.supervisors,
+    assignment?.teachers,
+    assignment?.teacherIds,
+    assignment?.supervisorIds,
+  ].find(Array.isArray) || [];
+
+  const parallelNames = [
+    assignment?.teacherNames,
+    assignment?.supervisorNames,
+    assignment?.names,
+  ].find(Array.isArray) || [];
+
+  return source
+    .map((entry, index) => {
+      const objectEntry =
+        entry && typeof entry === "object" && !Array.isArray(entry)
+          ? entry
+          : {};
+
+      const teacher =
+        objectEntry?.teacher && typeof objectEntry.teacher === "object"
+          ? objectEntry.teacher
+          : objectEntry?.teacherId && typeof objectEntry.teacherId === "object"
+            ? objectEntry.teacherId
+            : objectEntry?.user && typeof objectEntry.user === "object"
+              ? objectEntry.user
+              : {};
+
+      const ids = [
+        entry,
+        objectEntry?.teacherId,
+        objectEntry?.teacher,
+        objectEntry?.userId,
+        objectEntry?.user,
+        objectEntry?._id,
+        objectEntry?.id,
+        teacher?._id,
+        teacher?.id,
+      ]
+        .map(normalizeId)
+        .filter(Boolean);
+
+      const parallelName = parallelNames[index];
+      const name = String(
+        objectEntry?.teacherName ||
+          objectEntry?.supervisorName ||
+          objectEntry?.name ||
+          teacher?.name ||
+          teacher?.fullName ||
+          (typeof parallelName === "string"
+            ? parallelName
+            : parallelName?.name || parallelName?.teacherName || "") ||
+          ""
+      ).trim();
+
+      return {
+        ids: Array.from(new Set(ids)),
+        name,
+      };
+    })
+    .filter((entry) => entry.ids.length > 0 || entry.name);
 };
 
 const isFailedResponse = (response) =>
@@ -568,6 +668,8 @@ const TeacherSchedule = () => {
   const [lectures, setLectures] = useState([]);
   const [preparations, setPreparations] = useState([]);
   const [dutyDays, setDutyDays] = useState({});
+  const [todaySupervisorAssignment, setTodaySupervisorAssignment] =
+    useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -600,6 +702,7 @@ const TeacherSchedule = () => {
         setLectures([]);
         setPreparations([]);
         setDutyDays({});
+        setTodaySupervisorAssignment(null);
         setError(
           "تعذر تحديد حساب المعلم الحالي. سجّل الدخول مرة أخرى."
         );
@@ -614,16 +717,25 @@ const TeacherSchedule = () => {
       setError("");
 
       try {
-        const lectureResponse = await fetchLectures(
-          {
-            teacherId,
-            page: 1,
-            limit: 500,
-          },
-          {
-            force: true,
-          }
-        );
+        const todayDate = formatLocalDate(today);
+
+        const [lectureResponse, supervisorResponse] = await Promise.all([
+          fetchLectures(
+            {
+              teacherId,
+              page: 1,
+              limit: 500,
+            },
+            {
+              force: true,
+            }
+          ),
+          api
+            .get("/duty/supervisors", {
+              params: { date: todayDate },
+            })
+            .catch(() => null),
+        ]);
 
         if (isFailedResponse(lectureResponse)) {
           throw new Error(
@@ -665,10 +777,16 @@ const TeacherSchedule = () => {
         setLectures(lectureList);
         setPreparations(preparationList);
         setDutyDays(Object.fromEntries(dutyEntries));
+        setTodaySupervisorAssignment(
+          supervisorResponse
+            ? extractDutySupervisorAssignment(supervisorResponse, todayDate)
+            : null
+        );
       } catch (requestError) {
         setLectures([]);
         setPreparations([]);
         setDutyDays({});
+        setTodaySupervisorAssignment(null);
         setError(
           requestError?.message ||
             requestError?.response?.data?.message ||
@@ -679,7 +797,7 @@ const TeacherSchedule = () => {
         setRefreshing(false);
       }
     },
-    [teacherId, weekStart]
+    [teacherId, weekStart, today]
   );
 
   useEffect(() => {
@@ -986,6 +1104,54 @@ const TeacherSchedule = () => {
         (slot) => slot?.kind === "own" && slot?.excusedByLeave
       ).length
   );
+
+  const todaySupervisorInfo = useMemo(() => {
+    const entries = getDutySupervisorEntries(todaySupervisorAssignment);
+
+    const currentIds = new Set(
+      [
+        teacherId,
+        currentUser?._id,
+        currentUser?.id,
+        currentUser?.teacherId,
+        currentUser?.teacher,
+        authRoot?.teacherId,
+        authRoot?.teacher,
+        authRoot?.user?._id,
+        authRoot?.user?.id,
+      ]
+        .map(normalizeId)
+        .filter(Boolean)
+    );
+
+    const isAssigned = entries.some((entry) =>
+      entry.ids.some((id) => currentIds.has(id))
+    );
+
+    const names = Array.from(
+      new Set(entries.map((entry) => entry.name).filter(Boolean))
+    );
+
+    const currentTeacherName = String(
+      currentUser?.name || currentUser?.fullName || ""
+    ).trim();
+
+    return {
+      isAssigned,
+      names:
+        names.length > 0
+          ? names
+          : isAssigned && currentTeacherName
+            ? [currentTeacherName]
+            : [],
+      notes: String(todaySupervisorAssignment?.notes || "").trim(),
+    };
+  }, [
+    todaySupervisorAssignment,
+    teacherId,
+    currentUser,
+    authRoot,
+  ]);
 
   const openAttendance = (lecture, day) => {
     const classId =
@@ -1972,6 +2138,130 @@ const TeacherSchedule = () => {
           >
             {error}
           </Alert>
+        ) : null}
+
+        {!isPreparationMode && todaySupervisorInfo.isAssigned ? (
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 1,
+              px: { xs: 1.2, md: 1.5 },
+              py: { xs: 1.1, md: 1.25 },
+              borderRadius: 2.5,
+              border: "1.5px solid #dfbe72",
+              bgcolor: "#fffaf0",
+              boxShadow: "0 8px 20px rgba(173, 124, 34, .05)",
+            }}
+          >
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              justifyContent="space-between"
+              gap={1}
+            >
+              <Stack
+                direction="row"
+                alignItems="flex-start"
+                spacing={1}
+                sx={{ minWidth: 0 }}
+              >
+                <Box
+                  sx={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: "50%",
+                    display: "grid",
+                    placeItems: "center",
+                    flexShrink: 0,
+                    bgcolor: "#e2ae45",
+                    color: "#fff",
+                  }}
+                >
+                  <ShieldRounded />
+                </Box>
+
+                <Box sx={{ minWidth: 0 }}>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={0.8}
+                    flexWrap="wrap"
+                    useFlexGap
+                  >
+                    <Typography
+                      sx={{
+                        color: "#b27713",
+                        fontSize: { xs: 14, md: 16 },
+                        fontWeight: 900,
+                      }}
+                    >
+                      أنت مكلّف بالمناوبة والإشراف اليوم
+                    </Typography>
+
+                    <Chip
+                      size="small"
+                      label="مناوب معتمد"
+                      sx={{
+                        height: 26,
+                        color: "#fff",
+                        bgcolor: "#b78325",
+                        fontSize: 10.5,
+                        fontWeight: 900,
+                      }}
+                    />
+                  </Stack>
+
+                  <Typography
+                    sx={{
+                      mt: 0.35,
+                      color: "#42556a",
+                      fontSize: { xs: 11, md: 12 },
+                      lineHeight: 1.8,
+                    }}
+                  >
+                    {todaySupervisorInfo.notes ||
+                      "يرجى متابعة انضباط الطابور، الفسحة، الممرات، وتنظيم دخول وخروج الطلاب."}
+                  </Typography>
+
+                  {todaySupervisorInfo.names.length > 0 ? (
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      spacing={0.6}
+                      flexWrap="wrap"
+                      useFlexGap
+                      sx={{ mt: 0.7 }}
+                    >
+                      <Typography
+                        sx={{
+                          color: "#7f8a96",
+                          fontSize: 10.5,
+                          fontWeight: 800,
+                        }}
+                      >
+                        المناوبون اليوم:
+                      </Typography>
+
+                      {todaySupervisorInfo.names.map((name) => (
+                        <Chip
+                          key={name}
+                          size="small"
+                          label={name}
+                          sx={{
+                            height: 25,
+                            bgcolor: "#f1eee7",
+                            color: "#51677b",
+                            fontSize: 10.5,
+                            fontWeight: 800,
+                          }}
+                        />
+                      ))}
+                    </Stack>
+                  ) : null}
+                </Box>
+              </Stack>
+            </Stack>
+          </Paper>
         ) : null}
 
         {!isPreparationMode ? (
