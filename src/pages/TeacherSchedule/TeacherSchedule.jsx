@@ -52,6 +52,7 @@ import {
 } from "react-router-dom";
 
 import { fetchLectures } from "@/APIs/school/lectures";
+import { fetchMyDay } from "@/APIs/school/notifications";
 import {
   addPreparation,
   fetchPreparations,
@@ -557,8 +558,15 @@ const TeacherSchedule = () => {
   const currentUser = authRoot?.user || authRoot;
   const teacherId = resolveTeacherId(authRoot, currentUser);
 
+  const today = useMemo(() => new Date(), []);
+  const weekStart = useMemo(() => getStartOfWeek(today), [today]);
+  const todayKey = DAYS.find(
+    (day) => day.jsDay === today.getDay()
+  )?.key;
+
   const [lectures, setLectures] = useState([]);
   const [preparations, setPreparations] = useState([]);
+  const [dutyDays, setDutyDays] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -590,6 +598,7 @@ const TeacherSchedule = () => {
       if (!teacherId) {
         setLectures([]);
         setPreparations([]);
+        setDutyDays({});
         setError(
           "تعذر تحديد حساب المعلم الحالي. سجّل الدخول مرة أخرى."
         );
@@ -635,11 +644,30 @@ const TeacherSchedule = () => {
             lectureList
           );
 
+        // `my-day` هو المصدر الحقيقي للاستئذان والاحتياطي في يوم محدد.
+        // نحمله لكل أيام الأسبوع بالتوازي حتى يظهر الاحتياطي داخل نفس الجدول،
+        // والحصة المعفاة بالاستئذان تفضل ظاهرة ومعلّمة بدل ما تختفي.
+        const dutyEntries = await Promise.all(
+          DAYS.map(async (day) => {
+            const date = formatLocalDate(
+              getDateForDay(weekStart, day.jsDay)
+            );
+            const response = await fetchMyDay(date);
+
+            return [
+              day.key,
+              response.status ? response.data : null,
+            ];
+          })
+        );
+
         setLectures(lectureList);
         setPreparations(preparationList);
+        setDutyDays(Object.fromEntries(dutyEntries));
       } catch (requestError) {
         setLectures([]);
         setPreparations([]);
+        setDutyDays({});
         setError(
           requestError?.message ||
             requestError?.response?.data?.message ||
@@ -650,7 +678,7 @@ const TeacherSchedule = () => {
         setRefreshing(false);
       }
     },
-    [teacherId]
+    [teacherId, weekStart]
   );
 
   useEffect(() => {
@@ -674,18 +702,39 @@ const TeacherSchedule = () => {
   const enrichedLectures = useMemo(
     () =>
       lectures
-        .map((lecture) => ({
-          ...lecture,
-          scheduleDayKey: getLectureDayKey(lecture),
-          scheduleSubject: getSubjectData(lecture),
-          scheduleClassId: getClassId(lecture),
-          scheduleClassLabel: getClassLabel(lecture),
-          scheduleSlot: getSlotNumber(lecture),
-          schedulePreparation:
-            preparationByLecture.get(getLectureId(lecture)) || null,
-        }))
+        .map((lecture) => {
+          const scheduleDayKey = getLectureDayKey(lecture);
+          const scheduleSlot = getSlotNumber(lecture);
+          const lectureId = getLectureId(lecture);
+          const dutySlots = dutyDays?.[scheduleDayKey]?.slots ?? [];
+
+          const ownDutySlot = dutySlots.find((slot) => {
+            if (slot?.kind !== "own") return false;
+
+            const dutyLectureId = normalizeId(slot?.lectureId);
+            if (dutyLectureId && lectureId) {
+              return dutyLectureId === lectureId;
+            }
+
+            return Number(slot?.slot) === scheduleSlot;
+          });
+
+          return {
+            ...lecture,
+            scheduleDayKey,
+            scheduleSubject: getSubjectData(lecture),
+            scheduleClassId: getClassId(lecture),
+            scheduleClassLabel: getClassLabel(lecture),
+            scheduleSlot,
+            schedulePreparation:
+              preparationByLecture.get(lectureId) || null,
+            scheduleExcusedByLeave: Boolean(
+              ownDutySlot?.excusedByLeave
+            ),
+          };
+        })
         .filter((lecture) => lecture.scheduleDayKey),
-    [lectures, preparationByLecture]
+    [lectures, preparationByLecture, dutyDays]
   );
 
   /*
@@ -832,22 +881,16 @@ const TeacherSchedule = () => {
     preparationFilter,
   ]);
 
-  const today = useMemo(() => new Date(), []);
-  const weekStart = useMemo(() => getStartOfWeek(today), [today]);
-  const todayKey = DAYS.find(
-    (day) => day.jsDay === today.getDay()
-  )?.key;
-
   const visibleDays = useMemo(() => {
     const base = DAYS.slice(0, 5);
     const extra = DAYS.slice(5).filter((day) =>
       enrichedLectures.some(
         (lecture) => lecture.scheduleDayKey === day.key
-      )
+      ) || (dutyDays?.[day.key]?.slots?.length ?? 0) > 0
     );
 
     return [...base, ...extra];
-  }, [enrichedLectures]);
+  }, [enrichedLectures, dutyDays]);
 
   const lecturesByDay = useMemo(() => {
     const map = new Map(
@@ -866,6 +909,47 @@ const TeacherSchedule = () => {
     return map;
   }, [filteredLectures, visibleDays]);
 
+  const coverSlotsByDay = useMemo(() => {
+    const map = new Map(
+      visibleDays.map((day) => [day.key, []])
+    );
+    const query = normalizeText(search);
+    const hasStructuredFilter =
+      Boolean(subjectFilter) ||
+      Boolean(classFilter) ||
+      preparationFilter !== "all";
+
+    visibleDays.forEach((day) => {
+      const covers = (dutyDays?.[day.key]?.slots ?? [])
+        .filter((slot) => slot?.kind === "cover")
+        .filter((slot) => {
+          if (isPreparationMode || hasStructuredFilter) return false;
+          if (!query) return true;
+
+          return [
+            slot?.subjectName,
+            slot?.className,
+            slot?.roomNumber,
+            slot?.coveringFor,
+            `الحصة ${slot?.slot ?? ""}`,
+          ].some((value) => normalizeText(value).includes(query));
+        })
+        .sort((a, b) => Number(a?.slot) - Number(b?.slot));
+
+      map.set(day.key, covers);
+    });
+
+    return map;
+  }, [
+    visibleDays,
+    dutyDays,
+    search,
+    subjectFilter,
+    classFilter,
+    preparationFilter,
+    isPreparationMode,
+  ]);
+
   const displayedDays = useMemo(() => {
     if (!isPreparationMode) return visibleDays;
 
@@ -874,12 +958,32 @@ const TeacherSchedule = () => {
     );
   }, [isPreparationMode, visibleDays, lecturesByDay]);
 
+  const visibleCoverCount = useMemo(
+    () =>
+      Array.from(coverSlotsByDay.values()).reduce(
+        (total, slots) => total + slots.length,
+        0
+      ),
+    [coverSlotsByDay]
+  );
+
   const preparedCount = enrichedLectures.filter((lecture) =>
     Boolean(getPreparationId(lecture.schedulePreparation))
   ).length;
 
   const todayLectures = enrichedLectures.filter(
     (lecture) => lecture.scheduleDayKey === todayKey
+  );
+  const todayDuty = dutyDays?.[todayKey] ?? null;
+  const todayCoverCount = Number(
+    todayDuty?.stats?.cover ??
+      (todayDuty?.slots ?? []).filter((slot) => slot?.kind === "cover").length
+  );
+  const todayExcusedCount = Number(
+    todayDuty?.stats?.excused ??
+      (todayDuty?.slots ?? []).filter(
+        (slot) => slot?.kind === "own" && slot?.excusedByLeave
+      ).length
   );
 
   const openAttendance = (lecture, day) => {
@@ -1306,7 +1410,7 @@ const TeacherSchedule = () => {
               <Box sx={{ minHeight: 260, display: "grid", placeItems: "center" }}>
                 <CircularProgress size={32} />
               </Box>
-            ) : filteredLectures.length === 0 ? (
+            ) : filteredLectures.length === 0 && visibleCoverCount === 0 ? (
               <Box
                 sx={{
                   minHeight: 260,
@@ -1878,11 +1982,19 @@ const TeacherSchedule = () => {
           />
           <StatCard
             title="حصص اليوم"
-            value={todayLectures.length}
+            value={todayLectures.length + todayCoverCount}
             helper={
-              todayLectures.length
-                ? "الحصص المجدولة اليوم"
-                : "لا توجد حصص اليوم"
+              todayCoverCount > 0
+                ? `${todayCoverCount} احتياطي اليوم${
+                    todayExcusedCount > 0
+                      ? ` · ${todayExcusedCount} باستئذان`
+                      : ""
+                  }`
+                : todayExcusedCount > 0
+                  ? `${todayExcusedCount} حصة معفاة باستئذان`
+                  : todayLectures.length
+                    ? "الحصص المجدولة اليوم"
+                    : "لا توجد حصص اليوم"
             }
             icon={<CalendarMonthRounded />}
             tone="green"
@@ -2080,7 +2192,7 @@ const TeacherSchedule = () => {
                 </Typography>
               </Stack>
             </Box>
-          ) : enrichedLectures.length === 0 ? (
+          ) : enrichedLectures.length === 0 && visibleCoverCount === 0 ? (
             <Box
               sx={{
                 minHeight: 330,
@@ -2157,6 +2269,23 @@ const TeacherSchedule = () => {
               {displayedDays.map((day) => {
                 const dayDate = getDateForDay(weekStart, day.jsDay);
                 const dayLectures = lecturesByDay.get(day.key) || [];
+                const dayCovers = coverSlotsByDay.get(day.key) || [];
+                const dayItems = [
+                  ...dayLectures.map((lecture) => ({
+                    kind: "own",
+                    slot: lecture.scheduleSlot,
+                    lecture,
+                  })),
+                  ...dayCovers.map((cover, index) => ({
+                    kind: "cover",
+                    slot: Number(cover?.slot) || 0,
+                    cover,
+                    key:
+                      normalizeId(cover?.substitutionId) ||
+                      normalizeId(cover?.lectureId) ||
+                      `${day.key}-${cover?.slot ?? index}-${index}`,
+                  })),
+                ].sort((a, b) => a.slot - b.slot);
                 const isToday = day.key === todayKey;
 
                 return (
@@ -2215,7 +2344,11 @@ const TeacherSchedule = () => {
 
                       <Chip
                         size="small"
-                        label={`${dayLectures.length} حصة`}
+                        label={
+                          dayCovers.length > 0
+                            ? `${dayItems.length} حصة · ${dayCovers.length} احتياطي`
+                            : `${dayItems.length} حصة`
+                        }
                         sx={{
                           bgcolor: isToday
                             ? "rgba(255,255,255,.13)"
@@ -2227,7 +2360,7 @@ const TeacherSchedule = () => {
                     </Stack>
 
                     <Stack spacing={0.7} sx={{ p: 0.7 }}>
-                      {dayLectures.length === 0 ? (
+                      {dayItems.length === 0 ? (
                         <Box
                           sx={{
                             minHeight: 76,
@@ -2245,12 +2378,103 @@ const TeacherSchedule = () => {
                           </Box>
                         </Box>
                       ) : (
-                        dayLectures.map((lecture) => {
+                        dayItems.map((item) => {
+                          if (item.kind === "cover") {
+                            const cover = item.cover;
+
+                            return (
+                              <Paper
+                                key={`cover-${item.key}`}
+                                variant="outlined"
+                                sx={{
+                                  borderRadius: 2,
+                                  borderColor: "#b9d4ec",
+                                  bgcolor: "#f4f9fd",
+                                  p: 0.85,
+                                }}
+                              >
+                                <Stack spacing={0.6}>
+                                  <Stack
+                                    direction="row"
+                                    alignItems="center"
+                                    justifyContent="space-between"
+                                    spacing={1}
+                                  >
+                                    <Chip
+                                      size="small"
+                                      label={
+                                        SLOT_LABELS[item.slot] ||
+                                        `الحصة ${item.slot}`
+                                      }
+                                      sx={{
+                                        bgcolor: "#e5f1fb",
+                                        color: "#245d88",
+                                        fontWeight: 900,
+                                        fontSize: 10.5,
+                                      }}
+                                    />
+                                    <Chip
+                                      size="small"
+                                      color="info"
+                                      label="احتياطي"
+                                      sx={{ fontWeight: 900, fontSize: 10.5 }}
+                                    />
+                                  </Stack>
+
+                                  <Box>
+                                    <Typography
+                                      sx={{
+                                        color: "#082a4b",
+                                        fontWeight: 900,
+                                        fontSize: 12.5,
+                                        lineHeight: 1.35,
+                                      }}
+                                    >
+                                      {cover?.subjectName || "حصة احتياطي"}
+                                    </Typography>
+                                    <Typography
+                                      sx={{
+                                        color: "#71879a",
+                                        fontSize: 10.5,
+                                        mt: 0.15,
+                                      }}
+                                    >
+                                      {[
+                                        cover?.className,
+                                        cover?.roomNumber
+                                          ? `غرفة ${cover.roomNumber}`
+                                          : "",
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" · ") || "—"}
+                                    </Typography>
+                                    {cover?.coveringFor ? (
+                                      <Typography
+                                        sx={{
+                                          color: "#4f7390",
+                                          fontSize: 10.5,
+                                          mt: 0.2,
+                                          fontWeight: 800,
+                                        }}
+                                      >
+                                        بدل {cover.coveringFor}
+                                      </Typography>
+                                    ) : null}
+                                  </Box>
+                                </Stack>
+                              </Paper>
+                            );
+                          }
+
+                          const lecture = item.lecture;
                           const lectureId = getLectureId(lecture);
                           const hasPreparation = Boolean(
                             getPreparationId(
                               lecture.schedulePreparation
                             )
+                          );
+                          const isExcused = Boolean(
+                            lecture.scheduleExcusedByLeave
                           );
 
                           return (
@@ -2259,12 +2483,16 @@ const TeacherSchedule = () => {
                               variant="outlined"
                               sx={{
                                 borderRadius: 2,
-                                borderColor: hasPreparation
-                                  ? "#dcebe3"
-                                  : "#f0dfbb",
-                                bgcolor: hasPreparation
-                                  ? "#fbfefc"
-                                  : "#fffcf6",
+                                borderColor: isExcused
+                                  ? "#e5c98a"
+                                  : hasPreparation
+                                    ? "#dcebe3"
+                                    : "#f0dfbb",
+                                bgcolor: isExcused
+                                  ? "#fff8e9"
+                                  : hasPreparation
+                                    ? "#fbfefc"
+                                    : "#fffcf6",
                                 p: 0.85,
                               }}
                             >
@@ -2286,34 +2514,51 @@ const TeacherSchedule = () => {
                                     }}
                                   />
 
-                                  <Chip
-                                    size="small"
-                                    icon={
-                                      hasPreparation ? (
-                                        <CheckCircleRounded />
-                                      ) : (
-                                        <WarningAmberRounded />
-                                      )
-                                    }
-                                    label={
-                                      hasPreparation
-                                        ? "تم التحضير"
-                                        : "تحتاج تحضير"
-                                    }
-                                    sx={{
-                                      bgcolor: hasPreparation
-                                        ? "#e7f4ed"
-                                        : "#fff0d0",
-                                      color: hasPreparation
-                                        ? "#19825f"
-                                        : "#a86d0e",
-                                      fontWeight: 900,
-                                      fontSize: 10.5,
-                                      "& .MuiChip-icon": {
-                                        color: "inherit",
-                                      },
-                                    }}
-                                  />
+                                  <Stack
+                                    direction="row"
+                                    spacing={0.4}
+                                    alignItems="center"
+                                  >
+                                    {isExcused ? (
+                                      <Chip
+                                        size="small"
+                                        color="warning"
+                                        label="مستأذن"
+                                        sx={{
+                                          fontWeight: 900,
+                                          fontSize: 10.5,
+                                        }}
+                                      />
+                                    ) : null}
+                                    <Chip
+                                      size="small"
+                                      icon={
+                                        hasPreparation ? (
+                                          <CheckCircleRounded />
+                                        ) : (
+                                          <WarningAmberRounded />
+                                        )
+                                      }
+                                      label={
+                                        hasPreparation
+                                          ? "تم التحضير"
+                                          : "تحتاج تحضير"
+                                      }
+                                      sx={{
+                                        bgcolor: hasPreparation
+                                          ? "#e7f4ed"
+                                          : "#fff0d0",
+                                        color: hasPreparation
+                                          ? "#19825f"
+                                          : "#a86d0e",
+                                        fontWeight: 900,
+                                        fontSize: 10.5,
+                                        "& .MuiChip-icon": {
+                                          color: "inherit",
+                                        },
+                                      }}
+                                    />
+                                  </Stack>
                                 </Stack>
 
                                 <Box>
@@ -2371,15 +2616,20 @@ const TeacherSchedule = () => {
                                   >
                                     {hasPreparation
                                       ? "فتح التحضير"
-                                      : isPreparationMode
-                                      ? "ابدأ تحضير هذه الحصة"
                                       : "إضافة تحضير"}
                                   </Button>
 
-                                  {!isPreparationMode ? (
-                                    <Tooltip title="تسجيل الحضور">
+                                  <Tooltip
+                                    title={
+                                      isExcused
+                                        ? "الحصة معفاة باستئذان معتمد"
+                                        : "تسجيل الحضور"
+                                    }
+                                  >
+                                    <span>
                                       <IconButton
                                         size="small"
+                                        disabled={isExcused}
                                         onClick={() =>
                                           openAttendance(lecture, day)
                                         }
@@ -2391,8 +2641,8 @@ const TeacherSchedule = () => {
                                       >
                                         <HowToRegRounded fontSize="small" />
                                       </IconButton>
-                                    </Tooltip>
-                                  ) : null}
+                                    </span>
+                                  </Tooltip>
                                 </Stack>
                               </Stack>
                             </Paper>

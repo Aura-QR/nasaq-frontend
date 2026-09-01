@@ -56,6 +56,7 @@ import PlatformSchools from "@/pages/PlatformSchools/PlatformSchools";
 import PlatformSchoolDetails from "@/pages/PlatformSchoolDetails/PlatformSchoolDetails";
 
 import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
+import NotificationRouteShell from "@/components/Notifications/NotificationRouteShell";
 
 // =========================
 // Guards
@@ -70,6 +71,7 @@ import RoleRoute from "@/shared/guards/RoleRoute";
 // =========================
 import {
   ROLES,
+  DUTY_ADMIN_ROLES,
   SCHOOL_ADMIN_ROLES,
 } from "@/shared/auth/roles";
 
@@ -147,6 +149,7 @@ const AppRouter = () => {
           />
         }
       >
+        <Route element={<NotificationRouteShell />}>
         {/* =====================================================
             PLATFORM ADMIN
         ===================================================== */}
@@ -245,7 +248,22 @@ const AppRouter = () => {
             path="/school/teacher-attendance"
             element={<TeacherAttendanceAdmin />}
           />
+        </Route>
 
+        {/* =====================================================
+            DUTY ADMINISTRATION
+            OWNER / MANAGER / SUPERVISOR / SUPER_ADMIN
+        ===================================================== */}
+
+        <Route
+          element={
+            <RoleRoute
+              allowedRoles={
+                DUTY_ADMIN_ROLES
+              }
+            />
+          }
+        >
           <Route
             path="/school/duty"
             element={<CoverageBoard />}
@@ -430,6 +448,7 @@ const AppRouter = () => {
 
         {appRoutes}
 
+        </Route>
       </Route>
 
       {/* =========================================================

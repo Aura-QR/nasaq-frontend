@@ -247,8 +247,6 @@ const TeacherCheckIn = () => {
   }, [loadHistory]);
 
   const verification = getVerification(currentRecord);
-  const fullyVerified = verification.gps && verification.network;
-  const partiallyVerified = verification.gps !== verification.network;
   const hasCheckedIn = Boolean(currentRecord?.checkInAt);
   const hasCheckedOut = Boolean(currentRecord?.checkOutAt);
 
@@ -704,11 +702,23 @@ const TeacherCheckIn = () => {
 
                 {hasCheckedOut && hasMeasuredValue(currentRecord?.earlyLeaveMinutes) && (
                   <Alert
-                    severity={Number(currentRecord.earlyLeaveMinutes) > 0 ? "warning" : "success"}
+                    severity={
+                      Number(currentRecord.earlyLeaveMinutes) > 0
+                        ? currentRecord?.earlyLeaveApproved
+                          ? "success"
+                          : "warning"
+                        : "success"
+                    }
                     sx={{ mt: 1.1, borderRadius: "12px" }}
                   >
                     {Number(currentRecord.earlyLeaveMinutes) > 0
-                      ? `الخروج المبكر: ${formatMinutes(currentRecord.earlyLeaveMinutes)}`
+                      ? currentRecord?.earlyLeaveApproved
+                        ? `انصراف مبكر معتمد: ${formatMinutes(currentRecord.earlyLeaveMinutes)}${
+                            currentRecord?.approvedLeaveAt
+                              ? ` · وقت الاستئذان المعتمد: ${formatTime(currentRecord.approvedLeaveAt)}`
+                              : ""
+                          }`
+                        : `الخروج المبكر: ${formatMinutes(currentRecord.earlyLeaveMinutes)}`
                       : "تم تسجيل الانصراف في الموعد المحدد أو بعده."}
                   </Alert>
                 )}
@@ -816,9 +826,31 @@ const TeacherCheckIn = () => {
                               : "—"}
                           </TableCell>
                           <TableCell align="right">
-                            {hasMeasuredValue(record?.earlyLeaveMinutes)
-                              ? formatMinutes(record.earlyLeaveMinutes)
-                              : "—"}
+                            {hasMeasuredValue(record?.earlyLeaveMinutes) ? (
+                              <Stack
+                                direction="row"
+                                alignItems="center"
+                                spacing={0.75}
+                                sx={{ whiteSpace: "nowrap" }}
+                              >
+                                <span>{formatMinutes(record.earlyLeaveMinutes)}</span>
+                                {Number(record.earlyLeaveMinutes) > 0 &&
+                                  record?.earlyLeaveApproved && (
+                                    <Chip
+                                      label="معتمد"
+                                      size="small"
+                                      sx={{
+                                        height: 22,
+                                        color: "#237449",
+                                        backgroundColor: "#E7F6ED",
+                                        fontWeight: 800,
+                                      }}
+                                    />
+                                  )}
+                              </Stack>
+                            ) : (
+                              "—"
+                            )}
                           </TableCell>
                           <TableCell align="right">
                             {hasMeasuredValue(record?.workMinutes)

@@ -32,7 +32,17 @@ const POLL_MS = 60_000;
  * من غيره الميزة كلها فيها ثغرة: المديرة تكلّف بديل الصبح، والبديل مش هيعرف
  * لأنه مش هيفتح شاشة هو مش مستنيها — والفصل يفضل فاضي.
  */
-const NotificationBell = ({ sx }) => {
+const NotificationBell = ({
+  sx,
+  anchorOrigin = {
+    vertical: "bottom",
+    horizontal: "left",
+  },
+  transformOrigin = {
+    vertical: "top",
+    horizontal: "left",
+  },
+}) => {
   const [anchor, setAnchor] = useState(null);
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState([]);
@@ -104,8 +114,8 @@ const NotificationBell = ({ sx }) => {
         open={Boolean(anchor)}
         anchorEl={anchor}
         onClose={() => setAnchor(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-        transformOrigin={{ vertical: "top", horizontal: "left" }}
+        anchorOrigin={anchorOrigin}
+        transformOrigin={transformOrigin}
         slotProps={{ paper: { sx: { width: 360, maxHeight: 460, borderRadius: 2 } } }}
       >
         <Box dir="rtl">

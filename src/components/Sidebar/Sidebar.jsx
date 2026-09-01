@@ -201,12 +201,6 @@ const Sidebar = ({ active, setActive }) => {
   const roleLabel =
     ROLE_LABELS[role] || "مستخدم";
 
-  const userId =
-    user?._id ||
-    user?.id ||
-    user?.userId ||
-    "";
-
   const isTeacher = role === "TEACHER";
 
   const canManageAcademicYears =
@@ -637,7 +631,7 @@ const Sidebar = ({ active, setActive }) => {
               show: true,
             },
             {
-              name: "الاستئذان والاحتياطي",
+              name: "طلبات الاستئذان",
               Icon: EventBusyRounded,
               iconType: "mui",
               to: "/teacher/duty",
@@ -694,6 +688,7 @@ const Sidebar = ({ active, setActive }) => {
     return baseCategories;
   }, [
     isTeacher,
+    role,
     canManageAcademicYears,
     canManageSchoolSettings,
     studentsPermissions.read,

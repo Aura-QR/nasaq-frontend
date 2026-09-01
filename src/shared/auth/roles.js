@@ -17,6 +17,13 @@ export const SCHOOL_ADMIN_ROLES = Object.freeze([
   ROLES.MANAGER,
 ]);
 
+// Duty administration is also available to platform super admins.
+// Keep this separate so SUPER_ADMIN does not gain unrelated school screens.
+export const DUTY_ADMIN_ROLES = Object.freeze([
+  ...SCHOOL_ADMIN_ROLES,
+  ROLES.SUPER_ADMIN,
+]);
+
 export const SCHOOL_ROLES = Object.freeze([
   ...SCHOOL_ADMIN_ROLES,
   ROLES.TEACHER,

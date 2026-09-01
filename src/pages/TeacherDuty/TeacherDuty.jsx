@@ -25,7 +25,6 @@ import {
   LEAVE_STATUS_LABELS,
   toDateInput,
 } from "@/APIs/school/duty";
-import { fetchMyDay } from "@/APIs/school/notifications";
 
 const STATUS_COLORS = {
   pending: "warning",
@@ -34,14 +33,13 @@ const STATUS_COLORS = {
 };
 
 /**
- * شاشة المعلم — استئذاناته، والحصص المكلّف بيها احتياطي.
+ * شاشة المعلم لطلبات الاستئذان.
  *
- * الاتنين على نفس الشاشة عن قصد: الحصة الاحتياطي بتيجي من غياب زميل، وهي نفس
- * اللحظة اللي المعلم بيسأل فيها "أنا عليّ إيه النهارده".
+ * حصص الاحتياطي وحالة الحصص المعفاة بالاستئذان تظهر الآن داخل الجدول الدراسي
+ * نفسه، لذلك تفضل هذه الشاشة مخصصة لإنشاء الطلبات ومتابعتها فقط.
  */
 const TeacherDuty = () => {
   const [requests, setRequests] = useState([]);
-  const [day, setDay] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
@@ -55,18 +53,13 @@ const TeacherDuty = () => {
   const load = useCallback(async () => {
     setLoading(true);
 
-    const [leaveResponse, dayResponse] = await Promise.all([
-      fetchLeaveRequests({}),
-      fetchMyDay(toDateInput()),
-    ]);
+    const leaveResponse = await fetchLeaveRequests({});
 
     if (leaveResponse.status) {
       setRequests(Array.isArray(leaveResponse.data) ? leaveResponse.data : []);
     } else {
       toast.error(leaveResponse.message);
     }
-
-    if (dayResponse.status) setDay(dayResponse.data);
 
     setLoading(false);
   }, []);
@@ -113,10 +106,10 @@ const TeacherDuty = () => {
       >
         <Box>
           <Typography variant="h5" fontWeight={700}>
-            الاستئذان والاحتياطي
+            طلبات الاستئذان
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            طلبات انصرافك، والحصص المكلّف بيها بدل زميل
+            قدّم طلب انصراف وتابع حالة الموافقة أو الرفض
           </Typography>
         </Box>
         <Button
@@ -134,8 +127,6 @@ const TeacherDuty = () => {
         </Box>
       ) : (
         <>
-          <MyDay day={day} />
-
           <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, bgcolor: "#FFFCF7" }}>
             <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
               طلبات الاستئذان
@@ -273,104 +264,5 @@ const TeacherDuty = () => {
   );
 };
 
-/**
- * يوم المدرس كامل — حصصه وحصص الاحتياطي على نفس الخط، مرتبين بالحصة.
- *
- * الحصص اللي الاستئذان بيعفيه منها **بتتعلّم مش بتختفي**: إخفاؤها هو اللي
- * بيخلي حد يروح لحصة هو أصلًا مستأذن منها.
- */
-const MyDay = ({ day }) => {
-  if (!day) return null;
-
-  const slots = day.slots ?? [];
-
-  return (
-    <Paper elevation={0} sx={{ p: 2.5, mb: 2, borderRadius: 3, bgcolor: "#FFFCF7" }}>
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        sx={{ mb: 1.5 }}
-      >
-        <Typography variant="h6" fontWeight={700}>
-          يومك النهارده
-        </Typography>
-        <Stack direction="row" spacing={0.75}>
-          <Chip size="small" label={`${day.stats?.own ?? 0} حصة`} />
-          {(day.stats?.cover ?? 0) > 0 && (
-            <Chip
-              size="small"
-              color="info"
-              label={`${day.stats.cover} احتياطي`}
-            />
-          )}
-          {(day.stats?.excused ?? 0) > 0 && (
-            <Chip
-              size="small"
-              color="warning"
-              label={`${day.stats.excused} باستئذان`}
-            />
-          )}
-        </Stack>
-      </Stack>
-
-      {slots.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
-          مفيش حصص عليك النهارده.
-        </Typography>
-      ) : (
-        <Stack spacing={1}>
-          {slots.map((slot) => (
-            <Paper
-              key={`${slot.kind}-${slot.lectureId}`}
-              variant="outlined"
-              sx={{
-                p: 1.5,
-                borderRadius: 2,
-                borderColor:
-                  slot.kind === "cover" ? "#B9D4EC" : "rgba(0,0,0,0.12)",
-                bgcolor:
-                  slot.kind === "cover"
-                    ? "#F4F9FD"
-                    : slot.excusedByLeave
-                      ? "#FBF6EC"
-                      : "transparent",
-                opacity: slot.excusedByLeave ? 0.75 : 1,
-              }}
-            >
-              <Stack
-                direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-                gap={1}
-                flexWrap="wrap"
-              >
-                <Box>
-                  <Typography variant="body1" fontWeight={600}>
-                    الحصة {slot.slot} · {slot.className ?? "—"}
-                    {slot.roomNumber ? ` · ${slot.roomNumber}` : ""}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {slot.subjectName ?? "—"}
-                    {slot.coveringFor ? ` · بدل ${slot.coveringFor}` : ""}
-                  </Typography>
-                </Box>
-
-                <Stack direction="row" spacing={0.75}>
-                  {slot.kind === "cover" && (
-                    <Chip size="small" color="info" label="احتياطي" />
-                  )}
-                  {slot.excusedByLeave && (
-                    <Chip size="small" color="warning" label="مستأذن" />
-                  )}
-                </Stack>
-              </Stack>
-            </Paper>
-          ))}
-        </Stack>
-      )}
-    </Paper>
-  );
-};
 
 export default TeacherDuty;
