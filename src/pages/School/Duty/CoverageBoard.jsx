@@ -19,9 +19,11 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  CalendarMonthRounded,
   CheckCircleRounded,
   DeleteOutlineRounded,
   ErrorOutlineRounded,
+  Groups2Rounded,
   HistoryRounded,
   PersonAddAlt1Rounded,
   RefreshRounded,
@@ -249,290 +251,417 @@ const CoverageBoard = () => {
 
   return (
     <AppContainer>
-      <Box dir="rtl" sx={{ width: "100%", maxWidth: 1280, mx: "auto", pb: 4 }}>
-      <Paper
-        elevation={0}
-        sx={{ p: 3, mb: 2, borderRadius: 3, bgcolor: "#FFFCF7" }}
+      <Box
+        dir="rtl"
+        sx={{
+          width: "100%",
+          minWidth: 0,
+          pb: 4,
+          color: "var(--color-text)",
+        }}
       >
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={2}
-          alignItems={{ md: "center" }}
-          justifyContent="space-between"
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 1.25,
+            px: { xs: 1.5, md: 2.4 },
+            py: 1.6,
+            border: "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "18px",
+            background:
+              "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.42))",
+            boxShadow: "0 10px 24px rgba(18,47,77,0.06)",
+          }}
         >
-          <Box>
-            <Typography variant="h5" fontWeight={700}>
-              الاحتياطي والمناوبة
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              مين غايب النهارده، وحصصه هتروح لمين
-            </Typography>
-          </Box>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            alignItems={{ xs: "stretch", md: "center" }}
+            justifyContent="space-between"
+            gap={1.5}
+          >
+            <Box>
+              <Stack direction="row" alignItems="center" spacing={0.8}>
+                <Typography
+                  component="h1"
+                  sx={{
+                    color: "var(--color-navy-deep)",
+                    fontSize: { xs: "21px", md: "25px" },
+                    fontWeight: 800,
+                  }}
+                >
+                  الاحتياطي والمناوبة
+                </Typography>
+                <Chip
+                  size="small"
+                  label={stats.needCover ?? 0}
+                  sx={{
+                    color: "var(--color-gold-dark)",
+                    backgroundColor: "var(--color-gold-soft)",
+                    fontWeight: 800,
+                  }}
+                />
+              </Stack>
+              <Typography
+                sx={{
+                  mt: 0.45,
+                  color: "var(--color-muted)",
+                  fontSize: "11px",
+                }}
+              >
+                تابع الغياب، وزّع حصص الاحتياطي وحدد مناوبة اليوم من مكان واحد.
+              </Typography>
+            </Box>
 
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <TextField
-              type="date"
-              size="small"
-              label="اليوم"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              InputLabelProps={{ shrink: true }}
-            />
-            <Tooltip title="تحديث">
-              <span>
-                <IconButton onClick={() => load()} disabled={loading}>
-                  <RefreshRounded />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<HistoryRounded />}
-              onClick={openSupervisorHistory}
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              gap={1}
             >
-              سجل المناوبات
-            </Button>
+              <TextField
+                type="date"
+                size="small"
+                label="اليوم"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                InputLabelProps={{ shrink: true }}
+                sx={{ minWidth: { sm: 170 } }}
+              />
+              <Tooltip title="تحديث">
+                <span>
+                  <IconButton
+                    onClick={() => load()}
+                    disabled={loading}
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      border: "1px solid rgba(36,74,112,0.10)",
+                      borderRadius: "11px",
+                    }}
+                  >
+                    <RefreshRounded />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<HistoryRounded />}
+                onClick={openSupervisorHistory}
+                sx={{ minHeight: 40, borderRadius: "11px", fontWeight: 800 }}
+              >
+                سجل المناوبات
+              </Button>
+            </Stack>
           </Stack>
-        </Stack>
-      </Paper>
+        </Paper>
 
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-          <CircularProgress />
-        </Box>
-      ) : !board ? null : (
-        <>
-          <SummaryRow
-            board={board}
-            stats={stats}
-            coveredRatio={coveredRatio}
-            onEditSupervisors={() => setSupervisorDialog(true)}
-          />
+        {loading ? (
+          <Paper
+            elevation={0}
+            sx={{
+              minHeight: 280,
+              display: "grid",
+              placeItems: "center",
+              border: "1px solid rgba(36,74,112,0.08)",
+              borderRadius: "18px",
+              bgcolor: "var(--color-cream)",
+            }}
+          >
+            <CircularProgress />
+          </Paper>
+        ) : !board ? null : (
+          <>
+            <SummaryRow
+              board={board}
+              stats={stats}
+              coveredRatio={coveredRatio}
+              onEditSupervisors={() => setSupervisorDialog(true)}
+            />
 
-          {!board.checkInInUse && (
-            <Paper
-              elevation={0}
+            {!board.checkInInUse && (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 1.4,
+                  mb: 1.25,
+                  border: "1px solid rgba(36,74,112,0.08)",
+                  borderRadius: "14px",
+                  bgcolor: "rgba(36,74,112,0.045)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                <ErrorOutlineRounded sx={{ color: "var(--color-navy-deep)" }} />
+                <Typography sx={{ color: "var(--color-muted)", fontSize: "11px" }}>
+                  محدش سجّل حضور لليوم ده لسه، فمفيش غياب يتحسب. الاستئذانات
+                  المعتمدة بتظهر عادي.
+                </Typography>
+              </Paper>
+            )}
+
+            <Box
               sx={{
-                p: 2,
-                mb: 2,
-                borderRadius: 3,
-                bgcolor: "#EEF3F9",
-                display: "flex",
-                gap: 1.5,
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" },
+                gap: 1.25,
               }}
             >
-              <ErrorOutlineRounded color="info" />
-              <Typography variant="body2">
-                محدش سجّل حضور لليوم ده لسه، فمفيش غياب يتحسب. الاستئذانات
-                المعتمدة بتظهر عادي.
-              </Typography>
-            </Paper>
-          )}
+              <Section
+                title="محتاجة بديل"
+                count={board.uncovered?.length ?? 0}
+                emptyText="مفيش حصة محتاجة بديل — كل حاجة متغطية."
+              >
+                {(board.uncovered ?? []).map((item) => (
+                  <UncoveredCard
+                    key={item.lectureId}
+                    item={item}
+                    onPick={() => setTarget(item)}
+                  />
+                ))}
+              </Section>
 
-          <Section
-            title="محتاجة بديل"
-            count={board.uncovered?.length ?? 0}
-            emptyText="مفيش حصة محتاجة بديل — كل حاجة متغطية."
-          >
-            {(board.uncovered ?? []).map((item) => (
-              <UncoveredCard
-                key={item.lectureId}
-                item={item}
-                onPick={() => setTarget(item)}
-              />
-            ))}
-          </Section>
+              <Section
+                title="اتغطّت"
+                count={board.covered?.length ?? 0}
+                emptyText="لسه مفيش تكليفات."
+              >
+                {(board.covered ?? []).map((item) => (
+                  <CoveredCard
+                    key={item.lectureId}
+                    item={item}
+                    busy={busy}
+                    onRemove={() => handleRemove(item.substitutionId)}
+                  />
+                ))}
+              </Section>
+            </Box>
+          </>
+        )}
 
-          <Section
-            title="اتغطّت"
-            count={board.covered?.length ?? 0}
-            emptyText="لسه مفيش تكليفات."
-          >
-            {(board.covered ?? []).map((item) => (
-              <CoveredCard
-                key={item.lectureId}
-                item={item}
-                busy={busy}
-                onRemove={() => handleRemove(item.substitutionId)}
-              />
-            ))}
-          </Section>
-        </>
-      )}
+        <PickSubstituteDialog
+          target={target}
+          busy={busy}
+          onClose={() => setTarget(null)}
+          onPick={handleAssign}
+        />
 
-      <PickSubstituteDialog
-        target={target}
-        busy={busy}
-        onClose={() => setTarget(null)}
-        onPick={handleAssign}
-      />
+        <SupervisorsDialog
+          open={supervisorDialog}
+          busy={busy}
+          teachers={teachers}
+          value={supervisorIds}
+          onChange={setSupervisorIds}
+          notes={supervisorNotes}
+          onNotesChange={setSupervisorNotes}
+          onClose={() => setSupervisorDialog(false)}
+          onSave={handleSaveSupervisors}
+        />
 
-      <SupervisorsDialog
-        open={supervisorDialog}
-        busy={busy}
-        teachers={teachers}
-        value={supervisorIds}
-        onChange={setSupervisorIds}
-        notes={supervisorNotes}
-        onNotesChange={setSupervisorNotes}
-        onClose={() => setSupervisorDialog(false)}
-        onSave={handleSaveSupervisors}
-      />
-
-      <SupervisorHistoryDialog
-        open={historyOpen}
-        loading={historyLoading}
-        rows={historyRows}
-        from={historyFrom}
-        to={historyTo}
-        onFromChange={setHistoryFrom}
-        onToChange={setHistoryTo}
-        onRefresh={loadSupervisorHistory}
-        onClose={() => setHistoryOpen(false)}
-      />
-    </Box>
+        <SupervisorHistoryDialog
+          open={historyOpen}
+          loading={historyLoading}
+          rows={historyRows}
+          from={historyFrom}
+          to={historyTo}
+          onFromChange={setHistoryFrom}
+          onToChange={setHistoryTo}
+          onRefresh={loadSupervisorHistory}
+          onClose={() => setHistoryOpen(false)}
+        />
+      </Box>
     </AppContainer>
   );
 };
 
-const SummaryRow = ({ board, stats, coveredRatio, onEditSupervisors }) => (
-  <Stack
-    direction={{ xs: "column", md: "row" }}
-    spacing={2}
-    sx={{ mb: 2 }}
-    alignItems="stretch"
-  >
-    <Paper
-      elevation={0}
-      sx={{ p: 2.5, borderRadius: 3, flex: 1, bgcolor: "#FFFCF7" }}
-    >
-      <Typography variant="body2" color="text.secondary">
-        {DAY_NAMES[board.dayOfWeek] ?? board.dayOfWeek} · {board.date}
-      </Typography>
-      <Typography variant="h4" fontWeight={700} sx={{ mt: 0.5 }}>
-        {stats.covered} / {stats.needCover}
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        حصة متغطية
-      </Typography>
-      <LinearProgress
-        variant="determinate"
-        value={coveredRatio}
-        sx={{ height: 8, borderRadius: 4 }}
-        color={stats.uncovered > 0 ? "warning" : "success"}
-      />
-    </Paper>
+const SummaryRow = ({ board, stats, coveredRatio, onEditSupervisors }) => {
+  const absentCount = (board.absentTeachers ?? []).length;
+  const leaveCount = (board.onLeave ?? []).length;
 
-    <Paper
-      elevation={0}
-      sx={{ p: 2.5, borderRadius: 3, flex: 1, bgcolor: "#FFFCF7" }}
+  return (
+    <Box
+      sx={{
+        mb: 1.25,
+        display: "grid",
+        gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" },
+        gap: 1,
+      }}
     >
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        غايبين النهارده
-      </Typography>
-      {(board.absentTeachers ?? []).length === 0 ? (
-        <Typography variant="body2">مفيش</Typography>
-      ) : (
-        <Stack direction="row" flexWrap="wrap" gap={0.75}>
-          {board.absentTeachers.map((teacher) => (
+      <Paper
+        elevation={0}
+        sx={{
+          p: 1.4,
+          border: "1px solid rgba(36,74,112,0.08)",
+          borderRadius: "18px",
+          bgcolor: "var(--color-cream)",
+        }}
+      >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+          <Box>
+            <Typography sx={{ color: "var(--color-muted)", fontSize: "10px", fontWeight: 700 }}>
+              {DAY_NAMES[board.dayOfWeek] ?? board.dayOfWeek} · {board.date}
+            </Typography>
+            <Typography
+              sx={{ mt: 0.25, color: "var(--color-navy-deep)", fontSize: "22px", fontWeight: 800 }}
+            >
+              {stats.covered} / {stats.needCover}
+            </Typography>
+            <Typography sx={{ color: "var(--color-muted)", fontSize: "10px" }}>
+              حصة متغطية
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              width: 40,
+              height: 40,
+              display: "grid",
+              placeItems: "center",
+              color: "var(--color-gold-dark)",
+              bgcolor: "var(--color-gold-soft)",
+              borderRadius: "12px",
+            }}
+          >
+            <CalendarMonthRounded />
+          </Box>
+        </Stack>
+        <LinearProgress
+          variant="determinate"
+          value={coveredRatio}
+          sx={{ mt: 1.1, height: 5, borderRadius: 4 }}
+          color={stats.uncovered > 0 ? "warning" : "success"}
+        />
+      </Paper>
+
+      <Paper
+        elevation={0}
+        sx={{
+          p: 1.4,
+          border: "1px solid rgba(36,74,112,0.08)",
+          borderRadius: "18px",
+          bgcolor: "var(--color-cream)",
+        }}
+      >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+          <Box>
+            <Typography sx={{ color: "var(--color-muted)", fontSize: "10px", fontWeight: 700 }}>
+              الغياب والاستئذان
+            </Typography>
+            <Typography sx={{ mt: 0.25, color: "var(--color-navy-deep)", fontSize: "22px", fontWeight: 800 }}>
+              {absentCount} غياب · {leaveCount} استئذان
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              width: 40, height: 40, display: "grid", placeItems: "center",
+              color: "var(--color-gold-dark)", bgcolor: "var(--color-gold-soft)", borderRadius: "12px",
+            }}
+          >
+            <Groups2Rounded />
+          </Box>
+        </Stack>
+        <Stack direction="row" flexWrap="wrap" gap={0.6} sx={{ mt: 1 }}>
+          {(board.absentTeachers ?? []).map((teacher) => (
+            <Chip key={teacher.teacherId} size="small" color="error" variant="outlined" label={teacher.name ?? "—"} />
+          ))}
+          {(board.onLeave ?? []).map((teacher) => (
             <Chip
-              key={teacher.teacherId}
+              key={`leave-${teacher.teacherId}`}
               size="small"
-              color="error"
+              color="warning"
               variant="outlined"
-              label={teacher.name ?? "—"}
+              label={`${teacher.name}${teacher.fromSlot ? ` · من ${teacher.fromSlot}` : ""}`}
             />
           ))}
+          {absentCount === 0 && leaveCount === 0 && (
+            <Typography sx={{ color: "var(--color-muted)", fontSize: "10px" }}>لا يوجد غياب أو استئذان.</Typography>
+          )}
         </Stack>
-      )}
+      </Paper>
 
-      {(board.onLeave ?? []).length > 0 && (
-        <>
-          <Divider sx={{ my: 1.5 }} />
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            مستأذنين
-          </Typography>
-          <Stack direction="row" flexWrap="wrap" gap={0.75}>
-            {board.onLeave.map((teacher) => (
-              <Chip
-                key={teacher.teacherId}
-                size="small"
-                color="warning"
-                variant="outlined"
-                label={`${teacher.name} · ${teacher.leaveAt}${
-                  teacher.fromSlot ? ` (من الحصة ${teacher.fromSlot})` : ""
-                }`}
-              />
-            ))}
-          </Stack>
-        </>
-      )}
-    </Paper>
-
-    <Paper
-      elevation={0}
-      sx={{ p: 2.5, borderRadius: 3, flex: 1, bgcolor: "#FFFCF7" }}
-    >
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 1 }}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 1.4,
+          border: "1px solid rgba(36,74,112,0.08)",
+          borderRadius: "18px",
+          bgcolor: "var(--color-cream)",
+        }}
       >
-        <Typography variant="body2" color="text.secondary">
-          مناوبة اليوم
-        </Typography>
-        <Button size="small" startIcon={<ShieldRounded />} onClick={onEditSupervisors}>
-          تحديد
-        </Button>
-      </Stack>
-      {!board.supervisors || board.supervisors.teacherNames?.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
-          مفيش مناوب متحدد
-        </Typography>
-      ) : (
-        <Stack direction="row" flexWrap="wrap" gap={0.75}>
-          {board.supervisors.teacherNames.map((name, index) => (
-            <Chip key={`${name}-${index}`} size="small" color="primary" label={name} />
-          ))}
+        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+          <Box>
+            <Typography sx={{ color: "var(--color-muted)", fontSize: "10px", fontWeight: 700 }}>
+              مناوبة اليوم
+            </Typography>
+            <Stack direction="row" flexWrap="wrap" gap={0.6} sx={{ mt: 0.75 }}>
+              {(board.supervisors?.teacherNames ?? []).length ? (
+                board.supervisors.teacherNames.map((name, index) => (
+                  <Chip key={`${name}-${index}`} size="small" label={name} sx={{ fontWeight: 800 }} />
+                ))
+              ) : (
+                <Typography sx={{ color: "var(--color-muted)", fontSize: "10px" }}>مفيش مناوب متحدد</Typography>
+              )}
+            </Stack>
+          </Box>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<ShieldRounded />}
+            onClick={onEditSupervisors}
+            sx={{ borderRadius: "10px", fontWeight: 800, whiteSpace: "nowrap" }}
+          >
+            تحديد
+          </Button>
         </Stack>
-      )}
-      {board.supervisors?.notes && (
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-          ملاحظة: {board.supervisors.notes}
-        </Typography>
-      )}
-    </Paper>
-  </Stack>
-);
+        {board.supervisors?.notes && (
+          <Typography sx={{ mt: 0.8, color: "var(--color-muted)", fontSize: "9px" }}>
+            {board.supervisors.notes}
+          </Typography>
+        )}
+      </Paper>
+    </Box>
+  );
+};
 
 const Section = ({ title, count, emptyText, children }) => (
-  <Paper elevation={0} sx={{ p: 2.5, mb: 2, borderRadius: 3, bgcolor: "#FFFCF7" }}>
-    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-      <Typography variant="h6" fontWeight={700}>
+  <Paper
+    elevation={0}
+    sx={{
+      p: { xs: 1.2, md: 1.6 },
+      border: "1px solid rgba(36,74,112,0.08)",
+      borderRadius: "18px",
+      bgcolor: "var(--color-cream)",
+      minWidth: 0,
+    }}
+  >
+    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.2 }}>
+      <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "15px", fontWeight: 800 }}>
         {title}
       </Typography>
-      <Chip size="small" label={count} />
+      <Chip
+        size="small"
+        label={count}
+        sx={{ color: "var(--color-gold-dark)", bgcolor: "var(--color-gold-soft)", fontWeight: 800 }}
+      />
     </Stack>
-
     {count === 0 ? (
-      <Typography variant="body2" color="text.secondary">
-        {emptyText}
-      </Typography>
+      <Stack alignItems="center" justifyContent="center" sx={{ minHeight: 150 }}>
+        <Typography sx={{ color: "var(--color-muted)", fontSize: "11px", textAlign: "center" }}>
+          {emptyText}
+        </Typography>
+      </Stack>
     ) : (
-      <Stack spacing={1}>{children}</Stack>
+      <Stack spacing={0.85}>{children}</Stack>
     )}
   </Paper>
 );
 
 const LectureLine = ({ item }) => (
   <Box>
-    <Typography variant="body1" fontWeight={600}>
+    <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "12px", fontWeight: 800 }}>
       الحصة {item.slot} · {item.className ?? "—"}
       {item.roomNumber ? ` · ${item.roomNumber}` : ""}
     </Typography>
-    <Typography variant="body2" color="text.secondary">
+    <Typography sx={{ color: "var(--color-muted)", fontSize: "10px" }}>
       {item.subjectName ?? "—"} · {item.absentTeacherName ?? "بدون معلم"}
       {" · "}
       {COVER_REASON_LABELS[item.reason] ?? item.reason}
@@ -545,10 +674,10 @@ const UncoveredCard = ({ item, onPick }) => (
   <Paper
     variant="outlined"
     sx={{
-      p: 2,
-      borderRadius: 2,
-      borderColor: "#F0C0C0",
-      bgcolor: "#FDF7F7",
+      p: 1.25,
+      borderRadius: "14px",
+      borderColor: "rgba(209,67,67,0.22)",
+      bgcolor: "rgba(209,67,67,0.035)",
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
@@ -581,10 +710,10 @@ const CoveredCard = ({ item, busy, onRemove }) => (
   <Paper
     variant="outlined"
     sx={{
-      p: 2,
-      borderRadius: 2,
-      borderColor: "#CDE7D8",
-      bgcolor: "#F6FBF8",
+      p: 1.25,
+      borderRadius: "14px",
+      borderColor: "rgba(22,134,95,0.20)",
+      bgcolor: "rgba(22,134,95,0.035)",
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
@@ -616,7 +745,14 @@ const CoveredCard = ({ item, busy, onRemove }) => (
  * ترتيبهم هنا.
  */
 const PickSubstituteDialog = ({ target, busy, onClose, onPick }) => (
-  <Dialog open={Boolean(target)} onClose={onClose} fullWidth maxWidth="sm" dir="rtl">
+  <Dialog
+    open={Boolean(target)}
+    onClose={onClose}
+    fullWidth
+    maxWidth="sm"
+    dir="rtl"
+    PaperProps={{ sx: { borderRadius: "18px" } }}
+  >
     <DialogTitle>
       اختر بديل — الحصة {target?.slot} · {target?.className}
     </DialogTitle>
@@ -640,7 +776,7 @@ const PickSubstituteDialog = ({ target, busy, onClose, onPick }) => (
             }}
           >
             <Box>
-              <Typography variant="body1" fontWeight={600}>
+              <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "12px", fontWeight: 800 }}>
                 {suggestion.name}
               </Typography>
               <Typography variant="body2" color="text.secondary">
@@ -681,7 +817,14 @@ const SupervisorsDialog = ({
   onClose,
   onSave,
 }) => (
-  <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs" dir="rtl">
+  <Dialog
+    open={open}
+    onClose={onClose}
+    fullWidth
+    maxWidth="xs"
+    dir="rtl"
+    PaperProps={{ sx: { borderRadius: "18px" } }}
+  >
     <DialogTitle>مناوبة اليوم</DialogTitle>
     <DialogContent dividers>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -759,7 +902,14 @@ const SupervisorHistoryDialog = ({
   onRefresh,
   onClose,
 }) => (
-  <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" dir="rtl">
+  <Dialog
+    open={open}
+    onClose={onClose}
+    fullWidth
+    maxWidth="sm"
+    dir="rtl"
+    PaperProps={{ sx: { borderRadius: "18px" } }}
+  >
     <DialogTitle>سجل المناوبات</DialogTitle>
     <DialogContent dividers>
       <Stack

@@ -19,7 +19,11 @@ import {
   CheckRounded,
   CloseRounded,
   DeleteOutlineRounded,
+  EventAvailableRounded,
+  HourglassBottomRounded,
   RefreshRounded,
+  RestartAltRounded,
+  TaskAltRounded,
 } from "@mui/icons-material";
 import { toast } from "react-toastify";
 
@@ -193,181 +197,346 @@ const LeaveRequests = () => {
     }
   };
 
+  const stats = useMemo(() => ({
+    total: rows.length,
+    pending: rows.filter((row) => row.status === "pending").length,
+    approved: rows.filter((row) => row.status === "approved").length,
+    rejected: rows.filter((row) => row.status === "rejected").length,
+  }), [rows]);
+
+  const activeFiltersCount = [status, teacherId, from, to].filter(Boolean).length;
+
+  const resetFilters = () => {
+    setStatus("");
+    setTeacherId("");
+    setFrom(toDateInput());
+    setTo("");
+  };
+
   return (
     <AppContainer>
-      <Box dir="rtl" sx={{ width: "100%", maxWidth: 1280, mx: "auto", pb: 4 }}>
-      <Paper elevation={0} sx={{ p: 3, mb: 2, borderRadius: 3, bgcolor: "#FFFCF7" }}>
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          justifyContent="space-between"
-          alignItems={{ xs: "stretch", sm: "flex-start" }}
-          spacing={2}
-          sx={{ mb: 2 }}
+      <Box
+        dir="rtl"
+        sx={{
+          width: "100%",
+          minWidth: 0,
+          pb: 4,
+          color: "var(--color-text)",
+        }}
+      >
+        {/* Header */}
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 1.25,
+            px: { xs: 1.5, md: 2.4 },
+            py: 1.6,
+            border: "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "18px",
+            background:
+              "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.42))",
+            boxShadow: "0 10px 24px rgba(18,47,77,0.06)",
+          }}
         >
-          <Box>
-            <Typography variant="h5" fontWeight={700}>
-              طلبات الاستئذان
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              الموافقة بتمنع احتساب الانصراف كمخالفة، وبتحدد الحصص المحتاجة بديل
-            </Typography>
-          </Box>
-
-          <Button
-            variant="contained"
-            startIcon={<AddRounded />}
-            onClick={() => setCreateOpen(true)}
-            disabled={teachersLoading}
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ xs: "stretch", sm: "center" }}
+            justifyContent="space-between"
+            gap={1.5}
           >
-            استئذان لمعلم
-          </Button>
-        </Stack>
+            <Box>
+              <Stack direction="row" alignItems="center" spacing={0.8}>
+                <Typography
+                  component="h1"
+                  sx={{
+                    color: "var(--color-navy-deep)",
+                    fontSize: { xs: "21px", md: "25px" },
+                    fontWeight: 800,
+                  }}
+                >
+                  طلبات الاستئذان
+                </Typography>
+                <Chip
+                  label={stats.total}
+                  size="small"
+                  sx={{
+                    color: "var(--color-gold-dark)",
+                    bgcolor: "var(--color-gold-soft)",
+                    fontWeight: 800,
+                  }}
+                />
+              </Stack>
+              <Typography sx={{ mt: 0.45, color: "var(--color-muted)", fontSize: "11px" }}>
+                راجع الطلبات، وافق أو ارفض، وحدد من أي حصة يبدأ الاستئذان.
+              </Typography>
+            </Box>
 
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-          <TextField
-            select
-            size="small"
-            label="المعلم"
-            value={teacherId}
-            onChange={(event) => setTeacherId(event.target.value)}
-            sx={{ minWidth: 190 }}
-            disabled={teachersLoading}
-          >
-            <MenuItem value="">كل المعلمين</MenuItem>
-            {sortedTeachers.map((teacher) => (
-              <MenuItem key={teacher.id} value={teacher.id}>
-                {teacher.name}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            select
-            size="small"
-            label="الحالة"
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-            sx={{ minWidth: 160 }}
-          >
-            <MenuItem value="">الكل</MenuItem>
-            <MenuItem value="pending">في انتظار الرد</MenuItem>
-            <MenuItem value="approved">موافق عليه</MenuItem>
-            <MenuItem value="rejected">مرفوض</MenuItem>
-          </TextField>
-          <TextField
-            type="date"
-            size="small"
-            label="من"
-            value={from}
-            onChange={(event) => setFrom(event.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
-          <TextField
-            type="date"
-            size="small"
-            label="إلى"
-            value={to}
-            onChange={(event) => setTo(event.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
-          <Button startIcon={<RefreshRounded />} onClick={load} disabled={loading}>
-            تحديث
-          </Button>
-        </Stack>
-      </Paper>
-
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-          <CircularProgress />
-        </Box>
-      ) : rows.length === 0 ? (
-        <Paper elevation={0} sx={{ p: 4, borderRadius: 3, bgcolor: "#FFFCF7" }}>
-          <Typography variant="body1" color="text.secondary" textAlign="center">
-            مفيش طلبات في النطاق ده.
-          </Typography>
+            <Button
+              variant="contained"
+              startIcon={<AddRounded />}
+              onClick={() => setCreateOpen(true)}
+              disabled={teachersLoading}
+              sx={{ minHeight: 42, borderRadius: "12px", fontWeight: 800, px: 2 }}
+            >
+              استئذان لمعلم
+            </Button>
+          </Stack>
         </Paper>
-      ) : (
-        <Stack spacing={1.5}>
-          {rows.map((row) => (
+
+        {/* Stats */}
+        <Box
+          sx={{
+            mb: 1.25,
+            display: "grid",
+            gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" },
+            gap: 1,
+          }}
+        >
+          {[
+            { label: "إجمالي الطلبات", value: stats.total, icon: <EventAvailableRounded /> },
+            { label: "في انتظار الرد", value: stats.pending, icon: <HourglassBottomRounded /> },
+            { label: "موافق عليها", value: stats.approved, icon: <TaskAltRounded /> },
+            { label: "مرفوضة", value: stats.rejected, icon: <CloseRounded /> },
+          ].map((card) => (
             <Paper
-              key={row._id}
+              key={card.label}
               elevation={0}
               sx={{
-                p: 2.5,
-                borderRadius: 3,
-                bgcolor: "#FFFCF7",
+                p: 1.3,
                 display: "flex",
-                gap: 2,
                 alignItems: "center",
                 justifyContent: "space-between",
-                flexWrap: "wrap",
+                border: "1px solid rgba(36,74,112,0.08)",
+                borderRadius: "18px",
+                bgcolor: "var(--color-cream)",
               }}
             >
               <Box>
-                <Typography variant="body1" fontWeight={600}>
-                  {row.teacherName || "—"}
+                <Typography sx={{ color: "var(--color-muted)", fontSize: "10px", fontWeight: 700 }}>
+                  {card.label}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {row.date} · انصراف {row.leaveAt}
-                  {row.fromSlot ? ` · من الحصة ${row.fromSlot}` : " · اليوم كله"}
+                <Typography sx={{ mt: 0.35, color: "var(--color-navy-deep)", fontSize: "21px", fontWeight: 800 }}>
+                  {card.value}
                 </Typography>
-                {row.reason && (
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    {row.reason}
-                  </Typography>
-                )}
-                {row.status !== "pending" && row.reviewedByName && (
-                  <Typography variant="caption" color="text.secondary">
-                    {row.status === "approved" ? "وافق" : "رفض"}: {" "}
-                    {row.reviewedByName}
-                    {row.reviewNote ? ` — ${row.reviewNote}` : ""}
-                  </Typography>
-                )}
               </Box>
-
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                <Chip
-                  size="small"
-                  color={STATUS_COLORS[row.status]}
-                  label={LEAVE_STATUS_LABELS[row.status] ?? row.status}
-                />
-                {row.status === "pending" && (
-                  <>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      color="success"
-                      startIcon={<CheckRounded />}
-                      onClick={() => setDecision({ row, status: "approved" })}
-                      disabled={busy}
-                    >
-                      موافقة
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="error"
-                      startIcon={<CloseRounded />}
-                      onClick={() => setDecision({ row, status: "rejected" })}
-                      disabled={busy}
-                    >
-                      رفض
-                    </Button>
-                  </>
-                )}
-                <Button
-                  size="small"
-                  color="error"
-                  startIcon={<DeleteOutlineRounded />}
-                  onClick={() => setCancelTarget(row)}
-                  disabled={busy}
-                >
-                  إلغاء الطلب
-                </Button>
-              </Stack>
+              <Box
+                sx={{
+                  width: 40, height: 40, display: "grid", placeItems: "center",
+                  color: "var(--color-gold-dark)", bgcolor: "var(--color-gold-soft)", borderRadius: "12px",
+                }}
+              >
+                {card.icon}
+              </Box>
             </Paper>
           ))}
-        </Stack>
-      )}
+        </Box>
+
+        {/* Filters */}
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 1.25,
+            p: 1.6,
+            border: "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "18px",
+            bgcolor: "var(--color-cream)",
+          }}
+        >
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            alignItems={{ xs: "stretch", md: "center" }}
+            justifyContent="space-between"
+            gap={1}
+            sx={{ mb: 1.2 }}
+          >
+            <Box>
+              <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "15px", fontWeight: 800 }}>
+                البحث والتصفية
+              </Typography>
+              <Typography sx={{ mt: 0.2, color: "var(--color-muted)", fontSize: "9.5px" }}>
+                فلتر بالمعلم أو الحالة أو الفترة الزمنية.
+              </Typography>
+            </Box>
+            <Stack direction="row" gap={0.8}>
+              <Button
+                type="button"
+                startIcon={<RestartAltRounded />}
+                onClick={resetFilters}
+                disabled={!activeFiltersCount}
+                sx={{ fontWeight: 800 }}
+              >
+                مسح الفلاتر
+              </Button>
+              <Button
+                startIcon={<RefreshRounded />}
+                onClick={load}
+                disabled={loading}
+                sx={{ fontWeight: 800 }}
+              >
+                تحديث
+              </Button>
+            </Stack>
+          </Stack>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", xl: "1.2fr 1fr 1fr 1fr" },
+              gap: 1,
+            }}
+          >
+            <TextField
+              select
+              size="small"
+              label="المعلم"
+              value={teacherId}
+              onChange={(event) => setTeacherId(event.target.value)}
+              disabled={teachersLoading}
+            >
+              <MenuItem value="">كل المعلمين</MenuItem>
+              {sortedTeachers.map((teacher) => (
+                <MenuItem key={teacher.id} value={teacher.id}>{teacher.name}</MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              size="small"
+              label="الحالة"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
+              <MenuItem value="">كل الحالات</MenuItem>
+              <MenuItem value="pending">في انتظار الرد</MenuItem>
+              <MenuItem value="approved">موافق عليه</MenuItem>
+              <MenuItem value="rejected">مرفوض</MenuItem>
+            </TextField>
+            <TextField
+              type="date" size="small" label="من" value={from}
+              onChange={(event) => setFrom(event.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              type="date" size="small" label="إلى" value={to}
+              onChange={(event) => setTo(event.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
+        </Paper>
+
+        {/* Requests */}
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 1.2, md: 1.6 },
+            border: "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "18px",
+            bgcolor: "var(--color-cream)",
+          }}
+        >
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.2 }}>
+            <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "15px", fontWeight: 800 }}>
+              الطلبات
+            </Typography>
+            <Chip size="small" label={rows.length} sx={{ fontWeight: 800 }} />
+          </Stack>
+
+          {loading ? (
+            <Stack alignItems="center" justifyContent="center" sx={{ minHeight: 230 }}>
+              <CircularProgress />
+            </Stack>
+          ) : rows.length === 0 ? (
+            <Stack alignItems="center" justifyContent="center" sx={{ minHeight: 180 }}>
+              <EventAvailableRounded sx={{ fontSize: 44, color: "var(--color-muted)" }} />
+              <Typography sx={{ mt: 0.8, color: "var(--color-navy-deep)", fontWeight: 800 }}>
+                لا توجد طلبات
+              </Typography>
+              <Typography sx={{ mt: 0.3, color: "var(--color-muted)", fontSize: "10px" }}>
+                جرّب تغيير الفلاتر أو إنشاء استئذان جديد.
+              </Typography>
+            </Stack>
+          ) : (
+            <Stack spacing={0.85}>
+              {rows.map((row) => (
+                <Paper
+                  key={row._id}
+                  variant="outlined"
+                  sx={{
+                    p: 1.25,
+                    borderRadius: "14px",
+                    borderColor: "rgba(36,74,112,0.09)",
+                    bgcolor: "var(--color-white)",
+                    display: "flex",
+                    gap: 1.5,
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    transition: "200ms ease",
+                    "&:hover": { boxShadow: "0 10px 22px rgba(18,47,77,0.06)" },
+                  }}
+                >
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Stack direction="row" alignItems="center" gap={0.7} flexWrap="wrap">
+                      <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "12.5px", fontWeight: 800 }}>
+                        {row.teacherName || "—"}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        color={STATUS_COLORS[row.status]}
+                        label={LEAVE_STATUS_LABELS[row.status] ?? row.status}
+                        sx={{ height: 22, fontSize: "9px", fontWeight: 800 }}
+                      />
+                    </Stack>
+                    <Typography sx={{ mt: 0.45, color: "var(--color-muted)", fontSize: "10px" }}>
+                      {row.date} · انصراف {row.leaveAt}
+                      {row.fromSlot ? ` · من الحصة ${row.fromSlot}` : " · اليوم كله"}
+                    </Typography>
+                    {row.reason && (
+                      <Typography sx={{ mt: 0.45, color: "var(--color-text)", fontSize: "10px" }}>
+                        {row.reason}
+                      </Typography>
+                    )}
+                    {row.status !== "pending" && row.reviewedByName && (
+                      <Typography sx={{ mt: 0.4, color: "var(--color-muted)", fontSize: "9px" }}>
+                        {row.status === "approved" ? "وافق" : "رفض"}: {row.reviewedByName}
+                        {row.reviewNote ? ` — ${row.reviewNote}` : ""}
+                      </Typography>
+                    )}
+                  </Box>
+
+                  <Stack direction="row" spacing={0.7} alignItems="center" flexWrap="wrap" useFlexGap>
+                    {row.status === "pending" && (
+                      <>
+                        <Button
+                          size="small" variant="contained" color="success" startIcon={<CheckRounded />}
+                          onClick={() => setDecision({ row, status: "approved" })}
+                          disabled={busy}
+                          sx={{ borderRadius: "10px", fontWeight: 800 }}
+                        >
+                          موافقة
+                        </Button>
+                        <Button
+                          size="small" variant="outlined" color="error" startIcon={<CloseRounded />}
+                          onClick={() => setDecision({ row, status: "rejected" })}
+                          disabled={busy}
+                          sx={{ borderRadius: "10px", fontWeight: 800 }}
+                        >
+                          رفض
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      size="small" color="error" startIcon={<DeleteOutlineRounded />}
+                      onClick={() => setCancelTarget(row)} disabled={busy}
+                      sx={{ borderRadius: "10px", fontWeight: 800 }}
+                    >
+                      إلغاء الطلب
+                    </Button>
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </Paper>
 
       <Dialog
         open={createOpen}
@@ -375,6 +544,7 @@ const LeaveRequests = () => {
         fullWidth
         maxWidth="xs"
         dir="rtl"
+        PaperProps={{ sx: { borderRadius: "18px" } }}
       >
         <DialogTitle>إنشاء استئذان لمعلم</DialogTitle>
         <DialogContent dividers>
@@ -481,6 +651,7 @@ const LeaveRequests = () => {
         fullWidth
         maxWidth="xs"
         dir="rtl"
+        PaperProps={{ sx: { borderRadius: "18px" } }}
       >
         <DialogTitle>
           {decision?.status === "approved" ? "الموافقة على الاستئذان" : "رفض الاستئذان"}
@@ -526,6 +697,7 @@ const LeaveRequests = () => {
         fullWidth
         maxWidth="xs"
         dir="rtl"
+        PaperProps={{ sx: { borderRadius: "18px" } }}
       >
         <DialogTitle>إلغاء طلب الاستئذان</DialogTitle>
         <DialogContent dividers>
