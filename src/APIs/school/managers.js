@@ -16,37 +16,6 @@ let managersCache = null;
 let managersCacheTime = 0;
 let managersPendingRequest = null;
 
-/**
- * Default MANAGER permissions.
- *
- * These are administrative and academic
- * permissions only. Financial, expenses and
- * manager-management permissions are excluded.
- *
- * The permissions use the backend permission
- * catalog: students have CRUD permissions,
- * while the remaining modules use `.manage`.
- */
-export const MANAGER_DEFAULT_PERMISSIONS = [
-  "school.students.read",
-  "school.students.create",
-  "school.students.update",
-  "school.students.delete",
-
-  "school.teachers.manage",
-  "school.subjects.manage",
-  "school.classes.manage",
-  "school.lectures.manage",
-
-  "school.gradesCriteria.manage",
-  "school.exams.manage",
-  "school.projects.manage",
-
-  "school.attendance.manage",
-  "school.preparation.manage",
-  "school.library.manage",
-];
-
 const normalizeText = (
   value
 ) =>
@@ -85,29 +54,6 @@ const normalizeManagerType = (
     : "";
 };
 
-const normalizePermissions = (
-  permissions
-) =>
-  Array.from(
-    new Set(
-      (
-        Array.isArray(
-          permissions
-        )
-          ? permissions
-          : []
-      )
-        .map(normalizeText)
-        .filter(
-          (permission) =>
-            permission === "*" ||
-            permission.startsWith(
-              "school."
-            )
-        )
-    )
-  );
-
 const invalidateManagersCache =
   () => {
     managersCache = null;
@@ -116,43 +62,26 @@ const invalidateManagersCache =
 
 const normalizeCreatePayload = (
   payload
-) => {
-  const role =
+) => ({
+  username:
+    normalizeText(
+      payload?.username
+    ),
+
+  email:
+    normalizeEmail(
+      payload?.email
+    ),
+
+  password:
+    payload?.password ||
+    "",
+
+  role:
     normalizeRole(
       payload?.role
-    );
-
-  const requestedPermissions =
-    normalizePermissions(
-      payload?.permissions
-    );
-
-  const permissions =
-    role === "SUPERVISOR"
-      ? ["*"]
-      : requestedPermissions.length
-      ? requestedPermissions
-      : MANAGER_DEFAULT_PERMISSIONS;
-
-  return {
-    username:
-      normalizeText(
-        payload?.username
-      ),
-
-    email:
-      normalizeEmail(
-        payload?.email
-      ),
-
-    password:
-      payload?.password ||
-      "",
-
-    role,
-    permissions,
-  };
-};
+    ),
+});
 
 export const fetchManagers =
   async ({
@@ -222,48 +151,6 @@ export const createManager =
       return getApiError(
         error,
         "تعذر إنشاء الحساب الإداري"
-      );
-    }
-  };
-
-export const updateManagerPermissions =
-  async (
-    managerId,
-    permissions =
-      MANAGER_DEFAULT_PERMISSIONS
-  ) => {
-    const normalizedManagerId =
-      normalizeText(
-        managerId
-      );
-
-    if (!normalizedManagerId) {
-      return {
-        status: false,
-        message:
-          "معرّف المدير غير موجود",
-      };
-    }
-
-    try {
-      const response =
-        await api.patch(
-          `${MANAGERS_ENDPOINT}/${normalizedManagerId}/permissions`,
-          {
-            permissions:
-              normalizePermissions(
-                permissions
-              ),
-          }
-        );
-
-      invalidateManagersCache();
-
-      return response.data;
-    } catch (error) {
-      return getApiError(
-        error,
-        "تعذر تحديث صلاحيات المدير"
       );
     }
   };
@@ -425,12 +312,10 @@ export const demoteManager =
   demoteTeacherFromManager;
 
 export default {
-  MANAGER_DEFAULT_PERMISSIONS,
   fetchManagers,
   getSchoolManagers,
   createManager,
   createSchoolManager,
-  updateManagerPermissions,
   promoteTeacherToManager,
   demoteTeacherFromManager,
   promoteManager,

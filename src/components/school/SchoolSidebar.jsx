@@ -263,7 +263,10 @@ const SchoolSidebar = ({
     );
 
   const canManageManagers =
-    role === ROLES.OWNER;
+    [
+      ROLES.OWNER,
+      ROLES.SUPERVISOR,
+    ].includes(role);
 
   const modulePermissions = {
     students:

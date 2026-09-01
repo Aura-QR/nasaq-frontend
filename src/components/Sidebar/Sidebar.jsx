@@ -1,7 +1,6 @@
 import "./Sidebar.scss";
 
 import {
-  Box,
   Collapse,
   Stack,
   Typography,
@@ -78,7 +77,6 @@ import preparationIcon from "@/icons/preparation.json";
 
 import HoverLottie from "../HoverLottie";
 import usePermissions from "@/utils/hooks/usePermissions";
-import NotificationBell from "@/components/Notifications/NotificationBell";
 
 const normalizeRole = (role) =>
   String(role || "")
@@ -203,6 +201,12 @@ const Sidebar = ({ active, setActive }) => {
   const roleLabel =
     ROLE_LABELS[role] || "مستخدم";
 
+  const userId =
+    user?._id ||
+    user?.id ||
+    user?.userId ||
+    "";
+
   const isTeacher = role === "TEACHER";
 
   const canManageAcademicYears =
@@ -248,7 +252,9 @@ const Sidebar = ({ active, setActive }) => {
             Icon: ManageAccountsRounded,
             iconType: "mui",
             to: "/school/managers",
-            show: role === "OWNER",
+            show:
+              role === "OWNER" ||
+              role === "SUPERVISOR",
           },
         ],
       },
@@ -690,7 +696,6 @@ const Sidebar = ({ active, setActive }) => {
     return baseCategories;
   }, [
     isTeacher,
-    role,
     canManageAcademicYears,
     canManageSchoolSettings,
     studentsPermissions.read,
@@ -786,21 +791,6 @@ const Sidebar = ({ active, setActive }) => {
               <strong>{displayName}</strong>
               <small>{roleLabel}</small>
             </span>
-
-            <Box sx={{ flexShrink: 0, mr: "auto" }}>
-              <NotificationBell
-                sx={{
-                  width: 36,
-                  height: 36,
-                  color: "var(--color-navy, #244a70)",
-                  backgroundColor: "rgba(36,74,112,0.05)",
-                  border: "1px solid rgba(36,74,112,0.08)",
-                  "&:hover": {
-                    backgroundColor: "var(--color-gold-soft, #fbf0d8)",
-                  },
-                }}
-              />
-            </Box>
           </div>
 
           <button

@@ -6,15 +6,12 @@ import {
 import {
   Box,
   Button,
-  Checkbox,
-  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
-  FormControlLabel,
   IconButton,
   InputLabel,
   MenuItem,
@@ -26,7 +23,6 @@ import {
 
 import {
   useEffect,
-  useMemo,
   useState,
 } from "react";
 
@@ -41,170 +37,63 @@ const emailPattern =
 const passwordPattern =
   /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 
-const getPermissionLabel = (
-  permission
-) => {
-  const labels = {
-    students: "الطلاب",
-    teachers: "المعلمون",
-    classes: "الفصول",
-    subjects: "المواد",
-    attendance: "الحضور",
-    lectures: "الحصص",
-    exams: "الاختبارات",
-    gradesCriteria:
-      "معايير الدرجات",
-    projects: "المشاريع",
-    preparation: "التحضير",
-    library: "المكتبة",
-    financial: "المالية",
-    expenses: "المصروفات",
-    managers: "المديرون",
-    analytics: "التقارير",
-    settings: "الإعدادات",
-  };
-
-  const actions = {
-    read: "عرض",
-    create: "إضافة",
-    update: "تعديل",
-    delete: "حذف",
-    manage: "إدارة",
-  };
-
-  const parts =
-    String(
-      permission || ""
-    ).split(".");
-
-  return `${
-    labels[parts[1]] ||
-    parts[1] ||
-    permission
-  }${
-    parts[2]
-      ? ` — ${
-          actions[
-            parts[2]
-          ] || parts[2]
-        }`
-      : ""
-  }`;
-};
-
 const ManagerFormDialog = ({
   open,
   loading = false,
   currentRole,
-  permissions = [],
-  permissionsLoading = false,
   onClose,
   onSubmit,
 }) => {
-  const [
-    form,
-    setForm,
-  ] = useState({
-    username: "",
-    email: "",
-    password: "",
-    role:
-      ROLES.MANAGER,
-    permissions: [],
-  });
+  const [form, setForm] =
+    useState({
+      username: "",
+      email: "",
+      password: "",
+      role: ROLES.MANAGER,
+    });
 
   const [errors, setErrors] =
     useState({});
 
-  const normalizedCurrentRole =
-    normalizeRole(
-      currentRole
-    );
-
   const canCreateSupervisor =
-    normalizedCurrentRole ===
+    normalizeRole(currentRole) ===
     ROLES.OWNER;
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
+    if (!open) return;
 
     setForm({
       username: "",
       email: "",
       password: "",
-      role:
-        ROLES.MANAGER,
-      permissions: [],
+      role: ROLES.MANAGER,
     });
-
     setErrors({});
   }, [open]);
-
-  const sortedPermissions =
-    useMemo(
-      () =>
-        [...permissions].sort(
-          (first, second) =>
-            String(first).localeCompare(
-              String(second)
-            )
-        ),
-      [permissions]
-    );
 
   const updateField = (
     field,
     value
   ) => {
-    setForm(
-      (previous) => ({
-        ...previous,
-        [field]: value,
-      })
-    );
+    setForm((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
 
     if (errors[field]) {
-      setErrors(
-        (previous) => ({
-          ...previous,
-          [field]: "",
-        })
-      );
+      setErrors((previous) => ({
+        ...previous,
+        [field]: "",
+      }));
     }
   };
 
-  const togglePermission = (
-    permission
-  ) => {
-    setForm(
-      (previous) => ({
-        ...previous,
-
-        permissions:
-          previous.permissions.includes(
-            permission
-          )
-            ? previous.permissions.filter(
-                (item) =>
-                  item !==
-                  permission
-              )
-            : [
-                ...previous.permissions,
-                permission,
-              ],
-      })
-    );
-  };
-
-  const validate = () => {
+  const handleSubmit = () => {
     const nextErrors = {};
 
     if (
-      form.username
-        .trim().length < 3
+      form.username.trim().length <
+      3
     ) {
       nextErrors.username =
         "اسم المستخدم يجب ألا يقل عن 3 أحرف";
@@ -228,59 +117,48 @@ const ManagerFormDialog = ({
         "كلمة المرور 8 أحرف على الأقل وتحتوي على حرف ورقم";
     }
 
-    setErrors(
-      nextErrors
-    );
+    if (
+      form.role ===
+        ROLES.SUPERVISOR &&
+      !canCreateSupervisor
+    ) {
+      nextErrors.role =
+        "إنشاء مدير مدرسة جديد متاح لمالك المدرسة فقط";
+    }
 
-    return (
-      Object.keys(
-        nextErrors
-      ).length === 0
-    );
+    setErrors(nextErrors);
+
+    if (
+      Object.keys(nextErrors)
+        .length
+    ) {
+      return;
+    }
+
+    onSubmit?.({
+      username:
+        form.username.trim(),
+      email:
+        form.email
+          .trim()
+          .toLowerCase(),
+      password: form.password,
+      role: form.role,
+    });
   };
-
-  const handleSubmit =
-    () => {
-      if (!validate()) {
-        return;
-      }
-
-      onSubmit?.({
-        username:
-          form.username.trim(),
-
-        email:
-          form.email.trim(),
-
-        password:
-          form.password,
-
-        role:
-          form.role,
-
-        permissions:
-          form.role ===
-          ROLES.SUPERVISOR
-            ? ["*"]
-            : form.permissions,
-      });
-    };
 
   return (
     <Dialog
       open={open}
       onClose={
-        loading
-          ? undefined
-          : onClose
+        loading ? undefined : onClose
       }
       fullWidth
-      maxWidth="md"
+      maxWidth="sm"
+      dir="rtl"
       PaperProps={{
         sx: {
-          borderRadius:
-            "20px",
-
+          borderRadius: "20px",
           fontFamily:
             "Tajawal, Arial, sans-serif",
         },
@@ -290,24 +168,15 @@ const ManagerFormDialog = ({
         sx={{
           px: 2.5,
           py: 1.7,
-
           display: "flex",
-          alignItems:
-            "center",
-
+          alignItems: "center",
           justifyContent:
             "space-between",
-
           color: "#122f4d",
-
           borderBottom:
             "1px solid #ded8cd",
-
-          fontSize:
-            "16px",
-
-          fontWeight:
-            800,
+          fontSize: "16px",
+          fontWeight: 800,
         }}
       >
         إضافة حساب إداري
@@ -323,353 +192,133 @@ const ManagerFormDialog = ({
       <DialogContent
         sx={{
           px: 2.5,
-          py:
-            "22px !important",
+          py: "22px !important",
         }}
       >
-        <Box
-          sx={{
-            display: "grid",
-
-            gridTemplateColumns:
-              {
+        <Stack spacing={1.5}>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
                 xs: "1fr",
-                md:
-                  "repeat(2,minmax(0,1fr))",
+                md: "repeat(2,minmax(0,1fr))",
               },
-
-            gap: 1.5,
-          }}
-        >
-          <TextField
-            label="اسم المستخدم"
-            value={
-              form.username
-            }
-            onChange={(
-              event
-            ) =>
-              updateField(
-                "username",
-                event.target.value
-              )
-            }
-            error={
-              Boolean(
-                errors.username
-              )
-            }
-            helperText={
-              errors.username
-            }
-            disabled={loading}
-          />
-
-          <TextField
-            label="البريد الإلكتروني"
-            value={
-              form.email
-            }
-            onChange={(
-              event
-            ) =>
-              updateField(
-                "email",
-                event.target.value
-              )
-            }
-            error={
-              Boolean(
-                errors.email
-              )
-            }
-            helperText={
-              errors.email
-            }
-            disabled={loading}
-            inputProps={{
-              dir: "ltr",
+              gap: 1.5,
             }}
-          />
-
-          <TextField
-            label="كلمة المرور"
-            type="password"
-            value={
-              form.password
-            }
-            onChange={(
-              event
-            ) =>
-              updateField(
-                "password",
-                event.target.value
-              )
-            }
-            error={
-              Boolean(
-                errors.password
-              )
-            }
-            helperText={
-              errors.password
-            }
-            disabled={loading}
-          />
-
-          <FormControl>
-            <InputLabel>
-              الدور
-            </InputLabel>
-
-            <Select
-              label="الدور"
-              value={
-                form.role
-              }
-              onChange={(
-                event
-              ) =>
+          >
+            <TextField
+              label="اسم المستخدم"
+              value={form.username}
+              onChange={(event) =>
                 updateField(
-                  "role",
+                  "username",
                   event.target.value
                 )
               }
-              disabled={loading}
-            >
-              <MenuItem
-                value={
-                  ROLES.MANAGER
-                }
-              >
-                مساعد إداري
-              </MenuItem>
-
-              {canCreateSupervisor && (
-                <MenuItem
-                  value={
-                    ROLES.SUPERVISOR
-                  }
-                >
-                  مدير المدرسة
-                </MenuItem>
+              error={Boolean(
+                errors.username
               )}
-            </Select>
-          </FormControl>
-        </Box>
-
-        <Box
-          sx={{
-            mt: 2,
-
-            p: 1.6,
-
-            borderRadius:
-              "16px",
-
-            backgroundColor:
-              "#fffcf7",
-
-            border:
-              "1px solid #ded8cd",
-          }}
-        >
-          <Stack
-            direction={{
-              xs: "column",
-              sm: "row",
-            }}
-            alignItems={{
-              xs: "flex-start",
-              sm: "center",
-            }}
-            justifyContent="space-between"
-            spacing={1}
-          >
-            <Box>
-              <Typography
-                sx={{
-                  color:
-                    "#122f4d",
-
-                  fontSize:
-                    "12px",
-
-                  fontWeight:
-                    800,
-                }}
-              >
-                الصلاحيات
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 0.25,
-
-                  color:
-                    "#7e8791",
-
-                  fontSize:
-                    "8.5px",
-                }}
-              >
-                {form.role ===
-                ROLES.SUPERVISOR
-                  ? "يحصل على صلاحيات كاملة داخل المدرسة."
-                  : "صلاحيات المساعد الإداري معرّفة على مستوى المدرسة من صفحة الصلاحيات."}
-              </Typography>
-            </Box>
-
-            <Chip
-              label={
-                form.role ===
-                ROLES.SUPERVISOR
-                  ? "صلاحيات كاملة"
-                  : `${form.permissions.length} صلاحية`
+              helperText={
+                errors.username
               }
-              size="small"
-              sx={{
-                color:
-                  "#244a70",
-
-                backgroundColor:
-                  "#fbf0d8",
-
-                fontSize:
-                  "8px",
-
-                fontWeight:
-                  800,
-              }}
+              disabled={loading}
             />
-          </Stack>
 
-          {form.role ===
-          ROLES.MANAGER ? (
-            permissionsLoading ? (
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={1}
-                sx={{
-                  mt: 2,
-                }}
-              >
-                <CircularProgress
-                  size={18}
-                />
+            <TextField
+              label="البريد الإلكتروني"
+              value={form.email}
+              onChange={(event) =>
+                updateField(
+                  "email",
+                  event.target.value
+                )
+              }
+              error={Boolean(
+                errors.email
+              )}
+              helperText={errors.email}
+              disabled={loading}
+              inputProps={{ dir: "ltr" }}
+            />
 
-                <Typography
-                  sx={{
-                    color:
-                      "#7e8791",
+            <TextField
+              label="كلمة المرور"
+              type="password"
+              value={form.password}
+              onChange={(event) =>
+                updateField(
+                  "password",
+                  event.target.value
+                )
+              }
+              error={Boolean(
+                errors.password
+              )}
+              helperText={
+                errors.password
+              }
+              disabled={loading}
+            />
 
-                    fontSize:
-                      "9px",
-                  }}
-                >
-                  جاري تحميل الصلاحيات...
-                </Typography>
-              </Stack>
-            ) : sortedPermissions.length ? (
-              <Box
-                sx={{
-                  mt: 1.4,
-
-                  display:
-                    "grid",
-
-                  gridTemplateColumns:
-                    {
-                      xs: "1fr",
-                      sm:
-                        "repeat(2,minmax(0,1fr))",
-                      md:
-                        "repeat(3,minmax(0,1fr))",
-                    },
-
-                  gap: 0.7,
-                }}
-              >
-                {sortedPermissions.map(
-                  (
-                    permission
-                  ) => (
-                    <FormControlLabel
-                      key={
-                        permission
-                      }
-                      control={
-                        <Checkbox
-                          checked={form.permissions.includes(
-                            permission
-                          )}
-                          onChange={() =>
-                            togglePermission(
-                              permission
-                            )
-                          }
-                          size="small"
-                        />
-                      }
-                      label={getPermissionLabel(
-                        permission
-                      )}
-                      sx={{
-                        m: 0,
-                        p: 0.7,
-
-                        borderRadius:
-                          "10px",
-
-                        backgroundColor:
-                          "#ffffff",
-
-                        border:
-                          "1px solid rgba(36,74,112,0.08)",
-
-                        "& .MuiFormControlLabel-label":
-                          {
-                            color:
-                              "#193754",
-
-                            fontSize:
-                              "8.5px",
-
-                            fontWeight:
-                              700,
-                          },
-                      }}
-                    />
+            <FormControl
+              error={Boolean(
+                errors.role
+              )}
+            >
+              <InputLabel>
+                الدور
+              </InputLabel>
+              <Select
+                label="الدور"
+                value={form.role}
+                onChange={(event) =>
+                  updateField(
+                    "role",
+                    event.target.value
                   )
-                )}
-              </Box>
-            ) : (
-              <Typography
-                sx={{
-                  mt: 1.5,
-
-                  color:
-                    "#7e8791",
-
-                  fontSize:
-                    "9px",
-                }}
+                }
+                disabled={loading}
               >
-                لم يُرجع الخادم قائمة صلاحيات بعد. يمكن إنشاء المدير بدون صلاحيات ثم تعديلها لاحقًا.
-              </Typography>
-            )
-          ) : null}
-        </Box>
+                <MenuItem
+                  value={ROLES.MANAGER}
+                >
+                  مساعد إداري
+                </MenuItem>
+                {canCreateSupervisor && (
+                  <MenuItem
+                    value={
+                      ROLES.SUPERVISOR
+                    }
+                  >
+                    مدير المدرسة
+                  </MenuItem>
+                )}
+              </Select>
+            </FormControl>
+          </Box>
+
+          <Typography
+            sx={{
+              p: 1.2,
+              borderRadius: "12px",
+              bgcolor: "#FFFCF7",
+              border:
+                "1px solid #DED8CD",
+              color: "#5D6A76",
+              fontSize: "10.5px",
+              lineHeight: 1.8,
+            }}
+          >
+            صلاحيات المساعد الإداري لا تُحدد لكل حساب على حدة؛ يتم ضبطها مرة واحدة لكل المدرسة من شاشة صلاحيات المساعدين.
+          </Typography>
+        </Stack>
       </DialogContent>
 
       <DialogActions
         sx={{
           px: 2.5,
           py: 1.5,
-
           gap: 0.8,
-
           borderTop:
             "1px solid #ded8cd",
         }}
@@ -677,45 +326,29 @@ const ManagerFormDialog = ({
         <Button
           onClick={onClose}
           disabled={loading}
-          sx={{
-            color:
-              "#7e8791",
-
-            backgroundColor:
-              "rgba(126,135,145,0.08)",
-          }}
+          sx={{ color: "#7e8791" }}
         >
           إلغاء
         </Button>
 
         <Button
-          onClick={
-            handleSubmit
-          }
+          onClick={handleSubmit}
           disabled={loading}
           startIcon={
             loading ? (
               <CircularProgress
                 size={16}
-                sx={{
-                  color:
-                    "inherit",
-                }}
+                color="inherit"
               />
             ) : (
               <PersonAddAltRounded />
             )
           }
           sx={{
-            color:
-              "#ffffff",
-
-            backgroundColor:
-              "#244a70",
-
+            color: "#ffffff",
+            bgcolor: "#244a70",
             "&:hover": {
-              backgroundColor:
-                "#1b3d61",
+              bgcolor: "#1b3d61",
             },
           }}
         >

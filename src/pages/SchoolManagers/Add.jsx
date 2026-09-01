@@ -42,8 +42,16 @@ import Container from "@/components/Container/Container";
 
 import {
   createManager,
-  MANAGER_DEFAULT_PERMISSIONS,
 } from "@/APIs/school/managers";
+
+import {
+  useAuthUser,
+} from "react-auth-kit";
+
+import {
+  ROLES,
+  normalizeRole,
+} from "@/shared/auth/roles";
 
 const EMAIL_PATTERN =
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -119,6 +127,16 @@ const fieldSx = {
 
 const SchoolManagerAdd = () => {
   const navigate = useNavigate();
+  const getAuthUser = useAuthUser();
+  const authState =
+    getAuthUser?.() || {};
+  const currentRole =
+    normalizeRole(
+      authState?.user?.role ||
+        authState?.role
+    );
+  const canCreateSupervisor =
+    currentRole === ROLES.OWNER;
 
   const [loading, setLoading] =
     useState(false);
@@ -158,10 +176,15 @@ const SchoolManagerAdd = () => {
         .trim()
         .toUpperCase();
 
-    const permissions =
-      role === "SUPERVISOR"
-        ? ["*"]
-        : MANAGER_DEFAULT_PERMISSIONS;
+    if (
+      role === ROLES.SUPERVISOR &&
+      !canCreateSupervisor
+    ) {
+      toast.error(
+        "إنشاء مدير مدرسة جديد متاح لمالك المدرسة فقط"
+      );
+      return;
+    }
 
     const payload = {
       username:
@@ -176,8 +199,6 @@ const SchoolManagerAdd = () => {
         values.password,
 
       role,
-
-      permissions,
     };
 
     setLoading(true);
@@ -397,17 +418,19 @@ const SchoolManagerAdd = () => {
                           },
                       }}
                     >
-                      <ToggleButton
-                        value="SUPERVISOR"
-                        aria-label="مدير المدرسة"
-                      >
-                        <SupervisorAccountRounded
-                          sx={{
-                            fontSize: 18,
-                          }}
-                        />
-                        مدير المدرسة
-                      </ToggleButton>
+                      {canCreateSupervisor && (
+                        <ToggleButton
+                          value="SUPERVISOR"
+                          aria-label="مدير المدرسة"
+                        >
+                          <SupervisorAccountRounded
+                            sx={{
+                              fontSize: 18,
+                            }}
+                          />
+                          مدير المدرسة
+                        </ToggleButton>
+                      )}
 
                       <ToggleButton
                         value="MANAGER"

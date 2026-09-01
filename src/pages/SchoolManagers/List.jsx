@@ -37,9 +37,14 @@ import Container from "@/components/Container/Container";
 import {
   deleteManager,
   fetchManagers,
-  MANAGER_DEFAULT_PERMISSIONS,
-  updateManagerPermissions,
 } from "@/APIs/school/managers";
+
+import {
+  getSchoolPermissions,
+  updateSchoolRolePermissions,
+} from "@/APIs/school/permissions";
+
+import SchoolRolePermissionsDialog from "@/components/school/SchoolRolePermissionsDialog";
 
 const ROLE_LABELS = {
   OWNER: "مالك المدرسة",
@@ -173,9 +178,24 @@ const SchoolManagersList = () => {
   ] = useState(false);
 
   const [
-    syncingManagerId,
-    setSyncingManagerId,
-  ] = useState("");
+    permissionsOpen,
+    setPermissionsOpen,
+  ] = useState(false);
+
+  const [
+    permissionsLoading,
+    setPermissionsLoading,
+  ] = useState(false);
+
+  const [
+    permissionsSaving,
+    setPermissionsSaving,
+  ] = useState(false);
+
+  const [
+    managerPermissions,
+    setManagerPermissions,
+  ] = useState({});
 
   const loadManagers = async (
     force = false
@@ -280,50 +300,116 @@ const SchoolManagersList = () => {
         "active"
     ).length;
 
-  const handleSyncPermissions =
-    async (item) => {
-      const id =
-        getManagerId(item);
+  const unwrapPermissionsPayload = (value) => {
+    let current = value;
 
-      if (!id) {
-        toast.error(
-          "معرّف المدير غير موجود"
-        );
-        return;
-      }
-
-      setSyncingManagerId(id);
-
-      const response =
-        await updateManagerPermissions(
-          id,
-          MANAGER_DEFAULT_PERMISSIONS
-        );
-
+    for (let index = 0; index < 6; index += 1) {
       if (
-        !isSuccessfulResponse(
-          response
-        )
+        !current ||
+        typeof current !== "object" ||
+        Array.isArray(current)
       ) {
-        toast.error(
-          getResponseMessage(
-            response,
-            "تعذر ضبط صلاحيات المدير"
-          )
-        );
-
-        setSyncingManagerId("");
-        return;
+        break;
       }
 
-      setSyncingManagerId("");
+      const next =
+        current.data ??
+        current.result ??
+        current.payload;
 
-      await loadManagers(true);
+      if (!next || next === current) {
+        break;
+      }
 
-      toast.success(
-        "تم ضبط صلاحيات المدير الإدارية والأكاديمية فقط. تم استبعاد المالية والمصروفات، ويجب تسجيل الخروج ثم الدخول بالحساب مرة أخرى."
+      current = next;
+    }
+
+    return current;
+  };
+
+  const loadManagerPermissions = async () => {
+    setPermissionsLoading(true);
+
+    const response =
+      await getSchoolPermissions();
+
+    if (response?.status === false) {
+      toast.error(
+        response?.message ||
+          "تعذر تحميل صلاحيات المساعدين الإداريين"
       );
-    };
+      setManagerPermissions({});
+      setPermissionsLoading(false);
+      return false;
+    }
+
+    const payload =
+      unwrapPermissionsPayload(
+        response?.data ?? response
+      );
+
+    const nextPermissions =
+      payload?.MANAGER ||
+      payload?.manager ||
+      {};
+
+    setManagerPermissions(
+      nextPermissions &&
+        typeof nextPermissions === "object" &&
+        !Array.isArray(nextPermissions)
+        ? nextPermissions
+        : {}
+    );
+    setPermissionsLoading(false);
+    return true;
+  };
+
+  const openManagerPermissions = async () => {
+    setPermissionsOpen(true);
+    await loadManagerPermissions();
+  };
+
+  const saveManagerPermissions = async (permissions) => {
+    setPermissionsSaving(true);
+
+    const response =
+      await updateSchoolRolePermissions(
+        "MANAGER",
+        permissions
+      );
+
+    if (response?.status === false) {
+      toast.error(
+        response?.message ||
+          "تعذر تحديث صلاحيات المساعدين الإداريين"
+      );
+      setPermissionsSaving(false);
+      return;
+    }
+
+    const payload =
+      unwrapPermissionsPayload(
+        response?.data ?? response
+      );
+
+    if (payload?.permissions) {
+      setManagerPermissions(
+        payload.permissions
+      );
+    } else {
+      setManagerPermissions(
+        permissions
+      );
+    }
+
+    setPermissionsSaving(false);
+    setPermissionsOpen(false);
+
+    toast.success(
+      payload?.note ||
+        "تم تحديث صلاحيات المساعدين. تسري الصلاحيات الجديدة بعد تسجيل الدخول مرة أخرى."
+    );
+  };
 
   const handleDelete =
     async () => {
@@ -453,6 +539,29 @@ const SchoolManagersList = () => {
             spacing={1}
             sx={{ flexShrink: 0 }}
           >
+            <Button
+              variant="outlined"
+              startIcon={<SecurityRounded />}
+              onClick={openManagerPermissions}
+              sx={{
+                minHeight: 48,
+                px: 2,
+                borderRadius: "12px",
+                borderColor: "#C9D3DC",
+                color: "#244A70",
+                bgcolor: "#FFFFFF",
+                fontSize: "13px",
+                fontWeight: 900,
+                "& .MuiButton-startIcon": { ml: 0.65, mr: 0 },
+                "&:hover": {
+                  borderColor: "#244A70",
+                  bgcolor: "#F7FAFC",
+                },
+              }}
+            >
+              صلاحيات المساعدين
+            </Button>
+
             <Button
               variant="contained"
               startIcon={<AddCircleOutlineRounded />}
@@ -839,6 +948,19 @@ const SchoolManagersList = () => {
           )}
         </Box>
       </Box>
+
+      <SchoolRolePermissionsDialog
+        open={permissionsOpen}
+        permissions={managerPermissions}
+        loading={permissionsLoading}
+        saving={permissionsSaving}
+        onClose={() => {
+          if (!permissionsSaving) {
+            setPermissionsOpen(false);
+          }
+        }}
+        onSave={saveManagerPermissions}
+      />
 
       <Dialog
         open={Boolean(deleteTarget)}

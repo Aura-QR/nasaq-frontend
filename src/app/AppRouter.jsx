@@ -62,7 +62,6 @@ import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
 // =========================
 import AuthenticatedRoute from "@/shared/guards/AuthenticatedRoute";
 import GuestRoute from "@/shared/guards/GuestRoute";
-import OwnerOnlyRoute from "@/shared/guards/OwnerOnlyRoute";
 import RoleRoute from "@/shared/guards/RoleRoute";
 
 // =========================
@@ -70,7 +69,6 @@ import RoleRoute from "@/shared/guards/RoleRoute";
 // =========================
 import {
   ROLES,
-  DUTY_ADMIN_ROLES,
   SCHOOL_ADMIN_ROLES,
 } from "@/shared/auth/roles";
 
@@ -193,10 +191,19 @@ const AppRouter = () => {
         </Route>
 
         {/* =====================================================
-            OWNER ONLY
+            OWNER / SUPERVISOR — MANAGER ADMIN
         ===================================================== */}
 
-        <Route element={<OwnerOnlyRoute />}>
+        <Route
+          element={
+            <RoleRoute
+              allowedRoles={[
+                ROLES.OWNER,
+                ROLES.SUPERVISOR,
+              ]}
+            />
+          }
+        >
           <Route
             path="/school/managers"
             element={<SchoolManagersList />}
@@ -246,22 +253,7 @@ const AppRouter = () => {
             path="/school/teacher-attendance"
             element={<TeacherAttendanceAdmin />}
           />
-        </Route>
 
-        {/* =====================================================
-            DUTY ADMINISTRATION
-            OWNER / MANAGER / SUPERVISOR / SUPER_ADMIN
-        ===================================================== */}
-
-        <Route
-          element={
-            <RoleRoute
-              allowedRoles={
-                DUTY_ADMIN_ROLES
-              }
-            />
-          }
-        >
           <Route
             path="/school/duty"
             element={<CoverageBoard />}
@@ -445,6 +437,7 @@ const AppRouter = () => {
         ===================================================== */}
 
         {appRoutes}
+
       </Route>
 
       {/* =========================================================
