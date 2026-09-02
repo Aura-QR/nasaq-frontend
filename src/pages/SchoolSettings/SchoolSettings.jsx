@@ -40,6 +40,7 @@ import Container from "@/components/Container/Container";
 import Back from "@/components/Back/Back";
 import Input from "@/components/Input/Input";
 import Loading from "@/components/Loading";
+import usePermissions from "@/utils/hooks/usePermissions";
 
 import {
   fetchSchoolSettings,
@@ -529,6 +530,8 @@ const pageCardSx = {
 };
 
 const SchoolSettings = () => {
+  const settingsPermissions = usePermissions("settings");
+
   const {
     register,
     handleSubmit,
@@ -2227,46 +2230,48 @@ const SchoolSettings = () => {
                 "rgba(36,74,112,0.018)",
             }}
           >
-            <Button
-              type="submit"
-              disabled={saving || !hasChanges}
-              variant="contained"
-              startIcon={
-                saving ? (
-                  <CircularProgress
-                    size={15}
-                    color="inherit"
-                  />
-                ) : (
-                  <SaveRounded />
-                )
-              }
-              sx={{
-                width: {
-                  xs: "100%",
-                  sm: 190,
-                },
-                minHeight: 42,
-                borderRadius: "11px",
-                color:
-                  "var(--color-white)",
-                background:
-                  "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-                fontSize: "11px",
-                fontWeight: 800,
-                textTransform: "none",
-                boxShadow:
-                  "0 8px 18px rgba(36,74,112,0.16)",
-                "& .MuiButton-startIcon": {
-                  marginLeft: "6px",
-                  marginRight: 0,
-                },
-              }}
-            >
-              {saving
-                ? "جاري الحفظ..."
-                : "حفظ الإعدادات"}
-            </Button>
+            {settingsPermissions.edit && (
+              <Button
+                type="submit"
+                disabled={saving || !hasChanges}
+                variant="contained"
+                startIcon={
+                  saving ? (
+                    <CircularProgress
+                      size={15}
+                      color="inherit"
+                    />
+                  ) : (
+                    <SaveRounded />
+                  )
+                }
+                sx={{
+                  width: {
+                    xs: "100%",
+                    sm: 190,
+                  },
+                  minHeight: 42,
+                  borderRadius: "11px",
+                  color:
+                    "var(--color-white)",
+                  background:
+                    "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
+                  fontSize: "11px",
+                  fontWeight: 800,
+                  textTransform: "none",
+                  boxShadow:
+                    "0 8px 18px rgba(36,74,112,0.16)",
+                  "& .MuiButton-startIcon": {
+                    marginLeft: "6px",
+                    marginRight: 0,
+                  },
+                }}
+              >
+                {saving
+                  ? "جاري الحفظ..."
+                  : "حفظ الإعدادات"}
+              </Button>
+            )}
 
             <Button
               type="button"

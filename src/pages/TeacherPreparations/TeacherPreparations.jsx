@@ -51,6 +51,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { toast } from "react-toastify";
+import usePermissions from "@/utils/hooks/usePermissions";
 
 import nasaqLogo from "@/images/wadq-logo.png";
 import {
@@ -688,6 +689,7 @@ const LoadingView = () => (
 
 const TeacherPreparations = () => {
   const navigate = useNavigate();
+  const permissions = usePermissions("preparation");
 
   const [
     searchParams,
@@ -1083,6 +1085,7 @@ const TeacherPreparations = () => {
                 )}
               </IconButton>
             </Tooltip>
+            {permissions.add && (
             <Button
               startIcon={<AddRounded />}
               disabled={!nextMissing}
@@ -1101,6 +1104,7 @@ const TeacherPreparations = () => {
             >
               إضافة تحضير
             </Button>
+            )}
           </Stack>
         </Paper>
 
@@ -1371,6 +1375,7 @@ const TeacherPreparations = () => {
                                 <VisibilityRounded sx={{ fontSize: 17 }} />
                               </IconButton>
                             </Tooltip>
+                            {permissions.edit && (
                             <Tooltip title="تعديل التحضير">
                               <IconButton
                                 onClick={() => openPreparationDetails(row)}
@@ -1379,6 +1384,8 @@ const TeacherPreparations = () => {
                                 <EditRounded sx={{ fontSize: 17 }} />
                               </IconButton>
                             </Tooltip>
+                            )}
+                            {permissions.delete && (
                             <Tooltip title="حذف التحضير">
                               <span>
                                 <IconButton
@@ -1394,8 +1401,9 @@ const TeacherPreparations = () => {
                                 </IconButton>
                               </span>
                             </Tooltip>
+                            )}
                           </>
-                        ) : (
+                        ) : permissions.add ? (
                           <Button
                             startIcon={<AddRounded />}
                             onClick={() =>
@@ -1412,7 +1420,7 @@ const TeacherPreparations = () => {
                           >
                             إضافة تحضير
                           </Button>
-                        )}
+                        ) : null}
                       </Stack>
                     </Paper>
                   </Grid>

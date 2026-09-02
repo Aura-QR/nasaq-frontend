@@ -1,78 +1,103 @@
 import {
   Alert,
-  Avatar,
   Box,
   Button,
-  Checkbox,
   Chip,
   CircularProgress,
+  Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControlLabel,
   IconButton,
-  InputAdornment,
   MenuItem,
+  Pagination,
   Paper,
+  Slider,
   Stack,
+  Switch,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 
 import {
-  ArrowBackRounded,
-  CalendarMonthRounded,
-  CheckCircleRounded,
-  GroupsRounded,
-  HowToRegRounded,
+  AddRounded,
+  AssessmentRounded,
+  DeleteOutlineRounded,
+  EditRounded,
+  GpsFixedRounded,
+  LocationOnRounded,
+  MyLocationRounded,
   PersonOffRounded,
   RefreshRounded,
+  RouterRounded,
   SaveRounded,
-  SchoolRounded,
-  SearchRounded,
+  SettingsRounded,
+  WifiFindRounded,
 } from "@mui/icons-material";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-
-import {
-  useAuthUser,
-} from "react-auth-kit";
-
-import {
-  useNavigate,
-  useSearchParams,
-} from "react-router-dom";
-
+import { useAuthUser } from "react-auth-kit";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 
+import Container from "@/components/Container/Container";
+import Back from "@/components/Back/Back";
+import usePermissions from "@/utils/hooks/usePermissions";
+
+import { getSchoolTeachers } from "@/APIs/school/teachers";
+
 import {
-  addAttendance,
-  deleteAttendance,
-  fetchAttendance,
-  fetchLectureAttendanceSheet,
-} from "@/APIs/school/attendance";
+  createManualTeacherAttendance,
+  deleteTeacherAttendance,
+  detectTeacherAttendanceIp,
+  fetchAbsentTeachers,
+  fetchTeacherAttendanceAdmin,
+  fetchTeacherAttendanceSettings,
+  fetchTeacherAttendanceSummary,
+  updateTeacherAttendance,
+  updateTeacherAttendanceSettings,
+} from "@/APIs/school/teacherAttendance";
 
-import { api } from "@/APIs/Axios";
+const PAGE_LIMIT = 10;
 
-import nasaqLogo from "../../images/wadq-logo.png";
+const todayKey = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
-const DATE_LOCALE = "ar-EG-u-nu-latn";
+const monthStartKey = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}-01`;
+};
 
 const normalizeId = (value) => {
   if (value && typeof value === "object") {
-    return String(value._id || value.id || "").trim();
+    return String(value?._id || value?.id || "").trim();
   }
-
   return String(value || "").trim();
 };
 
-const unwrapResponse = (response) => {
-  let payload = response;
+const extractSettings = (response) => {
+  if (!response || response?.status === false) return {};
 
-  for (let index = 0; index < 5; index += 1) {
+  let payload = response;
+  for (let index = 0; index < 4; index += 1) {
     if (
       payload &&
       typeof payload === "object" &&
@@ -82,2146 +107,2047 @@ const unwrapResponse = (response) => {
       payload = payload.data;
       continue;
     }
+    break;
+  }
+
+  return payload?.settings || payload?.school?.settings || payload || {};
+};
+
+const extractTeachers = (response) => {
+  if (!response || response?.status === false) return [];
+
+  let payload = response;
+
+  // يدعم شكل getSchoolTeachers الحالي + استجابات الباك المتداخلة
+  for (let index = 0; index < 5; index += 1) {
+    if (Array.isArray(payload)) return payload;
+
+    if (!payload || typeof payload !== "object") {
+      return [];
+    }
+
+    const directList =
+      payload?.docs ||
+      payload?.items ||
+      payload?.results ||
+      payload?.teachers;
+
+    if (Array.isArray(directList)) {
+      return directList;
+    }
+
+    if (payload?.data !== undefined) {
+      payload = payload.data;
+      continue;
+    }
 
     break;
   }
 
-  return payload;
+  return Array.isArray(payload) ? payload : [];
 };
 
-const extractCollection = (response, extraKeys = []) => {
-  const payload = unwrapResponse(response);
+const extractAttendancePage = (response) => {
+  if (!response || response?.status === false) {
+    return { rows: [], meta: {} };
+  }
+
+  // Expected backend shape:
+  // { status, message, data: { data: [...], meta: {...} } }
+  const payload = response?.data ?? response;
 
   if (Array.isArray(payload)) {
-    return payload;
+    return { rows: payload, meta: {} };
   }
 
-  if (!payload || typeof payload !== "object") {
-    return [];
+  if (Array.isArray(payload?.data)) {
+    return {
+      rows: payload.data,
+      meta: payload.meta || {},
+    };
   }
 
-  const candidates = [
-    payload.docs,
-    payload.items,
-    payload.results,
-    payload.records,
-    payload.classes,
-    payload.students,
-    payload.attendance,
-    payload.attendances,
-    payload.absences,
-    payload.data,
-    ...extraKeys.map((key) => payload?.[key]),
-  ];
-
-  return candidates.find(Array.isArray) || [];
+  return { rows: [], meta: payload?.meta || {} };
 };
 
-const isFailedResponse = (response) =>
-  typeof response === "string" ||
-  response?.status === false ||
-  Number(response?.statusCode) >= 400;
+const extractAbsent = (response) => {
+  if (!response || response?.status === false) {
+    return {
+      teachers: [],
+      isWorkingDay: true,
+      message: "",
+    };
+  }
 
-const getErrorMessage = (response, fallback) => {
-  if (typeof response === "string") return response;
+  const payload = response?.data ?? response;
+
+  return {
+    teachers: Array.isArray(payload?.absentTeachers)
+      ? payload.absentTeachers
+      : Array.isArray(payload)
+        ? payload
+        : [],
+    isWorkingDay: payload?.isWorkingDay !== false,
+    message: payload?.message || "",
+  };
+};
+
+const extractAttendanceSummary = (response) => {
+  if (!response || response?.status === false) {
+    return {
+      rows: [],
+      totalTeachers: 0,
+      dateFrom: "",
+      dateTo: "",
+    };
+  }
+
+  let payload = response;
+
+  // يدعم الاستجابة المباشرة:
+  // { status, dateFrom, dateTo, totalTeachers, data: [...] }
+  // وأي wrapper محتمل حولها.
+  for (let index = 0; index < 3; index += 1) {
+    if (
+      payload &&
+      typeof payload === "object" &&
+      !Array.isArray(payload) &&
+      payload?.data &&
+      !Array.isArray(payload.data) &&
+      Array.isArray(payload.data?.data)
+    ) {
+      payload = payload.data;
+      continue;
+    }
+
+    break;
+  }
+
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload?.rows)
+        ? payload.rows
+        : [];
+
+  return {
+    rows,
+    totalTeachers: Number(
+      payload?.totalTeachers ??
+        payload?.meta?.totalTeachers ??
+        rows.length
+    ) || 0,
+    dateFrom: payload?.dateFrom || "",
+    dateTo: payload?.dateTo || "",
+  };
+};
+
+const getTeacherEntity = (record) =>
+  record?.teacherId || record?.teacher || record?.teacherProfile || {};
+
+const getTeacherName = (recordOrTeacher) => {
+  const teacher =
+    recordOrTeacher?.teacherId ||
+    recordOrTeacher?.teacher ||
+    recordOrTeacher;
 
   return (
-    response?.message ||
-    response?.data?.message ||
-    response?.error ||
-    fallback
+    teacher?.name ||
+    teacher?.fullName ||
+    teacher?.username ||
+    [teacher?.firstName, teacher?.fatherName, teacher?.familyName]
+      .filter(Boolean)
+      .join(" ") ||
+    "معلم"
   );
 };
 
-const formatLocalDate = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+const getRecordedByName = (record) => {
+  const actor = record?.recordedBy;
+  if (!actor) return "—";
+  if (typeof actor === "string") return "إدارة المدرسة";
+  return actor?.name || actor?.fullName || actor?.email || "إدارة المدرسة";
 };
 
-const formatDisplayDate = (value) => {
-  if (!value) return "";
-
-  const date = new Date(`${value}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return new Intl.DateTimeFormat(DATE_LOCALE, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(date);
-};
-
-const isMongoId = (value) =>
-  /^[a-f\d]{24}$/i.test(normalizeId(value));
-
-const resolveTeacherId = (authRoot, currentUser) => {
-  const candidates = [
-    authRoot?.teacherId,
-    authRoot?.teacher,
-    authRoot?.profile,
-    authRoot?.user?.teacherId,
-    authRoot?.user?.teacher,
-    currentUser?.teacherId,
-    currentUser?.teacher,
-    currentUser?.profile,
-    currentUser?._id,
-    currentUser?.id,
-  ];
-
-  return candidates.map(normalizeId).find(isMongoId) || "";
-};
-
-const extractStudentsFromClass = (value) => {
-  const payload = unwrapResponse(value);
-  const classEntity =
-    payload?.class ||
-    payload?.classData ||
-    payload?.schoolClass ||
-    payload;
-
-  const candidates = [
-    classEntity?.students,
-    classEntity?.studentIds,
-    classEntity?.enrolledStudents,
-    classEntity?.members,
-    classEntity?.enrollments,
-    payload?.students,
-    payload?.studentIds,
-    payload?.enrolledStudents,
-    payload?.members,
-    payload?.enrollments,
-  ];
-
-  return candidates.find(Array.isArray) || [];
-};
-
-const getClassEntity = (classItem) => {
-  if (!classItem || typeof classItem !== "object") {
-    return classItem;
-  }
-
-  const nestedCandidates = [
-    classItem?.class,
-    classItem?.classId,
-    classItem?.classroom,
-    classItem?.schoolClass,
-  ];
-
-  return (
-    nestedCandidates.find(
-      (candidate) => candidate && typeof candidate === "object"
-    ) || classItem
-  );
-};
-
-const getClassId = (classItem) => {
-  const entity = getClassEntity(classItem);
-
-  return normalizeId(
-    entity?._id ||
-      entity?.id ||
-      classItem?.classId ||
-      classItem?.class ||
-      classItem?.classroom ||
-      classItem?.schoolClass ||
-      entity
-  );
-};
-
-const getClassName = (classItem, index = 0) => {
-  const entity = getClassEntity(classItem);
-
-  const gradeName =
-    entity?.gradeLevelId?.name ||
-    entity?.gradeLevel?.name ||
-    entity?.gradeName ||
-    "";
-
-  const roomNumber = String(entity?.roomNumber || "").trim();
-  const explicitClassName = String(
-    entity?.className ||
-      entity?.title ||
-      entity?.displayName ||
+const normalizeRecordDate = (record) =>
+  String(
+    record?.date ||
+      record?.attendanceDate ||
+      record?.checkInDate ||
+      record?.createdAt ||
       ""
-  ).trim();
+  ).slice(0, 10);
 
-  // الباك المنشور قد يعيد اسم المدرسة داخل entity.name،
-  // لذلك لا نستخدمه كاسم للفصل. رقم الغرفة هو المصدر الأدق حاليًا.
-  const roomLabel = roomNumber ? `فصل ${roomNumber}` : explicitClassName;
+const formatTime = (value) => {
+  if (!value) return "—";
+  const text = String(value);
+  if (/^\d{2}:\d{2}/.test(text)) return text.slice(0, 5);
 
-  const parts = [gradeName, roomLabel]
-    .filter(Boolean)
-    .filter((value, itemIndex, array) => array.indexOf(value) === itemIndex);
-
-  return parts.join(" - ") || `فصل ${index + 1}`;
+  const date = new Date(text);
+  if (!Number.isNaN(date.getTime())) {
+    return new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  }
+  return text;
 };
 
-const getStudentEntity = (row) =>
-  row?.student ||
-  row?.studentId ||
-  row?.studentProfile ||
-  row;
+const formatMinutes = (value, { duration = false } = {}) => {
+  if (value === null || value === undefined || value === "") return "—";
 
-const getStudentId = (row) =>
-  normalizeId(getStudentEntity(row));
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes)) return "—";
 
-const getStudentName = (row, index = 0) => {
-  const student = getStudentEntity(row);
-  const combinedName = [student?.firstName, student?.lastName]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
+  if (!duration) return `${Math.max(0, Math.round(minutes))} د`;
 
-  return (
-    student?.name ||
-    student?.fullName ||
-    student?.studentName ||
-    combinedName ||
-    `طالب ${index + 1}`
-  );
+  const safeMinutes = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(safeMinutes / 60);
+  const remainingMinutes = safeMinutes % 60;
+
+  if (!hours) return `${remainingMinutes} د`;
+  if (!remainingMinutes) return `${hours} س`;
+
+  return `${hours} س ${remainingMinutes} د`;
 };
 
-const getStudentCode = (row) => {
-  const student = getStudentEntity(row);
+const getVerification = (record) => ({
+  gps: Boolean(record?.verification?.gps),
+  network: Boolean(record?.verification?.network),
+});
 
-  return (
-    student?.studentCode ||
-    student?.code ||
-    student?.username ||
-    student?.email ||
-    ""
-  );
-};
+const getRecordId = (record) => normalizeId(record);
 
-const getAttendanceStudentId = (record) =>
-  normalizeId(
-    record?.studentId ||
-      record?.student ||
-      record?.studentProfile
-  );
+const isFailed = (response) =>
+  response?.status === false || Number(response?.statusCode) >= 400;
 
-const getAttendanceRecordId = (record) => normalizeId(record);
-
-const getAttendanceClassId = (record) =>
-  normalizeId(record?.classId || record?.class);
-
-const getAttendanceDate = (record) =>
-  String(record?.date || record?.attendanceDate || "").slice(0, 10);
-
-const WEEKDAY_KEYS = [
-  "sunday",
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
+const WORK_WEEK_DAYS = [
+  { day: "sunday", label: "الأحد" },
+  { day: "monday", label: "الاثنين" },
+  { day: "tuesday", label: "الثلاثاء" },
+  { day: "wednesday", label: "الأربعاء" },
+  { day: "thursday", label: "الخميس" },
+  { day: "friday", label: "الجمعة" },
+  { day: "saturday", label: "السبت" },
 ];
 
-const getDateWeekday = (value) => {
-  const date = new Date(`${value}T12:00:00`);
+const normalizeWorkSchedule = (value) => {
+  const incoming = Array.isArray(value) ? value : [];
 
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return WEEKDAY_KEYS[date.getDay()] || "";
-};
-
-const getLectureId = (lecture) =>
-  normalizeId(lecture);
-
-const getLectureClassId = (lecture) =>
-  normalizeId(
-    lecture?.class ||
-      lecture?.classId ||
-      lecture?.classroom ||
-      lecture?.schoolClass
-  );
-
-const WEEKDAY_ALIASES = {
-  sunday: "sunday",
-  sun: "sunday",
-  "الأحد": "sunday",
-  "الاحد": "sunday",
-
-  monday: "monday",
-  mon: "monday",
-  "الاثنين": "monday",
-  "الإثنين": "monday",
-
-  tuesday: "tuesday",
-  tue: "tuesday",
-  "الثلاثاء": "tuesday",
-
-  wednesday: "wednesday",
-  wed: "wednesday",
-  "الأربعاء": "wednesday",
-  "الاربعاء": "wednesday",
-
-  thursday: "thursday",
-  thu: "thursday",
-  "الخميس": "thursday",
-
-  friday: "friday",
-  fri: "friday",
-  "الجمعة": "friday",
-
-  saturday: "saturday",
-  sat: "saturday",
-  "السبت": "saturday",
-};
-
-const normalizeWeekdayKey = (value) => {
-  const raw =
-    String(value || "")
-      .trim()
-      .toLowerCase();
-
-  return (
-    WEEKDAY_ALIASES[raw] ||
-    raw
-  );
-};
-
-const getLectureWeekday = (lecture) =>
-  normalizeWeekdayKey(
-    lecture?.dayOfWeek ||
-      lecture?.weekday ||
-      lecture?.day
-  );
-
-const getDateForWeekday = (
-  referenceDate,
-  weekdayKey
-) => {
-  const date = new Date(
-    `${referenceDate}T12:00:00`
-  );
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return referenceDate;
-  }
-
-  const targetIndex =
-    WEEKDAY_KEYS.indexOf(
-      weekdayKey
+  return WORK_WEEK_DAYS.map(({ day }) => {
+    const saved = incoming.find(
+      (item) =>
+        String(item?.day || "")
+          .trim()
+          .toLowerCase() === day
     );
 
-  if (targetIndex < 0) {
-    return referenceDate;
-  }
+    if (!saved) {
+      // Empty/unconfigured schedule means every day is treated as a
+      // working day but without measured start/end times.
+      return {
+        day,
+        isWorkingDay: true,
+        startTime: "",
+        endTime: "",
+      };
+    }
 
-  /*
-   * نختار نفس أسبوع التاريخ المعروض.
-   * مثال: الاثنين 24/8 وحصة الأحد -> الأحد 23/8.
-   */
-  const diff =
-    targetIndex -
-    date.getDay();
-
-  date.setDate(
-    date.getDate() +
-      diff
-  );
-
-  return formatLocalDate(
-    date
-  );
-};
-
-const findLectureForClassAndDate = (
-  lectures,
-  classId,
-  dateValue
-) => {
-  const weekday =
-    getDateWeekday(
-      dateValue
-    );
-
-  return (
-    lectures.find(
-      (lecture) =>
-        getLectureClassId(
-          lecture
-        ) ===
-          classId &&
-        getLectureWeekday(
-          lecture
-        ) ===
-          weekday
-    ) ||
-    null
-  );
-};
-
-const findBestLectureForClass = (
-  lectures,
-  classId,
-  dateValue
-) => {
-  const exact =
-    findLectureForClassAndDate(
-      lectures,
-      classId,
-      dateValue
-    );
-
-  if (exact) {
-    return exact;
-  }
-
-  const baseDate =
-    new Date(
-      `${dateValue}T12:00:00`
-    );
-
-  const baseDay =
-    Number.isNaN(
-      baseDate.getTime()
-    )
-      ? new Date().getDay()
-      : baseDate.getDay();
-
-  const candidates =
-    lectures
-      .filter(
-        (lecture) =>
-          getLectureClassId(
-            lecture
-          ) ===
-          classId
-      )
-      .map((lecture) => {
-        const weekday =
-          getLectureWeekday(
-            lecture
-          );
-
-        const dayIndex =
-          WEEKDAY_KEYS.indexOf(
-            weekday
-          );
-
-        return {
-          lecture,
-          distance:
-            dayIndex < 0
-              ? 99
-              : Math.abs(
-                  dayIndex -
-                    baseDay
-                ),
-          slot:
-            Number(
-              lecture?.slot ||
-                lecture?.period ||
-                lecture?.slotNumber ||
-                0
-            ),
-        };
-      })
-      .sort(
-        (a, b) =>
-          a.distance -
-            b.distance ||
-          a.slot -
-            b.slot
-      );
-
-  return (
-    candidates[0]
-      ?.lecture ||
-    null
-  );
-};
-
-const getSheetAttendanceRecordId = (studentRow) =>
-  normalizeId(
-    studentRow?.attendanceId ||
-      studentRow?.attendanceRecordId ||
-      studentRow?.absenceId ||
-      studentRow?.attendance ||
-      studentRow?.absence ||
-      studentRow?.record
-  );
-
-const sameSet = (first, second) => {
-  if (first.size !== second.size) return false;
-
-  for (const value of first) {
-    if (!second.has(value)) return false;
-  }
-
-  return true;
-};
-
-const StatCard = ({ icon, label, value, helper, accent = "navy" }) => {
-  const palette = {
-    navy: {
-      icon: "#214E78",
-      background: "rgba(33,78,120,.08)",
-    },
-    green: {
-      icon: "#25865A",
-      background: "rgba(37,134,90,.10)",
-    },
-    red: {
-      icon: "#C44545",
-      background: "rgba(196,69,69,.09)",
-    },
-    gold: {
-      icon: "#B9821D",
-      background: "rgba(226,173,59,.16)",
-    },
-  }[accent] || {
-    icon: "#214E78",
-    background: "rgba(33,78,120,.08)",
-  };
-
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        minHeight: 96,
-        p: 1.55,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 1.2,
-        border: "1px solid rgba(36,74,112,.08)",
-        borderRadius: "18px",
-        backgroundColor: "#fff",
-        boxShadow: "0 10px 24px rgba(18,47,77,.055)",
-      }}
-    >
-      <Box sx={{ minWidth: 0 }}>
-        <Typography
-          sx={{
-            color: "#7B8794",
-            fontSize: "13px",
-            fontWeight: 800,
-          }}
-        >
-          {label}
-        </Typography>
-        <Typography
-          sx={{
-            mt: 0.35,
-            color: "#122F4D",
-            fontSize: { xs: "24px", sm: "28px", md: "32px" },
-            lineHeight: 1.15,
-            fontWeight: 900,
-          }}
-        >
-          {value}
-        </Typography>
-        <Typography
-          noWrap
-          sx={{
-            mt: 0.45,
-            color: "#9AA6B2",
-            fontSize: "12px",
-            fontWeight: 600,
-          }}
-        >
-          {helper}
-        </Typography>
-      </Box>
-
-      <Box
-        sx={{
-          width: 44,
-          height: 44,
-          flexShrink: 0,
-          display: "grid",
-          placeItems: "center",
-          color: palette.icon,
-          backgroundColor: palette.background,
-          borderRadius: "13px",
-          "& svg": { fontSize: 23 },
-        }}
-      >
-        {icon}
-      </Box>
-    </Paper>
-  );
-};
-
-const TeacherAttendance = () => {
-  const navigate = useNavigate();
-  const getAuthUser = useAuthUser();
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const authRoot = getAuthUser?.() || {};
-  const currentUser = authRoot?.user || authRoot;
-  const teacherId = useMemo(
-    () => resolveTeacherId(authRoot, currentUser),
-    [authRoot, currentUser]
-  );
-
-  const [initialRequestedClassId] = useState(
-    () =>
-      searchParams.get(
-        "classId"
-      ) || ""
-  );
-
-  const [initialRequestedLectureId] = useState(
-    () =>
-      searchParams.get(
-        "lectureId"
-      ) || ""
-  );
-
-  const [initialRequestedDate] = useState(
-    () =>
-      searchParams.get(
-        "date"
-      ) ||
-      formatLocalDate()
-  );
-
-  const [classes, setClasses] = useState([]);
-
-  const [selectedClassId, setSelectedClassId] =
-    useState(
-      isMongoId(
-        initialRequestedClassId
-      )
-        ? initialRequestedClassId
-        : ""
-    );
-
-  const [selectedLectureId, setSelectedLectureId] =
-    useState(
-      isMongoId(
-        initialRequestedLectureId
-      )
-        ? initialRequestedLectureId
-        : ""
-    );
-
-  const [selectedDate, setSelectedDate] =
-    useState(
-      initialRequestedDate
-    );
-  const [students, setStudents] = useState([]);
-  const [attendanceRecords, setAttendanceRecords] = useState([]);
-  const [absentIds, setAbsentIds] = useState(new Set());
-  const [initialAbsentIds, setInitialAbsentIds] = useState(new Set());
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [loadingClasses, setLoadingClasses] = useState(true);
-  const [loadingRoster, setLoadingRoster] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  // Keep the latest classes outside loadRoster dependencies.
-  // Updating class metadata must not trigger a new roster request.
-  const classesRef = useRef([]);
-  const lecturesRef = useRef([]);
-  const rosterRequestIdRef = useRef(0);
-  const pendingRosterKeyRef = useRef("");
-  const pendingClassesRef = useRef(false);
-
-  const selectedClass = useMemo(
-    () => classes.find((item) => getClassId(item) === selectedClassId) || null,
-    [classes, selectedClassId]
-  );
-
-  const classSelectValue = useMemo(
-    () =>
-      classes.some((item) => getClassId(item) === selectedClassId)
-        ? selectedClassId
-        : "",
-    [classes, selectedClassId]
-  );
-
-  useEffect(() => {
-    classesRef.current = classes;
-  }, [classes]);
-
-  const uniqueStudents = useMemo(() => {
-    const seen = new Set();
-
-    return students.filter((row) => {
-      const id = getStudentId(row);
-      if (!id || seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    });
-  }, [students]);
-
-  const counts = useMemo(() => {
-    const total = uniqueStudents.length;
-    const absent = absentIds.size;
-    const present = Math.max(0, total - absent);
+    const isWorkingDay =
+      saved?.isWorkingDay !== false;
 
     return {
-      total,
-      absent,
-      present,
-      saved: initialAbsentIds.size,
+      day,
+      isWorkingDay,
+      startTime:
+        isWorkingDay && saved?.startTime
+          ? String(saved.startTime).slice(0, 5)
+          : "",
+      endTime:
+        isWorkingDay && saved?.endTime
+          ? String(saved.endTime).slice(0, 5)
+          : "",
     };
-  }, [uniqueStudents, absentIds, initialAbsentIds]);
+  });
+};
 
-  const hasChanges = useMemo(
-    () => !sameSet(absentIds, initialAbsentIds),
-    [absentIds, initialAbsentIds]
+const pageCardSx = {
+  border: "1px solid rgba(36,74,112,0.08)",
+  borderRadius: "18px",
+  backgroundColor: "var(--color-cream, #FFFCF7)",
+  boxShadow: "0 12px 28px rgba(18,47,77,0.06)",
+};
+
+const emptyManualForm = () => ({
+  teacherId: "",
+  date: todayKey(),
+  checkInAt: "07:45",
+  notes: "",
+});
+
+const TeacherAttendanceAdmin = () => {
+  const attendancePermissions = usePermissions("attendance");
+  const settingsPermissions = usePermissions("settings");
+
+  const getAuthUser = useAuthUser();
+  const authState = getAuthUser?.();
+  const currentUser = authState?.user || authState || {};
+  const adminName = currentUser?.name || currentUser?.fullName || "الإدارة";
+
+  const [tab, setTab] = useState(0);
+
+  // Settings
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [teacherCheckInEnabled, setTeacherCheckInEnabled] = useState(false);
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
+  const [radius, setRadius] = useState(150);
+  const [workSchedule, setWorkSchedule] = useState(() => normalizeWorkSchedule([]));
+  const [networkIps, setNetworkIps] = useState([]);
+  const [newIp, setNewIp] = useState("");
+  const [detectingIp, setDetectingIp] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  // Admin list
+  const [recordsLoading, setRecordsLoading] = useState(true);
+  const [records, setRecords] = useState([]);
+  const [meta, setMeta] = useState({});
+  const [page, setPage] = useState(1);
+  const [filter, setFilter] = useState("all");
+  const [absentTeachers, setAbsentTeachers] = useState([]);
+  const [absentDayInfo, setAbsentDayInfo] = useState({
+    isWorkingDay: true,
+    message: "",
+  });
+  const [showAbsent, setShowAbsent] = useState(false);
+  const [teachers, setTeachers] = useState([]);
+
+  // Summary report
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryLoaded, setSummaryLoaded] = useState(false);
+  const [summaryRows, setSummaryRows] = useState([]);
+  const [summaryTotalTeachers, setSummaryTotalTeachers] = useState(0);
+  const [summaryRange, setSummaryRange] = useState({
+    dateFrom: monthStartKey(),
+    dateTo: todayKey(),
+    teacherId: "",
+  });
+
+  // Manual create
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualForm, setManualForm] = useState(emptyManualForm);
+
+  // Edit
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState(null);
+  const [editForm, setEditForm] = useState({ checkInAt: "", checkOutAt: "", notes: "" });
+
+  // Delete
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteSaving, setDeleteSaving] = useState(false);
+
+  const today = useMemo(todayKey, []);
+
+  const parseCoordinate = (value) => {
+    if (value === null || value === undefined) return null;
+
+    const normalized = String(value).trim();
+    if (!normalized) return null;
+
+    const numericValue = Number(normalized);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  };
+
+  const isValidSchoolLocation = (latValue, lngValue) => {
+    const latitude = parseCoordinate(latValue);
+    const longitude = parseCoordinate(lngValue);
+
+    if (latitude === null || longitude === null) return false;
+
+    const insideValidRange =
+      latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180;
+
+    // 0,0 is almost always an empty/default coordinate in our UI flow.
+    // Do not allow it to activate attendance by mistake.
+    const isZeroZero = latitude === 0 && longitude === 0;
+
+    return insideValidRange && !isZeroZero;
+  };
+
+  const hasValidLocation = useMemo(
+    () => isValidSchoolLocation(lat, lng),
+    [lat, lng]
   );
 
-  const filteredStudents = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  const loadSettings = useCallback(async () => {
+    setSettingsLoading(true);
 
-    return uniqueStudents.filter((row, index) => {
-      const id = getStudentId(row);
-      const isAbsent = absentIds.has(id);
-
-      if (statusFilter === "absent" && !isAbsent) return false;
-      if (statusFilter === "present" && isAbsent) return false;
-
-      if (!query) return true;
-
-      const searchable = [
-        getStudentName(row, index),
-        getStudentCode(row),
-        id,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return searchable.includes(query);
-    });
-  }, [uniqueStudents, absentIds, search, statusFilter]);
-
-  const loadClasses = useCallback(async () => {
-    if (pendingClassesRef.current) return;
-
-    pendingClassesRef.current = true;
-    setLoadingClasses(true);
-    setError("");
-
-    try {
-      /*
-       * المسار الخاص بالمعلم يعتمد على الـ JWT،
-       * فلا نحتاج teacherId في query.
-       */
-      const lecturesResponse =
-        await api.get(
-          "/lectures/teacher/me"
-        );
-
-      const lectureList =
-        extractCollection(
-          lecturesResponse,
-          ["lectures"]
-        );
-
-      lecturesRef.current =
-        lectureList;
-
-      const map =
-        new Map();
-
-      lectureList.forEach(
-        (lecture) => {
-          const rawClass =
-            lecture?.class ||
-            lecture?.classId ||
-            lecture?.classroom ||
-            lecture?.schoolClass;
-
-          const classId =
-            normalizeId(
-              rawClass
-            );
-
-          if (
-            !isMongoId(
-              classId
-            ) ||
-            map.has(
-              classId
-            )
-          ) {
-            return;
-          }
-
-          const entity =
-            rawClass &&
-            typeof rawClass ===
-              "object"
-              ? rawClass
-              : {
-                  _id:
-                    classId,
-                };
-
-          map.set(
-            classId,
-            entity
-          );
-        }
-      );
-
-      const uniqueClasses =
-        Array.from(
-          map.values()
-        );
-
-      classesRef.current =
-        uniqueClasses;
-
-      setClasses(
-        uniqueClasses
-      );
-
-      const requestedLecture =
-        isMongoId(
-          initialRequestedLectureId
-        )
-          ? lectureList.find(
-              (lecture) =>
-                getLectureId(
-                  lecture
-                ) ===
-                initialRequestedLectureId
-            ) ||
-            null
-          : null;
-
-      const requestedLectureClassId =
-        getLectureClassId(
-          requestedLecture
-        );
-
-      const requestedClassExists =
-        uniqueClasses.some(
-          (item) =>
-            getClassId(
-              item
-            ) ===
-            initialRequestedClassId
-        );
-
-      const targetClassId =
-        (
-          isMongoId(
-            requestedLectureClassId
-          ) &&
-          uniqueClasses.some(
-            (item) =>
-              getClassId(
-                item
-              ) ===
-              requestedLectureClassId
-          )
-        )
-          ? requestedLectureClassId
-          : (
-              isMongoId(
-                initialRequestedClassId
-              ) &&
-              requestedClassExists
-            )
-            ? initialRequestedClassId
-            : uniqueClasses[0]
-              ? getClassId(
-                  uniqueClasses[0]
-                )
-              : "";
-
-      setSelectedClassId(
-        targetClassId
-      );
-
-      let targetLecture =
-        requestedLecture &&
-        getLectureClassId(
-          requestedLecture
-        ) ===
-          targetClassId
-          ? requestedLecture
-          : findBestLectureForClass(
-              lectureList,
-              targetClassId,
-              initialRequestedDate
-            );
-
-      if (targetLecture) {
-        const lectureId =
-          getLectureId(
-            targetLecture
-          );
-
-        const lectureWeekday =
-          getLectureWeekday(
-            targetLecture
-          );
-
-        const requestedWeekday =
-          getDateWeekday(
-            initialRequestedDate
-          );
-
-        setSelectedLectureId(
-          lectureId
-        );
-
-        /*
-         * لو الصفحة اتفتحت بتاريخ اليوم لكن الفصل لا توجد
-         * له حصة في هذا اليوم، ننقلها تلقائيًا ليوم الحصة
-         * في نفس الأسبوع بدل شاشة فاضية.
-         */
-        if (
-          lectureWeekday &&
-          lectureWeekday !==
-            requestedWeekday
-        ) {
-          setSelectedDate(
-            getDateForWeekday(
-              initialRequestedDate,
-              lectureWeekday
-            )
-          );
-        }
-      } else {
-        setSelectedLectureId(
-          ""
-        );
-      }
-
-      if (
-        !uniqueClasses.length
-      ) {
-        setError(
-          "لا توجد فصول داخل حصص المعلم الحالية. راجع الجدول وتكليفات المعلم من حساب الإدارة."
-        );
-      }
-    } catch (
-      requestError
-    ) {
-      lecturesRef.current =
-        [];
-      setClasses([]);
-      setSelectedClassId(
-        ""
-      );
-      setSelectedLectureId(
-        ""
-      );
-      setError(
-        requestError?.response
-          ?.data?.message ||
-          requestError?.message ||
-          "حدث خطأ أثناء تحميل فصول المعلم"
-      );
-    } finally {
-      pendingClassesRef.current =
-        false;
-      setLoadingClasses(
-        false
-      );
+    const response = await fetchTeacherAttendanceSettings();
+    if (response?.status === false) {
+      toast.error(response?.message || "تعذر تحميل إعدادات المدرسة");
+      setSettingsLoading(false);
+      return;
     }
-  }, [
-    initialRequestedClassId,
-    initialRequestedLectureId,
-    initialRequestedDate,
-  ]);
 
-  const loadRoster = useCallback(
-    async ({ silent = false, force = false } = {}) => {
-      if (!isMongoId(selectedClassId) || !selectedDate) {
-        setStudents([]);
-        setAttendanceRecords([]);
-        setAbsentIds(new Set());
-        setInitialAbsentIds(new Set());
-        return;
-      }
+    const settings = extractSettings(response);
 
-      const requestKey = `${selectedClassId}:${selectedDate}`;
+    const savedLat = settings?.location?.lat;
+    const savedLng = settings?.location?.lng;
+    const savedLocationIsValid = isValidSchoolLocation(savedLat, savedLng);
 
-      // React StrictMode may run effects twice in development.
-      // Do not start the same request while it is already pending.
-      if (!force && pendingRosterKeyRef.current === requestKey) {
-        return;
-      }
+    // Ignore the accidental 0,0 value that may have been saved by older UI logic.
+    setLat(savedLocationIsValid ? String(savedLat) : "");
+    setLng(savedLocationIsValid ? String(savedLng) : "");
 
-      pendingRosterKeyRef.current = requestKey;
-      const requestId = ++rosterRequestIdRef.current;
+    // Never show self check-in as enabled while the school location is invalid.
+    setTeacherCheckInEnabled(
+      Boolean(settings?.teacherCheckInEnabled) && savedLocationIsValid
+    );
 
-      if (silent) setRefreshing(true);
-      else setLoadingRoster(true);
+    setRadius(Number(settings?.checkInRadiusMeters) || 150);
+    setWorkSchedule(
+      normalizeWorkSchedule(settings?.workSchedule)
+    );
+    setNetworkIps(
+      Array.isArray(settings?.schoolNetworkIps)
+        ? settings.schoolNetworkIps.filter(Boolean)
+        : []
+    );
 
-      setError("");
+    setSettingsLoading(false);
+  }, []);
 
-      try {
-        const selectedWeekday = getDateWeekday(selectedDate);
+  const loadTeachers = useCallback(async () => {
+    const response = await getSchoolTeachers({ page: 1, limit: 1000 });
+    if (response?.status === false) return;
+    setTeachers(extractTeachers(response));
+  }, []);
 
-        const requestedLecture =
-          isMongoId(
-            selectedLectureId
-          )
-            ? lecturesRef.current.find(
-                (item) =>
-                  getLectureId(
-                    item
-                  ) ===
-                    selectedLectureId &&
-                  getLectureClassId(
-                    item
-                  ) ===
-                    selectedClassId &&
-                  getLectureWeekday(
-                    item
-                  ) ===
-                    selectedWeekday
-              ) ||
-              null
-            : null;
+  const loadAbsent = useCallback(async () => {
+    const response = await fetchAbsentTeachers();
 
-        const lecture =
-          requestedLecture ||
-          findLectureForClassAndDate(
-            lecturesRef.current,
-            selectedClassId,
-            selectedDate
-          );
+    if (response?.status === false) {
+      return;
+    }
 
-        const lectureId =
-          getLectureId(
-            lecture
-          );
+    const absentData = extractAbsent(response);
 
-        if (
-          lectureId &&
-          lectureId !==
-            selectedLectureId
-        ) {
-          setSelectedLectureId(
-            lectureId
-          );
+    setAbsentTeachers(absentData.teachers);
+    setAbsentDayInfo({
+      isWorkingDay: absentData.isWorkingDay,
+      message: absentData.message,
+    });
+
+    if (!absentData.isWorkingDay) {
+      setShowAbsent(false);
+    }
+  }, []);
+
+  const loadRecords = useCallback(async () => {
+    setRecordsLoading(true);
+
+    const params = {
+      page,
+      limit: PAGE_LIMIT,
+      ...(filter === "manual" ? { method: "manual" } : {}),
+    };
+
+    const response = await fetchTeacherAttendanceAdmin(params);
+
+    if (response?.status === false) {
+      toast.error(response?.message || "تعذر تحميل سجل حضور المعلمين");
+      setRecords([]);
+      setMeta({});
+      setRecordsLoading(false);
+      return;
+    }
+
+    const pageData = extractAttendancePage(response);
+    setRecords(pageData.rows);
+    setMeta(pageData.meta);
+    setRecordsLoading(false);
+  }, [filter, page]);
+
+  const loadSummary = useCallback(async () => {
+    const dateFrom = String(summaryRange.dateFrom || "").trim();
+    const dateTo = String(summaryRange.dateTo || "").trim();
+
+    if (!dateFrom || !dateTo) {
+      toast.error("حدد تاريخ البداية وتاريخ النهاية");
+      return;
+    }
+
+    if (dateFrom > dateTo) {
+      toast.error("تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية");
+      return;
+    }
+
+    setSummaryLoading(true);
+
+    const response = await fetchTeacherAttendanceSummary({
+      dateFrom,
+      dateTo,
+      teacherId: summaryRange.teacherId || undefined,
+    });
+
+    setSummaryLoading(false);
+    setSummaryLoaded(true);
+
+    if (isFailed(response)) {
+      setSummaryRows([]);
+      setSummaryTotalTeachers(0);
+      toast.error(response?.message || "تعذر تحميل تقرير حضور المعلمين");
+      return;
+    }
+
+    const summary = extractAttendanceSummary(response);
+    setSummaryRows(summary.rows);
+    setSummaryTotalTeachers(summary.totalTeachers);
+  }, [summaryRange]);
+
+  useEffect(() => {
+    loadSettings();
+    loadTeachers();
+  }, [loadSettings, loadTeachers]);
+
+  useEffect(() => {
+    loadRecords();
+    loadAbsent();
+  }, [loadRecords, loadAbsent]);
+
+  useEffect(() => {
+    if (tab === 2 && !summaryLoaded) {
+      loadSummary();
+    }
+  }, [tab, summaryLoaded, loadSummary]);
+
+  const visibleRecords = useMemo(() => {
+    if (filter === "weak") {
+      return records.filter((record) => {
+        if (record?.method === "manual") return false;
+        const { gps, network } = getVerification(record);
+        return gps !== network;
+      });
+    }
+
+    if (filter === "today") {
+      return records.filter((record) => normalizeRecordDate(record) === today);
+    }
+
+    return records;
+  }, [records, filter, today]);
+
+  const totalPages = Math.max(
+    1,
+    Number(meta?.totalPages || meta?.pages || meta?.lastPage || 1)
+  );
+
+  const summaryTotals = useMemo(
+    () =>
+      summaryRows.reduce(
+        (totals, row) => ({
+          daysPresent:
+            totals.daysPresent + (Number(row?.daysPresent) || 0),
+          daysLate:
+            totals.daysLate + (Number(row?.daysLate) || 0),
+          daysLeftEarly:
+            totals.daysLeftEarly + (Number(row?.daysLeftEarly) || 0),
+          daysMissingCheckOut:
+            totals.daysMissingCheckOut +
+            (Number(row?.daysMissingCheckOut) || 0),
+        }),
+        {
+          daysPresent: 0,
+          daysLate: 0,
+          daysLeftEarly: 0,
+          daysMissingCheckOut: 0,
         }
+      ),
+    [summaryRows]
+  );
 
-        if (!isMongoId(lectureId)) {
-          setStudents([]);
-          setAttendanceRecords([]);
-          setAbsentIds(new Set());
-          setInitialAbsentIds(new Set());
-          setError(
-            "لا توجد حصة لهذا الفصل في التاريخ المحدد."
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("المتصفح لا يدعم تحديد الموقع الجغرافي");
+      return;
+    }
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const latitude = Number(coords?.latitude);
+        const longitude = Number(coords?.longitude);
+
+        if (!isValidSchoolLocation(latitude, longitude)) {
+          setLocating(false);
+          toast.error(
+            "المتصفح أعاد موقعًا غير صالح. تأكد من تشغيل خدمة الموقع ثم حاول مرة أخرى."
           );
           return;
         }
 
-        const sheetResponse =
-          await fetchLectureAttendanceSheet(
-            lectureId,
-            selectedDate
-          );
+        setLat(String(latitude));
+        setLng(String(longitude));
+        setLocating(false);
+        toast.success("تم التقاط موقع الجهاز الحالي");
+      },
+      (error) => {
+        setLocating(false);
 
-        // Ignore an old request that finished after a newer request.
-        if (requestId !== rosterRequestIdRef.current) return;
+        const messageByCode = {
+          1: "تم رفض صلاحية الموقع. اسمح للموقع بالوصول إلى Location ثم حاول مرة أخرى.",
+          2: "تعذر تحديد موقع الجهاز حاليًا. تأكد من تشغيل خدمة الموقع.",
+          3: "انتهت مهلة تحديد الموقع. حاول مرة أخرى.",
+        };
 
-        if (isFailedResponse(sheetResponse)) {
-          throw new Error(
-            getErrorMessage(
-              sheetResponse,
-              "تعذر تحميل كشف الحضور"
-            )
-          );
-        }
-
-        const sheet = unwrapResponse(sheetResponse) || {};
-        const studentList = Array.isArray(sheet?.students)
-          ? sheet.students
-          : [];
-
-        const savedAbsentIds = new Set(
-          studentList
-            .filter((row) => row?.absent === true)
-            .map(getStudentId)
-            .filter(Boolean)
+        toast.error(
+          messageByCode[error?.code] ||
+            "تعذر التقاط موقع الجهاز. تأكد من صلاحية الموقع."
         );
-
-        const explicitRecords =
-          [
-            sheet?.attendanceRecords,
-            sheet?.attendance,
-            sheet?.attendances,
-            sheet?.absences,
-          ].find(Array.isArray) || [];
-
-        const records = explicitRecords.length
-          ? explicitRecords
-          : studentList
-              .filter((row) => row?.absent === true)
-              .map((row) => ({
-                _id: getSheetAttendanceRecordId(row),
-                studentId: getStudentId(row),
-                classId: selectedClassId,
-                date: selectedDate,
-              }));
-
-        const sheetLecture =
-          sheet?.lecture ||
-          lecture ||
-          null;
-
-        const rawRosterClass =
-          sheet?.class ||
-          sheetLecture?.class ||
-          sheetLecture?.classId ||
-          sheetLecture?.classroom ||
-          sheetLecture?.schoolClass ||
-          null;
-
-        const rosterClass =
-          rawRosterClass &&
-          typeof rawRosterClass === "object"
-            ? rawRosterClass
-            : null;
-
-        if (rosterClass) {
-          setClasses((current) => {
-            let changed = false;
-
-            const next = current.map((item) => {
-              if (getClassId(item) !== selectedClassId) return item;
-
-              const existing = getClassEntity(item) || {};
-              const nextRoomNumber = String(
-                rosterClass?.roomNumber || existing?.roomNumber || ""
-              ).trim();
-              const currentRoomNumber = String(
-                existing?.roomNumber || ""
-              ).trim();
-
-              const nextGradeName = String(
-                rosterClass?.gradeLevelId?.name ||
-                  rosterClass?.gradeLevel?.name ||
-                  rosterClass?.gradeName ||
-                  ""
-              ).trim();
-              const currentGradeName = String(
-                existing?.gradeLevelId?.name ||
-                  existing?.gradeLevel?.name ||
-                  existing?.gradeName ||
-                  ""
-              ).trim();
-
-              if (
-                nextRoomNumber === currentRoomNumber &&
-                (!nextGradeName || nextGradeName === currentGradeName)
-              ) {
-                return item;
-              }
-
-              changed = true;
-              return {
-                ...existing,
-                ...rosterClass,
-                _id: selectedClassId,
-              };
-            });
-
-            if (changed) {
-              classesRef.current = next;
-              return next;
-            }
-
-            return current;
-          });
-        }
-
-        setStudents(studentList);
-        setAttendanceRecords(records);
-        setAbsentIds(new Set(savedAbsentIds));
-        setInitialAbsentIds(new Set(savedAbsentIds));
-      } catch (requestError) {
-        if (requestId !== rosterRequestIdRef.current) return;
-
-        setStudents([]);
-        setAttendanceRecords([]);
-        setAbsentIds(new Set());
-        setInitialAbsentIds(new Set());
-        setError(
-          requestError?.message || "حدث خطأ أثناء تحميل سجل الحضور"
-        );
-      } finally {
-        if (requestId === rosterRequestIdRef.current) {
-          pendingRosterKeyRef.current = "";
-          setLoadingRoster(false);
-          setRefreshing(false);
-        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
       }
-    },
-    [selectedClassId, selectedDate, selectedLectureId]
-  );
-
-  useEffect(() => {
-    loadClasses();
-  }, [loadClasses]);
-
-  useEffect(() => {
-    loadRoster();
-  }, [loadRoster]);
-
-  useEffect(() => {
-    const next = new URLSearchParams(searchParams);
-
-    if (isMongoId(selectedClassId)) next.set("classId", selectedClassId);
-    else next.delete("classId");
-
-    if (selectedDate) {
-      next.set(
-        "date",
-        selectedDate
-      );
-    } else {
-      next.delete(
-        "date"
-      );
-    }
-
-    if (
-      isMongoId(
-        selectedLectureId
-      )
-    ) {
-      next.set(
-        "lectureId",
-        selectedLectureId
-      );
-    } else {
-      next.delete(
-        "lectureId"
-      );
-    }
-
-    if (next.toString() !== searchParams.toString()) {
-      setSearchParams(next, { replace: true });
-    }
-  }, [selectedClassId, selectedDate, selectedLectureId, searchParams, setSearchParams]);
-
-  const handleClassChange = (event) => {
-    const nextClassId =
-      event.target.value;
-
-    setSelectedClassId(
-      nextClassId
     );
+  };
 
-    const nextLecture =
-      findBestLectureForClass(
-        lecturesRef.current,
-        nextClassId,
-        selectedDate
-      );
+  const handleDetectIp = async () => {
+    setDetectingIp(true);
+    const response = await detectTeacherAttendanceIp();
+    setDetectingIp(false);
 
-    if (!nextLecture) {
-      setSelectedLectureId(
-        ""
+    if (response?.status === false) {
+      toast.error(response?.message || "تعذر اكتشاف عنوان الشبكة");
+      return;
+    }
+
+    const ip = response?.data?.ip || response?.ip;
+    if (!ip) {
+      toast.error("لم يرجع السيرفر عنوان IP صالحًا");
+      return;
+    }
+
+    setNetworkIps((previous) =>
+      previous.includes(ip) ? previous : [ip, ...previous]
+    );
+    toast.success(`تم اكتشاف ${ip}`);
+  };
+
+  const addManualIp = () => {
+    const value = newIp.trim();
+    if (!value) return;
+
+    if (networkIps.includes(value)) {
+      toast.info("عنوان الشبكة موجود بالفعل");
+      return;
+    }
+
+    setNetworkIps((previous) => [...previous, value]);
+    setNewIp("");
+  };
+
+  const updateWorkScheduleDay = (
+    day,
+    changes
+  ) => {
+    setWorkSchedule((current) =>
+      current.map((item) => {
+        if (item.day !== day) return item;
+
+        const next = {
+          ...item,
+          ...changes,
+        };
+
+        if (changes?.isWorkingDay === false) {
+          next.startTime = "";
+          next.endTime = "";
+        }
+
+        return next;
+      })
+    );
+  };
+
+  const saveSettings = async () => {
+    const latitude = parseCoordinate(lat);
+    const longitude = parseCoordinate(lng);
+
+    if (teacherCheckInEnabled && !hasValidLocation) {
+      toast.error(
+        "حدد موقع مدرسة صالحًا أولًا. لا يمكن استخدام إحداثيات فارغة أو 0,0."
       );
       return;
     }
 
-    setSelectedLectureId(
-      getLectureId(
-        nextLecture
-      )
-    );
-
-    const lectureWeekday =
-      getLectureWeekday(
-        nextLecture
-      );
-
-    if (
-      lectureWeekday &&
-      lectureWeekday !==
-        getDateWeekday(
-          selectedDate
-        )
-    ) {
-      setSelectedDate(
-        getDateForWeekday(
-          selectedDate,
-          lectureWeekday
-        )
-      );
-    }
-  };
-
-  const handleDateChange = (event) => {
-    const nextDate =
-      event.target.value;
-
-    setSelectedDate(
-      nextDate
-    );
-
-    const matchingLecture =
-      findLectureForClassAndDate(
-        lecturesRef.current,
-        selectedClassId,
-        nextDate
-      );
-
-    setSelectedLectureId(
-      getLectureId(
-        matchingLecture
-      )
-    );
-  };
-
-  const toggleAbsent = (studentId) => {
-    if (!studentId || saving) return;
-
-    setAbsentIds((current) => {
-      const next = new Set(current);
-      if (next.has(studentId)) next.delete(studentId);
-      else next.add(studentId);
-      return next;
-    });
-  };
-
-  const setVisibleStudentsAbsent = () => {
-    setAbsentIds((current) => {
-      const next = new Set(current);
-      filteredStudents.forEach((row) => {
-        const id = getStudentId(row);
-        if (id) next.add(id);
-      });
-      return next;
-    });
-  };
-
-  const setAllPresent = () => {
-    setAbsentIds(new Set());
-  };
-
-  const handleSave = async () => {
-    if (!isMongoId(selectedClassId) || !selectedDate) {
-      toast.error("اختر فصلًا صحيحًا والتاريخ أولًا");
+    const numericRadius = Number(radius);
+    if (!Number.isFinite(numericRadius) || numericRadius < 20 || numericRadius > 500) {
+      toast.error("نصف قطر القبول يجب أن يكون بين 20 و500 متر");
       return;
     }
 
-    if (!hasChanges) {
-      toast.info("لا توجد تغييرات جديدة للحفظ");
-      return;
-    }
+    setSettingsSaving(true);
 
-    const existingByStudent = new Map(
-      attendanceRecords
-        .map((record) => [getAttendanceStudentId(record), record])
-        .filter(([studentId]) => Boolean(studentId))
-    );
-
-    const toAdd = [...absentIds].filter(
-      (studentId) => !existingByStudent.has(studentId)
-    );
-
-    const toDelete = [...existingByStudent.entries()].filter(
-      ([studentId]) => !absentIds.has(studentId)
-    );
-
-    let attendanceLookupPromise = null;
-
-    const resolveAttendanceRecordId = async (
-      studentId,
-      record
-    ) => {
-      const directId = getAttendanceRecordId(record);
-
-      if (directId) {
-        return directId;
-      }
-
-      if (!attendanceLookupPromise) {
-        attendanceLookupPromise = fetchAttendance({
-          classId: selectedClassId,
-          date: selectedDate,
-          page: 1,
-          limit: 500,
-        });
-      }
-
-      const lookupResponse = await attendanceLookupPromise;
-
-      if (isFailedResponse(lookupResponse)) {
-        throw new Error(
-          getErrorMessage(
-            lookupResponse,
-            "تعذر تحديد سجل الغياب المطلوب حذفه"
-          )
-        );
-      }
-
-      const matchingRecord = extractCollection(
-        lookupResponse,
-        ["attendanceRecords"]
-      ).find((item) => {
-        const itemStudentId =
-          getAttendanceStudentId(item);
-        const itemClassId =
-          getAttendanceClassId(item);
-        const itemDate =
-          getAttendanceDate(item);
-
-        return (
-          itemStudentId === studentId &&
-          (!itemClassId || itemClassId === selectedClassId) &&
-          (!itemDate || itemDate === selectedDate)
-        );
-      });
-
-      return getAttendanceRecordId(matchingRecord);
+    const payload = {
+      teacherCheckInEnabled,
+      checkInRadiusMeters: numericRadius,
+      workSchedule: workSchedule.map((item) => ({
+        day: item.day,
+        isWorkingDay: Boolean(item.isWorkingDay),
+        startTime:
+          item.isWorkingDay && item.startTime
+            ? item.startTime
+            : null,
+        endTime:
+          item.isWorkingDay && item.endTime
+            ? item.endTime
+            : null,
+      })),
+      schoolNetworkIps: networkIps,
+      ...(hasValidLocation
+        ? {
+            location: {
+              lat: latitude,
+              lng: longitude,
+            },
+          }
+        : {}),
     };
 
-    setSaving(true);
+    const response = await updateTeacherAttendanceSettings(payload);
+    setSettingsSaving(false);
 
-    try {
-      const operations = [
-        ...toAdd.map(async (studentId) => {
-          const response = await addAttendance({
-            studentId,
-            classId: selectedClassId,
-            date: selectedDate,
-          });
-
-          if (isFailedResponse(response)) {
-            throw new Error(
-              getErrorMessage(response, "تعذر إضافة غياب طالب")
-            );
-          }
-
-          return response;
-        }),
-        ...toDelete.map(async ([studentId, record]) => {
-          const recordId =
-            await resolveAttendanceRecordId(
-              studentId,
-              record
-            );
-
-          if (!recordId) {
-            throw new Error(
-              "تعذر تحديد سجل الغياب المطلوب حذفه"
-            );
-          }
-
-          const response = await deleteAttendance(recordId);
-
-          if (isFailedResponse(response)) {
-            throw new Error(
-              getErrorMessage(response, "تعذر حذف غياب طالب")
-            );
-          }
-
-          return response;
-        }),
-      ];
-
-      const results = await Promise.allSettled(operations);
-      const failures = results.filter((result) => result.status === "rejected");
-
-      await loadRoster({ silent: true, force: true });
-
-      if (failures.length) {
-        toast.error(
-          `تم حفظ جزء من السجل، وتعذر تنفيذ ${failures.length} عملية`
-        );
-      } else {
-        toast.success(
-          `تم حفظ الحضور بنجاح • ${absentIds.size} غائب`
-        );
-      }
-    } catch (requestError) {
-      toast.error(
-        requestError?.message || "حدث خطأ أثناء حفظ الحضور"
-      );
-    } finally {
-      setSaving(false);
+    if (response?.status === false) {
+      toast.error(response?.message || "تعذر حفظ إعدادات حضور المعلمين");
+      return;
     }
+
+    toast.success("تم حفظ إعدادات حضور المعلمين");
+    await loadSettings();
   };
 
-  const loading = loadingClasses || loadingRoster;
+  const openManualDialog = () => {
+    setManualForm(emptyManualForm());
+    setManualOpen(true);
+  };
 
-  return (
-    <Box
-      dir="rtl"
-      sx={{
-        minHeight: "100vh",
-        py: { xs: 2, sm: 2.5, md: 3.5 },
-        color: "#122F4D",
-        backgroundColor: "transparent",
-      }}
-    >
-      <Box
+  const createManualRecord = async () => {
+    if (!manualForm.teacherId) {
+      toast.error("اختر المعلم");
+      return;
+    }
+
+    if (!manualForm.date || !manualForm.checkInAt) {
+      toast.error("حدد التاريخ ووقت الحضور");
+      return;
+    }
+
+    if (manualForm.date > today) {
+      toast.error("لا يمكن تسجيل حضور يدوي بتاريخ مستقبلي");
+      return;
+    }
+
+    setManualSaving(true);
+    const response = await createManualTeacherAttendance(manualForm);
+    setManualSaving(false);
+
+    if (isFailed(response)) {
+      toast.error(response?.message || "تعذر تسجيل الحضور اليدوي");
+      return;
+    }
+
+    toast.success("تم تسجيل الحضور اليدوي");
+    setManualOpen(false);
+    await Promise.all([loadRecords(), loadAbsent()]);
+  };
+
+  const openEditDialog = (record) => {
+    setSelectedRecord(record);
+    setEditForm({
+      checkInAt:
+        formatTime(record?.checkInAt) === "—"
+          ? ""
+          : formatTime(record?.checkInAt),
+      checkOutAt:
+        formatTime(record?.checkOutAt) === "—"
+          ? ""
+          : formatTime(record?.checkOutAt),
+      notes: record?.notes || "",
+    });
+    setEditOpen(true);
+  };
+
+  const saveEdit = async () => {
+    const id = getRecordId(selectedRecord);
+    if (!id) return;
+
+    if (!editForm.checkInAt) {
+      toast.error("حدد وقت الحضور");
+      return;
+    }
+
+    setEditSaving(true);
+    const response = await updateTeacherAttendance(id, editForm);
+    setEditSaving(false);
+
+    if (isFailed(response)) {
+      toast.error(response?.message || "تعذر تعديل سجل الحضور");
+      return;
+    }
+
+    toast.success("تم تعديل سجل الحضور");
+    setEditOpen(false);
+    setSelectedRecord(null);
+    await loadRecords();
+  };
+
+  const openDeleteDialog = (record) => {
+    setSelectedRecord(record);
+    setDeleteOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    const id = getRecordId(selectedRecord);
+    if (!id) return;
+
+    setDeleteSaving(true);
+    const response = await deleteTeacherAttendance(id);
+    setDeleteSaving(false);
+
+    if (isFailed(response)) {
+      toast.error(response?.message || "تعذر حذف سجل الحضور");
+      return;
+    }
+
+    toast.success("تم حذف سجل الحضور");
+    setDeleteOpen(false);
+    setSelectedRecord(null);
+    await Promise.all([loadRecords(), loadAbsent()]);
+  };
+
+  const renderSettings = () => {
+    if (settingsLoading) {
+      return (
+        <Paper elevation={0} sx={{ ...pageCardSx, p: 4, display: "grid", placeItems: "center" }}>
+          <CircularProgress />
+        </Paper>
+      );
+    }
+
+    return (
+      <Stack spacing={1.5}>
+        <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ xs: "stretch", sm: "center" }}
+            justifyContent="space-between"
+            gap={1.5}
+          >
+            <Box>
+              <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
+                تفعيل تسجيل الحضور والانصراف الذاتي
+              </Typography>
+              <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
+                يستخدم نفس الإعداد للحضور والانصراف الذاتي. لا يمكن تفعيله قبل وجود موقع صالح للمدرسة، وشبكة المدرسة اختيارية.
+              </Typography>
+            </Box>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={teacherCheckInEnabled}
+                  onChange={(event) => setTeacherCheckInEnabled(event.target.checked)}
+                />
+              }
+              label={teacherCheckInEnabled ? "مفعّل" : "متوقف"}
+            />
+          </Stack>
+
+          {teacherCheckInEnabled && !hasValidLocation && (
+            <Alert severity="warning" sx={{ mt: 1.2, borderRadius: "12px" }}>
+              حدد موقع المدرسة أولًا. الباك سيرفض التفعيل من غير Location.
+            </Alert>
+          )}
+        </Paper>
+
+        <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
+          <Box>
+            <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
+              جدول دوام المعلمين الأسبوعي
+            </Typography>
+            <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
+              حدّد أيام العمل ووقت البداية والنهاية لكل يوم. اليوم غير المفعّل يُرسل بدون أوقات.
+            </Typography>
+          </Box>
+
+          <Stack spacing={0.9} sx={{ mt: 1.5 }}>
+            {WORK_WEEK_DAYS.map(({ day, label }) => {
+              const item =
+                workSchedule.find(
+                  (row) => row.day === day
+                ) || {
+                  day,
+                  isWorkingDay: true,
+                  startTime: "",
+                  endTime: "",
+                };
+
+              return (
+                <Paper
+                  key={day}
+                  elevation={0}
+                  sx={{
+                    p: 1.1,
+                    border:
+                      "1px solid rgba(36,74,112,.08)",
+                    borderRadius: "14px",
+                    backgroundColor: item.isWorkingDay
+                      ? "#fff"
+                      : "rgba(36,74,112,.025)",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "1fr",
+                        md: "180px minmax(0,1fr)",
+                      },
+                      alignItems: "center",
+                      gap: 1,
+                    }}
+                  >
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={item.isWorkingDay}
+                          onChange={(event) =>
+                            updateWorkScheduleDay(
+                              day,
+                              {
+                                isWorkingDay:
+                                  event.target.checked,
+                              }
+                            )
+                          }
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography
+                            sx={{
+                              fontSize: 11,
+                              fontWeight: 900,
+                              color: "#122F4D",
+                            }}
+                          >
+                            {label}
+                          </Typography>
+                          <Typography
+                            sx={{
+                              mt: 0.1,
+                              color: "#708198",
+                              fontSize: 8.5,
+                            }}
+                          >
+                            {item.isWorkingDay
+                              ? "يوم عمل"
+                              : "إجازة"}
+                          </Typography>
+                        </Box>
+                      }
+                      sx={{ m: 0 }}
+                    />
+
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          sm: "1fr 1fr",
+                        },
+                        gap: 1,
+                      }}
+                    >
+                      <TextField
+                        type="time"
+                        label="بداية الدوام"
+                        value={item.startTime}
+                        disabled={!item.isWorkingDay}
+                        onChange={(event) =>
+                          updateWorkScheduleDay(
+                            day,
+                            {
+                              startTime:
+                                event.target.value,
+                            }
+                          )
+                        }
+                        InputLabelProps={{ shrink: true }}
+                        inputProps={{ step: 60 }}
+                        fullWidth
+                        size="small"
+                      />
+
+                      <TextField
+                        type="time"
+                        label="نهاية الدوام"
+                        value={item.endTime}
+                        disabled={!item.isWorkingDay}
+                        onChange={(event) =>
+                          updateWorkScheduleDay(
+                            day,
+                            {
+                              endTime:
+                                event.target.value,
+                            }
+                          )
+                        }
+                        InputLabelProps={{ shrink: true }}
+                        inputProps={{ step: 60 }}
+                        fullWidth
+                        size="small"
+                      />
+                    </Box>
+                  </Box>
+                </Paper>
+              );
+            })}
+          </Stack>
+
+          <Alert severity="info" sx={{ mt: 1.2, borderRadius: "12px" }}>
+            لو وقت البداية أو النهاية فارغ في يوم عمل، يعتبر اليوم يوم دوام لكن القياس المرتبط بهذا الوقت يكون غير متاح.
+          </Alert>
+        </Paper>
+
+        <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1}>
+            <Box>
+              <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
+                <LocationOnRounded sx={{ verticalAlign: "middle", ml: 0.6, color: "#B78430" }} />
+                موقع المدرسة
+              </Typography>
+              <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10 }}>
+                استخدم موقع الجهاز وأنت داخل المدرسة أو أدخل الإحداثيات يدويًا.
+              </Typography>
+            </Box>
+
+            {settingsPermissions.edit && (
+              <Button
+                type="button"
+                variant="outlined"
+                onClick={handleUseMyLocation}
+                disabled={locating}
+                startIcon={locating ? <CircularProgress size={15} /> : <MyLocationRounded />}
+                sx={{ borderRadius: "11px" }}
+              >
+                {locating ? "جارٍ تحديد الموقع" : "استخدم موقعي الحالي"}
+              </Button>
+            )}
+          </Stack>
+
+          <Box
+            sx={{
+              mt: 1.5,
+              height: 180,
+              display: "grid",
+              placeItems: "center",
+              position: "relative",
+              overflow: "hidden",
+              borderRadius: "16px",
+              border: "1px solid rgba(36,74,112,.09)",
+              backgroundImage:
+                "linear-gradient(rgba(36,74,112,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(36,74,112,.045) 1px, transparent 1px)",
+              backgroundSize: "28px 28px",
+              backgroundColor: "rgba(36,74,112,.025)",
+            }}
+          >
+            <Box
+              sx={{
+                width: Math.max(80, Math.min(160, 70 + (Number(radius) / 500) * 100)),
+                height: Math.max(80, Math.min(160, 70 + (Number(radius) / 500) * 100)),
+                position: "absolute",
+                borderRadius: "50%",
+                border: "2px dashed rgba(183,132,48,.55)",
+                backgroundColor: "rgba(251,240,216,.38)",
+              }}
+            />
+            <GpsFixedRounded sx={{ zIndex: 1, color: "#B78430", fontSize: 38 }} />
+          </Box>
+
+          <Box
+            sx={{
+              mt: 1.4,
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+              gap: 1,
+            }}
+          >
+            <TextField
+              label="Latitude"
+              value={lat}
+              onChange={(event) => setLat(event.target.value)}
+              type="number"
+              inputProps={{ step: "any", min: -90, max: 90 }}
+              fullWidth
+            />
+            <TextField
+              label="Longitude"
+              value={lng}
+              onChange={(event) => setLng(event.target.value)}
+              type="number"
+              inputProps={{ step: "any", min: -180, max: 180 }}
+              fullWidth
+            />
+          </Box>
+
+          <Box sx={{ mt: 2 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography sx={{ fontSize: 11, fontWeight: 800 }}>نصف قطر القبول</Typography>
+              <Chip label={`${radius} متر`} size="small" sx={{ fontWeight: 800 }} />
+            </Stack>
+            <Slider
+              value={Number(radius)}
+              onChange={(_, value) => setRadius(Number(value))}
+              min={20}
+              max={500}
+              step={10}
+              valueLabelDisplay="auto"
+              sx={{ mt: 1, color: "#B78430" }}
+            />
+          </Box>
+        </Paper>
+
+        <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1}>
+            <Box>
+              <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
+                <RouterRounded sx={{ verticalAlign: "middle", ml: 0.6, color: "#B78430" }} />
+                شبكة المدرسة / IP
+              </Typography>
+              <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10 }}>
+                اختياري. زر الاكتشاف يقرأ الـIP الذي يراه السيرفر فعليًا.
+              </Typography>
+            </Box>
+
+            {settingsPermissions.edit && (
+              <Button
+                onClick={handleDetectIp}
+                disabled={detectingIp}
+                startIcon={detectingIp ? <CircularProgress size={15} /> : <WifiFindRounded />}
+                variant="outlined"
+                sx={{ borderRadius: "11px" }}
+              >
+                {detectingIp ? "جارٍ الاكتشاف" : "اكتشاف IP الحالي"}
+              </Button>
+            )}
+          </Stack>
+
+          <Stack direction="row" flexWrap="wrap" gap={0.8} sx={{ mt: 1.5 }}>
+            {!networkIps.length ? (
+              <Alert severity="info" sx={{ width: "100%", borderRadius: "12px" }}>
+                لا توجد شبكة مسجلة. يمكن الاعتماد على الموقع الجغرافي فقط.
+              </Alert>
+            ) : (
+              networkIps.map((ip) => (
+                <Chip
+                  key={ip}
+                  label={ip}
+                  onDelete={
+                    settingsPermissions.edit
+                      ? () =>
+                          setNetworkIps((previous) =>
+                            previous.filter((item) => item !== ip)
+                          )
+                      : undefined
+                  }
+                  sx={{ fontFamily: "monospace" }}
+                />
+              ))
+            )}
+          </Stack>
+
+          <Stack direction={{ xs: "column", sm: "row" }} gap={1} sx={{ mt: 1.4 }}>
+            <TextField
+              label="إضافة IP يدوي"
+              value={newIp}
+              onChange={(event) => setNewIp(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addManualIp();
+                }
+              }}
+              fullWidth
+              placeholder="مثال: 156.203.44.118"
+            />
+            {settingsPermissions.edit && (
+              <Button onClick={addManualIp} variant="outlined" startIcon={<AddRounded />}>
+                إضافة
+              </Button>
+            )}
+          </Stack>
+        </Paper>
+
+        {settingsPermissions.edit && (
+          <Stack direction="row" justifyContent="flex-end">
+            <Button
+              onClick={saveSettings}
+              disabled={settingsSaving}
+              variant="contained"
+              startIcon={settingsSaving ? <CircularProgress size={16} color="inherit" /> : <SaveRounded />}
+              sx={{
+                minHeight: 44,
+                px: 2.5,
+                color: "#122F4D",
+                backgroundColor: "#F2D792",
+                boxShadow: "none",
+                borderRadius: "12px",
+                fontWeight: 900,
+                "&:hover": { backgroundColor: "#E8C96F", boxShadow: "none" },
+              }}
+            >
+              حفظ إعدادات الحضور
+            </Button>
+          </Stack>
+        )}
+      </Stack>
+    );
+  };
+
+  const renderLog = () => (
+    <Stack spacing={1.5}>
+      <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          alignItems={{ xs: "stretch", md: "center" }}
+          justifyContent="space-between"
+          gap={1.2}
+        >
+          <Box>
+            <Typography sx={{ color: "#122F4D", fontSize: 16, fontWeight: 900 }}>
+              سجل الحضور اليومي
+            </Typography>
+            <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10 }}>
+              كل سجل يوضح طريقة التسجيل ونتيجة GPS والشبكة بشكل منفصل.
+            </Typography>
+          </Box>
+
+          <Stack direction="row" gap={0.7}>
+            <Button
+              variant="outlined"
+              onClick={() => Promise.all([loadRecords(), loadAbsent()])}
+              startIcon={<RefreshRounded />}
+            >
+              تحديث
+            </Button>
+            {attendancePermissions.add && (
+              <Button
+                variant="contained"
+                onClick={openManualDialog}
+                startIcon={<AddRounded />}
+                sx={{
+                  color: "#122F4D",
+                  backgroundColor: "#F2D792",
+                  boxShadow: "none",
+                  "&:hover": { backgroundColor: "#E8C96F", boxShadow: "none" },
+                }}
+              >
+                تسجيل حضور يدوي
+              </Button>
+            )}
+          </Stack>
+        </Stack>
+      </Paper>
+
+      <Paper
+        elevation={0}
+        onClick={() => absentDayInfo.isWorkingDay && setShowAbsent((value) => !value)}
         sx={{
-          width: "100%",
-          maxWidth: "1680px",
-          mx: "auto",
-          px: { xs: 2, sm: 3, md: 4, lg: 5 },
+          ...pageCardSx,
+          p: 1.3,
+          cursor: absentDayInfo.isWorkingDay ? "pointer" : "default",
+          borderColor: "rgba(201,79,79,.18)",
+          backgroundColor: "rgba(253,234,234,.52)",
         }}
       >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <PersonOffRounded sx={{ color: "#C94848" }} />
+            <Box>
+              <Typography sx={{ color: "#A23E3E", fontSize: 12, fontWeight: 900 }}>
+                {absentDayInfo.isWorkingDay
+                  ? `${absentTeachers.length} معلم بدون سجل حضور اليوم`
+                  : absentDayInfo.message ||
+                    "هذا اليوم إجازة رسمية للمدرسة"}
+              </Typography>
+              <Typography sx={{ color: "#8B6262", fontSize: 9 }}>
+                {absentDayInfo.isWorkingDay
+                  ? "اضغط لعرض القائمة"
+                  : "لا يتم احتساب غياب المعلمين في يوم الإجازة"}
+              </Typography>
+            </Box>
+          </Stack>
+          <Chip
+            label={
+              absentDayInfo.isWorkingDay
+                ? showAbsent
+                  ? "إخفاء"
+                  : "عرض"
+                : "إجازة"
+            }
+            size="small"
+          />
+        </Stack>
+
+        <Collapse in={absentDayInfo.isWorkingDay && showAbsent}>
+          <Divider sx={{ my: 1 }} />
+          <Stack direction="row" flexWrap="wrap" gap={0.7}>
+            {!absentTeachers.length ? (
+              <Typography sx={{ color: "#708198", fontSize: 10 }}>
+                كل المعلمين لديهم سجل حضور اليوم.
+              </Typography>
+            ) : (
+              absentTeachers.map((teacher, index) => (
+                <Chip
+                  key={normalizeId(teacher) || index}
+                  label={getTeacherName(teacher)}
+                  sx={{ backgroundColor: "#fff" }}
+                />
+              ))
+            )}
+          </Stack>
+        </Collapse>
+      </Paper>
+
+      <Paper elevation={0} sx={{ ...pageCardSx, p: 1.2 }}>
+        <Stack direction="row" flexWrap="wrap" gap={0.7}>
+          {[
+            ["all", "كل السجلات"],
+            ["manual", "يدوي فقط"],
+            ["weak", "تحقق جزئي"],
+            ["today", "اليوم"],
+          ].map(([value, label]) => (
+            <Chip
+              key={value}
+              label={label}
+              clickable
+              onClick={() => {
+                setFilter(value);
+                setPage(1);
+              }}
+              sx={{
+                color: filter === value ? "#fff" : "#344054",
+                backgroundColor: filter === value ? "#122F4D" : "#fff",
+                border: "1px solid rgba(36,74,112,.12)",
+                fontWeight: 800,
+              }}
+            />
+          ))}
+        </Stack>
+      </Paper>
+
+      <Paper elevation={0} sx={{ ...pageCardSx, overflow: "hidden" }}>
+        {recordsLoading ? (
+          <Box sx={{ minHeight: 300, display: "grid", placeItems: "center" }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ backgroundColor: "rgba(36,74,112,.035)" }}>
+                  <TableCell align="right">المعلم</TableCell>
+                  <TableCell align="right">التاريخ</TableCell>
+                  <TableCell align="right">الحضور</TableCell>
+                  <TableCell align="right">الانصراف</TableCell>
+                  <TableCell align="right">التأخير</TableCell>
+                  <TableCell align="right">مدة العمل</TableCell>
+                  <TableCell align="right">طريقة الانصراف</TableCell>
+                  <TableCell align="right">طريقة الحضور</TableCell>
+                  <TableCell align="right">GPS</TableCell>
+                  <TableCell align="right">الشبكة</TableCell>
+                  <TableCell align="right">المسافة</TableCell>
+                  <TableCell align="right">سجّله</TableCell>
+                  {(attendancePermissions.edit ||
+                    attendancePermissions.delete) && (
+                    <TableCell align="center">إجراءات</TableCell>
+                  )}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {!visibleRecords.length ? (
+                  <TableRow>
+                    <TableCell colSpan={(attendancePermissions.edit || attendancePermissions.delete) ? 13 : 12} align="center" sx={{ py: 6, color: "#708198" }}>
+                      لا توجد سجلات مطابقة للفلتر الحالي.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  visibleRecords.map((record, index) => {
+                    const teacher = getTeacherEntity(record);
+                    const verification = getVerification(record);
+                    const manual = record?.method === "manual";
+                    const weak = !manual && verification.gps !== verification.network;
+                    const id = getRecordId(record) || index;
+
+                    return (
+                      <TableRow
+                        key={id}
+                        hover
+                        sx={{
+                          backgroundColor: manual
+                            ? "rgba(255,243,216,.28)"
+                            : weak
+                              ? "rgba(251,240,216,.18)"
+                              : "transparent",
+                        }}
+                      >
+                        <TableCell align="right">
+                          <Box>
+                            <Typography sx={{ fontSize: 11, fontWeight: 900 }}>
+                              {getTeacherName(teacher)}
+                            </Typography>
+                            <Typography sx={{ color: "#708198", fontSize: 8.5 }}>
+                              {teacher?.email || teacher?.phoneNumber || ""}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell align="right">{normalizeRecordDate(record) || "—"}</TableCell>
+                        <TableCell align="right">{formatTime(record?.checkInAt)}</TableCell>
+                        <TableCell align="right">{formatTime(record?.checkOutAt)}</TableCell>
+                        <TableCell align="right">
+                          {record?.lateMinutes === null || record?.lateMinutes === undefined
+                            ? "غير مقاس"
+                            : formatMinutes(record.lateMinutes)}
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatMinutes(record?.workMinutes, { duration: true })}
+                        </TableCell>
+                        <TableCell align="right">{record?.checkOutMethod || "—"}</TableCell>
+                        <TableCell align="right">
+                          <Chip
+                            size="small"
+                            label={manual ? "يدوي" : weak ? "ذاتي — جزئي" : "ذاتي"}
+                            sx={{
+                              color: manual || weak ? "#9A6B12" : "#237449",
+                              backgroundColor: manual || weak ? "#FFF3D8" : "#E7F6ED",
+                              fontWeight: 800,
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell align="right">{verification.gps ? "✅" : "—"}</TableCell>
+                        <TableCell align="right">{verification.network ? "✅" : "—"}</TableCell>
+                        <TableCell align="right">
+                          {record?.distanceMeters === undefined || record?.distanceMeters === null
+                            ? "—"
+                            : `${Math.round(Number(record.distanceMeters) || 0)} م`}
+                        </TableCell>
+                        <TableCell align="right">
+                          {manual ? getRecordedByName(record) : "—"}
+                        </TableCell>
+                        {(attendancePermissions.edit ||
+                          attendancePermissions.delete) && (
+                          <TableCell align="center">
+                            <Stack direction="row" justifyContent="center" spacing={0.2}>
+                              {attendancePermissions.edit && (
+                                <Tooltip title="تعديل">
+                                  <IconButton size="small" onClick={() => openEditDialog(record)}>
+                                    <EditRounded fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {attendancePermissions.delete && (
+                                <Tooltip title="حذف">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => openDeleteDialog(record)}
+                                    sx={{ color: "#C94848" }}
+                                  >
+                                    <DeleteOutlineRounded fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </Stack>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        {totalPages > 1 && filter !== "weak" && filter !== "today" && (
+          <Stack alignItems="center" sx={{ py: 1.5 }}>
+            <Pagination
+              count={totalPages}
+              page={page}
+              onChange={(_, value) => setPage(value)}
+              color="primary"
+            />
+          </Stack>
+        )}
+      </Paper>
+    </Stack>
+  );
+
+
+  const renderSummary = () => (
+    <Stack spacing={1.5}>
+      <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          alignItems={{ xs: "stretch", md: "center" }}
+          justifyContent="space-between"
+          gap={1.2}
+        >
+          <Box>
+            <Typography sx={{ color: "#122F4D", fontSize: 16, fontWeight: 900 }}>
+              تقرير حضور المعلمين
+            </Typography>
+            <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10 }}>
+              ملخص الحضور والتأخير والخروج المبكر وساعات العمل خلال فترة محددة.
+            </Typography>
+          </Box>
+
+          <Button
+            variant="outlined"
+            onClick={loadSummary}
+            disabled={summaryLoading}
+            startIcon={
+              summaryLoading
+                ? <CircularProgress size={15} />
+                : <RefreshRounded />
+            }
+            sx={{ borderRadius: "11px" }}
+          >
+            {summaryLoading ? "جارٍ تحميل التقرير" : "تحديث التقرير"}
+          </Button>
+        </Stack>
+
+        <Box
+          sx={{
+            mt: 1.5,
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "1fr 1fr",
+              lg: "1fr 1fr 1.25fr auto",
+            },
+            gap: 1,
+            alignItems: "center",
+          }}
+        >
+          <TextField
+            type="date"
+            label="من تاريخ"
+            value={summaryRange.dateFrom}
+            onChange={(event) =>
+              setSummaryRange((current) => ({
+                ...current,
+                dateFrom: event.target.value,
+              }))
+            }
+            InputLabelProps={{ shrink: true }}
+            size="small"
+            fullWidth
+          />
+
+          <TextField
+            type="date"
+            label="إلى تاريخ"
+            value={summaryRange.dateTo}
+            onChange={(event) =>
+              setSummaryRange((current) => ({
+                ...current,
+                dateTo: event.target.value,
+              }))
+            }
+            InputLabelProps={{ shrink: true }}
+            size="small"
+            fullWidth
+          />
+
+          <TextField
+            select
+            label="المعلم"
+            value={summaryRange.teacherId}
+            onChange={(event) =>
+              setSummaryRange((current) => ({
+                ...current,
+                teacherId: event.target.value,
+              }))
+            }
+            size="small"
+            fullWidth
+          >
+            <MenuItem value="">كل المعلمين</MenuItem>
+            {teachers.map((teacher, index) => (
+              <MenuItem
+                key={normalizeId(teacher) || index}
+                value={normalizeId(teacher)}
+              >
+                {getTeacherName(teacher)}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <Button
+            variant="contained"
+            onClick={loadSummary}
+            disabled={summaryLoading}
+            startIcon={
+              summaryLoading
+                ? <CircularProgress size={15} color="inherit" />
+                : <AssessmentRounded />
+            }
+            sx={{
+              minHeight: 40,
+              px: 2.2,
+              color: "#122F4D",
+              backgroundColor: "#F2D792",
+              boxShadow: "none",
+              borderRadius: "11px",
+              fontWeight: 900,
+              "&:hover": {
+                backgroundColor: "#E8C96F",
+                boxShadow: "none",
+              },
+            }}
+          >
+            عرض التقرير
+          </Button>
+        </Box>
+      </Paper>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: {
+            xs: "1fr 1fr",
+            lg: "repeat(5,minmax(0,1fr))",
+          },
+          gap: 1,
+        }}
+      >
+        {[
+          ["المعلمين في التقرير", summaryTotalTeachers],
+          ["أيام الحضور", summaryTotals.daysPresent],
+          ["أيام التأخير", summaryTotals.daysLate],
+          ["أيام الخروج المبكر", summaryTotals.daysLeftEarly],
+          ["بدون انصراف", summaryTotals.daysMissingCheckOut],
+        ].map(([label, value]) => (
+          <Paper
+            key={label}
+            elevation={0}
+            sx={{
+              ...pageCardSx,
+              p: 1.35,
+              backgroundColor: "#fff",
+            }}
+          >
+            <Typography sx={{ color: "#708198", fontSize: 9, fontWeight: 800 }}>
+              {label}
+            </Typography>
+            <Typography
+              sx={{
+                mt: 0.25,
+                color: "#122F4D",
+                fontSize: 20,
+                fontWeight: 900,
+              }}
+            >
+              {value}
+            </Typography>
+          </Paper>
+        ))}
+      </Box>
+
+      <Alert severity="info" sx={{ borderRadius: "14px" }}>
+        "غير مقاس" لا يعني أن المعلم حضر أو انصرف في الموعد؛ بل يعني أن جدول
+        المدرسة لم يكن يحتوي على وقت بداية أو نهاية يمكن القياس عليه في ذلك اليوم.
+      </Alert>
+
+      <Paper elevation={0} sx={{ ...pageCardSx, overflow: "hidden" }}>
+        {summaryLoading ? (
+          <Box sx={{ minHeight: 320, display: "grid", placeItems: "center" }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <TableContainer>
+            <Table size="small" sx={{ minWidth: 1380 }}>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: "rgba(36,74,112,.035)" }}>
+                  <TableCell align="right">المعلم</TableCell>
+                  <TableCell align="center">الحالة</TableCell>
+                  <TableCell align="center">أيام الحضور</TableCell>
+                  <TableCell align="center">أيام التأخير</TableCell>
+                  <TableCell align="center">إجمالي التأخير</TableCell>
+                  <TableCell align="center">الخروج المبكر</TableCell>
+                  <TableCell align="center">إجمالي الخروج المبكر</TableCell>
+                  <TableCell align="right">العمل / المتوقع</TableCell>
+                  <TableCell align="center">بدون انصراف</TableCell>
+                  <TableCell align="center">تأخير غير مقاس</TableCell>
+                  <TableCell align="center">خروج غير مقاس</TableCell>
+                  <TableCell align="center">دوام في إجازة</TableCell>
+                </TableRow>
+              </TableHead>
+
+              <TableBody>
+                {!summaryLoaded ? (
+                  <TableRow>
+                    <TableCell colSpan={12} align="center" sx={{ py: 7, color: "#708198" }}>
+                      اختر الفترة ثم اضغط «عرض التقرير».
+                    </TableCell>
+                  </TableRow>
+                ) : !summaryRows.length ? (
+                  <TableRow>
+                    <TableCell colSpan={12} align="center" sx={{ py: 7, color: "#708198" }}>
+                      لا توجد بيانات حضور في الفترة المحددة.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  summaryRows.map((row, index) => (
+                    <TableRow
+                      key={normalizeId(row?.teacherId) || `${row?.teacherName || "teacher"}-${index}`}
+                      hover
+                    >
+                      <TableCell align="right">
+                        <Typography sx={{ color: "#122F4D", fontSize: 11, fontWeight: 900 }}>
+                          {row?.teacherName || "معلم"}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell align="center">
+                        <Chip
+                          size="small"
+                          label={row?.teacherDeleted ? "محذوف" : "حالي"}
+                          sx={{
+                            color: row?.teacherDeleted ? "#A44343" : "#237449",
+                            backgroundColor: row?.teacherDeleted
+                              ? "rgba(201,79,79,.12)"
+                              : "rgba(116,201,154,.17)",
+                            fontWeight: 800,
+                          }}
+                        />
+                      </TableCell>
+
+                      <TableCell align="center">
+                        {Number(row?.daysPresent) || 0}
+                      </TableCell>
+                      <TableCell align="center">
+                        {Number(row?.daysLate) || 0}
+                      </TableCell>
+                      <TableCell align="center">
+                        {formatMinutes(Number(row?.totalLateMinutes) || 0)}
+                      </TableCell>
+                      <TableCell align="center">
+                        {Number(row?.daysLeftEarly) || 0}
+                      </TableCell>
+                      <TableCell align="center">
+                        {formatMinutes(Number(row?.totalEarlyLeaveMinutes) || 0)}
+                      </TableCell>
+
+                      <TableCell align="right">
+                        <Typography sx={{ fontSize: 9.5, fontWeight: 800, whiteSpace: "nowrap" }}>
+                          {formatMinutes(row?.totalWorkMinutes, { duration: true })}
+                          {" من "}
+                          {formatMinutes(row?.totalExpectedWorkMinutes, { duration: true })}
+                          {" متوقعة"}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell align="center">
+                        <Chip
+                          size="small"
+                          label={Number(row?.daysMissingCheckOut) || 0}
+                          sx={{
+                            color: Number(row?.daysMissingCheckOut) > 0 ? "#A44343" : "#237449",
+                            backgroundColor: Number(row?.daysMissingCheckOut) > 0
+                              ? "rgba(201,79,79,.12)"
+                              : "rgba(116,201,154,.12)",
+                            fontWeight: 800,
+                          }}
+                        />
+                      </TableCell>
+
+                      <TableCell align="center">
+                        {Number(row?.daysLatenessNotTracked) || 0}
+                      </TableCell>
+                      <TableCell align="center">
+                        {Number(row?.daysEarlyLeaveNotTracked) || 0}
+                      </TableCell>
+                      <TableCell align="center">
+                        {Number(row?.daysOnDayOff) || 0}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Paper>
+    </Stack>
+  );
+
+  return (
+    <Container>
+      <Box dir="rtl" sx={{ width: "100%", pb: 4 }}>
         <Paper
           elevation={0}
           sx={{
-            position: "relative",
-            overflow: "hidden",
-            p: { xs: 1.7, md: 2.4 },
-            borderRadius: "24px",
-            color: "white",
+            ...pageCardSx,
+            p: { xs: 1.4, md: 1.8 },
+            mb: 1.5,
             background:
-              "linear-gradient(120deg, #173B5E 0%, #244F78 55%, #2C5C87 100%)",
-            boxShadow: "0 18px 45px rgba(18,47,77,.18)",
-            "&::after": {
-              content: '\"\"',
-              position: "absolute",
-              width: 260,
-              height: 260,
-              left: -80,
-              top: -120,
-              border: "1px solid rgba(255,255,255,.08)",
-              borderRadius: "50%",
-            },
+              "linear-gradient(135deg, rgba(255,252,247,.98), rgba(251,240,216,.45))",
           }}
         >
           <Stack
             direction={{ xs: "column", md: "row" }}
             alignItems={{ xs: "stretch", md: "center" }}
             justifyContent="space-between"
-            gap={1.6}
-            sx={{ position: "relative", zIndex: 1 }}
+            gap={1.2}
           >
-            <Stack direction="row" alignItems="center" spacing={1.55}>
-              <Box
-                sx={{
-                  width: { xs: 52, md: 56 },
-                  height: { xs: 52, md: 56 },
-                  p: 0.8,
-                  flexShrink: 0,
-                  display: "grid",
-                  placeItems: "center",
-                  backgroundColor: "#fff",
-                  borderRadius: "14px",
-                  boxShadow: "0 8px 20px rgba(0,0,0,.12)",
-                }}
-              >
-                <Box
-                  component="img"
-                  src={nasaqLogo}
-                  alt="نسق"
-                  sx={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                  }}
-                />
-              </Box>
+            <Box>
+              <Back title="حضور المعلمين" />
+              <Typography sx={{ mt: 0.5, color: "#708198", fontSize: 10 }}>
+                إعداد التسجيل الذاتي ومراجعة سجل حضور المعلمين والإدخالات اليدوية والتقارير.
+              </Typography>
+            </Box>
 
-              <Box sx={{ minWidth: 0 }}>
-                <Chip
-                  icon={<HowToRegRounded />}
-                  label="بوابة المعلم"
-                  size="small"
-                  sx={{
-                    mb: 0.75,
-                    height: 25,
-                    color: "#F2D792",
-                    backgroundColor: "rgba(242,215,146,.12)",
-                    border: "1px solid rgba(242,215,146,.22)",
-                    fontSize: "9px",
-                    fontWeight: 800,
-                    "& .MuiChip-icon": { color: "inherit", fontSize: 15 },
-                  }}
-                />
-                <Typography
-                  sx={{
-                    fontSize: { xs: "22px", md: "28px" },
-                    fontWeight: 900,
-                    lineHeight: 1.18,
-                  }}
-                >
-                  تسجيل الحضور
-                </Typography>
-                <Typography
-                  sx={{
-                    mt: 0.35,
-                    color: "rgba(255,255,255,.72)",
-                    fontSize: { xs: "9.5px", md: "10.5px" },
-                  }}
-                >
-                  حدّد الطلاب الغائبين فقط، وسيُعتبر باقي الفصل حاضرًا تلقائيًا.
-                </Typography>
-              </Box>
-            </Stack>
-
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              gap={0.8}
-              alignItems={{ xs: "stretch", sm: "center" }}
-            >
-              <Button
-                type="button"
-                onClick={() => navigate("/teacher/dashboard")}
-                variant="outlined"
-                startIcon={<ArrowBackRounded />}
-                sx={{
-                  minHeight: 42,
-                  px: 1.7,
-                  borderColor: "rgba(255,255,255,.28)",
-                  color: "white",
-                  borderRadius: "12px",
-                  fontSize: "10px",
-                  fontWeight: 800,
-                  textTransform: "none",
-                  "&:hover": {
-                    borderColor: "rgba(255,255,255,.5)",
-                    backgroundColor: "rgba(255,255,255,.08)",
-                  },
-                  "& .MuiButton-startIcon": {
-                    marginLeft: "6px",
-                    marginRight: 0,
-                  },
-                }}
-              >
-                لوحة التحكم
-              </Button>
-
-              <Tooltip title="تحديث البيانات">
-                <span>
-                  <IconButton
-                    type="button"
-                    disabled={refreshing || !selectedClassId}
-                    onClick={() => loadRoster({ silent: true, force: true })}
-                    sx={{
-                      width: 42,
-                      height: 42,
-                      color: "white",
-                      border: "1px solid rgba(255,255,255,.25)",
-                      borderRadius: "12px",
-                    }}
-                  >
-                    {refreshing ? (
-                      <CircularProgress size={18} color="inherit" />
-                    ) : (
-                      <RefreshRounded />
-                    )}
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </Stack>
+            <Chip
+              icon={<SettingsRounded />}
+              label={`الإدارة: ${adminName}`}
+              sx={{
+                color: "#B78430",
+                backgroundColor: "#FBF0D8",
+                "& .MuiChip-icon": { color: "inherit" },
+                fontWeight: 800,
+              }}
+            />
           </Stack>
         </Paper>
 
-        <Box
-          sx={{
-            mt: 1.25,
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              sm: "repeat(2, minmax(0,1fr))",
-              lg: "repeat(4, minmax(0,1fr))",
-            },
-            gap: 1.1,
-          }}
-        >
-          <StatCard
-            icon={<GroupsRounded />}
-            label="إجمالي الطلاب"
-            value={counts.total}
-            helper={selectedClass ? getClassName(selectedClass) : "اختر فصلًا"}
-          />
-          <StatCard
-            icon={<CheckCircleRounded />}
-            label="الحاضرون"
-            value={counts.present}
-            helper="يُحسبون تلقائيًا من إجمالي الفصل"
-            accent="green"
-          />
-          <StatCard
-            icon={<PersonOffRounded />}
-            label="الغائبون"
-            value={counts.absent}
-            helper="الطلاب المحددون حاليًا"
-            accent="red"
-          />
-          <StatCard
-            icon={<SaveRounded />}
-            label="غياب محفوظ"
-            value={counts.saved}
-            helper={formatDisplayDate(selectedDate)}
-            accent="gold"
-          />
-        </Box>
-
-        <Paper
-          elevation={0}
-          sx={{
-            mt: 1.25,
-            p: { xs: 1.1, md: 1.35 },
-            border: "1px solid rgba(36,74,112,.08)",
-            borderRadius: "17px",
-            backgroundColor: "#fff",
-            boxShadow: "0 10px 24px rgba(18,47,77,.045)",
-          }}
-        >
-          <Stack
-            direction={{ xs: "column", lg: "row" }}
-            alignItems={{ xs: "stretch", lg: "center" }}
-            gap={1}
+        <Paper elevation={0} sx={{ ...pageCardSx, mb: 1.5, overflow: "hidden" }}>
+          <Tabs
+            value={tab}
+            onChange={(_, value) => setTab(value)}
+            variant="scrollable"
+            scrollButtons="auto"
           >
+            <Tab icon={<SettingsRounded />} iconPosition="start" label="إعدادات الحضور" />
+            <Tab icon={<GpsFixedRounded />} iconPosition="start" label="سجل الحضور اليومي" />
+            <Tab icon={<AssessmentRounded />} iconPosition="start" label="تقرير الحضور" />
+          </Tabs>
+        </Paper>
+
+        {tab === 0
+          ? renderSettings()
+          : tab === 1
+            ? renderLog()
+            : renderSummary()}
+      </Box>
+
+      <Dialog
+        open={manualOpen}
+        onClose={() => !manualSaving && setManualOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>تسجيل حضور يدوي</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 1.5, borderRadius: "12px" }}>
+            السجل اليدوي لا يحمل تحقق GPS أو شبكة، وسيظهر مميزًا في التقارير باسم الإدارة التي سجّلته.
+          </Alert>
+
+          <Stack spacing={1.2}>
             <TextField
               select
-              value={classSelectValue}
-              onChange={handleClassChange}
-              label="الفصل"
-              size="small"
-              disabled={loadingClasses || !classes.length}
-              sx={{
-                minWidth: { xs: "100%", lg: 250 },
-                "& .MuiOutlinedInput-root": {
-                  minHeight: 44,
-                  borderRadius: "12px",
-                },
-              }}
+              label="المعلم"
+              value={manualForm.teacherId}
+              onChange={(event) =>
+                setManualForm((previous) => ({ ...previous, teacherId: event.target.value }))
+              }
+              fullWidth
+              required
             >
-              {classes.map((item, index) => (
-                <MenuItem key={getClassId(item)} value={getClassId(item)}>
-                  {getClassName(item, index)}
+              <MenuItem value="" disabled>اختر المعلم</MenuItem>
+              {teachers.map((teacher, index) => (
+                <MenuItem key={normalizeId(teacher) || index} value={normalizeId(teacher)}>
+                  {getTeacherName(teacher)}
                 </MenuItem>
               ))}
             </TextField>
 
-            <TextField
-              type="date"
-              value={selectedDate}
-              onChange={handleDateChange}
-              label="التاريخ"
-              size="small"
-              InputLabelProps={{ shrink: true }}
+            <Box
               sx={{
-                minWidth: { xs: "100%", lg: 210 },
-                "& .MuiOutlinedInput-root": {
-                  minHeight: 44,
-                  borderRadius: "12px",
-                },
-              }}
-            />
-
-            <TextField
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="ابحث باسم الطالب أو الكود"
-              size="small"
-              fullWidth
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchRounded sx={{ fontSize: 20 }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                flex: 1,
-                "& .MuiOutlinedInput-root": {
-                  minHeight: 44,
-                  borderRadius: "12px",
-                  backgroundColor: "#FAFBFC",
-                },
-              }}
-            />
-
-            <TextField
-              select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              label="الحالة"
-              size="small"
-              sx={{
-                minWidth: { xs: "100%", lg: 165 },
-                "& .MuiOutlinedInput-root": {
-                  minHeight: 44,
-                  borderRadius: "12px",
-                },
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gap: 1,
               }}
             >
-              <MenuItem value="all">كل الطلاب</MenuItem>
-              <MenuItem value="present">الحاضرون</MenuItem>
-              <MenuItem value="absent">الغائبون</MenuItem>
-            </TextField>
-          </Stack>
-        </Paper>
-
-        {error && (
-          <Alert
-            severity="warning"
-            sx={{ mt: 1.15, borderRadius: "13px", fontSize: "10px" }}
-          >
-            {error}
-          </Alert>
-        )}
-
-        {loading ? (
-          <Box
-            sx={{
-              minHeight: 280,
-              display: "grid",
-              placeItems: "center",
-            }}
-          >
-            <Stack alignItems="center" spacing={1}>
-              <CircularProgress size={30} sx={{ color: "#214E78" }} />
-              <Typography sx={{ color: "#7B8794", fontSize: "10px" }}>
-                جاري تحميل طلاب الفصل...
-              </Typography>
-            </Stack>
-          </Box>
-        ) : !classes.length ? (
-          <Box
-            sx={{
-              minHeight: 280,
-              display: "grid",
-              placeItems: "center",
-              textAlign: "center",
-            }}
-          >
-            <Stack alignItems="center" spacing={0.8}>
-              <Box
-                sx={{
-                  width: 58,
-                  height: 58,
-                  display: "grid",
-                  placeItems: "center",
-                  color: "#B9821D",
-                  backgroundColor: "rgba(226,173,59,.16)",
-                  borderRadius: "17px",
-                }}
-              >
-                <SchoolRounded />
-              </Box>
-              <Typography sx={{ fontSize: "13px", fontWeight: 900 }}>
-                لا توجد فصول مرتبطة بحسابك
-              </Typography>
-              <Typography sx={{ color: "#8B96A3", fontSize: "9.5px" }}>
-                راجع تكليفات المعلم من حساب الإدارة.
-              </Typography>
-            </Stack>
-          </Box>
-        ) : !uniqueStudents.length ? (
-          <Box
-            sx={{
-              minHeight: 280,
-              display: "grid",
-              placeItems: "center",
-              textAlign: "center",
-            }}
-          >
-            <Stack alignItems="center" spacing={0.8}>
-              <Box
-                sx={{
-                  width: 58,
-                  height: 58,
-                  display: "grid",
-                  placeItems: "center",
-                  color: "#214E78",
-                  backgroundColor: "rgba(33,78,120,.08)",
-                  borderRadius: "17px",
-                }}
-              >
-                <GroupsRounded />
-              </Box>
-              <Typography sx={{ fontSize: "13px", fontWeight: 900 }}>
-                لا يوجد طلاب في هذا الفصل
-              </Typography>
-            </Stack>
-          </Box>
-        ) : (
-          <>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              alignItems={{ xs: "stretch", sm: "center" }}
-              justifyContent="space-between"
-              gap={1}
-              sx={{ mt: 1.35, mb: 1 }}
-            >
-              <Box>
-                <Typography sx={{ fontSize: "14px", fontWeight: 900 }}>
-                  طلاب {getClassName(selectedClass)}
-                </Typography>
-                <Typography sx={{ mt: 0.15, color: "#8B96A3", fontSize: "9px" }}>
-                  اضغط على الطالب لتغيير حالته بين حاضر وغائب.
-                </Typography>
-              </Box>
-
-              <Stack direction="row" gap={0.7} flexWrap="wrap">
-                <Button
-                  type="button"
-                  variant="outlined"
-                  onClick={setAllPresent}
-                  disabled={!absentIds.size || saving}
-                  startIcon={<CheckCircleRounded />}
-                  sx={{
-                    minHeight: 36,
-                    borderRadius: "10px",
-                    color: "#25865A",
-                    borderColor: "rgba(37,134,90,.25)",
-                    fontSize: "9px",
-                    fontWeight: 800,
-                    textTransform: "none",
-                    "& .MuiButton-startIcon": {
-                      marginLeft: "5px",
-                      marginRight: 0,
-                    },
-                  }}
-                >
-                  الكل حاضر
-                </Button>
-                <Button
-                  type="button"
-                  variant="outlined"
-                  onClick={setVisibleStudentsAbsent}
-                  disabled={!filteredStudents.length || saving}
-                  startIcon={<PersonOffRounded />}
-                  sx={{
-                    minHeight: 36,
-                    borderRadius: "10px",
-                    color: "#C44545",
-                    borderColor: "rgba(196,69,69,.24)",
-                    fontSize: "9px",
-                    fontWeight: 800,
-                    textTransform: "none",
-                    "& .MuiButton-startIcon": {
-                      marginLeft: "5px",
-                      marginRight: 0,
-                    },
-                  }}
-                >
-                  تحديد الظاهر كغائب
-                </Button>
-              </Stack>
-            </Stack>
-
-            {!filteredStudents.length ? (
-              <Box
-                sx={{
-                  minHeight: 220,
-                  display: "grid",
-                  placeItems: "center",
-                  textAlign: "center",
-                }}
-              >
-                <Typography sx={{ color: "#8B96A3", fontSize: "11px" }}>
-                  لا توجد نتائج مطابقة للبحث أو الفلتر.
-                </Typography>
-              </Box>
-            ) : (
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: {
-                    xs: "1fr",
-                    md: "repeat(2, minmax(0,1fr))",
-                    xl: "repeat(3, minmax(0,1fr))",
-                  },
-                  gap: 0.9,
-                }}
-              >
-                {filteredStudents.map((row, index) => {
-                  const studentId = getStudentId(row);
-                  const name = getStudentName(row, index);
-                  const code = getStudentCode(row);
-                  const isAbsent = absentIds.has(studentId);
-                  const initials = name
-                    .trim()
-                    .split(" ")
-                    .slice(0, 2)
-                    .map((word) => word[0])
-                    .join("");
-
-                  return (
-                    <Paper
-                      key={studentId}
-                      component="button"
-                      type="button"
-                      elevation={0}
-                      onClick={() => toggleAbsent(studentId)}
-                      sx={{
-                        width: "100%",
-                        p: 1.15,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 1,
-                        textAlign: "right",
-                        cursor: "pointer",
-                        border: isAbsent
-                          ? "1px solid rgba(196,69,69,.28)"
-                          : "1px solid rgba(37,134,90,.18)",
-                        borderRadius: "15px",
-                        backgroundColor: isAbsent
-                          ? "rgba(196,69,69,.035)"
-                          : "rgba(37,134,90,.025)",
-                        boxShadow: "none",
-                        transition: "all .18s ease",
-                        "&:hover": {
-                          transform: "translateY(-1px)",
-                          boxShadow: "0 8px 18px rgba(18,47,77,.07)",
-                        },
-                      }}
-                    >
-                      <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
-                        <Avatar
-                          sx={{
-                            width: 40,
-                            height: 40,
-                            flexShrink: 0,
-                            color: "white",
-                            backgroundColor: isAbsent ? "#C44545" : "#25865A",
-                            fontSize: "11px",
-                            fontWeight: 900,
-                          }}
-                        >
-                          {initials || "ط"}
-                        </Avatar>
-
-                        <Box sx={{ minWidth: 0 }}>
-                          <Typography
-                            noWrap
-                            sx={{ fontSize: "14.5px", fontWeight: 900 }}
-                          >
-                            {name}
-                          </Typography>
-                          <Typography
-                            noWrap
-                            sx={{ mt: 0.3, color: "#8B96A3", fontSize: "12.5px" }}
-                          >
-                            {code || `رقم الطالب: ${studentId.slice(-6)}`}
-                          </Typography>
-                        </Box>
-                      </Stack>
-
-                      <Stack direction="row" alignItems="center" spacing={0.5}>
-                        <Chip
-                          icon={isAbsent ? <PersonOffRounded /> : <CheckCircleRounded />}
-                          label={isAbsent ? "غائب" : "حاضر"}
-                          size="small"
-                          sx={{
-                            height: 28,
-                            color: isAbsent ? "#A93434" : "#237449",
-                            backgroundColor: isAbsent
-                              ? "rgba(196,69,69,.10)"
-                              : "rgba(37,134,90,.10)",
-                            fontSize: "12px",
-                            fontWeight: 900,
-                            "& .MuiChip-icon": {
-                              color: "inherit",
-                              fontSize: 16,
-                            },
-                          }}
-                        />
-                        <Checkbox
-                          checked={isAbsent}
-                          tabIndex={-1}
-                          disableRipple
-                          sx={{
-                            p: 0.6,
-                            color: "rgba(36,74,112,.28)",
-                            "&.Mui-checked": { color: "#C44545" },
-                          }}
-                        />
-                      </Stack>
-                    </Paper>
-                  );
-                })}
-              </Box>
-            )}
-
-            <Paper
-              elevation={0}
-              sx={{
-                mt: 2,
-                p: { xs: 1.8, md: 2.2 },
-                display: "flex",
-                flexDirection: { xs: "column", sm: "row" },
-                alignItems: { xs: "stretch", sm: "center" },
-                justifyContent: "space-between",
-                gap: 1.5,
-                border: hasChanges
-                  ? "1px solid rgba(211,164,79,.38)"
-                  : "1px solid rgba(36,74,112,.08)",
-                borderRadius: "18px",
-                backgroundColor: hasChanges
-                  ? "rgba(242,215,146,.14)"
-                  : "#fff",
-                boxShadow: "0 10px 24px rgba(18,47,77,.05)",
-              }}
-            >
-              <Box>
-                <Typography sx={{ fontSize: "14.5px", fontWeight: 900 }}>
-                  {hasChanges
-                    ? "لديك تغييرات غير محفوظة"
-                    : "سجل الحضور محفوظ"}
-                </Typography>
-                <Typography sx={{ mt: 0.3, color: "#8B96A3", fontSize: "12.5px" }}>
-                  {counts.present} حاضر • {counts.absent} غائب • {formatDisplayDate(selectedDate)}
-                </Typography>
-              </Box>
-
-              <Button
-                type="button"
-                variant="contained"
-                disabled={!hasChanges || saving}
-                onClick={handleSave}
-                startIcon={
-                  saving ? (
-                    <CircularProgress size={16} color="inherit" />
-                  ) : (
-                    <SaveRounded />
-                  )
+              <TextField
+                type="date"
+                label="التاريخ"
+                value={manualForm.date}
+                onChange={(event) =>
+                  setManualForm((previous) => ({ ...previous, date: event.target.value }))
                 }
-                sx={{
-                  minHeight: 44,
-                  px: 2.6,
-                  borderRadius: "12px",
-                  color: "#122F4D",
-                  backgroundColor: "#F2D792",
-                  boxShadow: "none",
-                  fontSize: "13.5px",
-                  fontWeight: 900,
-                  textTransform: "none",
-                  "&:hover": {
-                    backgroundColor: "#E8C96F",
-                    boxShadow: "none",
-                  },
-                  "& .MuiButton-startIcon": {
-                    marginLeft: "6px",
-                    marginRight: 0,
-                  },
-                }}
-              >
-                حفظ الحضور
-              </Button>
-            </Paper>
-          </>
-        )}
-      </Box>
-    </Box>
+                inputProps={{ max: today }}
+                InputLabelProps={{ shrink: true }}
+                required
+              />
+              <TextField
+                type="time"
+                label="وقت الحضور"
+                value={manualForm.checkInAt}
+                onChange={(event) =>
+                  setManualForm((previous) => ({ ...previous, checkInAt: event.target.value }))
+                }
+                InputLabelProps={{ shrink: true }}
+                required
+              />
+            </Box>
+
+            <TextField
+              label="السبب / ملاحظات"
+              value={manualForm.notes}
+              onChange={(event) =>
+                setManualForm((previous) => ({ ...previous, notes: event.target.value }))
+              }
+              multiline
+              minRows={2}
+              placeholder="مثال: الجهاز لا يدعم تحديد الموقع"
+              fullWidth
+            />
+
+            <Alert severity="info" sx={{ borderRadius: "12px" }}>
+              سيتولى السيرفر تسجيل recordedBy تلقائيًا باسم الحساب الإداري الحالي.
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setManualOpen(false)} disabled={manualSaving}>إلغاء</Button>
+          <Button
+            onClick={createManualRecord}
+            disabled={manualSaving}
+            variant="contained"
+            startIcon={manualSaving ? <CircularProgress size={15} color="inherit" /> : <SaveRounded />}
+          >
+            حفظ السجل
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={editOpen}
+        onClose={() => !editSaving && setEditOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>تعديل سجل الحضور</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.2} sx={{ pt: 0.5 }}>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gap: 1,
+              }}
+            >
+              <TextField
+                type="time"
+                label="وقت الحضور"
+                value={editForm.checkInAt}
+                onChange={(event) =>
+                  setEditForm((previous) => ({
+                    ...previous,
+                    checkInAt: event.target.value,
+                  }))
+                }
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+
+              <TextField
+                type="time"
+                label="وقت الانصراف"
+                value={editForm.checkOutAt}
+                onChange={(event) =>
+                  setEditForm((previous) => ({
+                    ...previous,
+                    checkOutAt: event.target.value,
+                  }))
+                }
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+            </Box>
+
+            <Alert severity="info" sx={{ borderRadius: "12px" }}>
+              عند تعديل وقت الحضور أو الانصراف سيعيد السيرفر حساب التأخير ومدة العمل تلقائيًا.
+            </Alert>
+
+            <TextField
+              label="ملاحظات"
+              value={editForm.notes}
+              onChange={(event) =>
+                setEditForm((previous) => ({ ...previous, notes: event.target.value }))
+              }
+              multiline
+              minRows={2}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditOpen(false)} disabled={editSaving}>إلغاء</Button>
+          <Button
+            onClick={saveEdit}
+            variant="contained"
+            disabled={editSaving}
+            startIcon={editSaving ? <CircularProgress size={15} color="inherit" /> : <SaveRounded />}
+          >
+            حفظ التعديل
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onClose={() => !deleteSaving && setDeleteOpen(false)}>
+        <DialogTitle>حذف سجل الحضور؟</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: "#667085", fontSize: 12 }}>
+            سيتم حذف سجل {getTeacherName(getTeacherEntity(selectedRecord || {}))} نهائيًا.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteOpen(false)} disabled={deleteSaving}>إلغاء</Button>
+          <Button
+            onClick={confirmDelete}
+            color="error"
+            variant="contained"
+            disabled={deleteSaving}
+            startIcon={deleteSaving ? <CircularProgress size={15} color="inherit" /> : <DeleteOutlineRounded />}
+          >
+            حذف
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Container>
   );
 };
 
-export default TeacherAttendance;
+export default TeacherAttendanceAdmin;

@@ -62,7 +62,7 @@ const ROLE_CONFIG = {
     label: "الطلاب",
     shortLabel: "STUDENT",
     description:
-      "الصلاحيات الافتراضية التي يحصل عليها الطالب عند تسجيل الدخول.",
+      "للطالب نعرض صلاحيات العرض فقط؛ عمليات الإضافة والتعديل والحذف ليست جزءًا من دوره.",
     icon: <PersonRounded />,
   },
 };
@@ -189,15 +189,40 @@ const unwrapPayload = (value) => {
     : {};
 };
 
-const countEnabled = (permissions) =>
-  Object.values(permissions || {}).reduce(
-    (total, actions) =>
-      total +
-      Object.values(actions || {}).filter(
-        Boolean
-      ).length,
-    0
+
+const getVisibleActionKeys = (role, actions) => {
+  const available = actions || {};
+
+  // الطالب مستخدم نهائي وليس دور CRUD إداري.
+  // نخفي add/edit/delete من شاشة الإعدادات مع الإبقاء
+  // على القيم الأصلية داخل الـdraft حتى لا نمسح شيئًا
+  // عند إرسال الكائن الكامل إلى الـBackend.
+  if (role === "STUDENT") {
+    return Object.prototype.hasOwnProperty.call(available, "read")
+      ? ["read"]
+      : [];
+  }
+
+  const extraActions = Object.keys(available).filter(
+    (action) => !ACTION_ORDER.includes(action)
   );
+
+  return [
+    ...ACTION_ORDER.filter((action) =>
+      Object.prototype.hasOwnProperty.call(available, action)
+    ),
+    ...extraActions,
+  ];
+};
+
+const countVisibleEnabled = (role, permissions) =>
+  Object.values(permissions || {}).reduce((total, actions) => {
+    const visibleKeys = getVisibleActionKeys(role, actions);
+    return (
+      total +
+      visibleKeys.filter((action) => Boolean(actions?.[action])).length
+    );
+  }, 0);
 
 const SchoolPermissions = () => {
   const [searchParams, setSearchParams] =
@@ -289,8 +314,11 @@ const SchoolPermissions = () => {
 
   const entities = useMemo(
     () =>
-      Object.entries(currentDraft),
-    [currentDraft]
+      Object.entries(currentDraft).filter(
+        ([, actions]) =>
+          getVisibleActionKeys(activeRole, actions).length > 0
+      ),
+    [currentDraft, activeRole]
   );
 
   const isDirty = useMemo(
@@ -313,10 +341,11 @@ const SchoolPermissions = () => {
   const enabledCount =
     useMemo(
       () =>
-        countEnabled(
+        countVisibleEnabled(
+          activeRole,
           currentDraft
         ),
-      [currentDraft]
+      [currentDraft, activeRole]
     );
 
   const changeRole = (
@@ -761,26 +790,11 @@ const SchoolPermissions = () => {
               >
                 {entities.map(
                   ([entity, actions]) => {
-                    const extraActions =
-                      Object.keys(
-                        actions || {}
-                      ).filter(
-                        (action) =>
-                          !ACTION_ORDER.includes(
-                            action
-                          )
+                    const actionKeys =
+                      getVisibleActionKeys(
+                        activeRole,
+                        actions
                       );
-
-                    const actionKeys = [
-                      ...ACTION_ORDER.filter(
-                        (action) =>
-                          Object.prototype.hasOwnProperty.call(
-                            actions || {},
-                            action
-                          )
-                      ),
-                      ...extraActions,
-                    ];
 
                     return (
                       <Paper

@@ -779,7 +779,7 @@ const BusListPage = () => {
         </Button>
       )}
 
-      {permissions?.edit && (
+      {permissions?.add && (
         <Button
           onClick={() =>
             setOpen(true)
@@ -961,7 +961,7 @@ const BusListPage = () => {
                   permissions?.read
                 }
                 deleteFn={
-                  permissions?.edit
+                  permissions?.delete
                     ? unenroll
                     : undefined
                 }

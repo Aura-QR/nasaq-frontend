@@ -59,6 +59,7 @@ import {
 } from "@/APIs/school/exams";
 
 import nasaqLogo from "../../images/wadq-logo.png";
+import usePermissions from "@/utils/hooks/usePermissions";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
 
@@ -418,6 +419,7 @@ const StatCard = ({ icon, label, value, helper, accent = "navy" }) => {
 
 const TeacherExams = () => {
   const navigate = useNavigate();
+  const permissions = usePermissions("exams");
 
   const [
     searchParams,
@@ -841,6 +843,7 @@ const TeacherExams = () => {
                 تصحيح الاختبارات
               </Button>
 
+              {permissions.add && (
               <Button
                 type="button"
                 onClick={() => navigate("/teacher/exams/add")}
@@ -868,6 +871,7 @@ const TeacherExams = () => {
               >
                 إنشاء اختبار
               </Button>
+              )}
             </Stack>
           </Stack>
         </Paper>
@@ -1074,6 +1078,7 @@ const TeacherExams = () => {
                 >
                   غيّر الفلاتر أو أنشئ اختبارًا جديدًا ليظهر هنا.
                 </Typography>
+                {permissions.add && (
                 <Button
                   type="button"
                   onClick={() => navigate("/teacher/exams/add")}
@@ -1100,6 +1105,7 @@ const TeacherExams = () => {
                 >
                   إنشاء اختبار
                 </Button>
+                )}
               </Stack>
             </Paper>
           ) : (
@@ -1330,6 +1336,7 @@ const TeacherExams = () => {
                             </IconButton>
                           </Tooltip>
 
+                          {permissions.edit && (
                           <Tooltip title="تعديل الاختبار والأسئلة">
                             <IconButton
                               type="button"
@@ -1347,7 +1354,9 @@ const TeacherExams = () => {
                               <EditRounded sx={{ fontSize: 18 }} />
                             </IconButton>
                           </Tooltip>
+                          )}
 
+                          {permissions.delete && (
                           <Tooltip title="حذف الاختبار">
                             <IconButton
                               type="button"
@@ -1363,6 +1372,7 @@ const TeacherExams = () => {
                               <DeleteOutlineRounded sx={{ fontSize: 18 }} />
                             </IconButton>
                           </Tooltip>
+                          )}
                         </Stack>
 
                         <Button
@@ -1555,6 +1565,7 @@ const TeacherExams = () => {
               >
                 إغلاق
               </Button>
+              {permissions.edit && (
               <Button
                 type="button"
                 onClick={() =>
@@ -1575,6 +1586,7 @@ const TeacherExams = () => {
               >
                 تعديل وإدارة الأسئلة
               </Button>
+              )}
             </DialogActions>
           </>
         )}

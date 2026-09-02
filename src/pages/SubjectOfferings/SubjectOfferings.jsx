@@ -47,6 +47,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
+import usePermissions from "@/utils/hooks/usePermissions";
 
 import { api } from "@/APIs/Axios";
 import {
@@ -1121,6 +1122,8 @@ const TeachingPlanImportDialog = ({
 };
 
 const SubjectOfferings = () => {
+  const permissions = usePermissions("subjects");
+
   const navigate = useNavigate();
 
   const [loadingInitial, setLoadingInitial] = useState(true);
@@ -1862,59 +1865,65 @@ const SubjectOfferings = () => {
               alignItems={{ xs: "stretch", sm: "center" }}
               flexWrap="wrap"
             >
-              <Button
-                variant="outlined"
-                startIcon={<UploadFileRounded />}
-                onClick={() => setImportPlanOpen(true)}
-                disabled={!selectedTermId || !gradeLevels.length}
-                sx={{
-                  minHeight: 40,
-                  borderRadius: "11px",
-                  borderColor: "rgba(183,132,48,.42)",
-                  color: COLORS.gold,
-                  fontWeight: 800,
-                  bgcolor: "rgba(251,240,216,.34)",
-                  whiteSpace: "nowrap",
-                  "&:hover": { borderColor: COLORS.gold, bgcolor: COLORS.goldSoft },
-                }}
-              >
-                استيراد خطة المواد
-              </Button>
+              {permissions.add && (
+                <Button
+                  variant="outlined"
+                  startIcon={<UploadFileRounded />}
+                  onClick={() => setImportPlanOpen(true)}
+                  disabled={!selectedTermId || !gradeLevels.length}
+                  sx={{
+                    minHeight: 40,
+                    borderRadius: "11px",
+                    borderColor: "rgba(183,132,48,.42)",
+                    color: COLORS.gold,
+                    fontWeight: 800,
+                    bgcolor: "rgba(251,240,216,.34)",
+                    whiteSpace: "nowrap",
+                    "&:hover": { borderColor: COLORS.gold, bgcolor: COLORS.goldSoft },
+                  }}
+                >
+                  استيراد خطة المواد
+                </Button>
+              )}
 
-              <Button
-                variant="outlined"
-                startIcon={<ContentCopyRounded />}
-                onClick={copyFromPreviousYear}
-                disabled={saving || academicYears.length < 2}
-                sx={{
-                  minHeight: 40,
-                  borderRadius: "11px",
-                  borderColor: "#d7dde3",
-                  color: COLORS.navy,
-                  fontWeight: 800,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                نسخ من سنة سابقة
-              </Button>
+              {permissions.add && (
+                <Button
+                  variant="outlined"
+                  startIcon={<ContentCopyRounded />}
+                  onClick={copyFromPreviousYear}
+                  disabled={saving || academicYears.length < 2}
+                  sx={{
+                    minHeight: 40,
+                    borderRadius: "11px",
+                    borderColor: "#d7dde3",
+                    color: COLORS.navy,
+                    fontWeight: 800,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  نسخ من سنة سابقة
+                </Button>
+              )}
 
-              <Button
-                variant="contained"
-                startIcon={<AddRounded />}
-                onClick={() => setDialogOpen(true)}
-                disabled={!terms.length || !subjects.length || !gradeLevels.length}
-                sx={{
-                  minHeight: 40,
-                  borderRadius: "11px",
-                  bgcolor: COLORS.navy,
-                  fontWeight: 800,
-                  boxShadow: "none",
-                  whiteSpace: "nowrap",
-                  "&:hover": { bgcolor: COLORS.navy2, boxShadow: "none" },
-                }}
-              >
-                إضافة عرض مادة
-              </Button>
+              {permissions.add && (
+                <Button
+                  variant="contained"
+                  startIcon={<AddRounded />}
+                  onClick={() => setDialogOpen(true)}
+                  disabled={!terms.length || !subjects.length || !gradeLevels.length}
+                  sx={{
+                    minHeight: 40,
+                    borderRadius: "11px",
+                    bgcolor: COLORS.navy,
+                    fontWeight: 800,
+                    boxShadow: "none",
+                    whiteSpace: "nowrap",
+                    "&:hover": { bgcolor: COLORS.navy2, boxShadow: "none" },
+                  }}
+                >
+                  إضافة عرض مادة
+                </Button>
+              )}
 
               <Button
                 variant="text"
@@ -2138,30 +2147,32 @@ const SubjectOfferings = () => {
                   فحص قابلية الجدول
                 </Button>
 
-                <Button
-                  size="small"
-                  variant="contained"
-                  startIcon={
-                    savingPlan ? <CircularProgress size={16} color="inherit" /> : <SaveRounded />
-                  }
-                  onClick={savePlan}
-                  disabled={
-                    savingPlan ||
-                    loadingOfferings ||
-                    !changedPlanEntries.length ||
-                    hasInvalidPlanValue
-                  }
-                  sx={{
-                    minHeight: 34,
-                    borderRadius: "10px",
-                    bgcolor: COLORS.navy,
-                    fontWeight: 800,
-                    boxShadow: "none",
-                    "&:hover": { bgcolor: COLORS.navy2, boxShadow: "none" },
-                  }}
-                >
-                  حفظ الخطة
-                </Button>
+                {permissions.edit && (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={
+                      savingPlan ? <CircularProgress size={16} color="inherit" /> : <SaveRounded />
+                    }
+                    onClick={savePlan}
+                    disabled={
+                      savingPlan ||
+                      loadingOfferings ||
+                      !changedPlanEntries.length ||
+                      hasInvalidPlanValue
+                    }
+                    sx={{
+                      minHeight: 34,
+                      borderRadius: "10px",
+                      bgcolor: COLORS.navy,
+                      fontWeight: 800,
+                      boxShadow: "none",
+                      "&:hover": { bgcolor: COLORS.navy2, boxShadow: "none" },
+                    }}
+                  >
+                    حفظ الخطة
+                  </Button>
+                )}
               </Stack>
             </Stack>
           </Box>
@@ -2268,7 +2279,7 @@ const SubjectOfferings = () => {
               <Typography sx={{ color: COLORS.muted, fontSize: 11, mt: 0.4 }}>
                 أضف المادة وحدد الصف الدراسي والترم لبدء استخدامها في الإسناد والجدول
               </Typography>
-              {!search && !selectedGradeId ? (
+              {!search && !selectedGradeId && permissions.add ? (
                 <Button
                   variant="contained"
                   startIcon={<AddRounded />}
@@ -2389,29 +2400,31 @@ const SubjectOfferings = () => {
                     }}
                   />
 
-                  <Tooltip title="حذف العرض">
-                    <span>
-                      <IconButton
-                        onClick={() => removeOffering(item)}
-                        disabled={deletingId === item.id}
-                        sx={{
-                          width: 42,
-                          height: 42,
-                          color: COLORS.red,
-                          bgcolor: "#fff2f2",
-                          borderRadius: "10px",
-                          flexShrink: 0,
-                          "&:hover": { bgcolor: "#ffe7e7" },
-                        }}
-                      >
-                        {deletingId === item.id ? (
-                          <CircularProgress size={19} color="inherit" />
-                        ) : (
-                          <DeleteOutlineRounded />
-                        )}
-                      </IconButton>
-                    </span>
-                  </Tooltip>
+                  {permissions.delete && (
+                    <Tooltip title="حذف العرض">
+                      <span>
+                        <IconButton
+                          onClick={() => removeOffering(item)}
+                          disabled={deletingId === item.id}
+                          sx={{
+                            width: 42,
+                            height: 42,
+                            color: COLORS.red,
+                            bgcolor: "#fff2f2",
+                            borderRadius: "10px",
+                            flexShrink: 0,
+                            "&:hover": { bgcolor: "#ffe7e7" },
+                          }}
+                        >
+                          {deletingId === item.id ? (
+                            <CircularProgress size={19} color="inherit" />
+                          ) : (
+                            <DeleteOutlineRounded />
+                          )}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
                 </Paper>
               ))}
             </Box>

@@ -62,6 +62,7 @@ import {
 
 import nasaqLogo from "../../images/wadq-logo.png";
 import NotificationBell from "@/components/Notifications/NotificationBell";
+import usePermissions from "@/utils/hooks/usePermissions";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
 
@@ -642,6 +643,7 @@ const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
 
 const TeacherSchedule = () => {
   const navigate = useNavigate();
+  const preparationPermissions = usePermissions("preparation");
   const [searchParams] = useSearchParams();
   const getAuthUser = useAuthUser();
 
@@ -1662,6 +1664,7 @@ const TeacherSchedule = () => {
                         </Box>
                       </Stack>
 
+                      {(getPreparationId(lecture.schedulePreparation) || preparationPermissions.add) && (
                       <Button
                         fullWidth
                         variant={
@@ -1714,6 +1717,7 @@ const TeacherSchedule = () => {
                           ? "فتح التحضير الموجود"
                           : "إضافة تحضير"}
                       </Button>
+                      )}
                     </Box>
                   ));
                 })}
@@ -1838,6 +1842,7 @@ const TeacherSchedule = () => {
             >
               إلغاء
             </Button>
+            {preparationPermissions.add && (
             <Button
               variant="contained"
               startIcon={
@@ -1858,6 +1863,7 @@ const TeacherSchedule = () => {
             >
               حفظ التحضير
             </Button>
+            )}
           </DialogActions>
         </Dialog>
       </Box>
@@ -2890,6 +2896,7 @@ const TeacherSchedule = () => {
                                   spacing={0.7}
                                   sx={{ pt: 0.3 }}
                                 >
+                                  {(hasPreparation || preparationPermissions.add) && (
                                   <Button
                                     fullWidth
                                     size="small"
@@ -2920,6 +2927,7 @@ const TeacherSchedule = () => {
                                       ? "فتح التحضير"
                                       : "إضافة تحضير"}
                                   </Button>
+                                  )}
 
                                   <Tooltip
                                     title={

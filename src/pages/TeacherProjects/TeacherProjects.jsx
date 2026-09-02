@@ -686,6 +686,7 @@ const StatCard = ({ icon, title, value, subtitle, tone = "navy" }) => {
 
 const TeacherProjects = () => {
   const navigate = useNavigate();
+  const permissions = usePermissions("projects");
   const [searchParams] = useSearchParams();
   const getAuthUser = useAuthUser();
   const authRoot = getAuthUser?.() || {};
@@ -1548,6 +1549,7 @@ const TeacherProjects = () => {
               </span>
             </Tooltip>
 
+            {permissions.add && (
             <Button
               onClick={openCreateDialog}
               startIcon={<AddRounded />}
@@ -1561,6 +1563,7 @@ const TeacherProjects = () => {
             >
               مشروع جديد
             </Button>
+            )}
           </Stack>
         </Paper>
 
@@ -2329,6 +2332,7 @@ const TeacherProjects = () => {
                           direction="row"
                           spacing={0.4}
                         >
+                          {permissions.edit && (
                           <Button
                             onClick={() =>
                               openEditDialog(
@@ -2360,7 +2364,9 @@ const TeacherProjects = () => {
                           >
                             تعديل
                           </Button>
+                          )}
 
+                          {permissions.delete && (
                           <Tooltip title="حذف المشروع">
                             <IconButton
                               onClick={() =>
@@ -2384,6 +2390,7 @@ const TeacherProjects = () => {
                               <DeleteOutlineRounded />
                             </IconButton>
                           </Tooltip>
+                          )}
                         </Stack>
                       </Stack>
                     </Box>
@@ -2601,6 +2608,7 @@ const TeacherProjects = () => {
           >
             إلغاء
           </Button>
+          {((form.id && permissions.edit) || (!form.id && permissions.add)) && (
           <Button
             onClick={handleSave}
             disabled={saving || offeringOptions.length === 0}
@@ -2628,6 +2636,7 @@ const TeacherProjects = () => {
                 ? "حفظ التعديلات"
                 : "إنشاء المشروع"}
           </Button>
+          )}
         </DialogActions>
       </Dialog>
 
@@ -2654,6 +2663,7 @@ const TeacherProjects = () => {
           >
             إلغاء
           </Button>
+          {permissions.delete && (
           <Button
             onClick={handleDelete}
             disabled={deleting}
@@ -2674,6 +2684,7 @@ const TeacherProjects = () => {
           >
             حذف المشروع
           </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>
