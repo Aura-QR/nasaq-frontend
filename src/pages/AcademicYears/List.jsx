@@ -4,6 +4,7 @@ import {
   CalendarMonthRounded,
   CheckCircleRounded,
   DateRangeRounded,
+  DeleteOutlineRounded,
   RefreshRounded,
   SearchRounded,
   SettingsRounded,
@@ -45,9 +46,12 @@ import {
   useNavigate,
 } from "react-router-dom";
 
+import { toast } from "react-toastify";
+
 import Container from "@/components/Container/Container";
 
 import {
+  deleteAcademicYear,
   fetchAcademicYears,
 } from "@/APIs/school/academicYears";
 
@@ -368,6 +372,11 @@ const AcademicYearsList =
       setStatus,
     ] = useState("");
 
+    const [
+      deletingId,
+      setDeletingId,
+    ] = useState("");
+
     const loadYears =
       useCallback(
         async ({
@@ -413,6 +422,61 @@ const AcademicYearsList =
     useEffect(() => {
       loadYears();
     }, [loadYears]);
+
+    const handleDeleteYear =
+      async (year) => {
+        const academicYearId =
+          getEntityId(year);
+
+        if (!academicYearId) {
+          toast.error(
+            "معرّف السنة الدراسية غير موجود"
+          );
+          return;
+        }
+
+        const confirmed =
+          window.confirm(
+            `هل أنت متأكد من حذف السنة "${year?.name || ""}"؟ لا يمكن التراجع عن هذه العملية.`
+          );
+
+        if (!confirmed) {
+          return;
+        }
+
+        setDeletingId(
+          academicYearId
+        );
+
+        const response =
+          await deleteAcademicYear(
+            academicYearId
+          );
+
+        if (
+          response?.status ===
+          false
+        ) {
+          toast.error(
+            response?.message ||
+              "تعذر حذف السنة الدراسية"
+          );
+
+          setDeletingId("");
+          return;
+        }
+
+        toast.success(
+          response?.message ||
+            "تم حذف السنة الدراسية بنجاح"
+        );
+
+        setDeletingId("");
+
+        await loadYears({
+          force: true,
+        });
+      };
 
     const filteredYears =
       useMemo(
@@ -1282,46 +1346,98 @@ const AcademicYearsList =
                                 <TableCell
                                   align="center"
                                 >
-                                  <Tooltip title="عرض التفاصيل والترمات">
-                                    <IconButton
-                                      type="button"
-                                      onClick={() =>
-                                        navigate(
-                                          `/school/academic-years/${getEntityId(
-                                            year
-                                          )}`
-                                        )
-                                      }
-                                      sx={{
-                                        width: 34,
-                                        height: 34,
+                                  <Stack
+                                    direction="row"
+                                    spacing={0.6}
+                                    justifyContent="center"
+                                    alignItems="center"
+                                  >
+                                    <Tooltip title="عرض التفاصيل والترمات">
+                                      <IconButton
+                                        type="button"
+                                        onClick={() =>
+                                          navigate(
+                                            `/school/academic-years/${getEntityId(
+                                              year
+                                            )}`
+                                          )
+                                        }
+                                        sx={{
+                                          width: 34,
+                                          height: 34,
 
-                                        color:
-                                          "#244a70",
+                                          color:
+                                            "#244a70",
 
-                                        backgroundColor:
-                                          "rgba(36,74,112,0.08)",
+                                          backgroundColor:
+                                            "rgba(36,74,112,0.08)",
 
-                                        border:
-                                          "1px solid rgba(36,74,112,0.06)",
+                                          border:
+                                            "1px solid rgba(36,74,112,0.06)",
 
-                                        "&:hover":
-                                          {
+                                          "&:hover":
+                                            {
+                                              color:
+                                                "#244a70",
+
+                                              backgroundColor:
+                                                "rgba(36,74,112,0.12)",
+                                            },
+                                        }}
+                                      >
+                                        <VisibilityRounded
+                                          sx={{
+                                            fontSize: 17,
+                                          }}
+                                        />
+                                      </IconButton>
+                                    </Tooltip>
+
+                                    <Tooltip title="حذف السنة الدراسية">
+                                      <span>
+                                        <IconButton
+                                          type="button"
+                                          disabled={
+                                            deletingId ===
+                                            getEntityId(year)
+                                          }
+                                          onClick={() =>
+                                            handleDeleteYear(
+                                              year
+                                            )
+                                          }
+                                          sx={{
+                                            width: 34,
+                                            height: 34,
+
                                             color:
-                                              "#244a70",
+                                              "#d14343",
 
                                             backgroundColor:
-                                              "rgba(36,74,112,0.12)",
-                                          },
-                                      }}
-                                    >
-                                      <VisibilityRounded
-                                        sx={{
-                                          fontSize: 17,
-                                        }}
-                                      />
-                                    </IconButton>
-                                  </Tooltip>
+                                              "rgba(209,67,67,0.07)",
+
+                                            border:
+                                              "1px solid rgba(209,67,67,0.12)",
+
+                                            "&:hover":
+                                              {
+                                                color:
+                                                  "#b52f2f",
+
+                                                backgroundColor:
+                                                  "rgba(209,67,67,0.12)",
+                                              },
+                                          }}
+                                        >
+                                          <DeleteOutlineRounded
+                                            sx={{
+                                              fontSize: 17,
+                                            }}
+                                          />
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
+                                  </Stack>
                                 </TableCell>
                               </TableRow>
                             );
@@ -1498,38 +1614,73 @@ const AcademicYearsList =
                                   </Typography>
                                 </Box>
 
-                                <Button
-                                  type="button"
-                                  size="small"
-                                  variant="outlined"
-                                  startIcon={
-                                    <VisibilityRounded />
-                                  }
-                                  onClick={() =>
-                                    navigate(
-                                      `/school/academic-years/${getEntityId(
-                                        year
-                                      )}`
-                                    )
-                                  }
-                                  sx={{
-                                    borderRadius:
-                                      "10px",
-
-                                    color:
-                                      "#244a70",
-
-                                    borderColor:
-                                      "rgba(36,74,112,0.18)",
-
-                                    fontSize:
-                                      "9px",
-
-                                    fontWeight: 800,
-                                  }}
+                                <Stack
+                                  direction="row"
+                                  spacing={0.6}
                                 >
-                                  التفاصيل
-                                </Button>
+                                  <Button
+                                    type="button"
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={
+                                      <VisibilityRounded />
+                                    }
+                                    onClick={() =>
+                                      navigate(
+                                        `/school/academic-years/${getEntityId(
+                                          year
+                                        )}`
+                                      )
+                                    }
+                                    sx={{
+                                      borderRadius:
+                                        "10px",
+
+                                      color:
+                                        "#244a70",
+
+                                      borderColor:
+                                        "rgba(36,74,112,0.18)",
+
+                                      fontSize:
+                                        "9px",
+
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    التفاصيل
+                                  </Button>
+
+                                  <Button
+                                    type="button"
+                                    size="small"
+                                    variant="outlined"
+                                    color="error"
+                                    startIcon={
+                                      <DeleteOutlineRounded />
+                                    }
+                                    disabled={
+                                      deletingId ===
+                                      getEntityId(year)
+                                    }
+                                    onClick={() =>
+                                      handleDeleteYear(
+                                        year
+                                      )
+                                    }
+                                    sx={{
+                                      borderRadius:
+                                        "10px",
+
+                                      fontSize:
+                                        "9px",
+
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    حذف
+                                  </Button>
+                                </Stack>
                               </Stack>
                             </Paper>
                           );
