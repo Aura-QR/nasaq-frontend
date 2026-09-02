@@ -3,6 +3,7 @@ import { getApiError } from "../helpers/getApiError";
 
 const ENDPOINT = "/academic-years";
 const CACHE_TTL = 15000;
+
 const cache = new Map();
 const pending = new Map();
 
@@ -11,6 +12,7 @@ const normalizeId = (value) =>
 
 const normalizeResponse = (response) => {
   const payload = response?.data;
+
   if (payload?.status === false) {
     return {
       status: false,
@@ -29,65 +31,109 @@ const normalizeResponse = (response) => {
 
 const normalizeError = (error, fallback) => {
   const parsed = getApiError(error, fallback);
+
   return {
     status: false,
     message:
       parsed?.message ||
       (typeof parsed === "string" ? parsed : fallback),
-    statusCode: error?.response?.status,
+    statusCode:
+      parsed?.statusCode ||
+      error?.response?.status,
   };
 };
 
-const cachedRequest = async (key, request, { force = false } = {}) => {
+const cachedRequest = async (
+  key,
+  request,
+  { force = false } = {}
+) => {
   const saved = cache.get(key);
-  if (!force && saved && Date.now() - saved.createdAt < CACHE_TTL) {
+
+  if (
+    !force &&
+    saved &&
+    Date.now() - saved.createdAt < CACHE_TTL
+  ) {
     return saved.value;
   }
-  if (!force && pending.has(key)) return pending.get(key);
+
+  if (!force && pending.has(key)) {
+    return pending.get(key);
+  }
 
   const promise = request()
     .then((value) => {
-      cache.set(key, { value, createdAt: Date.now() });
+      cache.set(key, {
+        value,
+        createdAt: Date.now(),
+      });
+
       return value;
     })
-    .finally(() => pending.delete(key));
+    .finally(() => {
+      pending.delete(key);
+    });
 
   pending.set(key, promise);
+
   return promise;
 };
 
-export const invalidateAcademicYearsCache = () => cache.clear();
+export const invalidateAcademicYearsCache = () =>
+  cache.clear();
 
-export const fetchAcademicYears = async ({ force = false } = {}) =>
+export const fetchAcademicYears = async (
+  { force = false } = {}
+) =>
   cachedRequest(
     "academic-years:list",
     async () => {
       try {
-        return normalizeResponse(await api.get(ENDPOINT));
+        return normalizeResponse(
+          await api.get(ENDPOINT)
+        );
       } catch (error) {
-        return normalizeError(error, "تعذر تحميل السنوات الدراسية");
+        return normalizeError(
+          error,
+          "تعذر تحميل السنوات الدراسية"
+        );
       }
     },
     { force }
   );
 
-export const fetchActiveAcademicYear = async ({ force = false } = {}) =>
+export const fetchActiveAcademicYear = async (
+  { force = false } = {}
+) =>
   cachedRequest(
     "academic-years:active",
     async () => {
       try {
-        return normalizeResponse(await api.get(`${ENDPOINT}/active`));
+        return normalizeResponse(
+          await api.get(`${ENDPOINT}/active`)
+        );
       } catch (error) {
-        return normalizeError(error, "تعذر تحميل السنة الدراسية النشطة");
+        return normalizeError(
+          error,
+          "تعذر تحميل السنة الدراسية النشطة"
+        );
       }
     },
     { force }
   );
 
-export const fetchAcademicYearById = async (id, { force = false } = {}) => {
+export const fetchAcademicYearById = async (
+  id,
+  { force = false } = {}
+) => {
   const academicYearId = normalizeId(id);
+
   if (!academicYearId) {
-    return { status: false, message: "معرّف السنة الدراسية غير موجود" };
+    return {
+      status: false,
+      message: "معرّف السنة الدراسية غير موجود",
+    };
   }
 
   return cachedRequest(
@@ -95,10 +141,15 @@ export const fetchAcademicYearById = async (id, { force = false } = {}) => {
     async () => {
       try {
         return normalizeResponse(
-          await api.get(`${ENDPOINT}/${academicYearId}`)
+          await api.get(
+            `${ENDPOINT}/${academicYearId}`
+          )
         );
       } catch (error) {
-        return normalizeError(error, "تعذر تحميل بيانات السنة الدراسية");
+        return normalizeError(
+          error,
+          "تعذر تحميل بيانات السنة الدراسية"
+        );
       }
     },
     { force }
@@ -107,34 +158,61 @@ export const fetchAcademicYearById = async (id, { force = false } = {}) => {
 
 export const createAcademicYear = async (payload) => {
   try {
-    const response = await api.post(ENDPOINT, {
-      name: String(payload?.name || "").trim(),
-      startDate: payload?.startDate,
-      endDate: payload?.endDate,
-    });
+    const response = await api.post(
+      ENDPOINT,
+      {
+        name: String(
+          payload?.name || ""
+        ).trim(),
+        startDate: payload?.startDate,
+        endDate: payload?.endDate,
+      }
+    );
+
     invalidateAcademicYearsCache();
+
     return normalizeResponse(response);
   } catch (error) {
-    return normalizeError(error, "تعذر إنشاء السنة الدراسية");
+    return normalizeError(
+      error,
+      "تعذر إنشاء السنة الدراسية"
+    );
   }
 };
 
-export const updateAcademicYear = async (id, payload) => {
+export const updateAcademicYear = async (
+  id,
+  payload
+) => {
   const academicYearId = normalizeId(id);
+
   if (!academicYearId) {
-    return { status: false, message: "معرّف السنة الدراسية غير موجود" };
+    return {
+      status: false,
+      message: "معرّف السنة الدراسية غير موجود",
+    };
   }
 
   try {
-    const response = await api.patch(`${ENDPOINT}/${academicYearId}`, {
-      name: String(payload?.name || "").trim(),
-      startDate: payload?.startDate,
-      endDate: payload?.endDate,
-    });
+    const response = await api.patch(
+      `${ENDPOINT}/${academicYearId}`,
+      {
+        name: String(
+          payload?.name || ""
+        ).trim(),
+        startDate: payload?.startDate,
+        endDate: payload?.endDate,
+      }
+    );
+
     invalidateAcademicYearsCache();
+
     return normalizeResponse(response);
   } catch (error) {
-    return normalizeError(error, "تعذر تعديل السنة الدراسية");
+    return normalizeError(
+      error,
+      "تعذر تعديل السنة الدراسية"
+    );
   }
 };
 
@@ -143,8 +221,12 @@ export const updateAcademicYearSetupStep = async (
   setupStep = "setup_terms"
 ) => {
   const academicYearId = normalizeId(id);
+
   if (!academicYearId) {
-    return { status: false, message: "معرّف السنة الدراسية غير موجود" };
+    return {
+      status: false,
+      message: "معرّف السنة الدراسية غير موجود",
+    };
   }
 
   /*
@@ -160,31 +242,55 @@ export const updateAcademicYearSetupStep = async (
   const requestBody =
     typeof setupStep === "number"
       ? { step: setupStep }
-      : { setupStep: String(setupStep || "setup_terms").trim() };
+      : {
+          setupStep: String(
+            setupStep || "setup_terms"
+          ).trim(),
+        };
 
   try {
     const response = await api.patch(
       `${ENDPOINT}/${academicYearId}/setup-step`,
       requestBody
     );
+
     invalidateAcademicYearsCache();
+
     return normalizeResponse(response);
   } catch (error) {
-    return normalizeError(error, "تعذر تحديث خطوة تجهيز السنة");
+    return normalizeError(
+      error,
+      "تعذر تحديث خطوة تجهيز السنة"
+    );
   }
 };
 
+/*
+ * DELETE /academic-years/:id
+ * Deletes an academic year by its Mongo ObjectId.
+ */
 export const deleteAcademicYear = async (id) => {
   const academicYearId = normalizeId(id);
+
   if (!academicYearId) {
-    return { status: false, message: "معرّف السنة الدراسية غير موجود" };
+    return {
+      status: false,
+      message: "معرّف السنة الدراسية غير موجود",
+    };
   }
 
   try {
-    const response = await api.delete(`${ENDPOINT}/${academicYearId}`);
+    const response = await api.delete(
+      `${ENDPOINT}/${academicYearId}`
+    );
+
     invalidateAcademicYearsCache();
+
     return normalizeResponse(response);
   } catch (error) {
-    return normalizeError(error, "تعذر حذف السنة الدراسية");
+    return normalizeError(
+      error,
+      "تعذر حذف السنة الدراسية"
+    );
   }
 };
