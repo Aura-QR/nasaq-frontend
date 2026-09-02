@@ -62,9 +62,9 @@ const COLORS = {
   navy2: "#244a70",
   gold: "#b78430",
   goldSoft: "#fbf0d8",
-  page: "#ffffff",
-  border: "#e1e6eb",
-  muted: "#778491",
+  page: "#fff",
+  border: "#ded8cd",
+  muted: "#7e8791",
   green: "#16865f",
   red: "#d14343",
 };
@@ -209,26 +209,26 @@ const StatCard = ({ icon, label, value, helper, tone = "blue" }) => {
     <Paper
       elevation={0}
       sx={{
-        minHeight: 78,
-        px: 1.6,
-        py: 1.25,
-        border: `1px solid ${COLORS.border}`,
-        borderRadius: "16px",
+        minHeight: 82,
+        p: 1.25,
         display: "flex",
         alignItems: "center",
-        gap: 1.2,
-        bgcolor: "#fff",
+        gap: 0.9,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: "15px",
+        backgroundColor: "#fff",
+        boxShadow: "0 7px 20px rgba(36,74,112,.035)",
       }}
     >
       <Box
         sx={{
-          width: 42,
-          height: 42,
-          borderRadius: "12px",
+          width: 40,
+          height: 40,
           display: "grid",
           placeItems: "center",
           color: selected.color,
-          bgcolor: selected.bg,
+          backgroundColor: selected.bg,
+          borderRadius: "11px",
           flexShrink: 0,
         }}
       >
@@ -236,32 +236,13 @@ const StatCard = ({ icon, label, value, helper, tone = "blue" }) => {
       </Box>
 
       <Box sx={{ minWidth: 0 }}>
-        <Typography
-          sx={{
-            color: COLORS.muted,
-            fontWeight: 700,
-            fontSize: 11,
-          }}
-        >
+        <Typography sx={{ color: COLORS.muted, fontSize: "8px", fontWeight: 700 }}>
           {label}
         </Typography>
-        <Typography
-          sx={{
-            color: COLORS.navy,
-            fontWeight: 900,
-            fontSize: 23,
-            lineHeight: 1.15,
-          }}
-        >
+        <Typography sx={{ color: COLORS.navy, fontSize: "19px", fontWeight: 800, lineHeight: 1.2 }}>
           {value}
         </Typography>
-        <Typography
-          sx={{
-            color: "#9ba5af",
-            fontSize: 9.5,
-            mt: 0.15,
-          }}
-        >
+        <Typography sx={{ color: "#9ba5af", fontSize: "7.5px", mt: 0.15 }}>
           {helper}
         </Typography>
       </Box>
@@ -1823,44 +1804,35 @@ const SubjectOfferings = () => {
 
   return (
     <Container>
-      <Box
-        dir="rtl"
-        sx={{
-          width: "100%",
-          minHeight: "100%",
-          bgcolor: COLORS.page,
-          py: { xs: 1.5, md: 2.5 },
-          px: { xs: 1.2, md: 2.2 },
-        }}
-      >
-      <Box sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}>
+      <Box dir="rtl" sx={{ pb: 4 }}>
         <Paper
           elevation={0}
           sx={{
-            border: `1px solid ${COLORS.border}`,
-            borderRadius: "20px",
-            px: { xs: 1.8, md: 2.5 },
-            py: { xs: 1.6, md: 2 },
-            mb: 1.6,
-            bgcolor: "#fff",
+            p: { xs: 1.7, md: 2.1 },
+            border: "1px solid rgba(36,74,112,.08)",
+            borderRadius: "18px",
+            background:
+              "linear-gradient(135deg,rgba(255,252,247,.98),rgba(251,240,216,.44))",
+            boxShadow: "0 10px 24px rgba(18,47,77,.06)",
           }}
         >
           <Stack
             direction={{ xs: "column", md: "row" }}
             alignItems={{ xs: "stretch", md: "center" }}
             justifyContent="space-between"
-            gap={1.5}
+            gap={1.2}
           >
-            <Stack direction="row" alignItems="center" gap={1.2}>
+            <Stack direction="row" alignItems="center" gap={1}>
               <Box
                 sx={{
                   width: 46,
                   height: 46,
-                  borderRadius: "13px",
                   display: "grid",
                   placeItems: "center",
-                  bgcolor: COLORS.goldSoft,
                   color: COLORS.gold,
+                  backgroundColor: COLORS.goldSoft,
+                  borderRadius: "12px",
+                  flexShrink: 0,
                 }}
               >
                 <MenuBookRounded />
@@ -1868,46 +1840,42 @@ const SubjectOfferings = () => {
 
               <Box>
                 <Typography
-                  variant="h4"
+                  component="h1"
                   sx={{
                     color: COLORS.navy,
-                    fontWeight: 900,
-                    fontSize: { xs: 22, md: 27 },
+                    fontSize: { xs: "21px", md: "25px" },
+                    fontWeight: 800,
+                    lineHeight: 1.2,
                   }}
                 >
                   عروض المواد
                 </Typography>
-                <Typography sx={{ color: COLORS.muted, fontSize: 12 }}>
+                <Typography sx={{ mt: 0.35, color: COLORS.muted, fontSize: "10px" }}>
                   اربط مواد المدرسة بالصفوف الدراسية والترم المناسب
                 </Typography>
               </Box>
             </Stack>
 
-            <Stack direction="row" gap={1} flexWrap="wrap">
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              gap={0.8}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              flexWrap="wrap"
+            >
               <Button
                 variant="outlined"
                 startIcon={<UploadFileRounded />}
-                onClick={() =>
-                  setImportPlanOpen(true)
-                }
-                disabled={
-                  !selectedTermId ||
-                  !gradeLevels.length
-                }
+                onClick={() => setImportPlanOpen(true)}
+                disabled={!selectedTermId || !gradeLevels.length}
                 sx={{
+                  minHeight: 40,
                   borderRadius: "11px",
-                  borderColor:
-                    "rgba(183,132,48,0.42)",
+                  borderColor: "rgba(183,132,48,.42)",
                   color: COLORS.gold,
-                  fontWeight: 900,
-                  bgcolor:
-                    "rgba(251,240,216,0.34)",
-                  "&:hover": {
-                    borderColor:
-                      COLORS.gold,
-                    bgcolor:
-                      COLORS.goldSoft,
-                  },
+                  fontWeight: 800,
+                  bgcolor: "rgba(251,240,216,.34)",
+                  whiteSpace: "nowrap",
+                  "&:hover": { borderColor: COLORS.gold, bgcolor: COLORS.goldSoft },
                 }}
               >
                 استيراد خطة المواد
@@ -1919,10 +1887,12 @@ const SubjectOfferings = () => {
                 onClick={copyFromPreviousYear}
                 disabled={saving || academicYears.length < 2}
                 sx={{
+                  minHeight: 40,
                   borderRadius: "11px",
                   borderColor: "#d7dde3",
                   color: COLORS.navy,
                   fontWeight: 800,
+                  whiteSpace: "nowrap",
                 }}
               >
                 نسخ من سنة سابقة
@@ -1934,25 +1904,25 @@ const SubjectOfferings = () => {
                 onClick={() => setDialogOpen(true)}
                 disabled={!terms.length || !subjects.length || !gradeLevels.length}
                 sx={{
+                  minHeight: 40,
                   borderRadius: "11px",
                   bgcolor: COLORS.navy,
                   fontWeight: 800,
                   boxShadow: "none",
+                  whiteSpace: "nowrap",
                   "&:hover": { bgcolor: COLORS.navy2, boxShadow: "none" },
                 }}
               >
                 إضافة عرض مادة
               </Button>
 
-              <Tooltip title="رجوع">
-                <Button
-                  variant="text"
-                  onClick={() => navigate(-1)}
-                  sx={{ color: COLORS.muted, minWidth: 44 }}
-                >
-                  رجوع
-                </Button>
-              </Tooltip>
+              <Button
+                variant="text"
+                onClick={() => navigate(-1)}
+                sx={{ color: COLORS.muted, minWidth: 54, fontWeight: 800 }}
+              >
+                رجوع
+              </Button>
             </Stack>
           </Stack>
         </Paper>
@@ -1965,170 +1935,170 @@ const SubjectOfferings = () => {
                 إعادة المحاولة
               </Button>
             }
-            sx={{ borderRadius: "13px", mb: 1.5 }}
+            sx={{ mt: 1.25, borderRadius: "14px" }}
           >
             {error}
           </Alert>
         ) : null}
 
-        <Grid container spacing={1.2} sx={{ mb: 1.5 }}>
-          <Grid item xs={12} md={4}>
-            <StatCard
-              icon={<MenuBookRounded />}
-              label="إجمالي العروض"
-              value={statistics.total}
-              helper="العروض المسجلة في الترم المحدد"
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <StatCard
-              icon={<SchoolRounded />}
-              label="الصفوف المرتبطة"
-              value={statistics.grades}
-              helper="صفوف لديها مواد مفعلة"
-              tone="green"
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <StatCard
-              icon={<CalendarMonthRounded />}
-              label="المواد المفعلة"
-              value={statistics.subjects}
-              helper={activeYear?.label || "السنة الدراسية الحالية"}
-              tone="gold"
-            />
-          </Grid>
-        </Grid>
+        <Box
+          sx={{
+            mt: 1.25,
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "repeat(3,minmax(0,1fr))" },
+            gap: 1,
+          }}
+        >
+          <StatCard
+            icon={<MenuBookRounded />}
+            label="إجمالي العروض"
+            value={statistics.total}
+            helper="العروض المسجلة في الترم المحدد"
+          />
+          <StatCard
+            icon={<SchoolRounded />}
+            label="الصفوف المرتبطة"
+            value={statistics.grades}
+            helper="صفوف لديها مواد مفعلة"
+            tone="green"
+          />
+          <StatCard
+            icon={<CalendarMonthRounded />}
+            label="المواد المفعلة"
+            value={statistics.subjects}
+            helper={activeYear?.label || "السنة الدراسية الحالية"}
+            tone="gold"
+          />
+        </Box>
 
         <Paper
           elevation={0}
           sx={{
-            p: 1.25,
+            mt: 1.25,
+            p: 1.2,
             border: `1px solid ${COLORS.border}`,
             borderRadius: "16px",
-            mb: 1.5,
+            backgroundColor: "#fff",
           }}
         >
-          <Grid container spacing={1} alignItems="center">
-            <Grid item xs={12} md={4.5}>
-              <TextField
-                fullWidth
-                size="small"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="ابحث باسم المادة أو الصف"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchRounded sx={{ color: "#8b98a4" }} />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{
-                  "& .MuiOutlinedInput-root": { borderRadius: "11px" },
-                }}
-              />
-            </Grid>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "minmax(260px,2fr) repeat(3,minmax(155px,1fr)) 42px",
+              },
+              gap: 0.8,
+              alignItems: "center",
+            }}
+          >
+            <TextField
+              fullWidth
+              size="small"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="ابحث باسم المادة أو الصف"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchRounded sx={{ color: "#8b98a4" }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ "& .MuiOutlinedInput-root": { borderRadius: "11px", bgcolor: "#fff" } }}
+            />
 
-            <Grid item xs={12} sm={4} md={2.5}>
-              <FormControl fullWidth size="small">
-                <InputLabel>السنة الدراسية</InputLabel>
-                <Select
-                  value={selectedYearId}
-                  label="السنة الدراسية"
-                  onChange={(event) => changeYear(event.target.value)}
-                  sx={{ borderRadius: "11px" }}
-                >
-                  {academicYears.map((year) => (
-                    <MenuItem key={year._id} value={year._id}>
-                      {year.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
+            <FormControl fullWidth size="small">
+              <InputLabel>السنة الدراسية</InputLabel>
+              <Select
+                value={selectedYearId}
+                label="السنة الدراسية"
+                onChange={(event) => changeYear(event.target.value)}
+                sx={{ borderRadius: "11px", bgcolor: "#fff" }}
+              >
+                {academicYears.map((year) => (
+                  <MenuItem key={year._id} value={year._id}>
+                    {year.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
-            <Grid item xs={12} sm={4} md={2.2}>
-              <FormControl fullWidth size="small">
-                <InputLabel>الترم</InputLabel>
-                <Select
-                  value={selectedTermId}
-                  label="الترم"
-                  onChange={(event) => {
-                    setSelectedTermId(event.target.value);
-                    setSelectedGradeId("");
+            <FormControl fullWidth size="small">
+              <InputLabel>الترم</InputLabel>
+              <Select
+                value={selectedTermId}
+                label="الترم"
+                onChange={(event) => {
+                  setSelectedTermId(event.target.value);
+                  setSelectedGradeId("");
+                }}
+                sx={{ borderRadius: "11px", bgcolor: "#fff" }}
+              >
+                {terms.map((term) => (
+                  <MenuItem key={term._id} value={term._id}>
+                    {term.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth size="small">
+              <InputLabel>الصف الدراسي</InputLabel>
+              <Select
+                value={selectedGradeId}
+                label="الصف الدراسي"
+                onChange={(event) => setSelectedGradeId(event.target.value)}
+                sx={{ borderRadius: "11px", bgcolor: "#fff" }}
+              >
+                <MenuItem value="">كل الصفوف</MenuItem>
+                {gradeLevels.map((grade) => (
+                  <MenuItem key={grade._id} value={grade._id}>
+                    {grade.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Tooltip title="تحديث البيانات">
+              <span>
+                <IconButton
+                  onClick={loadOfferings}
+                  disabled={loadingOfferings || !selectedTermId}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: "11px",
+                    bgcolor: "#fff",
                   }}
-                  sx={{ borderRadius: "11px" }}
                 >
-                  {terms.map((term) => (
-                    <MenuItem key={term._id} value={term._id}>
-                      {term.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} sm={4} md={2.2}>
-              <FormControl fullWidth size="small">
-                <InputLabel>الصف الدراسي</InputLabel>
-                <Select
-                  value={selectedGradeId}
-                  label="الصف الدراسي"
-                  onChange={(event) => setSelectedGradeId(event.target.value)}
-                  sx={{ borderRadius: "11px" }}
-                >
-                  <MenuItem value="">كل الصفوف</MenuItem>
-                  {gradeLevels.map((grade) => (
-                    <MenuItem key={grade._id} value={grade._id}>
-                      {grade.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={0.6}>
-              <Tooltip title="تحديث البيانات">
-                <span>
-                  <IconButton
-                    onClick={loadOfferings}
-                    disabled={loadingOfferings || !selectedTermId}
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      border: `1px solid ${COLORS.border}`,
-                      borderRadius: "11px",
-                    }}
-                  >
-                    <RefreshRounded />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </Grid>
-          </Grid>
+                  <RefreshRounded />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
         </Paper>
 
         <Paper
           elevation={0}
           sx={{
+            mt: 1.25,
             border: `1px solid ${COLORS.border}`,
             borderRadius: "18px",
             overflow: "hidden",
             bgcolor: "#fff",
           }}
         >
-          <Box sx={{ px: 2, py: 1.6 }}>
+          <Box sx={{ px: 2, py: 1.35 }}>
             <Stack
-              direction="row"
-              alignItems="center"
+              direction={{ xs: "column", md: "row" }}
+              alignItems={{ xs: "stretch", md: "center" }}
               justifyContent="space-between"
               gap={1}
             >
               <Box>
-                <Typography
-                  sx={{ color: COLORS.navy, fontWeight: 900, fontSize: 17 }}
-                >
+                <Typography sx={{ color: COLORS.navy, fontWeight: 900, fontSize: 17 }}>
                   العروض المسجلة
                 </Typography>
                 <Typography sx={{ color: COLORS.muted, fontSize: 10.5 }}>
@@ -2136,13 +2106,7 @@ const SubjectOfferings = () => {
                 </Typography>
               </Box>
 
-              <Stack
-                direction="row"
-                alignItems="center"
-                gap={0.8}
-                flexWrap="wrap"
-                justifyContent="flex-end"
-              >
+              <Stack direction="row" alignItems="center" gap={0.8} flexWrap="wrap">
                 <Chip
                   label={`${visibleOfferings.length} عرض`}
                   size="small"
@@ -2153,36 +2117,22 @@ const SubjectOfferings = () => {
                   <Chip
                     label={`${changedPlanEntries.length} تعديل غير محفوظ`}
                     size="small"
-                    sx={{
-                      fontWeight: 800,
-                      bgcolor: COLORS.goldSoft,
-                      color: COLORS.gold,
-                    }}
+                    sx={{ fontWeight: 800, bgcolor: COLORS.goldSoft, color: COLORS.gold }}
                   />
                 ) : null}
 
                 <Button
                   size="small"
                   variant="outlined"
-                  startIcon={
-                    <FactCheckRounded />
-                  }
-                  onClick={() =>
-                    navigate("/school/lectures")
-                  }
+                  startIcon={<FactCheckRounded />}
+                  onClick={() => navigate("/school/lectures")}
                   disabled={!selectedTermId}
                   sx={{
                     minHeight: 34,
                     borderRadius: "10px",
                     color: COLORS.navy,
-                    borderColor:
-                      "rgba(36,74,112,0.16)",
+                    borderColor: "rgba(36,74,112,.16)",
                     fontWeight: 800,
-                    textTransform: "none",
-                    "& .MuiButton-startIcon": {
-                      marginLeft: "5px",
-                      marginRight: 0,
-                    },
                   }}
                 >
                   فحص قابلية الجدول
@@ -2192,11 +2142,7 @@ const SubjectOfferings = () => {
                   size="small"
                   variant="contained"
                   startIcon={
-                    savingPlan ? (
-                      <CircularProgress size={16} color="inherit" />
-                    ) : (
-                      <SaveRounded />
-                    )
+                    savingPlan ? <CircularProgress size={16} color="inherit" /> : <SaveRounded />
                   }
                   onClick={savePlan}
                   disabled={
@@ -2211,10 +2157,7 @@ const SubjectOfferings = () => {
                     bgcolor: COLORS.navy,
                     fontWeight: 800,
                     boxShadow: "none",
-                    "&:hover": {
-                      bgcolor: COLORS.navy2,
-                      boxShadow: "none",
-                    },
+                    "&:hover": { bgcolor: COLORS.navy2, boxShadow: "none" },
                   }}
                 >
                   حفظ الخطة
@@ -2232,32 +2175,21 @@ const SubjectOfferings = () => {
             <Box
               sx={{
                 px: 2,
-                py: 1.15,
-                bgcolor: "#fafbfd",
+                py: 1.05,
+                bgcolor: "#f8fafc",
                 borderBottom: `1px solid ${COLORS.border}`,
               }}
             >
-              <Stack
-                direction="row"
-                alignItems="center"
-                gap={0.8}
-                flexWrap="wrap"
-              >
+              <Stack direction="row" alignItems="center" gap={0.8} flexWrap="wrap">
                 <Typography
-                  sx={{
-                    color: COLORS.muted,
-                    fontSize: 10.5,
-                    fontWeight: 800,
-                    ml: 0.5,
-                  }}
+                  sx={{ color: COLORS.muted, fontSize: 10.5, fontWeight: 800, ml: 0.5 }}
                 >
                   إجمالي الخطة:
                 </Typography>
 
                 {gradePlanTotals.map((grade) => {
                   const overCapacity =
-                    Number.isFinite(slotsPerWeek) &&
-                    grade.total > slotsPerWeek;
+                    Number.isFinite(slotsPerWeek) && grade.total > slotsPerWeek;
 
                   return (
                     <Chip
@@ -2286,17 +2218,18 @@ const SubjectOfferings = () => {
           ) : null}
 
           {loadingInitial || loadingOfferings ? (
-            <Grid container spacing={1.2} sx={{ p: 1.6 }}>
+            <Box
+              sx={{
+                p: 1.4,
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))" },
+                gap: 1.1,
+              }}
+            >
               {[1, 2, 3, 4, 5, 6].map((item) => (
-                <Grid item xs={12} md={6} key={item}>
-                  <Skeleton
-                    variant="rounded"
-                    height={88}
-                    sx={{ borderRadius: "14px" }}
-                  />
-                </Grid>
+                <Skeleton key={item} variant="rounded" height={88} sx={{ borderRadius: "14px" }} />
               ))}
-            </Grid>
+            </Box>
           ) : !selectedTermId ? (
             <Box sx={{ py: 8, px: 2, textAlign: "center" }}>
               <CalendarMonthRounded sx={{ fontSize: 44, color: "#c2cad1" }} />
@@ -2325,15 +2258,9 @@ const SubjectOfferings = () => {
                   color: COLORS.gold,
                 }}
               >
-                {search || selectedGradeId ? (
-                  <SearchOffRounded />
-                ) : (
-                  <MenuBookRounded />
-                )}
+                {search || selectedGradeId ? <SearchOffRounded /> : <MenuBookRounded />}
               </Box>
-              <Typography
-                sx={{ color: COLORS.navy, fontWeight: 900, mt: 1.2, fontSize: 16 }}
-              >
+              <Typography sx={{ color: COLORS.navy, fontWeight: 900, mt: 1.2, fontSize: 16 }}>
                 {search || selectedGradeId
                   ? "لا توجد عروض مطابقة"
                   : "لم تتم إضافة عروض مواد لهذا الترم"}
@@ -2359,171 +2286,162 @@ const SubjectOfferings = () => {
               ) : null}
             </Box>
           ) : (
-            <Grid container spacing={1.2} sx={{ p: 1.6 }}>
+            <Box
+              sx={{
+                p: 1.4,
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))" },
+                gap: 1.1,
+              }}
+            >
               {visibleOfferings.map((item) => (
-                <Grid item xs={12} md={6} key={item.id}>
-                  <Paper
-                    elevation={0}
+                <Paper
+                  key={item.id}
+                  elevation={0}
+                  sx={{
+                    minHeight: 88,
+                    p: 1.2,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: "14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    bgcolor: "#fff",
+                    transition: "border-color .18s ease, box-shadow .18s ease",
+                    "&:hover": {
+                      borderColor: "#c9c1b6",
+                      boxShadow: "0 7px 18px rgba(18,47,77,.045)",
+                    },
+                  }}
+                >
+                  <Box
                     sx={{
-                      minHeight: 88,
-                      p: 1.4,
-                      border: `1px solid ${COLORS.border}`,
-                      borderRadius: "14px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1.2,
-                      transition: "0.18s ease",
-                      "&:hover": {
-                        borderColor: "#b9c7d3",
-                        boxShadow: "0 8px 22px rgba(18,47,77,.055)",
-                      },
+                      width: 44,
+                      height: 44,
+                      borderRadius: "12px",
+                      display: "grid",
+                      placeItems: "center",
+                      bgcolor: COLORS.goldSoft,
+                      color: COLORS.gold,
+                      flexShrink: 0,
                     }}
                   >
-                    <Box
-                      sx={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: "12px",
-                        display: "grid",
-                        placeItems: "center",
-                        bgcolor: COLORS.goldSoft,
-                        color: COLORS.gold,
-                        flexShrink: 0,
-                      }}
-                    >
-                      <MenuBookRounded />
-                    </Box>
+                    <MenuBookRounded />
+                  </Box>
 
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography
-                        noWrap
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                      noWrap
+                      sx={{ color: COLORS.navy, fontWeight: 900, fontSize: 13.5 }}
+                    >
+                      {item.subjectLabel}
+                    </Typography>
+
+                    <Stack direction="row" gap={0.6} mt={0.55} flexWrap="wrap">
+                      <Chip
+                        size="small"
+                        label={item.gradeLabel}
                         sx={{
+                          height: 21,
+                          fontSize: 8.5,
+                          fontWeight: 700,
+                          bgcolor: "#eef3f7",
                           color: COLORS.navy,
-                          fontWeight: 900,
-                          fontSize: 14,
+                        }}
+                      />
+                      <Chip
+                        size="small"
+                        label={item.termLabel}
+                        sx={{
+                          height: 21,
+                          fontSize: 8.5,
+                          fontWeight: 700,
+                          bgcolor: "#edf6f2",
+                          color: COLORS.green,
+                        }}
+                      />
+                    </Stack>
+                  </Box>
+
+                  <TextField
+                    type="number"
+                    size="small"
+                    label="الحصص / الأسبوع"
+                    value={planDraft[item.id] ?? item.periodsPerWeek ?? 0}
+                    onChange={(event) => updatePlanValue(item.id, event.target.value)}
+                    inputProps={{ min: 0, max: 20, step: 1, inputMode: "numeric" }}
+                    error={
+                      planDraft[item.id] === "" ||
+                      Number(planDraft[item.id]) < 0 ||
+                      Number(planDraft[item.id]) > 20
+                    }
+                    sx={{
+                      width: { xs: 110, sm: 125 },
+                      flexShrink: 0,
+                      "& .MuiOutlinedInput-root": { borderRadius: "10px", bgcolor: "#fff" },
+                      "& input": {
+                        textAlign: "center",
+                        fontWeight: 900,
+                        color: COLORS.navy,
+                        py: 1,
+                      },
+                      "& .MuiInputLabel-root": { fontSize: 11 },
+                    }}
+                  />
+
+                  <Tooltip title="حذف العرض">
+                    <span>
+                      <IconButton
+                        onClick={() => removeOffering(item)}
+                        disabled={deletingId === item.id}
+                        sx={{
+                          width: 42,
+                          height: 42,
+                          color: COLORS.red,
+                          bgcolor: "#fff2f2",
+                          borderRadius: "10px",
+                          flexShrink: 0,
+                          "&:hover": { bgcolor: "#ffe7e7" },
                         }}
                       >
-                        {item.subjectLabel}
-                      </Typography>
-
-                      <Stack direction="row" gap={0.7} mt={0.65} flexWrap="wrap">
-                        <Chip
-                          size="small"
-                          label={item.gradeLabel}
-                          sx={{ height: 22, fontSize: 9, fontWeight: 700 }}
-                        />
-                        <Chip
-                          size="small"
-                          label={item.termLabel}
-                          sx={{
-                            height: 22,
-                            fontSize: 9,
-                            fontWeight: 700,
-                            bgcolor: "#edf6f2",
-                            color: COLORS.green,
-                          }}
-                        />
-                      </Stack>
-                    </Box>
-
-                    <TextField
-                      type="number"
-                      size="small"
-                      label="الحصص / الأسبوع"
-                      value={planDraft[item.id] ?? item.periodsPerWeek ?? 0}
-                      onChange={(event) =>
-                        updatePlanValue(item.id, event.target.value)
-                      }
-                      inputProps={{
-                        min: 0,
-                        max: 20,
-                        step: 1,
-                        inputMode: "numeric",
-                      }}
-                      error={
-                        planDraft[item.id] === "" ||
-                        Number(planDraft[item.id]) < 0 ||
-                        Number(planDraft[item.id]) > 20
-                      }
-                      sx={{
-                        width: { xs: 110, sm: 125 },
-                        flexShrink: 0,
-                        "& .MuiOutlinedInput-root": {
-                          borderRadius: "10px",
-                          bgcolor: "#fff",
-                        },
-                        "& input": {
-                          textAlign: "center",
-                          fontWeight: 900,
-                          color: COLORS.navy,
-                          py: 1,
-                        },
-                        "& .MuiInputLabel-root": {
-                          fontSize: 11,
-                        },
-                      }}
-                    />
-
-                    <Tooltip title="حذف العرض">
-                      <span>
-                        <IconButton
-                          onClick={() => removeOffering(item)}
-                          disabled={deletingId === item.id}
-                          sx={{
-                            color: COLORS.red,
-                            bgcolor: "#fff2f2",
-                            borderRadius: "10px",
-                            "&:hover": { bgcolor: "#ffe7e7" },
-                          }}
-                        >
-                          {deletingId === item.id ? (
-                            <CircularProgress size={19} color="inherit" />
-                          ) : (
-                            <DeleteOutlineRounded />
-                          )}
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                  </Paper>
-                </Grid>
+                        {deletingId === item.id ? (
+                          <CircularProgress size={19} color="inherit" />
+                        ) : (
+                          <DeleteOutlineRounded />
+                        )}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </Paper>
               ))}
-            </Grid>
+            </Box>
           )}
         </Paper>
-      </Box>
 
-      <TeachingPlanImportDialog
-        open={importPlanOpen}
-        termId={selectedTermId}
-        initialGradeId={
-          selectedGradeId
-        }
-        gradeLevels={gradeLevels}
-        onClose={() =>
-          setImportPlanOpen(false)
-        }
-        onImported={async ({
-          gradeLevelId,
-        }) => {
-          setSelectedGradeId(
-            gradeLevelId
-          );
-          setSearch("");
-          setPlanDraft({});
-          await loadOfferings();
-        }}
-      />
+        <TeachingPlanImportDialog
+          open={importPlanOpen}
+          termId={selectedTermId}
+          initialGradeId={selectedGradeId}
+          gradeLevels={gradeLevels}
+          onClose={() => setImportPlanOpen(false)}
+          onImported={async ({ gradeLevelId }) => {
+            setSelectedGradeId(gradeLevelId);
+            setSearch("");
+            setPlanDraft({});
+            await loadOfferings();
+          }}
+        />
 
-      <SubjectOfferingDialog
-        open={dialogOpen}
-        loading={saving}
-        subjects={subjects}
-        gradeLevels={gradeLevels}
-        terms={terms}
-        initialValues={dialogDefaults}
-        onClose={() => setDialogOpen(false)}
-        onSubmit={createOffering}
-      />
+        <SubjectOfferingDialog
+          open={dialogOpen}
+          loading={saving}
+          subjects={subjects}
+          gradeLevels={gradeLevels}
+          terms={terms}
+          initialValues={dialogDefaults}
+          onClose={() => setDialogOpen(false)}
+          onSubmit={createOffering}
+        />
       </Box>
     </Container>
   );
