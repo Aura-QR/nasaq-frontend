@@ -50,7 +50,9 @@ const getPermissionLabel = (
   const actions = {
     read: "عرض",
     create: "إضافة",
+    add: "إضافة",
     update: "تعديل",
+    edit: "تعديل",
     delete: "حذف",
     manage: "إدارة",
   };
@@ -328,7 +330,7 @@ const ManagerPermissionsDialog =
                   "9px",
               }}
             >
-              لا توجد صلاحيات متاحة من الخادم حاليًا.
+              لا توجد صلاحيات متاحة حاليًا.
             </Typography>
           )}
         </DialogContent>

@@ -16,6 +16,33 @@ let managersCache = null;
 let managersCacheTime = 0;
 let managersPendingRequest = null;
 
+/*
+ * Default permissions used only when creating/updating a MANAGER
+ * without an explicit permissions array.
+ *
+ * Per-manager permissions are stored and updated through:
+ * PATCH /managers/:id/permissions
+ */
+export const MANAGER_DEFAULT_PERMISSIONS = [
+  "school.students.read",
+  "school.students.create",
+  "school.students.update",
+  "school.students.delete",
+
+  "school.teachers.manage",
+  "school.subjects.manage",
+  "school.classes.manage",
+  "school.lectures.manage",
+
+  "school.gradesCriteria.manage",
+  "school.exams.manage",
+  "school.projects.manage",
+
+  "school.attendance.manage",
+  "school.preparation.manage",
+  "school.library.manage",
+];
+
 const normalizeText = (
   value
 ) =>
@@ -54,6 +81,29 @@ const normalizeManagerType = (
     : "";
 };
 
+const normalizePermissions = (
+  permissions
+) =>
+  Array.from(
+    new Set(
+      (
+        Array.isArray(
+          permissions
+        )
+          ? permissions
+          : []
+      )
+        .map(normalizeText)
+        .filter(
+          (permission) =>
+            permission === "*" ||
+            permission.startsWith(
+              "school."
+            )
+        )
+    )
+  );
+
 const invalidateManagersCache =
   () => {
     managersCache = null;
@@ -62,26 +112,44 @@ const invalidateManagersCache =
 
 const normalizeCreatePayload = (
   payload
-) => ({
-  username:
-    normalizeText(
-      payload?.username
-    ),
-
-  email:
-    normalizeEmail(
-      payload?.email
-    ),
-
-  password:
-    payload?.password ||
-    "",
-
-  role:
+) => {
+  const role =
     normalizeRole(
       payload?.role
-    ),
-});
+    );
+
+  const requestedPermissions =
+    normalizePermissions(
+      payload?.permissions
+    );
+
+  const permissions =
+    role === "SUPERVISOR"
+      ? ["*"]
+      : requestedPermissions.length
+      ? requestedPermissions
+      : MANAGER_DEFAULT_PERMISSIONS;
+
+  return {
+    username:
+      normalizeText(
+        payload?.username
+      ),
+
+    email:
+      normalizeEmail(
+        payload?.email
+      ),
+
+    password:
+      payload?.password ||
+      "",
+
+    role,
+
+    permissions,
+  };
+};
 
 export const fetchManagers =
   async ({
@@ -151,6 +219,58 @@ export const createManager =
       return getApiError(
         error,
         "تعذر إنشاء الحساب الإداري"
+      );
+    }
+  };
+
+/**
+ * Update one manager's own permission array.
+ *
+ * Backend endpoint:
+ * PATCH /managers/:id/permissions
+ *
+ * Body:
+ * {
+ *   permissions: string[]
+ * }
+ */
+export const updateManagerPermissions =
+  async (
+    managerId,
+    permissions = []
+  ) => {
+    const normalizedManagerId =
+      normalizeText(
+        managerId
+      );
+
+    if (!normalizedManagerId) {
+      return {
+        status: false,
+        message:
+          "معرّف المدير غير موجود",
+      };
+    }
+
+    try {
+      const response =
+        await api.patch(
+          `${MANAGERS_ENDPOINT}/${normalizedManagerId}/permissions`,
+          {
+            permissions:
+              normalizePermissions(
+                permissions
+              ),
+          }
+        );
+
+      invalidateManagersCache();
+
+      return response.data;
+    } catch (error) {
+      return getApiError(
+        error,
+        "تعذر تحديث صلاحيات المدير"
       );
     }
   };
@@ -293,8 +413,6 @@ export const deleteManager =
 
 /*
  * Backward-compatible aliases.
- * They prevent older school pages from breaking
- * while the route-based List/Add pages are used.
  */
 export const getSchoolManagers =
   fetchManagers;
@@ -312,10 +430,12 @@ export const demoteManager =
   demoteTeacherFromManager;
 
 export default {
+  MANAGER_DEFAULT_PERMISSIONS,
   fetchManagers,
   getSchoolManagers,
   createManager,
   createSchoolManager,
+  updateManagerPermissions,
   promoteTeacherToManager,
   demoteTeacherFromManager,
   promoteManager,

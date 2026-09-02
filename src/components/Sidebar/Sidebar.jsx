@@ -250,15 +250,6 @@ const Sidebar = ({ active, setActive }) => {
               role === "OWNER" ||
               role === "SUPERVISOR",
           },
-          {
-            name: "إدارة الصلاحيات",
-            Icon: ShieldRounded,
-            iconType: "mui",
-            to: "/school/permissions",
-            show:
-              role === "OWNER" ||
-              role === "SUPERVISOR",
-          },
         ],
       },
       {
