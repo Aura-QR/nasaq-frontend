@@ -2,6 +2,7 @@ import { api } from "../Axios";
 import { getApiError } from "../helpers/getApiError";
 
 const ENDPOINT = "/schools/me/settings";
+const DEFAULT_PERIODS_PER_DAY = 7;
 
 const normalizeNationalityCodes = (values) => {
   if (!Array.isArray(values)) {
@@ -67,12 +68,46 @@ const normalizeTime = (value) => {
   return stringValue;
 };
 
+const normalizePeriodsPerDay = (
+  value,
+  fallback = DEFAULT_PERIODS_PER_DAY
+) => {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) {
+    const fallbackValue = Number(fallback);
+
+    return Math.min(
+      10,
+      Math.max(
+        1,
+        Math.round(
+          Number.isFinite(fallbackValue)
+            ? fallbackValue
+            : DEFAULT_PERIODS_PER_DAY
+        )
+      )
+    );
+  }
+
+  return Math.min(
+    10,
+    Math.max(1, Math.round(numberValue))
+  );
+};
+
 const normalizeWorkSchedule = (
-  value
+  value,
+  fallbackPeriodsPerDay = DEFAULT_PERIODS_PER_DAY
 ) => {
   if (!Array.isArray(value)) {
     return value;
   }
+
+  const defaultPeriodsPerDay =
+    normalizePeriodsPerDay(
+      fallbackPeriodsPerDay
+    );
 
   return value.map((item) => {
     const isWorkingDay =
@@ -98,6 +133,13 @@ const normalizeWorkSchedule = (
             item?.endTime
           )
         : null,
+
+      periodsPerDay: isWorkingDay
+        ? normalizePeriodsPerDay(
+            item?.periodsPerDay,
+            defaultPeriodsPerDay
+          )
+        : null,
     };
   });
 };
@@ -106,7 +148,6 @@ const buildSchoolSettingsPayload = (
   data = {}
 ) => {
   /*
-   * مهم:
    * نبدأ من نسخة كاملة من data حتى لا نسقط
    * أي إعدادات أخرى تستخدم نفس endpoint
    * (الحضور، الشبكة، الموقع... إلخ).
@@ -145,25 +186,32 @@ const buildSchoolSettingsPayload = (
   }
 
   /*
-   * Timetable settings.
-   * لا نحذف الحقلين؛ فقط نطبّع القيم.
+   * periodsPerDay العام يظل fallback فقط.
+   * العدد الفعلي لكل يوم موجود في:
+   * workSchedule[].periodsPerDay
    */
+  let fallbackPeriodsPerDay =
+    DEFAULT_PERIODS_PER_DAY;
+
   if (
     Object.prototype.hasOwnProperty.call(
       payload,
       "periodsPerDay"
     )
   ) {
-    const periodsPerDay = Number(
-      payload.periodsPerDay
-    );
-
     payload.periodsPerDay =
-      Number.isFinite(periodsPerDay)
-        ? periodsPerDay
-        : payload.periodsPerDay;
+      normalizePeriodsPerDay(
+        payload.periodsPerDay
+      );
+
+    fallbackPeriodsPerDay =
+      payload.periodsPerDay;
   }
 
+  /*
+   * الباك يستبدل workSchedule بالكامل،
+   * لذلك الـ UI يجب أن يرسل الأيام السبعة كاملة.
+   */
   if (
     Object.prototype.hasOwnProperty.call(
       payload,
@@ -172,7 +220,8 @@ const buildSchoolSettingsPayload = (
   ) {
     payload.workSchedule =
       normalizeWorkSchedule(
-        payload.workSchedule
+        payload.workSchedule,
+        fallbackPeriodsPerDay
       );
   }
 

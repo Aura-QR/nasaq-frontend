@@ -143,11 +143,15 @@ const isValidPeriodsPerDay = (value) =>
   value <= 10;
 
 const createDefaultWorkSchedule = (
-  workStartTime = "07:00"
+  workStartTime = "07:00",
+  periodsPerDay = DEFAULT_PERIODS_PER_DAY
 ) => {
   const startTime =
     normalizeWorkStartTime(workStartTime) ||
     "07:00";
+
+  const defaultPeriodsPerDay =
+    normalizePeriodsPerDay(periodsPerDay);
 
   return WEEK_DAYS.map(({ day }) => {
     const isWorkingDay = ![
@@ -164,17 +168,27 @@ const createDefaultWorkSchedule = (
       endTime: isWorkingDay
         ? "14:00"
         : null,
+      periodsPerDay: isWorkingDay
+        ? defaultPeriodsPerDay
+        : null,
     };
   });
 };
 
 const normalizeWorkSchedule = (
   value,
-  fallbackStartTime = "07:00"
+  fallbackStartTime = "07:00",
+  fallbackPeriodsPerDay = DEFAULT_PERIODS_PER_DAY
 ) => {
+  const defaultPeriodsPerDay =
+    normalizePeriodsPerDay(
+      fallbackPeriodsPerDay
+    );
+
   if (!Array.isArray(value) || !value.length) {
     return createDefaultWorkSchedule(
-      fallbackStartTime
+      fallbackStartTime,
+      defaultPeriodsPerDay
     );
   }
 
@@ -198,6 +212,7 @@ const normalizeWorkSchedule = (
         isWorkingDay: false,
         startTime: null,
         endTime: null,
+        periodsPerDay: null,
       };
     }
 
@@ -217,6 +232,12 @@ const normalizeWorkSchedule = (
         ? normalizeWorkStartTime(
             item?.endTime
           ) || null
+        : null,
+      periodsPerDay: isWorkingDay
+        ? normalizePeriodsPerDay(
+            item?.periodsPerDay ??
+              defaultPeriodsPerDay
+          )
         : null,
     };
   });
@@ -268,6 +289,14 @@ const validateWorkSchedule = (workSchedule) => {
       WEEK_DAYS.find(
         (day) => day.day === item.day
       )?.label || item.day;
+
+    if (
+      !isValidPeriodsPerDay(
+        Number(item.periodsPerDay)
+      )
+    ) {
+      return `عدد حصص ${dayLabel} يجب أن يكون رقمًا صحيحًا من 1 إلى 10`;
+    }
 
     if (
       !item.startTime ||
@@ -607,7 +636,8 @@ const SchoolSettings = () => {
   const currentWorkSchedule =
     normalizeWorkSchedule(
       watch("workSchedule"),
-      currentWorkStartTime
+      currentWorkStartTime,
+      currentPeriodsPerDay
     );
 
   const workingDaysCount =
@@ -616,8 +646,14 @@ const SchoolSettings = () => {
     ).length;
 
   const weeklySlots =
-    workingDaysCount *
-    currentPeriodsPerDay;
+    currentWorkSchedule.reduce(
+      (total, item) =>
+        item.isWorkingDay
+          ? total +
+            Number(item.periodsPerDay || 0)
+          : total,
+      0
+    );
 
   const currentLocalNationalities =
     normalizeNationalityCodes(
@@ -647,8 +683,6 @@ const SchoolSettings = () => {
     () =>
       currentValue !==
         savedSettings.defaultPassingGrade ||
-      currentPeriodsPerDay !==
-        savedSettings.periodsPerDay ||
       !sameWorkSchedule(
         currentWorkSchedule,
         savedSettings.workSchedule
@@ -659,7 +693,6 @@ const SchoolSettings = () => {
       ),
     [
       currentValue,
-      currentPeriodsPerDay,
       currentWorkSchedule,
       currentLocalNationalities,
       savedSettings,
@@ -739,7 +772,8 @@ const SchoolSettings = () => {
           nextWorkSchedule =
             normalizeWorkSchedule(
               settings?.workSchedule,
-              nextWorkStartTime
+              nextWorkStartTime,
+              nextPeriodsPerDay
             );
 
           nextLocalNationalities =
@@ -914,6 +948,7 @@ const SchoolSettings = () => {
             ...next,
             startTime: null,
             endTime: null,
+            periodsPerDay: null,
           };
         }
 
@@ -927,6 +962,11 @@ const SchoolSettings = () => {
             normalizeWorkStartTime(
               next.endTime
             ) || "14:00",
+          periodsPerDay:
+            normalizePeriodsPerDay(
+              next.periodsPerDay ??
+                currentPeriodsPerDay
+            ),
         };
       });
 
@@ -946,14 +986,16 @@ const SchoolSettings = () => {
         formData.defaultPassingGrade
       );
 
-    const periodsPerDay = Number(
-      formData.periodsPerDay
-    );
+    const periodsPerDay =
+      normalizePeriodsPerDay(
+        formData.periodsPerDay
+      );
 
     const workSchedule =
       normalizeWorkSchedule(
         formData.workSchedule,
-        formData.workStartTime
+        formData.workStartTime,
+        periodsPerDay
       );
 
     const workStartTime =
@@ -1062,7 +1104,8 @@ const SchoolSettings = () => {
       const nextWorkSchedule =
         normalizeWorkSchedule(
           workSchedule,
-          workStartTime
+          workStartTime,
+          periodsPerDay
         );
 
       const nextSettings = {
@@ -1708,13 +1751,13 @@ const SchoolSettings = () => {
                     lineHeight: 1.65,
                   }}
                 >
-                  حددي عدد الحصص اليومية وأيام العمل وأوقات البداية والنهاية لكل يوم.
+                  حددي عدد الحصص لكل يوم عمل مع أوقات البداية والنهاية بشكل مستقل.
                 </Typography>
               </Box>
             </Stack>
 
             <Chip
-              label={`${weeklySlots} خانة أسبوعيًا — ${workingDaysCount} أيام × ${currentPeriodsPerDay} حصص`}
+              label={`${weeklySlots} حصة أسبوعيًا — ${workingDaysCount} أيام عمل`}
               size="small"
               sx={{
                 height: 29,
@@ -1735,82 +1778,6 @@ const SchoolSettings = () => {
               p: { xs: 1.35, md: 1.8 },
             }}
           >
-            <Paper
-              elevation={0}
-              sx={{
-                p: { xs: 1.25, md: 1.5 },
-                mb: 1.25,
-                border:
-                  "1px solid rgba(36,74,112,0.09)",
-                borderRadius: "15px",
-                backgroundColor:
-                  "var(--color-white)",
-              }}
-            >
-              <Stack
-                direction={{
-                  xs: "column",
-                  md: "row",
-                }}
-                alignItems={{
-                  xs: "stretch",
-                  md: "center",
-                }}
-                justifyContent="space-between"
-                gap={1.2}
-              >
-                <Box>
-                  <Typography
-                    sx={{
-                      color:
-                        "var(--color-navy-deep)",
-                      fontSize: "12px",
-                      fontWeight: 900,
-                    }}
-                  >
-                    عدد الحصص في اليوم
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      mt: 0.2,
-                      color:
-                        "var(--color-muted)",
-                      fontSize: "9.5px",
-                    }}
-                  >
-                    من 1 إلى 10 حصص. القيمة الافتراضية 7.
-                  </Typography>
-                </Box>
-
-                <TextField
-                  {...register("periodsPerDay", {
-                    valueAsNumber: true,
-                  })}
-                  type="number"
-                  label="عدد الحصص"
-                  disabled={saving}
-                  inputProps={{
-                    min: 1,
-                    max: 10,
-                    step: 1,
-                  }}
-                  sx={{
-                    width: {
-                      xs: "100%",
-                      md: 220,
-                    },
-                    "& .MuiOutlinedInput-root": {
-                      minHeight: 50,
-                      borderRadius: "13px",
-                      backgroundColor:
-                        "var(--color-white)",
-                    },
-                  }}
-                />
-              </Stack>
-            </Paper>
-
             <Stack spacing={0.8}>
               {WEEK_DAYS.map(({ day, label }) => {
                 const item =
@@ -1821,6 +1788,7 @@ const SchoolSettings = () => {
                     isWorkingDay: false,
                     startTime: null,
                     endTime: null,
+                    periodsPerDay: null,
                   };
 
                 return (
@@ -1832,7 +1800,7 @@ const SchoolSettings = () => {
                       display: "grid",
                       gridTemplateColumns: {
                         xs: "1fr",
-                        sm: "minmax(130px, 0.8fr) minmax(150px, 1fr) minmax(150px, 1fr)",
+                        sm: "minmax(130px, 0.8fr) minmax(120px, 0.65fr) minmax(150px, 1fr) minmax(150px, 1fr)",
                       },
                       gap: 1,
                       alignItems: "center",
@@ -1913,6 +1881,44 @@ const SchoolSettings = () => {
                         }}
                       />
                     </Stack>
+
+                    <TextField
+                      type="number"
+                      label="عدد الحصص"
+                      value={
+                        item.periodsPerDay ?? ""
+                      }
+                      onChange={(event) =>
+                        updateWorkScheduleDay(
+                          day,
+                          {
+                            periodsPerDay:
+                              event.target.value,
+                          }
+                        )
+                      }
+                      disabled={
+                        saving ||
+                        !item.isWorkingDay
+                      }
+                      inputProps={{
+                        min: 1,
+                        max: 10,
+                        step: 1,
+                      }}
+                      sx={{
+                        "& .MuiOutlinedInput-root": {
+                          minHeight: 46,
+                          borderRadius: "11px",
+                          backgroundColor:
+                            "var(--color-white)",
+                        },
+                        "& .MuiInputLabel-root": {
+                          fontSize: "10.5px",
+                          fontWeight: 700,
+                        },
+                      }}
+                    />
 
                     <TextField
                       type="time"
@@ -2009,7 +2015,7 @@ const SchoolSettings = () => {
                 lineHeight: 1.7,
               }}
             >
-              السعة الأسبوعية للجدول = عدد أيام العمل × عدد الحصص في اليوم. سيتم إرسال <b>workSchedule</b> كاملًا، مع <b>workStartTime</b> للتوافق مع الأجزاء القديمة.
+              السعة الأسبوعية للجدول = مجموع عدد الحصص المحدد لكل يوم عمل. يتم إرسال الأيام السبعة كاملة داخل <b>workSchedule</b>، ويحتوي كل يوم على <b>periodsPerDay</b>. وتظل القيمة العامة <b>periodsPerDay</b> قيمة افتراضية للتوافق مع الباك.
             </Alert>
           </Box>
 
