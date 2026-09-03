@@ -574,6 +574,37 @@ const getSubjectOfferingData = (
     : {};
 };
 
+/**
+ * `subject` on a preparation is a SubjectOffering — grade, term and periods
+ * per week. It has no name; the name is one level down on `subjectId`.
+ *
+ * This used to take `item.subject` and stop, so it returned the offering and
+ * read a `name` that does not exist on it. Unwrap one more level whenever the
+ * candidate turns out to be an offering.
+ */
+const unwrapSubject = (
+  candidate
+) => {
+  if (
+    !candidate ||
+    typeof candidate !== "object"
+  ) {
+    return null;
+  }
+
+  const nested =
+    candidate?.subjectId;
+
+  if (
+    nested &&
+    typeof nested === "object"
+  ) {
+    return nested;
+  }
+
+  return candidate;
+};
+
 const getSubjectData = (
   item
 ) => {
@@ -584,12 +615,12 @@ const getSubjectData = (
     getSubjectOfferingData(item);
 
   const subjectData =
-    item?.subject ||
-    item?.subjectId ||
-    lecture?.subject ||
-    lecture?.subjectId ||
-    offering?.subjectId ||
-    offering?.subject;
+    unwrapSubject(item?.subject) ||
+    unwrapSubject(item?.subjectId) ||
+    unwrapSubject(lecture?.subject) ||
+    unwrapSubject(lecture?.subjectId) ||
+    unwrapSubject(offering?.subjectId) ||
+    unwrapSubject(offering?.subject);
 
   return subjectData &&
     typeof subjectData === "object"
@@ -597,6 +628,14 @@ const getSubjectData = (
     : {};
 };
 
+/**
+ * A preparation names its teacher two ways, and this read neither of them.
+ *
+ * The API populates `submittedBy`, and stores the teacher's name on `name` at
+ * write time so the row survives the teacher being deleted. What this looked
+ * for instead — `teacher`, `teacherId`, `createdBy` — are not fields on a
+ * preparation at all, so the column was always a dash, whatever the data said.
+ */
 const getTeacherData = (
   item
 ) => {
@@ -604,6 +643,7 @@ const getTeacherData = (
     getLectureData(item);
 
   const teacher =
+    item?.submittedBy ||
     item?.teacher ||
     item?.teacherId ||
     lecture?.teacher ||
@@ -625,6 +665,9 @@ const getTeacherName = (
   return (
     teacher?.name ||
     teacher?.username ||
+    // Written on the row itself, and the only name left once the teacher
+    // record is gone.
+    item?.name ||
     item?.teacherName ||
     item?.createdBy?.name ||
     "—"
@@ -637,19 +680,30 @@ const getClassLabel = (
   const classData =
     getClassData(item);
 
-  const academicYear =
-    getNestedName(
-      classData?.academicYearId ||
-      classData?.academicYear ||
-      item?.academicYearId ||
-      item?.academicYear
-    );
+  /*
+   * Only a populated year has a name. Unpopulated it is a 24-character id,
+   * and getNestedName hands a plain string straight back — which would print
+   * the raw ObjectId into the label. Take the name only when there is one.
+   */
+  const yearSource =
+    classData?.academicYearId ||
+    classData?.academicYear ||
+    item?.academicYearId ||
+    item?.academicYear;
 
+  const academicYear =
+    yearSource &&
+    typeof yearSource === "object"
+      ? getNestedName(yearSource)
+      : "";
+
+  // The class's own name is what identifies it on every other screen; the
+  // room number is where it happens to sit.
   const roomNumber =
-    classData?.roomNumber ||
     classData?.name ||
-    item?.roomNumber ||
+    classData?.roomNumber ||
     item?.className ||
+    item?.roomNumber ||
     "";
 
   const gender =
