@@ -25,6 +25,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { useAuthUser } from "react-auth-kit";
 
 import {
   ROLES,
@@ -37,6 +38,17 @@ const emailPattern =
 const passwordPattern =
   /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 
+const getCurrentRoleFromAuthState = (authState) =>
+  normalizeRole(
+    authState?.user?.role ||
+      authState?.admin?.role ||
+      authState?.data?.user?.role ||
+      authState?.data?.admin?.role ||
+      authState?.data?.data?.user?.role ||
+      authState?.data?.data?.admin?.role ||
+      authState?.role
+  );
+
 const ManagerFormDialog = ({
   open,
   loading = false,
@@ -44,6 +56,27 @@ const ManagerFormDialog = ({
   onClose,
   onSubmit,
 }) => {
+  const getAuthUser = useAuthUser();
+  const authState = getAuthUser();
+
+  const authRole =
+    getCurrentRoleFromAuthState(
+      authState
+    );
+
+  const resolvedCurrentRole =
+    authRole ||
+    normalizeRole(currentRole);
+
+  // الصلاحيات القديمة:
+  // OWNER فقط هو الذي يستطيع إنشاء الحسابات الإدارية.
+  // SUPERVISOR و MANAGER لا يمكنهما الإضافة.
+  const canManageAdministrativeAccounts =
+    resolvedCurrentRole === ROLES.OWNER;
+
+  const canCreateSupervisor =
+    canManageAdministrativeAccounts;
+
   const [form, setForm] =
     useState({
       username: "",
@@ -55,10 +88,6 @@ const ManagerFormDialog = ({
   const [errors, setErrors] =
     useState({});
 
-  const canCreateSupervisor =
-    normalizeRole(currentRole) ===
-    ROLES.OWNER;
-
   useEffect(() => {
     if (!open) return;
 
@@ -68,6 +97,7 @@ const ManagerFormDialog = ({
       password: "",
       role: ROLES.MANAGER,
     });
+
     setErrors({});
   }, [open]);
 
@@ -89,6 +119,12 @@ const ManagerFormDialog = ({
   };
 
   const handleSubmit = () => {
+    if (
+      !canManageAdministrativeAccounts
+    ) {
+      return;
+    }
+
     const nextErrors = {};
 
     if (
@@ -146,6 +182,14 @@ const ManagerFormDialog = ({
       role: form.role,
     });
   };
+
+  // حتى لو تم استدعاء الـ Dialog من مكان آخر بالخطأ،
+  // لن يظهر لمدير المدرسة أو المساعد الإداري.
+  if (
+    !canManageAdministrativeAccounts
+  ) {
+    return null;
+  }
 
   return (
     <Dialog
@@ -268,6 +312,7 @@ const ManagerFormDialog = ({
               <InputLabel>
                 الدور
               </InputLabel>
+
               <Select
                 label="الدور"
                 value={form.role}
@@ -284,6 +329,7 @@ const ManagerFormDialog = ({
                 >
                   مساعد إداري
                 </MenuItem>
+
                 {canCreateSupervisor && (
                   <MenuItem
                     value={

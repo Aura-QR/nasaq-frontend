@@ -28,7 +28,8 @@ import {
   Typography,
 } from "@mui/material";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuthUser } from "react-auth-kit";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -38,18 +39,27 @@ import {
   deleteManager,
   fetchManagers,
 } from "@/APIs/school/managers";
-
+import {
+  ROLES,
+  normalizeRole,
+} from "@/shared/auth/roles";
 
 const ROLE_LABELS = {
-  OWNER: "مالك المدرسة",
-  SUPERVISOR: "مدير المدرسة",
-  MANAGER: "مساعد إداري",
+  [ROLES.OWNER]: "مالك المدرسة",
+  [ROLES.SUPERVISOR]: "مدير المدرسة",
+  [ROLES.MANAGER]: "مساعد إداري",
 };
 
-const normalizeRole = (role) =>
-  String(role || "")
-    .trim()
-    .toUpperCase();
+const getCurrentRoleFromAuthState = (authState) =>
+  normalizeRole(
+    authState?.user?.role ||
+      authState?.admin?.role ||
+      authState?.data?.user?.role ||
+      authState?.data?.admin?.role ||
+      authState?.data?.data?.user?.role ||
+      authState?.data?.data?.admin?.role ||
+      authState?.role
+  );
 
 const getResponseMessage = (
   response,
@@ -148,12 +158,22 @@ const getManagerStatus = (
 
 const SchoolManagersList = () => {
   const navigate = useNavigate();
+  const getAuthUser = useAuthUser();
+  const authState = getAuthUser();
+
+  const currentRole =
+    getCurrentRoleFromAuthState(
+      authState
+    );
+
+  const canManageAdministrativeAccounts =
+    currentRole === ROLES.OWNER;
 
   const [items, setItems] =
     useState([]);
 
   const [loading, setLoading] =
-    useState(true);
+    useState(false);
 
   const [search, setSearch] =
     useState("");
@@ -171,43 +191,54 @@ const SchoolManagersList = () => {
     setDeleting,
   ] = useState(false);
 
-  const loadManagers = async (
-    force = false
-  ) => {
-    setLoading(true);
+  const loadManagers = useCallback(
+    async (force = false) => {
+      // الصلاحيات القديمة: المالك فقط يمكنه قراءة
+      // قائمة المديرين والمساعدين من هذه الشاشة.
+      if (
+        !canManageAdministrativeAccounts
+      ) {
+        setItems([]);
+        setLoading(false);
+        return;
+      }
 
-    const response =
-      await fetchManagers({
-        force,
-      });
+      setLoading(true);
 
-    if (
-      !isSuccessfulResponse(
-        response
-      )
-    ) {
-      toast.error(
-        getResponseMessage(
-          response,
-          "تعذر تحميل المديرين والمساعدين"
+      const response =
+        await fetchManagers({
+          force,
+        });
+
+      if (
+        !isSuccessfulResponse(
+          response
         )
+      ) {
+        toast.error(
+          getResponseMessage(
+            response,
+            "تعذر تحميل المديرين والمساعدين"
+          )
+        );
+
+        setItems([]);
+        setLoading(false);
+        return;
+      }
+
+      setItems(
+        extractManagers(response)
       );
 
-      setItems([]);
       setLoading(false);
-      return;
-    }
-
-    setItems(
-      extractManagers(response)
-    );
-
-    setLoading(false);
-  };
+    },
+    [canManageAdministrativeAccounts]
+  );
 
   useEffect(() => {
     loadManagers();
-  }, []);
+  }, [loadManagers]);
 
   const filteredItems =
     useMemo(() => {
@@ -257,14 +288,14 @@ const SchoolManagersList = () => {
     items.filter(
       (item) =>
         getManagerRole(item) ===
-        "SUPERVISOR"
+        ROLES.SUPERVISOR
     ).length;
 
   const managersCount =
     items.filter(
       (item) =>
         getManagerRole(item) ===
-        "MANAGER"
+        ROLES.MANAGER
     ).length;
 
   const activeCount =
@@ -276,6 +307,15 @@ const SchoolManagersList = () => {
 
   const handleDelete =
     async () => {
+      if (
+        !canManageAdministrativeAccounts
+      ) {
+        toast.error(
+          "ليس لديك صلاحية حذف الحسابات الإدارية"
+        );
+        return;
+      }
+
       const id =
         getManagerId(
           deleteTarget
@@ -335,6 +375,83 @@ const SchoolManagersList = () => {
           : "تم حذف الحساب الإداري بنجاح"
       );
     };
+
+  // SUPERVISOR (مدير المدرسة) و MANAGER (المساعد الإداري)
+  // لا يمكنهما رؤية أو إدارة حسابات إدارية أخرى.
+  if (!canManageAdministrativeAccounts) {
+    return (
+      <Container>
+        <Box
+          dir="rtl"
+          sx={{
+            width: "100%",
+            minHeight: 360,
+            display: "grid",
+            placeItems: "center",
+            px: { xs: 2, md: 3 },
+            py: 4,
+          }}
+        >
+          <Box
+            sx={{
+              width: "100%",
+              maxWidth: 620,
+              p: { xs: 2.5, md: 4 },
+              textAlign: "center",
+              borderRadius: "20px",
+              border: "1px solid #DED8CD",
+              bgcolor: "#FFFFFF",
+              boxShadow:
+                "0 8px 22px rgba(18,47,77,0.035)",
+            }}
+          >
+            <Box
+              sx={{
+                width: 64,
+                height: 64,
+                mx: "auto",
+                display: "grid",
+                placeItems: "center",
+                borderRadius: "18px",
+                bgcolor: "#FBF0D8",
+                color: "#B78430",
+              }}
+            >
+              <SecurityRounded
+                sx={{ fontSize: 32 }}
+              />
+            </Box>
+
+            <Typography
+              sx={{
+                mt: 1.5,
+                color: "#122F4D",
+                fontSize: {
+                  xs: "18px",
+                  md: "21px",
+                },
+                fontWeight: 900,
+              }}
+            >
+              غير مصرح لك بإدارة الحسابات الإدارية
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.8,
+                color: "#7E8791",
+                fontSize: "13px",
+                lineHeight: 1.9,
+              }}
+            >
+              إدارة وعرض مديري المدرسة والمساعدين الإداريين متاحة لمالك المدرسة فقط.
+            </Typography>
+          </Box>
+        </Box>
+      </Container>
+    );
+  }
+
   return (
     <Container>
       <Box dir="rtl" sx={{ pb: 4, width: "100%" }}>
@@ -574,8 +691,8 @@ const SchoolManagersList = () => {
               }}
             >
               <MenuItem value="">كل الأدوار</MenuItem>
-              <MenuItem value="MANAGER">مساعد إداري</MenuItem>
-              <MenuItem value="SUPERVISOR">مدير المدرسة</MenuItem>
+              <MenuItem value={ROLES.MANAGER}>مساعد إداري</MenuItem>
+              <MenuItem value={ROLES.SUPERVISOR}>مدير المدرسة</MenuItem>
             </TextField>
           </Stack>
         </Box>
@@ -752,9 +869,9 @@ const SchoolManagersList = () => {
                             sx={{
                               height: 27,
                               bgcolor:
-                                role === "SUPERVISOR" ? "#FBF0D8" : "#EEF3F7",
+                                role === ROLES.SUPERVISOR ? "#FBF0D8" : "#EEF3F7",
                               color:
-                                role === "SUPERVISOR" ? "#8A6220" : "#244A70",
+                                role === ROLES.SUPERVISOR ? "#8A6220" : "#244A70",
                               borderRadius: "8px",
                               fontSize: "10px",
                               fontWeight: 900,
