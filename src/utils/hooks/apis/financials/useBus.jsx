@@ -146,6 +146,36 @@ const normalizeEntityId = (
   return String(value).trim();
 };
 
+const getCanonicalStudentId = (
+  item,
+  student = null
+) => {
+  /*
+   * نرتب مصادر الـ ID من الأكثر دقة للأقل:
+   * - student._id
+   * - studentId (object/string)
+   * - user/student nested alternatives
+   * - وأخيرًا item._id فقط لو العنصر نفسه طالب مباشر.
+   *
+   * مهم جدًا: لا نعتمد على item._id أولًا،
+   * لأنه قد يكون ID لسجل candidate/enrollment وليس ID الطالب.
+   */
+  return (
+    normalizeEntityId(
+      item?.student
+    ) ||
+    normalizeEntityId(
+      item?.studentId
+    ) ||
+    normalizeEntityId(
+      item?.user
+    ) ||
+    normalizeEntityId(
+      student
+    )
+  );
+};
+
 const normalizeCandidate = (
   item
 ) => {
@@ -170,7 +200,25 @@ const normalizeCandidate = (
       ? item.studentId
       : null;
 
-  const looksLikeStudent =
+  const nestedUser =
+    item?.user &&
+    typeof item.user ===
+      "object"
+      ? item.user
+      : null;
+
+  /*
+   * لو studentId نص، ننشئ object للطالب منه
+   * بدل اعتبار item نفسه هو الطالب.
+   */
+  const primitiveStudentId =
+    normalizeEntityId(
+      item?.studentId
+    );
+
+  const looksLikeDirectStudent =
+    !item?.student &&
+    !item?.studentId &&
     Boolean(
       item?._id ||
         item?.id
@@ -187,36 +235,57 @@ const normalizeCandidate = (
   let student =
     nestedStudent ||
     nestedStudentId ||
-    (looksLikeStudent
-      ? item
-      : null);
+    nestedUser ||
+    (
+      primitiveStudentId
+        ? {
+            _id:
+              primitiveStudentId,
+            name:
+              item?.studentName ||
+              item?.name ||
+              "",
+            fullName:
+              item?.fullName ||
+              "",
+            firstName:
+              item?.firstName ||
+              "",
+            fatherName:
+              item?.fatherName ||
+              "",
+            familyName:
+              item?.familyName ||
+              "",
+            email:
+              item?.email ||
+              "",
+          }
+        : null
+    ) ||
+    (
+      looksLikeDirectStudent
+        ? item
+        : null
+    );
 
   if (!student) {
-    const studentId =
-      normalizeEntityId(
-        item?.studentId
-      );
+    return null;
+  }
 
-    if (!studentId) {
-      return null;
-    }
+  const canonicalStudentId =
+    getCanonicalStudentId(
+      item,
+      student
+    ) ||
+    (
+      looksLikeDirectStudent
+        ? normalizeEntityId(item)
+        : ""
+    );
 
-    student = {
-      _id: studentId,
-      name:
-        item?.studentName ||
-        item?.name ||
-        "",
-      firstName:
-        item?.firstName ||
-        "",
-      fatherName:
-        item?.fatherName ||
-        "",
-      familyName:
-        item?.familyName ||
-        "",
-    };
+  if (!canonicalStudentId) {
+    return null;
   }
 
   const classCandidate =
@@ -250,21 +319,21 @@ const normalizeCandidate = (
     ) ||
     {};
 
-  const studentId =
-    normalizeEntityId(
-      student
-    );
-
-  if (!studentId) {
-    return null;
-  }
-
   return {
     ...item,
+
+    /*
+     * نخزن ID ثابت إضافي للاستخدام في إزالة التكرار.
+     */
+    __studentId:
+      canonicalStudentId,
+
     student: {
       ...student,
-      _id: studentId,
+      _id:
+        canonicalStudentId,
     },
+
     class: classCandidate,
   };
 };
@@ -281,36 +350,38 @@ const normalizeCandidates = (
       ]
     );
 
-  const normalized = list
-    .map(normalizeCandidate)
-    .filter(Boolean);
-
-  /*
-   * بعض ردود الـ backend قد تحتوي نفس الطالب
-   * أكثر من مرة بسبب joins / enrollments قديمة.
-   * نخلي كل طالب يظهر مرة واحدة فقط حسب student._id.
-   */
   const uniqueByStudentId =
     new Map();
 
-  normalized.forEach((item) => {
-    const studentId =
-      normalizeEntityId(
-        item?.student
-      );
+  list
+    .map(normalizeCandidate)
+    .filter(Boolean)
+    .forEach((item) => {
+      const studentId =
+        item?.__studentId ||
+        normalizeEntityId(
+          item?.student
+        );
 
-    if (
-      studentId &&
-      !uniqueByStudentId.has(
-        studentId
-      )
-    ) {
-      uniqueByStudentId.set(
-        studentId,
-        item
-      );
-    }
-  });
+      if (!studentId) {
+        return;
+      }
+
+      /*
+       * نفس الطالب يظهر مرة واحدة فقط حتى لو
+       * الـ backend رجعه بأكثر من candidate record.
+       */
+      if (
+        !uniqueByStudentId.has(
+          studentId
+        )
+      ) {
+        uniqueByStudentId.set(
+          studentId,
+          item
+        );
+      }
+    });
 
   return Array.from(
     uniqueByStudentId.values()
