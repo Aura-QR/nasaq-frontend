@@ -116,26 +116,15 @@ const getProblemText = (problem = {}) => {
           : ""
       }.`;
 
-    case "subject_unassigned": {
-      const count = asNumber(problem?.count);
-
-      if (count > 0) {
-        return `${count} ${count === 1 ? "مادة بدون معلم" : "مواد بدون معلم"} — ستُجدول كفراغات ظاهرة حتى يتم إسناد معلم.`;
-      }
-
+    case "subject_unassigned":
       return `${subjectName} في ${className} بدون معلم${
         periodsPerWeek
           ? ` (${periodsPerWeek} حصص أسبوعيًا)`
           : ""
       }. ستظهر الحصص كفراغات حتى يتم إسناد معلم.`;
-    }
 
-    case "assignment_shared": {
-      const teacherCount = asNumber(problem?.teacherCount);
-      const countText = teacherCount > 0 ? ` (${teacherCount} معلمين)` : "";
-
-      return `${className}: يوجد أكثر من معلم على نفس الصف بدون تحديد الفصول لكل معلم${countText}. راجع الإسنادات لتجنب تقسيم غير مقصود.`;
-    }
+    case "assignment_shared":
+      return `${className}: يوجد أكثر من معلم على نفس الصف بدون تحديد الفصول لكل معلم. راجع الإسنادات لتجنب تقسيم غير مقصود.`;
 
     default:
       return "توجد ملاحظة تحتاج مراجعة قبل اعتماد الجدول.";
@@ -349,9 +338,15 @@ const FeasibilityPanel = ({
   termLabel = "",
   classId = "",
   classLabel = "",
+  initialScope = "all",
 }) => {
+  const getInitialScope = () =>
+    initialScope === "current" && classId
+      ? "current"
+      : "all";
+
   const [scope, setScope] =
-    useState("all");
+    useState(getInitialScope);
 
   const [data, setData] =
     useState(null);
@@ -361,6 +356,15 @@ const FeasibilityPanel = ({
 
   const [error, setError] =
     useState("");
+
+  useEffect(() => {
+    const nextScope =
+      initialScope === "current" && classId
+        ? "current"
+        : "all";
+
+    setScope(nextScope);
+  }, [initialScope, classId]);
 
   useEffect(() => {
     if (!classId && scope === "current") {
@@ -1117,11 +1121,10 @@ const FeasibilityPanel = ({
                       index
                     ) => (
                       <Box
-                        key={`${item?.subjectOfferingId || "offering"}-${
-                          item?.classId ||
-                          item?.className ||
-                          "class"
-                        }-${index}`}
+                        key={
+                          item?.subjectOfferingId ||
+                          `unassigned-${index}`
+                        }
                         sx={{
                           px: 1.1,
                           py: 0.9,

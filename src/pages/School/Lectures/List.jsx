@@ -523,6 +523,11 @@ const List = () => {
   ] = useState(false);
 
   const [
+    automationScope,
+    setAutomationScope,
+  ] = useState("current");
+
+  const [
     copyOpen,
     setCopyOpen,
   ] = useState(false);
@@ -1671,33 +1676,81 @@ const List = () => {
               )}
 
               {permissions.add && (
-                <Button
-                  type="button"
-                  variant="contained"
-                  startIcon={<AutoAwesomeRounded />}
-                  disabled={!readyForSchedule}
-                  onClick={() => setAutomationOpen(true)}
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={0.7}
+                  useFlexGap
+                  flexWrap="wrap"
                   sx={{
-                    minHeight: 42,
-                    px: 1.6,
                     flexShrink: 0,
-                    borderRadius: "11px",
-                    color: "var(--color-white)",
-                    background:
-                      "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-                    boxShadow: "none",
-                    fontSize: "9.5px",
-                    fontWeight: 900,
-                    textTransform: "none",
-                    "&:hover": { boxShadow: "none" },
-                    "& .MuiButton-startIcon": {
-                      marginLeft: "6px",
-                      marginRight: 0,
-                    },
+                    width: { xs: "100%", md: "auto" },
                   }}
                 >
-                  إنشاء جدول تلقائي
-                </Button>
+                  <Button
+                    type="button"
+                    variant="contained"
+                    startIcon={<AutoAwesomeRounded />}
+                    disabled={!readyForSchedule}
+                    onClick={() => {
+                      setAutomationScope("current");
+                      setAutomationOpen(true);
+                    }}
+                    sx={{
+                      minHeight: 42,
+                      px: 1.6,
+                      borderRadius: "11px",
+                      color: "var(--color-white)",
+                      background:
+                        "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
+                      boxShadow: "none",
+                      fontSize: "9.5px",
+                      fontWeight: 900,
+                      textTransform: "none",
+                      whiteSpace: "nowrap",
+                      "&:hover": { boxShadow: "none" },
+                      "& .MuiButton-startIcon": {
+                        marginLeft: "6px",
+                        marginRight: 0,
+                      },
+                    }}
+                  >
+                    إنشاء جدول للفصل
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outlined"
+                    startIcon={<AutoAwesomeRounded />}
+                    disabled={!termId || classesLoading || termsLoading}
+                    onClick={() => {
+                      setAutomationScope("all");
+                      setAutomationOpen(true);
+                    }}
+                    sx={{
+                      minHeight: 42,
+                      px: 1.6,
+                      borderRadius: "11px",
+                      color: "var(--color-gold-dark)",
+                      backgroundColor: "rgba(255,255,255,0.72)",
+                      borderColor: "rgba(211,164,79,0.42)",
+                      boxShadow: "none",
+                      fontSize: "9.5px",
+                      fontWeight: 900,
+                      textTransform: "none",
+                      whiteSpace: "nowrap",
+                      "&:hover": {
+                        borderColor: "var(--color-gold-dark)",
+                        backgroundColor: "rgba(251,240,216,0.42)",
+                      },
+                      "& .MuiButton-startIcon": {
+                        marginLeft: "6px",
+                        marginRight: 0,
+                      },
+                    }}
+                  >
+                    إنشاء جداول كل الفصول
+                  </Button>
+                </Stack>
               )}
             </Stack>
 
@@ -1833,7 +1886,10 @@ const List = () => {
                 type="button"
                 variant="text"
                 startIcon={<AutoAwesomeRounded />}
-                onClick={() => setAutomationOpen(true)}
+                onClick={() => {
+                  setAutomationScope("current");
+                  setAutomationOpen(true);
+                }}
                 sx={{
                   alignSelf: { xs: "flex-start", sm: "center" },
                   minHeight: 32,
@@ -1934,7 +1990,9 @@ const List = () => {
               fontWeight: 900,
             }}
           >
-            إنشاء الجدول تلقائيًا
+            {automationScope === "all"
+              ? "إنشاء جداول كل الفصول"
+              : "إنشاء جدول الفصل تلقائيًا"}
           </Typography>
 
           <Typography
@@ -1944,7 +2002,9 @@ const List = () => {
               fontSize: "8.5px",
             }}
           >
-            افحص جاهزية الجدول، ثم استخدم المعاينة قبل اعتماد التوزيع النهائي.
+            {automationScope === "all"
+              ? "سيتم تطبيق المعاينة على كل الفصول النشطة في الترم الحالي قبل الاعتماد النهائي."
+              : "افحص جاهزية الفصل الحالي، ثم استخدم المعاينة قبل اعتماد التوزيع النهائي."}
           </Typography>
         </DialogTitle>
 
@@ -1956,21 +2016,27 @@ const List = () => {
         >
           <Stack spacing={1.1}>
             <Alert severity="info" sx={{ borderRadius: "12px", fontSize: "9px" }}>
-              هذه الأدوات اختيارية. يمكنك دائمًا إدارة الحصص يدويًا من الجدول الرئيسي.
+              {automationScope === "all"
+                ? "سيتم العمل على كل الفصول النشطة في هذا الترم. ابدأ بالمعاينة، وراجع النتيجة، ثم اعتمدها."
+                : "سيتم العمل على الفصل المحدد فقط. ابدأ بالمعاينة، وراجع النتيجة، ثم اعتمدها."}
             </Alert>
 
             <FeasibilityPanel
+              key={`feasibility-${automationScope}-${automationOpen ? "open" : "closed"}`}
               termId={termId}
               termLabel={selectedTermLabel}
               classId={classFilter}
               classLabel={selectedClassLabel}
+              initialScope={automationScope}
             />
 
             <GenerateTimetablePanel
+              key={`generate-${automationScope}-${automationOpen ? "open" : "closed"}`}
               termId={termId}
               termLabel={selectedTermLabel}
               classId={classFilter}
               classLabel={selectedClassLabel}
+              initialScope={automationScope}
               onCommitted={async () => {
                 const refreshed = await fetchLectures(
                   {

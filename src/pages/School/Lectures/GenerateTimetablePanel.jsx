@@ -5,10 +5,6 @@ import {
   Checkbox,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControlLabel,
   MenuItem,
   Paper,
@@ -129,10 +125,16 @@ const GenerateTimetablePanel = ({
   termLabel,
   classId,
   classLabel,
+  initialScope = "all",
   onCommitted,
 }) => {
+  const getInitialScope = () =>
+    initialScope === "current" && classId
+      ? "current"
+      : "all";
+
   const [scope, setScope] =
-    useState("all");
+    useState(getInitialScope);
 
   const [onExisting, setOnExisting] =
     useState("skip");
@@ -155,9 +157,6 @@ const GenerateTimetablePanel = ({
   const [committed, setCommitted] =
     useState(false);
 
-  const [confirmOpen, setConfirmOpen] =
-    useState(false);
-
   const effectiveClassIds =
     useMemo(
       () =>
@@ -170,7 +169,6 @@ const GenerateTimetablePanel = ({
   useEffect(() => {
     setPreview(null);
     setCommitted(false);
-    setConfirmOpen(false);
   }, [
     termId,
     classId,
@@ -179,6 +177,15 @@ const GenerateTimetablePanel = ({
     maxSamePerDay,
     includeUnstaffed,
   ]);
+
+  useEffect(() => {
+    const nextScope =
+      initialScope === "current" && classId
+        ? "current"
+        : "all";
+
+    setScope(nextScope);
+  }, [initialScope, classId]);
 
   useEffect(() => {
     if (!classId && scope === "current") {
@@ -254,7 +261,6 @@ const GenerateTimetablePanel = ({
       return;
     }
 
-    setConfirmOpen(false);
     setCommitLoading(true);
 
     try {
@@ -657,7 +663,7 @@ const GenerateTimetablePanel = ({
                   previewLoading ||
                   commitLoading
                 }
-                onClick={() => setConfirmOpen(true)}
+                onClick={handleCommit}
                 sx={{
                   minHeight: 38,
                   px: 1.6,
@@ -1035,7 +1041,13 @@ const GenerateTimetablePanel = ({
                                                 backgroundColor:
                                                   cell.empty
                                                     ? "rgba(36,74,112,0.025)"
+                                                    : cell.unstaffed
+                                                    ? "rgba(209,67,67,0.10)"
                                                     : "rgba(251,240,216,0.42)",
+                                                border:
+                                                  cell.unstaffed
+                                                    ? "1px solid rgba(209,67,67,0.20)"
+                                                    : "1px solid transparent",
                                               }}
                                             >
                                               <Typography
@@ -1132,42 +1144,6 @@ const GenerateTimetablePanel = ({
           )}
         </Stack>
       </Box>
-
-      <Dialog
-        open={confirmOpen}
-        onClose={() => !commitLoading && setConfirmOpen(false)}
-        fullWidth
-        maxWidth="xs"
-        dir="rtl"
-      >
-        <DialogTitle sx={{ fontWeight: 900 }}>تأكيد اعتماد الجدول</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={1.25}>
-            <Typography variant="body2">
-              سيتم حفظ <strong>{preview?.placed ?? 0}</strong> حصة من المعاينة الحالية
-              {scope === "current" && classLabel ? ` للفصل ${classLabel}` : " لكل الفصول في الترم"}.
-            </Typography>
-            {onExisting === "replace" ? (
-              <Alert severity="warning" icon={<WarningAmberRounded />}>
-                خيار «استبدال الجدول الموجود» مفعّل. سيتم حذف الحصص الحالية للفصول المستهدفة ثم كتابة الجدول الجديد مكانها.
-              </Alert>
-            ) : (
-              <Alert severity="info">
-                الفصول التي لديها جدول حالي ستُترك كما هي لأن خيار الاستبدال غير مفعّل.
-              </Alert>
-            )}
-            <Typography variant="caption" color="text.secondary">
-              لو غيّرت أي إعداد بعد المعاينة، اعمل معاينة جديدة قبل الاعتماد.
-            </Typography>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmOpen(false)} disabled={commitLoading}>رجوع</Button>
-          <Button variant="contained" onClick={handleCommit} disabled={!canCommit || commitLoading || previewLoading}>
-            {commitLoading ? "جاري الاعتماد..." : "تأكيد الاعتماد"}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Paper>
   );
 };
