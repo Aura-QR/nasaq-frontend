@@ -103,24 +103,35 @@ const normalizeSuccess = (
     envelope;
 
   /*
-   * الباك بيرد بالشكل ده لما يتبعتله page/limit:
-   *   { data: [...], totalDocs, totalPages }
+   * الترقيم بيوصل بشكلين، ولازم نقرا الاتنين.
    *
-   * كنا بناخد `data` بس ونرمي الباقي، فمعلومات الترقيم كانت بتضيع
-   * وأزرار الصفحات مكانتش بتظهر خالص — المستخدم يشوف أول ١٠ وخلاص.
-   * بنسيبها هنا جنب `data` عشان الشكل اللي بيستهلكه باقي الملفات ميتغيرش.
+   * السيرفس بترجّع { data, totalDocs, totalPages }، وبعدين
+   * ResponseInterceptor بيشيل الرقمين من هناك ويحطهم جوه `pagination`:
+   *
+   *   { status, message, data: [...], pagination: { totalDocs, totalPages } }
+   *
+   * كنا بندوّر على `envelope.totalDocs` — المكان الوحيد اللي الاعتراضية
+   * شالته منه — فـ pagination كان بيرجع undefined دايمًا، و totalPages
+   * بيقع على ١، والباجينيشن بيتخفي. يعني الباج كان بيخبّي علاجه بنفسه.
    */
-  const hasPageInfo =
+  const pageInfo =
     envelope &&
     typeof envelope ===
       "object" &&
-    !Array.isArray(
-      envelope
-    ) &&
-    (envelope.totalDocs !==
-      undefined ||
-      envelope.totalPages !==
-        undefined);
+    !Array.isArray(envelope)
+      ? envelope.pagination ??
+        (envelope.totalDocs !==
+          undefined ||
+        envelope.totalPages !==
+          undefined
+          ? {
+              totalDocs:
+                envelope.totalDocs,
+              totalPages:
+                envelope.totalPages,
+            }
+          : undefined)
+      : undefined;
 
   return {
     status: true,
@@ -128,14 +139,7 @@ const normalizeSuccess = (
       envelope?.message ||
       "Success",
     data: payload,
-    pagination: hasPageInfo
-      ? {
-          totalDocs:
-            envelope.totalDocs,
-          totalPages:
-            envelope.totalPages,
-        }
-      : undefined,
+    pagination: pageInfo,
   };
 };
 

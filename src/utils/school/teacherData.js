@@ -104,7 +104,10 @@ const extractTeachersPagination = (
 
   const total =
     Number(
-      pagination?.total ??
+      // The server's name for it. Without this the count fell back to the
+      // number of rows on the page — a school of thirty reporting twenty-five.
+      pagination?.totalDocs ??
+        pagination?.total ??
         pagination?.totalItems ??
         pagination?.count ??
         data?.total ??

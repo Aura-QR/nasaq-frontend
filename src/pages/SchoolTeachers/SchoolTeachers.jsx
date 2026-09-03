@@ -313,9 +313,14 @@ const SchoolTeachers = () => {
           response?.data
         );
 
+      /*
+       * `response`, not `response.data`. The pagination sits *beside* data in
+       * the envelope, so handing over the inner array threw away the only copy
+       * of it — and the pager, which renders on totalPages > 1, stayed hidden.
+       */
       const nextPagination =
         extractTeachersPagination(
-          response?.data,
+          response,
           {
             page:
               pagination.page,
