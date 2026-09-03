@@ -28,6 +28,7 @@ import {
   IconButton,
   InputAdornment,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Paper,
   Select,
@@ -43,7 +44,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
@@ -68,6 +69,7 @@ const COLORS = {
   muted: "#7e8791",
   green: "#16865f",
   red: "#d14343",
+  amber: "#b7791f",
 };
 
 const idOf = (value) =>
@@ -1125,6 +1127,9 @@ const SubjectOfferings = () => {
   const permissions = usePermissions("subjects");
 
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedGradeId = String(searchParams.get("gradeLevelId") || "").trim();
+  const requestedTermId = String(searchParams.get("termId") || "").trim();
 
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [loadingOfferings, setLoadingOfferings] = useState(false);
@@ -1149,7 +1154,7 @@ const SubjectOfferings = () => {
 
   const [selectedYearId, setSelectedYearId] = useState("");
   const [selectedTermId, setSelectedTermId] = useState("");
-  const [selectedGradeId, setSelectedGradeId] = useState("");
+  const [selectedGradeId, setSelectedGradeId] = useState(requestedGradeId);
   const [search, setSearch] = useState("");
 
   const subjectMap = useMemo(
@@ -1195,14 +1200,20 @@ const SubjectOfferings = () => {
       normalized[0] ||
       null;
 
-    setSelectedTermId((current) =>
-      normalized.some((item) => item._id === current)
-        ? current
-        : activeTerm?._id || ""
-    );
+    setSelectedTermId((current) => {
+      if (normalized.some((item) => item._id === current)) {
+        return current;
+      }
+
+      if (requestedTermId && normalized.some((item) => item._id === requestedTermId)) {
+        return requestedTermId;
+      }
+
+      return activeTerm?._id || "";
+    });
 
     return normalized;
-  }, [fetchTermsForYear]);
+  }, [fetchTermsForYear, requestedTermId]);
 
   const loadInitial = useCallback(async () => {
     setLoadingInitial(true);
@@ -1249,6 +1260,15 @@ const SubjectOfferings = () => {
       setActiveYear(active);
       setSubjects(loadedSubjects);
       setGradeLevels(loadedGrades);
+      setSelectedGradeId((current) => {
+        if (loadedGrades.some((item) => item._id === current)) {
+          return current;
+        }
+
+        return loadedGrades.some((item) => item._id === requestedGradeId)
+          ? requestedGradeId
+          : "";
+      });
       setSelectedYearId(active?._id || "");
 
       if (active?._id) {
@@ -1261,7 +1281,7 @@ const SubjectOfferings = () => {
     } finally {
       setLoadingInitial(false);
     }
-  }, [loadTerms]);
+  }, [loadTerms, requestedGradeId]);
 
   const loadOfferings = useCallback(async () => {
     if (!selectedTermId) {
@@ -2199,29 +2219,88 @@ const SubjectOfferings = () => {
                 </Typography>
 
                 {gradePlanTotals.map((grade) => {
-                  const overCapacity =
-                    Number.isFinite(slotsPerWeek) && grade.total > slotsPerWeek;
+                  const capacityKnown =
+                    Number.isFinite(slotsPerWeek) && slotsPerWeek > 0;
+                  const missing = capacityKnown
+                    ? Math.max(0, slotsPerWeek - grade.total)
+                    : 0;
+                  const excess = capacityKnown
+                    ? Math.max(0, grade.total - slotsPerWeek)
+                    : 0;
+                  const complete = capacityKnown && missing === 0 && excess === 0;
+                  const statusColor = excess
+                    ? COLORS.red
+                    : complete
+                    ? COLORS.green
+                    : capacityKnown
+                    ? COLORS.amber
+                    : COLORS.navy;
+                  const statusBackground = excess
+                    ? "#fff0f0"
+                    : complete
+                    ? "#edf8f3"
+                    : capacityKnown
+                    ? "#fff8e8"
+                    : "#eef3f7";
+                  const progressValue = capacityKnown
+                    ? Math.min(100, Math.max(0, (grade.total / slotsPerWeek) * 100))
+                    : 0;
+                  const statusText = !capacityKnown
+                    ? `${grade.total} حصة أسبوعيًا`
+                    : excess
+                    ? `تجاوزت السعة بـ ${excess} حصة`
+                    : complete
+                    ? `الخطة مكتملة (${grade.total} / ${slotsPerWeek})`
+                    : `متبقي توزيع ${missing} حصة (${grade.total} / ${slotsPerWeek})`;
 
                   return (
-                    <Chip
+                    <Box
                       key={grade.gradeLevelId}
-                      size="small"
-                      label={
-                        Number.isFinite(slotsPerWeek)
-                          ? `${grade.gradeLabel} — الخطة: ${grade.total} حصة / ${slotsPerWeek} خانة في الأسبوع`
-                          : `${grade.gradeLabel} — الخطة: ${grade.total} حصة في الأسبوع`
-                      }
                       sx={{
-                        height: 26,
-                        fontSize: 10,
-                        fontWeight: 800,
-                        bgcolor: overCapacity ? "#fff0f0" : "#eef3f7",
-                        color: overCapacity ? COLORS.red : COLORS.navy,
-                        border: overCapacity
-                          ? `1px solid ${COLORS.red}22`
-                          : "1px solid transparent",
+                        minWidth: { xs: "100%", sm: 280 },
+                        flex: "1 1 300px",
+                        px: 1.15,
+                        py: 0.85,
+                        borderRadius: "11px",
+                        bgcolor: statusBackground,
+                        border: `1px solid ${statusColor}22`,
                       }}
-                    />
+                    >
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        gap={1}
+                      >
+                        <Typography
+                          sx={{ color: COLORS.navy, fontSize: 10, fontWeight: 900 }}
+                        >
+                          {grade.gradeLabel}
+                        </Typography>
+                        <Typography
+                          sx={{ color: statusColor, fontSize: 9.5, fontWeight: 900 }}
+                        >
+                          {statusText}
+                        </Typography>
+                      </Stack>
+
+                      {capacityKnown ? (
+                        <LinearProgress
+                          variant="determinate"
+                          value={progressValue}
+                          sx={{
+                            mt: 0.65,
+                            height: 6,
+                            borderRadius: 99,
+                            bgcolor: "rgba(18,47,77,.08)",
+                            "& .MuiLinearProgress-bar": {
+                              borderRadius: 99,
+                              bgcolor: statusColor,
+                            },
+                          }}
+                        />
+                      ) : null}
+                    </Box>
                   );
                 })}
               </Stack>

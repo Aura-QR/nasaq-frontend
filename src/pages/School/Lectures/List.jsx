@@ -2028,6 +2028,12 @@ const List = () => {
               classId={classFilter}
               classLabel={selectedClassLabel}
               initialScope={automationScope}
+              onNavigateToCurriculum={(gradeLevelId) => {
+                const params = new URLSearchParams();
+                if (termId) params.set("termId", termId);
+                if (gradeLevelId) params.set("gradeLevelId", gradeLevelId);
+                navigate(`/subject-offerings?${params.toString()}`);
+              }}
             />
 
             <GenerateTimetablePanel

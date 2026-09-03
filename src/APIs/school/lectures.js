@@ -367,17 +367,25 @@ export const generateTimetable = async (
 
     return normalizeSuccess(response);
   } catch (error) {
-    return normalizeFailure(
-      getApiError(
-        error,
-        normalizedMode === "commit"
-          ? "تعذر اعتماد الجدول الدراسي"
-          : "تعذر إنشاء معاينة الجدول الدراسي"
-      ),
+    const fallback =
       normalizedMode === "commit"
         ? "تعذر اعتماد الجدول الدراسي"
-        : "تعذر إنشاء معاينة الجدول الدراسي"
+        : "تعذر إنشاء معاينة الجدول الدراسي";
+    const failure = normalizeFailure(
+      getApiError(error, fallback),
+      fallback
     );
+    const responsePayload = error?.response?.data;
+
+    return {
+      ...failure,
+      statusCode: error?.response?.status,
+      data:
+        responsePayload?.data ??
+        (responsePayload && typeof responsePayload === "object"
+          ? responsePayload
+          : undefined),
+    };
   }
 };
 

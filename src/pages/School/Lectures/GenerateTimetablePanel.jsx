@@ -5,6 +5,10 @@ import {
   Checkbox,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   MenuItem,
   Paper,
@@ -29,6 +33,7 @@ import {
 } from "@mui/icons-material";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -36,7 +41,10 @@ import {
 
 import { toast } from "react-toastify";
 
-import { generateTimetable } from "@/APIs/school/lectures";
+import {
+  fetchLectureFeasibility,
+  generateTimetable,
+} from "@/APIs/school/lectures";
 
 const DAY_LABELS = {
   sunday: "الأحد",
@@ -68,6 +76,7 @@ const normalizeResult = (result) => {
   return {
     ...data,
     classes: asArray(data?.classes),
+    classPlans: asArray(data?.classPlans),
     problems: asArray(data?.problems),
     workingDays: asArray(
       data?.workingDays
@@ -87,6 +96,59 @@ const normalizeResult = (result) => {
       data?.slotsPerWeek
     ),
   };
+};
+
+const BLOCKING_PROBLEM_TYPES = new Set([
+  "no_working_days",
+  "nothing_planned",
+  "class_underfilled",
+  "class_overbooked",
+  "teacher_overloaded",
+]);
+
+const getBlockingProblems = (value) =>
+  asArray(value?.problems).filter(
+    (problem) =>
+      problem?.blocking === true ||
+      BLOCKING_PROBLEM_TYPES.has(String(problem?.type || ""))
+  );
+
+const getGenerationProblemText = (problem = {}) => {
+  const type = String(problem?.type || "");
+  const className = problem?.className || "الفصل";
+  const teacherName = problem?.teacherName || "المعلم";
+  const subjectName = problem?.subjectName || "المادة";
+  const required = numberOf(problem?.required ?? problem?.demand ?? problem?.load);
+  const capacity = numberOf(problem?.capacity);
+  const missing = numberOf(
+    problem?.missing ?? Math.max(0, capacity - required)
+  );
+  const excess = numberOf(
+    problem?.excess ?? Math.max(0, required - capacity)
+  );
+
+  switch (type) {
+    case "class_underfilled":
+      return `${className}: تم توزيع ${required} من ${capacity} حصة — متبقي ${missing} حصة.`;
+    case "class_overbooked":
+      return `${className}: الخطة ${required} حصة بينما السعة ${capacity} — زيادة ${excess} حصة.`;
+    case "teacher_overloaded":
+      return `${teacherName}: النصاب ${required} حصة بينما السعة ${capacity}.`;
+    case "subject_unassigned":
+      return `${subjectName} في ${className} بدون معلم؛ يمكن معاينتها مؤقتًا بدون معلم.`;
+    case "no_working_days":
+      return "لا توجد أيام عمل مفعلة في إعدادات المدرسة.";
+    case "nothing_planned":
+      return "لم يتم تحديد خطة حصص قابلة للتوليد في النطاق الحالي.";
+    case "no_slot_left":
+      return `${className} — لم توجد خانة مناسبة لمادة ${subjectName}${
+        problem?.teacherName ? ` مع ${problem.teacherName}` : ""
+      }.`;
+    case "search_exhausted":
+      return "الخطة مزدحمة جدًا ولم يكتمل البحث عن توزيع مناسب لكل الحصص.";
+    default:
+      return problem?.message || "ظهرت ملاحظة أثناء إنشاء الجدول. راجع الإعدادات والخطة.";
+  }
 };
 
 const getSlot = (day, slotNumber) =>
@@ -157,6 +219,15 @@ const GenerateTimetablePanel = ({
   const [committed, setCommitted] =
     useState(false);
 
+  const [feasibilityReport, setFeasibilityReport] =
+    useState(null);
+  const [feasibilityLoading, setFeasibilityLoading] =
+    useState(false);
+  const [commitConfirmOpen, setCommitConfirmOpen] =
+    useState(false);
+  const [commitRejection, setCommitRejection] =
+    useState(null);
+
   const effectiveClassIds =
     useMemo(
       () =>
@@ -166,9 +237,44 @@ const GenerateTimetablePanel = ({
       [scope, classId]
     );
 
+  const loadFeasibility = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!termId) {
+        setFeasibilityReport(null);
+        return null;
+      }
+
+      if (!silent) setFeasibilityLoading(true);
+
+      try {
+        const result = await fetchLectureFeasibility(
+          { termId, classIds: effectiveClassIds },
+          { force: true }
+        );
+
+        if (result?.status === false) {
+          if (!silent) {
+            toast.error(result?.message || "تعذر فحص جاهزية الجدول");
+          }
+          setFeasibilityReport(null);
+          return null;
+        }
+
+        const report = result?.data?.data ?? result?.data ?? result;
+        setFeasibilityReport(report);
+        return report;
+      } finally {
+        if (!silent) setFeasibilityLoading(false);
+      }
+    },
+    [termId, effectiveClassIds]
+  );
+
   useEffect(() => {
     setPreview(null);
     setCommitted(false);
+    setCommitConfirmOpen(false);
+    setCommitRejection(null);
   }, [
     termId,
     classId,
@@ -193,6 +299,10 @@ const GenerateTimetablePanel = ({
     }
   }, [classId, scope]);
 
+  useEffect(() => {
+    loadFeasibility({ silent: true });
+  }, [loadFeasibility]);
+
   const runGenerate = async (mode) => {
     if (!termId) {
       toast.info("اختر الترم أولًا");
@@ -209,6 +319,19 @@ const GenerateTimetablePanel = ({
     });
 
     if (result?.status === false) {
+      const errorPayload =
+        result?.data && typeof result.data === "object"
+          ? normalizeResult(result.data)
+          : null;
+
+      if (mode === "commit" && errorPayload) {
+        return {
+          ...errorPayload,
+          requestFailed: true,
+          requestMessage: result?.message || "تعذر اعتماد الجدول",
+        };
+      }
+
       toast.error(
         result?.message ||
           (mode === "commit"
@@ -237,8 +360,18 @@ const GenerateTimetablePanel = ({
       if (!data) return;
 
       setPreview(data);
+      await loadFeasibility({ silent: true });
 
-      if (data.unplaced > 0) {
+      const previewBlockers = getBlockingProblems(data);
+      const hasIncompletePlan = previewBlockers.some((problem) =>
+        ["class_underfilled", "class_overbooked"].includes(String(problem?.type || ""))
+      );
+
+      if (hasIncompletePlan) {
+        toast.warning(
+          "تمت المعاينة كتجربة فقط؛ يجب استكمال خطة جميع الفصول قبل الاعتماد النهائي"
+        );
+      } else if (data.unplaced > 0) {
         toast.warning(
           `تمت المعاينة: ${data.placed} حصة موزعة و ${data.unplaced} غير موزعة`
         );
@@ -253,25 +386,57 @@ const GenerateTimetablePanel = ({
   };
 
   const handleCommit = async () => {
-    if (
-      !preview ||
-      commitLoading ||
-      previewLoading
-    ) {
+    if (!preview || commitLoading || previewLoading) {
       return;
     }
 
+    setCommitConfirmOpen(false);
     setCommitLoading(true);
 
     try {
-      const data = await runGenerate(
-        "commit"
-      );
+      const latestReport = await loadFeasibility({ silent: true });
+
+      if (!latestReport || latestReport?.feasible !== true) {
+        setCommitRejection(
+          latestReport || {
+            problems: [
+              {
+                type: "feasibility_unavailable",
+                blocking: true,
+                message: "تعذر التأكد من جاهزية الجدول للاعتماد.",
+              },
+            ],
+          }
+        );
+        toast.error("لا يمكن اعتماد الجدول قبل اكتمال الجاهزية");
+        return;
+      }
+
+      const data = await runGenerate("commit");
 
       if (!data) return;
 
+      const blockingProblems = getBlockingProblems(data);
+      const rejected = data.requestFailed || blockingProblems.length > 0;
+
+      if (rejected) {
+        setPreview((current) =>
+          current
+            ? {
+                ...current,
+                problems: data.problems.length ? data.problems : current.problems,
+              }
+            : data
+        );
+        setCommitted(false);
+        setCommitRejection(data);
+        toast.error(data.requestMessage || "رفض الباك إند اعتماد الجدول");
+        return;
+      }
+
       setPreview(data);
       setCommitted(true);
+      setCommitRejection(null);
 
       if (data.failed > 0) {
         toast.warning(
@@ -287,9 +452,9 @@ const GenerateTimetablePanel = ({
         );
       }
 
-      if (
-        typeof onCommitted === "function"
-      ) {
+      await loadFeasibility({ silent: true });
+
+      if (typeof onCommitted === "function") {
         await onCommitted(data);
       }
     } finally {
@@ -297,11 +462,23 @@ const GenerateTimetablePanel = ({
     }
   };
 
+  const previewBlockingProblems = getBlockingProblems(preview);
+  const feasibilityBlockingProblems = getBlockingProblems(feasibilityReport);
+  const previewHasIncompletePlans = [
+    ...previewBlockingProblems,
+    ...feasibilityBlockingProblems,
+  ].some((problem) =>
+    ["class_underfilled", "class_overbooked"].includes(String(problem?.type || ""))
+  );
+
   const canCommit =
     Boolean(preview) &&
     !committed &&
     preview.unplaced === 0 &&
-    preview.failed === 0;
+    preview.failed === 0 &&
+    feasibilityReport?.feasible === true &&
+    feasibilityBlockingProblems.length === 0 &&
+    !feasibilityLoading;
 
   return (
     <Paper
@@ -598,9 +775,8 @@ const GenerateTimetablePanel = ({
               },
             }}
           >
-            المعاينة لا تحفظ أي حصة. زر
-            «اعتماد الجدول» يظهر للاستخدام بعد
-            نجاح المعاينة فقط.
+            المعاينة لا تحفظ أي حصة ويمكن استخدامها حتى لو كانت الخطة ناقصة.
+            الاعتماد النهائي لا يتاح إلا عندما تكون جاهزية جميع الفصول مكتملة 100%.
           </Alert>
 
           <Stack
@@ -663,7 +839,12 @@ const GenerateTimetablePanel = ({
                   previewLoading ||
                   commitLoading
                 }
-                onClick={handleCommit}
+                onClick={() => setCommitConfirmOpen(true)}
+                title={
+                  !canCommit
+                    ? "لا يمكن اعتماد الجدول لوجود فصول لم تكتمل خطتها الدراسية"
+                    : ""
+                }
                 sx={{
                   minHeight: 38,
                   px: 1.6,
@@ -772,6 +953,35 @@ const GenerateTimetablePanel = ({
                 )}
               </Stack>
 
+              {previewHasIncompletePlans && (
+                <Alert
+                  severity="warning"
+                  sx={{
+                    borderRadius: "11px",
+                    fontSize: "8.5px",
+                    fontWeight: 800,
+                  }}
+                >
+                  تنبيه: هذه معاينة تجريبية وتحتوي على خانات فارغة بسبب نقص أو زيادة
+                  خطة بعض الفصول. يمكنك مراجعتها، لكن لا يمكن اعتمادها رسميًا قبل
+                  مطابقة مجموع الحصص لسعة الأسبوع بالكامل.
+                </Alert>
+              )}
+
+              {feasibilityReport && feasibilityReport?.feasible !== true && (
+                <Alert
+                  severity="error"
+                  sx={{
+                    borderRadius: "11px",
+                    fontSize: "8.5px",
+                    fontWeight: 800,
+                  }}
+                >
+                  لا يمكن اعتماد الجدول حاليًا لوجود {feasibilityBlockingProblems.length} مشكلة
+                  حاجبة في فحص الجاهزية. عالجها ثم أعد المعاينة.
+                </Alert>
+              )}
+
               {preview.unplaced > 0 && (
                 <Alert
                   severity="warning"
@@ -808,10 +1018,11 @@ const GenerateTimetablePanel = ({
                       <Alert
                         key={`${problem?.type || "problem"}-${index}`}
                         severity={
-                          problem?.type ===
-                            "no_slot_left" ||
-                          problem?.type ===
-                            "search_exhausted"
+                          problem?.blocking === true ||
+                          BLOCKING_PROBLEM_TYPES.has(String(problem?.type || ""))
+                            ? "error"
+                            : problem?.type === "no_slot_left" ||
+                              problem?.type === "search_exhausted"
                             ? "warning"
                             : "info"
                         }
@@ -821,19 +1032,7 @@ const GenerateTimetablePanel = ({
                           fontSize: "8px",
                         }}
                       >
-                        {problem?.type ===
-                        "no_slot_left"
-                          ? `${problem?.className || "فصل"} — لم توجد خانة مناسبة لمادة ${
-                              problem?.subjectName || "مادة"
-                            }${
-                              problem?.teacherName
-                                ? ` مع ${problem.teacherName}`
-                                : ""
-                            }.`
-                          : problem?.type ===
-                            "search_exhausted"
-                          ? "الخطة مزدحمة جدًا ولم يكتمل البحث عن توزيع مناسب لكل الحصص."
-                          : "ظهرت ملاحظة أثناء إنشاء الجدول. راجع الإعدادات والخطة."}
+                        {getGenerationProblemText(problem)}
                       </Alert>
                     )
                   )}
@@ -1144,6 +1343,107 @@ const GenerateTimetablePanel = ({
           )}
         </Stack>
       </Box>
+
+      <Dialog
+        open={commitConfirmOpen}
+        onClose={() => !commitLoading && setCommitConfirmOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{ sx: { borderRadius: "16px" } }}
+      >
+        <DialogTitle sx={{ fontWeight: 900, color: "var(--color-navy-deep)" }}>
+          تأكيد الاعتماد النهائي
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ borderRadius: "11px", fontSize: "9px" }}>
+            سيتم إنشاء وحفظ الجدول الرسمي في قاعدة البيانات. سيتم فحص الجاهزية مرة
+            أخرى قبل الحفظ للتأكد من أن جميع خطط الفصول مكتملة 100%.
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setCommitConfirmOpen(false)}
+            disabled={commitLoading}
+            sx={{ fontWeight: 900, textTransform: "none" }}
+          >
+            إلغاء
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCommit}
+            disabled={!canCommit || commitLoading}
+            startIcon={
+              commitLoading ? <CircularProgress size={15} color="inherit" /> : <CheckCircleRounded />
+            }
+            sx={{ borderRadius: "10px", fontWeight: 900, textTransform: "none" }}
+          >
+            اعتماد نهائي
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(commitRejection)}
+        onClose={() => setCommitRejection(null)}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{ sx: { borderRadius: "16px" } }}
+      >
+        <DialogTitle sx={{ fontWeight: 900, color: "var(--color-danger)" }}>
+          تعذر اعتماد الجدول
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={1}>
+            <Alert severity="error" sx={{ borderRadius: "11px", fontSize: "9px" }}>
+              لم يتم حفظ الجدول لأن فحص الجاهزية ما زال يحتوي على مشاكل حاجبة.
+              استكمل خطة الحصص أو عالج التعارضات ثم أعد المعاينة.
+            </Alert>
+
+            {getBlockingProblems(commitRejection).map((problem, index) => (
+              <Alert
+                key={`commit-rejection-${problem?.type || "problem"}-${index}`}
+                severity="warning"
+                sx={{ borderRadius: "10px", fontSize: "8.5px" }}
+              >
+                {getGenerationProblemText(problem)}
+              </Alert>
+            ))}
+
+            {asArray(commitRejection?.classPlans)
+              .filter((plan) => plan?.ok === false)
+              .map((plan, index) => (
+                <Box
+                  key={`class-plan-${plan?.classId || index}`}
+                  sx={{
+                    px: 1.2,
+                    py: 0.9,
+                    borderRadius: "10px",
+                    border: "1px solid rgba(209,67,67,.16)",
+                    bgcolor: "rgba(255,240,240,.45)",
+                  }}
+                >
+                  <Typography sx={{ fontSize: "9px", fontWeight: 900, color: "var(--color-navy-deep)" }}>
+                    {plan?.name || "فصل"}: {numberOf(plan?.demand)} / {numberOf(plan?.capacity)} حصة
+                  </Typography>
+                  <Typography sx={{ mt: 0.2, fontSize: "8px", color: "var(--color-danger)" }}>
+                    {numberOf(plan?.missing) > 0
+                      ? `متبقي ${numberOf(plan?.missing)} حصة`
+                      : `زيادة ${numberOf(plan?.excess)} حصة`}
+                  </Typography>
+                </Box>
+              ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setCommitRejection(null)}
+            variant="contained"
+            sx={{ borderRadius: "10px", fontWeight: 900, textTransform: "none" }}
+          >
+            فهمت
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 };

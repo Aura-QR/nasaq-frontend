@@ -102,10 +102,21 @@ const getProblemText = (problem = {}) => {
     case "nothing_planned":
       return "لم يتم تحديد عدد الحصص الأسبوعية لأي مادة في هذا الترم. حدّد خطة الحصص أولًا من عروض المواد.";
 
+    case "class_underfilled": {
+      const missing = asNumber(
+        problem?.missing,
+        Math.max(0, capacity - required)
+      );
+
+      return `${className}: تم توزيع ${required} حصة من أصل ${capacity} حصة أسبوعيًا${
+        missing ? ` — متبقي ${missing} حصة` : ""
+      }.`;
+    }
+
     case "class_overbooked":
       return `${className}: يحتاج ${required} حصة أسبوعيًا بينما السعة ${capacity}${
-        overBy
-          ? ` — زيادة ${overBy} حصة`
+        asNumber(problem?.excess, overBy)
+          ? ` — زيادة ${asNumber(problem?.excess, overBy)} حصة`
           : ""
       }.`;
 
@@ -199,7 +210,10 @@ const CapacityRow = ({
   value,
   capacity,
   free,
+  missing,
+  excess,
   ok,
+  kind = "teacher",
 }) => {
   const current = asNumber(value);
   const max = asNumber(capacity);
@@ -207,21 +221,40 @@ const CapacityRow = ({
     free,
     max - current
   );
+  const missingCount = asNumber(
+    missing,
+    kind === "class" && current < max ? max - current : 0
+  );
+  const excessCount = asNumber(
+    excess,
+    current > max ? current - max : 0
+  );
+  const isUnderfilled = kind === "class" && missingCount > 0;
+  const isOverbooked = excessCount > 0;
+  const statusColor = isOverbooked
+    ? "var(--color-danger)"
+    : isUnderfilled
+    ? "#b7791f"
+    : ok === true
+    ? "#27966f"
+    : "var(--color-navy)";
 
   return (
     <Box
       sx={{
         px: 1.15,
         py: 1,
-        border:
-          ok === false
-            ? "1px solid rgba(209,67,67,0.18)"
-            : "1px solid rgba(36,74,112,0.07)",
+        border: isOverbooked
+          ? "1px solid rgba(209,67,67,0.18)"
+          : isUnderfilled
+          ? "1px solid rgba(183,121,31,0.22)"
+          : "1px solid rgba(36,74,112,0.07)",
         borderRadius: "13px",
-        backgroundColor:
-          ok === false
-            ? "rgba(255,240,240,0.55)"
-            : "var(--color-white)",
+        backgroundColor: isOverbooked
+          ? "rgba(255,240,240,0.55)"
+          : isUnderfilled
+          ? "rgba(255,248,232,0.72)"
+          : "var(--color-white)",
       }}
     >
       <Stack
@@ -274,10 +307,7 @@ const CapacityRow = ({
           <Typography
             sx={{
               minWidth: 58,
-              color:
-                ok === false
-                  ? "var(--color-danger)"
-                  : "var(--color-navy)",
+              color: statusColor,
               fontSize: "10px",
               fontWeight: 900,
               textAlign: "left",
@@ -301,10 +331,7 @@ const CapacityRow = ({
                 "rgba(36,74,112,0.08)",
               "& .MuiLinearProgress-bar": {
                 borderRadius: 99,
-                backgroundColor:
-                  ok === false
-                    ? "var(--color-danger)"
-                    : "#27966f",
+                backgroundColor: statusColor,
               },
             }}
           />
@@ -312,19 +339,20 @@ const CapacityRow = ({
           <Typography
             sx={{
               minWidth: 66,
-              color:
-                remaining < 0
-                  ? "var(--color-danger)"
-                  : "var(--color-muted)",
+              color: isOverbooked || isUnderfilled
+                ? statusColor
+                : "var(--color-muted)",
               fontSize: "8.5px",
               fontWeight: 800,
               textAlign: "left",
             }}
           >
-            {remaining < 0
-              ? `زيادة ${Math.abs(
-                  remaining
-                )}`
+            {isOverbooked
+              ? `زيادة ${excessCount}`
+              : isUnderfilled
+              ? `ناقص ${missingCount}`
+              : kind === "class"
+              ? "مكتمل"
               : `متاح ${remaining}`}
           </Typography>
         </Stack>
@@ -339,6 +367,7 @@ const FeasibilityPanel = ({
   classId = "",
   classLabel = "",
   initialScope = "all",
+  onNavigateToCurriculum,
 }) => {
   const getInitialScope = () =>
     initialScope === "current" && classId
@@ -934,6 +963,29 @@ const FeasibilityPanel = ({
                             ? "error"
                             : "warning"
                         }
+                        action={
+                          ["class_underfilled", "class_overbooked"].includes(
+                            String(problem?.type || "")
+                          ) &&
+                          problem?.gradeLevelId &&
+                          typeof onNavigateToCurriculum === "function" ? (
+                            <Button
+                              size="small"
+                              onClick={() =>
+                                onNavigateToCurriculum(problem.gradeLevelId)
+                              }
+                              sx={{
+                                minWidth: "auto",
+                                px: 1,
+                                fontSize: "8px",
+                                fontWeight: 900,
+                                textTransform: "none",
+                              }}
+                            >
+                              تعديل الخطة
+                            </Button>
+                          ) : undefined
+                        }
                         sx={{
                           py: 0.25,
                           borderRadius:
@@ -1089,9 +1141,16 @@ const FeasibilityPanel = ({
                         free={
                           classItem?.free
                         }
+                        missing={
+                          classItem?.missing
+                        }
+                        excess={
+                          classItem?.excess
+                        }
                         ok={
                           classItem?.ok
                         }
+                        kind="class"
                       />
                     )
                   )}

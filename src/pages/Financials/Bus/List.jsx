@@ -588,52 +588,86 @@ const BusListPage = () => {
   const candidateOptions =
     useMemo(
       () =>
-        arr(
-          candidates
-        )
+        arr(candidates)
           .map((item) => {
-            const student =
+            /*
+             * ندعم أكثر من شكل لاستجابة الـ API:
+             * 1) { student: {...}, class: {...} }
+             * 2) { studentId: {...}, class: {...} }
+             * 3) الطالب نفسه مباشرة.
+             */
+            const studentCandidate =
               item?.student ||
+              item?.studentId ||
+              item;
+
+            const student =
+              studentCandidate &&
+              typeof studentCandidate === "object"
+                ? studentCandidate
+                : {};
+
+            const classCandidate =
+              item?.class ||
+              item?.classId ||
+              student?.class ||
+              student?.classId ||
               {};
 
             const cls =
-              item?.class ||
-              {};
+              classCandidate &&
+              typeof classCandidate === "object"
+                ? classCandidate
+                : {};
+
+            const studentId =
+              student?._id ||
+              student?.id ||
+              item?.studentId ||
+              item?._id ||
+              item?.id;
+
+            const studentName =
+              student?.name ||
+              student?.fullName ||
+              item?.studentName ||
+              item?.name ||
+              [
+                student?.firstName,
+                student?.fatherName,
+                student?.familyName,
+              ]
+                .filter(Boolean)
+                .join(" ") ||
+              "طالب";
 
             const className =
               cls?.roomNumber ||
-              cls?.name;
+              cls?.name ||
+              item?.className;
 
             const classLabel =
               className
-                ? `${className} - ${translateGender(
-                    cls?.gender,
-                    "class"
-                  )}`
+                ? `${className}${
+                    cls?.gender
+                      ? ` - ${translateGender(
+                          cls.gender,
+                          "class"
+                        )}`
+                      : ""
+                  }`
                 : "بدون فصل";
 
             return {
-              _id:
-                student?._id ||
-                student?.id,
-
+              _id: normalizeEntityId(
+                studentId
+              ),
               displayName:
-                `${
-                  student?.name ||
-                  [
-                    student?.firstName,
-                    student?.fatherName,
-                    student?.familyName,
-                  ]
-                    .filter(Boolean)
-                    .join(" ") ||
-                  "طالب"
-                } (${classLabel})`,
+                `${studentName} (${classLabel})`,
             };
           })
-          .filter(
-            (item) =>
-              item._id
+          .filter((item) =>
+            Boolean(item._id)
           ),
       [candidates]
     );
