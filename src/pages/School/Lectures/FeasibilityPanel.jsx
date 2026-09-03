@@ -90,6 +90,10 @@ const getProblemText = (problem = {}) => {
     problem?.periodsPerWeek
   );
 
+  const omitted = asNumber(
+    problem?.omitted
+  );
+
   const overBy =
     required > capacity
       ? required - capacity
@@ -126,6 +130,9 @@ const getProblemText = (problem = {}) => {
           ? ` — زيادة ${overBy} حصة`
           : ""
       }.`;
+
+    case "unstaffed_excluded":
+      return `${className}: استبعاد المواد بدون معلم سيحذف ${omitted} حصة مخططة من الجدول الرسمي. فعّل إدراج المواد بدون معلم أو أسند معلمًا قبل الاعتماد.`;
 
     case "subject_unassigned":
       return `${subjectName} في ${className} بدون معلم${

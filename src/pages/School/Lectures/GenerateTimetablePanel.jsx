@@ -103,6 +103,7 @@ const BLOCKING_PROBLEM_TYPES = new Set([
   "nothing_planned",
   "class_underfilled",
   "class_overbooked",
+  "unstaffed_excluded",
   "teacher_overloaded",
 ]);
 
@@ -126,6 +127,7 @@ const getGenerationProblemText = (problem = {}) => {
   const excess = numberOf(
     problem?.excess ?? Math.max(0, required - capacity)
   );
+  const omitted = numberOf(problem?.omitted);
 
   switch (type) {
     case "class_underfilled":
@@ -134,6 +136,8 @@ const getGenerationProblemText = (problem = {}) => {
       return `${className}: الخطة ${required} حصة بينما السعة ${capacity} — زيادة ${excess} حصة.`;
     case "teacher_overloaded":
       return `${teacherName}: النصاب ${required} حصة بينما السعة ${capacity}.`;
+    case "unstaffed_excluded":
+      return `${className}: تعطيل إدراج المواد بدون معلم سيستبعد ${omitted} حصة من الجدول الرسمي. فعّل «إدراج المواد بدون معلم» أو أسند معلمًا للمادة قبل الاعتماد.`;
     case "subject_unassigned":
       return `${subjectName} في ${className} بدون معلم؛ يمكن معاينتها مؤقتًا بدون معلم.`;
     case "no_working_days":
@@ -366,10 +370,17 @@ const GenerateTimetablePanel = ({
       const hasIncompletePlan = previewBlockers.some((problem) =>
         ["class_underfilled", "class_overbooked"].includes(String(problem?.type || ""))
       );
+      const excludesUnstaffed = previewBlockers.some(
+        (problem) => String(problem?.type || "") === "unstaffed_excluded"
+      );
 
       if (hasIncompletePlan) {
         toast.warning(
           "تمت المعاينة كتجربة فقط؛ يجب استكمال خطة جميع الفصول قبل الاعتماد النهائي"
+        );
+      } else if (excludesUnstaffed) {
+        toast.warning(
+          "تمت المعاينة، لكن استبعاد المواد بدون معلم يمنع الاعتماد النهائي. فعّل إدراجها أو أسند معلمين لها."
         );
       } else if (data.unplaced > 0) {
         toast.warning(
@@ -417,20 +428,51 @@ const GenerateTimetablePanel = ({
       if (!data) return;
 
       const blockingProblems = getBlockingProblems(data);
-      const rejected = data.requestFailed || blockingProblems.length > 0;
+      const nothingWritten = data.written === 0;
+      const generationIncomplete = data.failed > 0 || data.unplaced > 0;
+      const rejected =
+        data.requestFailed ||
+        blockingProblems.length > 0 ||
+        nothingWritten ||
+        generationIncomplete;
 
       if (rejected) {
+        const fallbackProblem = {
+          type: "commit_not_written",
+          blocking: true,
+          message:
+            data.requestMessage ||
+            (generationIncomplete
+              ? `لم يتم حفظ الجدول لأن المولد لم يستطع إكمال التوزيع بالكامل (${data.unplaced} غير موزعة، ${data.failed} فشل).`
+              : "لم يتم حفظ أي حصة. الاعتماد عملية كاملة أو لا تتم؛ راجع قيود المعلمين والخانات ثم أعد المعاينة."),
+        };
+
+        const rejectionData = {
+          ...data,
+          problems:
+            blockingProblems.length > 0
+              ? data.problems
+              : [...data.problems, fallbackProblem],
+        };
+
         setPreview((current) =>
           current
             ? {
                 ...current,
-                problems: data.problems.length ? data.problems : current.problems,
+                problems: rejectionData.problems.length
+                  ? rejectionData.problems
+                  : current.problems,
               }
-            : data
+            : rejectionData
         );
         setCommitted(false);
-        setCommitRejection(data);
-        toast.error(data.requestMessage || "رفض الباك إند اعتماد الجدول");
+        setCommitRejection(rejectionData);
+        toast.error(
+          data.requestMessage ||
+            (nothingWritten
+              ? "لم يتم حفظ الجدول؛ الاعتماد لم يكتمل بالكامل"
+              : "رفض الباك إند اعتماد الجدول")
+        );
         return;
       }
 
@@ -476,6 +518,7 @@ const GenerateTimetablePanel = ({
     !committed &&
     preview.unplaced === 0 &&
     preview.failed === 0 &&
+    previewBlockingProblems.length === 0 &&
     feasibilityReport?.feasible === true &&
     feasibilityBlockingProblems.length === 0 &&
     !feasibilityLoading;
@@ -842,7 +885,7 @@ const GenerateTimetablePanel = ({
                 onClick={() => setCommitConfirmOpen(true)}
                 title={
                   !canCommit
-                    ? "لا يمكن اعتماد الجدول لوجود فصول لم تكتمل خطتها الدراسية"
+                    ? "لا يمكن اعتماد الجدول قبل معالجة جميع المشاكل الحاجبة في المعاينة وفحص الجاهزية"
                     : ""
                 }
                 sx={{
@@ -965,6 +1008,23 @@ const GenerateTimetablePanel = ({
                   تنبيه: هذه معاينة تجريبية وتحتوي على خانات فارغة بسبب نقص أو زيادة
                   خطة بعض الفصول. يمكنك مراجعتها، لكن لا يمكن اعتمادها رسميًا قبل
                   مطابقة مجموع الحصص لسعة الأسبوع بالكامل.
+                </Alert>
+              )}
+
+              {previewBlockingProblems.some(
+                (problem) => String(problem?.type || "") === "unstaffed_excluded"
+              ) && (
+                <Alert
+                  severity="error"
+                  sx={{
+                    borderRadius: "11px",
+                    fontSize: "8.5px",
+                    fontWeight: 800,
+                  }}
+                >
+                  لا يمكن اعتماد الجدول مع استبعاد المواد التي لا يوجد لها معلم؛
+                  لأن ذلك سيترك حصصًا مخططة خارج الجدول الرسمي. فعّل «إدراج المواد
+                  بدون معلم» أو أسند معلمًا لكل مادة ثم أعد المعاينة.
                 </Alert>
               )}
 
@@ -1395,8 +1455,8 @@ const GenerateTimetablePanel = ({
         <DialogContent>
           <Stack spacing={1}>
             <Alert severity="error" sx={{ borderRadius: "11px", fontSize: "9px" }}>
-              لم يتم حفظ الجدول لأن فحص الجاهزية ما زال يحتوي على مشاكل حاجبة.
-              استكمل خطة الحصص أو عالج التعارضات ثم أعد المعاينة.
+              لم يتم حفظ الجدول. الاعتماد النهائي عملية كاملة أو لا تتم؛
+              عالج مشاكل الخطة أو الإسنادات أو تعارضات التوزيع ثم أعد المعاينة.
             </Alert>
 
             {getBlockingProblems(commitRejection).map((problem, index) => (
