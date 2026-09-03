@@ -81,7 +81,9 @@ import {
   getSchoolSessionInfo,
 } from "@/utils/school/schoolSession";
 
-const PAGE_LIMIT = 10;
+// Ten meant five pages for a school with forty-three teachers, and the pager
+// that would have let you reach them was itself hidden by the bug above.
+const PAGE_LIMIT = 25;
 
 const StatCard = ({
   title,
