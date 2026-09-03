@@ -51,6 +51,8 @@ import { useAuthUser } from "react-auth-kit";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 
+import { requestBrowserLocation } from "@/utils/geolocation";
+
 import Container from "@/components/Container/Container";
 import Back from "@/components/Back/Back";
 import usePermissions from "@/utils/hooks/usePermissions";
@@ -673,51 +675,36 @@ const TeacherAttendanceAdmin = () => {
     [summaryRows]
   );
 
-  const handleUseMyLocation = () => {
-    if (!navigator.geolocation) {
-      toast.error("المتصفح لا يدعم تحديد الموقع الجغرافي");
-      return;
-    }
-
+  /*
+   * A prompt nobody answers used to leave `locating` true for good, so the
+   * button that sets the school's own location could sit spinning forever —
+   * and without that location no teacher can check in at all.
+   */
+  const handleUseMyLocation = async () => {
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const latitude = Number(coords?.latitude);
-        const longitude = Number(coords?.longitude);
 
-        if (!isValidSchoolLocation(latitude, longitude)) {
-          setLocating(false);
-          toast.error(
-            "المتصفح أعاد موقعًا غير صالح. تأكد من تشغيل خدمة الموقع ثم حاول مرة أخرى."
-          );
-          return;
-        }
+    try {
+      const { lat: latitude, lng: longitude } =
+        await requestBrowserLocation();
 
-        setLat(String(latitude));
-        setLng(String(longitude));
-        setLocating(false);
-        toast.success("تم التقاط موقع الجهاز الحالي");
-      },
-      (error) => {
-        setLocating(false);
-
-        const messageByCode = {
-          1: "تم رفض صلاحية الموقع. اسمح للموقع بالوصول إلى Location ثم حاول مرة أخرى.",
-          2: "تعذر تحديد موقع الجهاز حاليًا. تأكد من تشغيل خدمة الموقع.",
-          3: "انتهت مهلة تحديد الموقع. حاول مرة أخرى.",
-        };
-
+      if (!isValidSchoolLocation(latitude, longitude)) {
         toast.error(
-          messageByCode[error?.code] ||
-            "تعذر التقاط موقع الجهاز. تأكد من صلاحية الموقع."
+          "المتصفح أعاد موقعًا غير صالح. تأكد من تشغيل خدمة الموقع ثم حاول مرة أخرى."
         );
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
+        return;
       }
-    );
+
+      setLat(String(latitude));
+      setLng(String(longitude));
+      toast.success("تم التقاط موقع الجهاز الحالي");
+    } catch (error) {
+      toast.error(
+        error?.message ||
+          "تعذر التقاط موقع الجهاز. تأكد من صلاحية الموقع."
+      );
+    } finally {
+      setLocating(false);
+    }
   };
 
   const handleDetectIp = async () => {

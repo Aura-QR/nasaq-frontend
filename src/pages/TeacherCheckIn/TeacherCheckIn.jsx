@@ -38,6 +38,7 @@ import {
 } from "@/APIs/school/teacherAttendance";
 
 import NotificationBell from "@/components/Notifications/NotificationBell";
+import { requestBrowserLocation } from "@/utils/geolocation";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
 
@@ -251,41 +252,6 @@ const TeacherCheckIn = () => {
   const verification = getVerification(currentRecord);
   const hasCheckedIn = Boolean(currentRecord?.checkInAt);
   const hasCheckedOut = Boolean(currentRecord?.checkOutAt);
-
-  const requestBrowserLocation = () =>
-    new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("المتصفح لا يدعم تحديد الموقع الجغرافي"));
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        ({ coords }) =>
-          resolve({
-            lat: coords.latitude,
-            lng: coords.longitude,
-          }),
-        (locationError) => {
-          const messages = {
-            1: "تم رفض صلاحية الموقع. فعّل الموقع للمتصفح ثم أعد المحاولة.",
-            2: "تعذر تحديد موقعك الحالي.",
-            3: "انتهت مهلة تحديد الموقع. أعد المحاولة.",
-          };
-
-          reject(
-            new Error(
-              messages[locationError?.code] ||
-                "تعذر الوصول إلى موقعك الحالي"
-            )
-          );
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-        }
-      );
-    });
 
   const handleCheckIn = async () => {
     if (currentRecord) {
