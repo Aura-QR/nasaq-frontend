@@ -32,16 +32,20 @@ import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
 import Table from "@/components/Table/Table";
+import AdminSetPasswordDialog from "@/components/school/AdminSetPasswordDialog";
 import SearchFilter from "@/components/Filters/SearchFilter";
 import SelectFilter from "@/components/Filters/SelectFilter";
 import PaginationControls from "@/components/Pagination";
 
 import { deleteTeacher } from "@/APIs/users/teachers";
+import { adminSetTeacherPassword } from "@/APIs/school/teachers";
 import { useTeachers } from "@/utils/hooks/apis/useTeachers";
 import useDebounce from "@/utils/hooks/useDebounce";
 import usePermissions from "@/utils/hooks/usePermissions";
 
 import Status from "@/utils/constants/Status";
+import { getStoredRole } from "@/shared/auth/session";
+import { ROLES } from "@/shared/auth/roles";
 
 const TABLE_HEADERS = [
   "اسم المعلم",
@@ -165,6 +169,13 @@ const List = () => {
 
   const [limit, setLimit] = useState(10);
   const [page, setPage] = useState(1);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordTeacher, setPasswordTeacher] = useState(null);
+
+  const canSetPassword = [
+    ROLES.OWNER,
+    ROLES.MANAGER,
+  ].includes(getStoredRole());
 
   const [
     localPagination,
@@ -337,6 +348,24 @@ const List = () => {
       );
     }
   };
+
+  const openPasswordDialog = (teacher) => {
+    if (!canSetPassword) return;
+
+    setPasswordTeacher(teacher);
+    setPasswordDialogOpen(true);
+  };
+
+  const closePasswordDialog = () => {
+    setPasswordDialogOpen(false);
+    setPasswordTeacher(null);
+  };
+
+  const handleSetPassword = (payload) =>
+    adminSetTeacherPassword(
+      passwordTeacher?.id,
+      payload
+    );
 
   return (
     <Container>
@@ -1246,6 +1275,11 @@ const List = () => {
               schedule={
                 lecturePermissions.read
               }
+              setPasswordFn={
+                canSetPassword
+                  ? openPasswordDialog
+                  : undefined
+              }
             />
 
             {currentPagination && (
@@ -1262,6 +1296,14 @@ const List = () => {
             )}
           </Box>
         </Paper>
+
+        <AdminSetPasswordDialog
+          open={passwordDialogOpen}
+          name={passwordTeacher?.name || ""}
+          subjectId={passwordTeacher?.id || ""}
+          onClose={closePasswordDialog}
+          onSubmit={handleSetPassword}
+        />
       </Box>
     </Container>
   );

@@ -26,12 +26,14 @@ import { format } from "date-fns";
 
 import Container from "@/components/Container/Container";
 import Table from "@/components/Table/Table";
+import AdminSetPasswordDialog from "@/components/school/AdminSetPasswordDialog";
 import SearchFilter from "@/components/Filters/SearchFilter";
 import SelectFilter from "@/components/Filters/SelectFilter";
 import ClassFilter from "@/components/Filters/ClassFilter";
 import PaginationControls from "@/components/Pagination";
 
 import { deleteStudent } from "@/APIs/users/students";
+import { adminSetStudentPassword } from "@/APIs/school/students";
 import { fetchStudentEnrollments } from "@/APIs/school/enrollments";
 import { useStudents } from "@/utils/hooks/apis/useStudents";
 import useDebounce from "@/utils/hooks/useDebounce";
@@ -39,6 +41,8 @@ import usePermissions from "@/utils/hooks/usePermissions";
 
 import Status from "@/utils/constants/Status";
 import { useAcademicYears } from "@/utils/hooks/apis/useAcademicYears";
+import { getStoredRole } from "@/shared/auth/session";
+import { ROLES } from "@/shared/auth/roles";
 
 const getReferenceId = (value) => {
   if (!value) return "";
@@ -313,6 +317,13 @@ const List = () => {
   const [limit, setLimit] = useState(10);
   const [enrollmentsByStudentId, setEnrollmentsByStudentId] = useState({});
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordStudent, setPasswordStudent] = useState(null);
+
+  const canSetPassword = [
+    ROLES.OWNER,
+    ROLES.MANAGER,
+  ].includes(getStoredRole());
 
   const debouncedSearch = useDebounce(search, 700);
 
@@ -566,6 +577,24 @@ const List = () => {
       );
     }
   };
+
+  const openPasswordDialog = (student) => {
+    if (!canSetPassword) return;
+
+    setPasswordStudent(student);
+    setPasswordDialogOpen(true);
+  };
+
+  const closePasswordDialog = () => {
+    setPasswordDialogOpen(false);
+    setPasswordStudent(null);
+  };
+
+  const handleSetPassword = (payload) =>
+    adminSetStudentPassword(
+      passwordStudent?.id,
+      payload
+    );
 
   return (
     <Container>
@@ -1229,6 +1258,11 @@ const List = () => {
                   ? handleDelete
                   : undefined
               }
+              setPasswordFn={
+                canSetPassword
+                  ? openPasswordDialog
+                  : undefined
+              }
             />
           </Box>
 
@@ -1252,6 +1286,14 @@ const List = () => {
             </Box>
           )}
         </Paper>
+
+        <AdminSetPasswordDialog
+          open={passwordDialogOpen}
+          name={passwordStudent?.name || ""}
+          subjectId={passwordStudent?.id || ""}
+          onClose={closePasswordDialog}
+          onSubmit={handleSetPassword}
+        />
       </Box>
     </Container>
   );
