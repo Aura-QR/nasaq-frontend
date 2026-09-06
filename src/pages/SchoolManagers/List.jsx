@@ -3,6 +3,7 @@ import {
   AdminPanelSettingsRounded,
   CheckCircleRounded,
   DeleteOutlineRounded,
+  LockResetRounded,
   ManageAccountsRounded,
   RefreshRounded,
   SearchRounded,
@@ -34,8 +35,10 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
+import AdminSetPasswordDialog from "@/components/school/AdminSetPasswordDialog";
 
 import {
+  adminSetManagerPassword,
   deleteManager,
   fetchManagers,
 } from "@/APIs/school/managers";
@@ -156,6 +159,38 @@ const getManagerStatus = (
   return "active";
 };
 
+const canResetAdministrativePassword = (
+  callerRole,
+  targetRole
+) => {
+  const caller =
+    normalizeRole(callerRole);
+
+  const target =
+    normalizeRole(targetRole);
+
+  if (caller === ROLES.SUPER_ADMIN) {
+    return [
+      ROLES.OWNER,
+      ROLES.SUPERVISOR,
+      ROLES.MANAGER,
+    ].includes(target);
+  }
+
+  if (caller === ROLES.OWNER) {
+    return [
+      ROLES.SUPERVISOR,
+      ROLES.MANAGER,
+    ].includes(target);
+  }
+
+  if (caller === ROLES.SUPERVISOR) {
+    return target === ROLES.MANAGER;
+  }
+
+  return false;
+};
+
 const SchoolManagersList = () => {
   const navigate = useNavigate();
   const getAuthUser = useAuthUser();
@@ -165,6 +200,12 @@ const SchoolManagersList = () => {
     getCurrentRoleFromAuthState(
       authState
     );
+
+  const canViewAdministrativeAccounts = [
+    ROLES.OWNER,
+    ROLES.SUPERVISOR,
+    ROLES.SUPER_ADMIN,
+  ].includes(currentRole);
 
   const canManageAdministrativeAccounts =
     currentRole === ROLES.OWNER;
@@ -191,12 +232,20 @@ const SchoolManagersList = () => {
     setDeleting,
   ] = useState(false);
 
+  const [
+    passwordTarget,
+    setPasswordTarget,
+  ] = useState(null);
+
+  const [
+    passwordDialogOpen,
+    setPasswordDialogOpen,
+  ] = useState(false);
+
   const loadManagers = useCallback(
     async (force = false) => {
-      // الصلاحيات القديمة: المالك فقط يمكنه قراءة
-      // قائمة المديرين والمساعدين من هذه الشاشة.
       if (
-        !canManageAdministrativeAccounts
+        !canViewAdministrativeAccounts
       ) {
         setItems([]);
         setLoading(false);
@@ -233,7 +282,7 @@ const SchoolManagersList = () => {
 
       setLoading(false);
     },
-    [canManageAdministrativeAccounts]
+    [canViewAdministrativeAccounts]
   );
 
   useEffect(() => {
@@ -376,9 +425,35 @@ const SchoolManagersList = () => {
       );
     };
 
-  // SUPERVISOR (مدير المدرسة) و MANAGER (المساعد الإداري)
-  // لا يمكنهما رؤية أو إدارة حسابات إدارية أخرى.
-  if (!canManageAdministrativeAccounts) {
+  const openPasswordDialog = (item) => {
+    const targetRole =
+      getManagerRole(item);
+
+    if (
+      !canResetAdministrativePassword(
+        currentRole,
+        targetRole
+      )
+    ) {
+      return;
+    }
+
+    setPasswordTarget(item);
+    setPasswordDialogOpen(true);
+  };
+
+  const closePasswordDialog = () => {
+    setPasswordDialogOpen(false);
+    setPasswordTarget(null);
+  };
+
+  const handleSetPassword = (payload) =>
+    adminSetManagerPassword(
+      getManagerId(passwordTarget),
+      payload
+    );
+
+  if (!canViewAdministrativeAccounts) {
     return (
       <Container>
         <Box
@@ -444,7 +519,7 @@ const SchoolManagersList = () => {
                 lineHeight: 1.9,
               }}
             >
-              إدارة وعرض مديري المدرسة والمساعدين الإداريين متاحة لمالك المدرسة فقط.
+              لا تملك صلاحية الوصول إلى حسابات المديرين والمساعدين.
             </Typography>
           </Box>
         </Box>
@@ -510,7 +585,7 @@ const SchoolManagersList = () => {
                 fontWeight: 600,
               }}
             >
-              إدارة الحسابات الإدارية والأدوار والصلاحيات من مكان واحد.
+              إدارة الحسابات الإدارية وتعيين كلمات المرور حسب صلاحيات دورك.
             </Typography>
           </Box>
 
@@ -519,55 +594,59 @@ const SchoolManagersList = () => {
             spacing={1}
             sx={{ flexShrink: 0 }}
           >
-            <Button
-              variant="outlined"
-              startIcon={<SecurityRounded />}
-              onClick={() =>
-                navigate(
-                  "/school/permissions?role=MANAGER"
-                )
-              }
-              sx={{
-                minHeight: 48,
-                px: 2,
-                borderRadius: "12px",
-                borderColor: "#C9D3DC",
-                color: "#244A70",
-                bgcolor: "#FFFFFF",
-                fontSize: "13px",
-                fontWeight: 900,
-                "& .MuiButton-startIcon": { ml: 0.65, mr: 0 },
-                "&:hover": {
-                  borderColor: "#244A70",
-                  bgcolor: "#F7FAFC",
-                },
-              }}
-            >
-              صلاحيات المساعدين
-            </Button>
+            {canManageAdministrativeAccounts && (
+              <>
+                <Button
+                  variant="outlined"
+                  startIcon={<SecurityRounded />}
+                  onClick={() =>
+                    navigate(
+                      "/school/permissions?role=MANAGER"
+                    )
+                  }
+                  sx={{
+                    minHeight: 48,
+                    px: 2,
+                    borderRadius: "12px",
+                    borderColor: "#C9D3DC",
+                    color: "#244A70",
+                    bgcolor: "#FFFFFF",
+                    fontSize: "13px",
+                    fontWeight: 900,
+                    "& .MuiButton-startIcon": { ml: 0.65, mr: 0 },
+                    "&:hover": {
+                      borderColor: "#244A70",
+                      bgcolor: "#F7FAFC",
+                    },
+                  }}
+                >
+                  صلاحيات المساعدين
+                </Button>
 
-            <Button
-              variant="contained"
-              startIcon={<AddCircleOutlineRounded />}
-              onClick={() => navigate("/school/managers/add")}
-              sx={{
-                minHeight: 48,
-                px: 2.3,
-                borderRadius: "12px",
-                bgcolor: "#244A70",
-                color: "#FFFFFF",
-                fontSize: "13px",
-                fontWeight: 900,
-                boxShadow: "none",
-                "& .MuiButton-startIcon": { ml: 0.7, mr: 0 },
-                "&:hover": {
-                  bgcolor: "#122F4D",
-                  boxShadow: "none",
-                },
-              }}
-            >
-              إضافة حساب إداري
-            </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<AddCircleOutlineRounded />}
+                  onClick={() => navigate("/school/managers/add")}
+                  sx={{
+                    minHeight: 48,
+                    px: 2.3,
+                    borderRadius: "12px",
+                    bgcolor: "#244A70",
+                    color: "#FFFFFF",
+                    fontSize: "13px",
+                    fontWeight: 900,
+                    boxShadow: "none",
+                    "& .MuiButton-startIcon": { ml: 0.7, mr: 0 },
+                    "&:hover": {
+                      bgcolor: "#122F4D",
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  إضافة حساب إداري
+                </Button>
+              </>
+            )}
 
             <Button
               variant="outlined"
@@ -901,26 +980,52 @@ const SchoolManagersList = () => {
 
                         <td>
                           <Stack direction="row" spacing={0.65} justifyContent="center">
-                    
-                            <Tooltip title="حذف الحساب">
-                              <span>
-                                <IconButton
-                                  onClick={() => setDeleteTarget(item)}
-                                  disabled={!id}
-                                  size="small"
-                                  sx={{
-                                    width: 36,
-                                    height: 36,
-                                    color: "#C94F4F",
-                                    bgcolor: "#FDECEC",
-                                    border: "1px solid #F3D4D4",
-                                    "&:hover": { bgcolor: "#F9DDDD" },
-                                  }}
-                                >
-                                  <DeleteOutlineRounded sx={{ fontSize: 20 }} />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
+                            {canResetAdministrativePassword(
+                              currentRole,
+                              role
+                            ) && (
+                              <Tooltip title="تعيين كلمة المرور">
+                                <span>
+                                  <IconButton
+                                    onClick={() => openPasswordDialog(item)}
+                                    disabled={!id}
+                                    size="small"
+                                    sx={{
+                                      width: 36,
+                                      height: 36,
+                                      color: "#244A70",
+                                      bgcolor: "#EEF3F7",
+                                      border: "1px solid #D9E2EA",
+                                      "&:hover": { bgcolor: "#E2EAF1" },
+                                    }}
+                                  >
+                                    <LockResetRounded sx={{ fontSize: 20 }} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            )}
+
+                            {canManageAdministrativeAccounts && (
+                              <Tooltip title="حذف الحساب">
+                                <span>
+                                  <IconButton
+                                    onClick={() => setDeleteTarget(item)}
+                                    disabled={!id}
+                                    size="small"
+                                    sx={{
+                                      width: 36,
+                                      height: 36,
+                                      color: "#C94F4F",
+                                      bgcolor: "#FDECEC",
+                                      border: "1px solid #F3D4D4",
+                                      "&:hover": { bgcolor: "#F9DDDD" },
+                                    }}
+                                  >
+                                    <DeleteOutlineRounded sx={{ fontSize: 20 }} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            )}
                           </Stack>
                         </td>
                       </tr>
@@ -932,6 +1037,18 @@ const SchoolManagersList = () => {
           )}
         </Box>
       </Box>
+
+      <AdminSetPasswordDialog
+        open={passwordDialogOpen}
+        name={
+          getManagerUsername(passwordTarget) === "—"
+            ? ""
+            : getManagerUsername(passwordTarget)
+        }
+        subjectId={getManagerId(passwordTarget)}
+        onClose={closePasswordDialog}
+        onSubmit={handleSetPassword}
+      />
 
       <Dialog
         open={Boolean(deleteTarget)}

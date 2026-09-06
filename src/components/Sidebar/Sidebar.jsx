@@ -246,7 +246,9 @@ const Sidebar = ({ active, setActive }) => {
             Icon: ManageAccountsRounded,
             iconType: "mui",
             to: "/school/managers",
-            show: role === "OWNER",
+            show:
+              role === "OWNER" ||
+              role === "SUPERVISOR",
           },
         ],
       },

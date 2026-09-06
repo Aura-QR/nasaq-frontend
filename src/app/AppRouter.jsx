@@ -201,6 +201,7 @@ const AppRouter = () => {
               allowedRoles={[
                 ROLES.OWNER,
                 ROLES.SUPERVISOR,
+                ROLES.SUPER_ADMIN,
               ]}
             />
           }
@@ -209,7 +210,18 @@ const AppRouter = () => {
             path="/school/managers"
             element={<SchoolManagersList />}
           />
+        </Route>
 
+        <Route
+          element={
+            <RoleRoute
+              allowedRoles={[
+                ROLES.OWNER,
+                ROLES.SUPERVISOR,
+              ]}
+            />
+          }
+        >
           <Route
             path="/school/managers/add"
             element={<SchoolManagerAdd />}

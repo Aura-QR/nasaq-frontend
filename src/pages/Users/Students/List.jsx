@@ -323,6 +323,7 @@ const List = () => {
   const canSetPassword = [
     ROLES.OWNER,
     ROLES.MANAGER,
+    ROLES.SUPER_ADMIN,
   ].includes(getStoredRole());
 
   const debouncedSearch = useDebounce(search, 700);

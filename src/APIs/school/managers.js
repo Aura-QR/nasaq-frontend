@@ -411,6 +411,46 @@ export const deleteManager =
     }
   };
 
+/**
+ * Set or auto-generate a password for an administrative account.
+ *
+ * Backend endpoint:
+ * PATCH /managers/:id/password
+ *
+ * Body:
+ * - {} to auto-generate a password
+ * - { password } to set a specific password
+ */
+export const adminSetManagerPassword =
+  async (managerId, payload = {}) => {
+    const normalizedManagerId =
+      normalizeText(managerId);
+
+    if (!normalizedManagerId) {
+      return {
+        status: false,
+        message:
+          "معرّف الحساب الإداري غير موجود",
+      };
+    }
+
+    try {
+      const response = await api.patch(
+        `${MANAGERS_ENDPOINT}/${normalizedManagerId}/password`,
+        payload?.password
+          ? { password: payload.password }
+          : {}
+      );
+
+      return response.data;
+    } catch (error) {
+      return getApiError(
+        error,
+        "تعذر تعيين كلمة المرور"
+      );
+    }
+  };
+
 /*
  * Backward-compatible aliases.
  */
@@ -436,6 +476,7 @@ export default {
   createManager,
   createSchoolManager,
   updateManagerPermissions,
+  adminSetManagerPassword,
   promoteTeacherToManager,
   demoteTeacherFromManager,
   promoteManager,
