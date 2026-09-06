@@ -511,6 +511,56 @@ export const deletePreparation =
     }
   };
 
+
+
+export const fetchPreparationReferenceLists = async () => {
+  try {
+    const response = await api.get(`${ENDPOINT}/reference-lists`);
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeFailure(
+      error,
+      "تعذر تحميل قوائم إعداد الدرس"
+    );
+  }
+};
+
+export const submitPreparation = async (id) => {
+  const preparationId = normalizeId(id);
+
+  if (!preparationId) {
+    return {
+      status: false,
+      message: "معرّف التحضير غير موجود",
+    };
+  }
+
+  // Structured-preparation backends expose a dedicated submit action.
+  // The two method attempts keep the frontend compatible during rollout,
+  // while the final PATCH fallback works with the legacy reviewStatus model.
+  try {
+    const response = await api.post(`${ENDPOINT}/${preparationId}/submit`, {});
+    return normalizeSuccess(response);
+  } catch (error) {
+    if (![404, 405].includes(error?.response?.status)) {
+      return normalizeFailure(error, "تعذر إرسال التحضير للمراجعة");
+    }
+  }
+
+  try {
+    const response = await api.patch(`${ENDPOINT}/${preparationId}/submit`, {});
+    return normalizeSuccess(response);
+  } catch (error) {
+    if (![404, 405].includes(error?.response?.status)) {
+      return normalizeFailure(error, "تعذر إرسال التحضير للمراجعة");
+    }
+  }
+
+  return patchPreparation(preparationId, {
+    reviewStatus: "pending",
+  });
+};
+
 /*
  * Aliases للتوافق مع الملفات القديمة.
  */
@@ -531,6 +581,7 @@ export const removePreparation =
 
 export default {
   fetchPreparations,
+  fetchPreparationReferenceLists,
   fetchSinglePreparation,
   fetchPreparation,
   getPreparation,
@@ -543,4 +594,5 @@ export default {
   addPreparationFiles,
   deletePreparationFile,
   replacePreparationFile,
+  submitPreparation,
 };

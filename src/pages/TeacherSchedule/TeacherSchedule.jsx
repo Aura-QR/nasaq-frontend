@@ -892,18 +892,17 @@ const TeacherSchedule = () => {
 
     if (preparationId) {
       navigate(
-        `/teacher/preparations?preparationId=${preparationId}`,
+        `/teacher/preparations/${preparationId}`,
         { replace: true }
       );
       return;
     }
 
-    setSelectedLecture(
-      requestedLecture
-    );
-
-    setUploadedFile(
-      null
+    navigate(
+      `/teacher/preparations/add?lectureId=${requestedPreparationLectureId}&returnTo=${encodeURIComponent(
+        "/teacher/schedule"
+      )}`,
+      { replace: true }
     );
   }, [
     isPreparationMode,
@@ -1213,7 +1212,7 @@ const TeacherSchedule = () => {
        * لا نفتح School/Preparation/Profile القديمة.
        */
       navigate(
-        `/teacher/preparations?preparationId=${preparationId}`
+        `/teacher/preparations/${preparationId}`
       );
       return;
     }
@@ -1241,22 +1240,13 @@ const TeacherSchedule = () => {
     }
 
     /*
-     * داخل وضع التحضير نفتح نموذج الرفع الحديث مباشرة.
+     * داخل وضع التحضير نفتح نموذج التحضير المنظم للحصة مباشرة.
      */
-    setSelectedLecture(
-      lecture
+    navigate(
+      `/teacher/preparations/add?lectureId=${lectureId}&returnTo=${encodeURIComponent(
+        "/teacher/schedule"
+      )}`
     );
-
-    setUploadedFile(
-      null
-    );
-
-    if (
-      fileInputRef.current
-    ) {
-      fileInputRef.current.value =
-        "";
-    }
   };
 
   const closePreparationDialog = () => {

@@ -68,6 +68,7 @@ const Table = ({
   addFn,
   editBtn,
   setPasswordFn,
+  renderCell,
 }) => {
   const [activeDelete, setActiveDelete] =
     useState(false);
@@ -183,8 +184,8 @@ const Table = ({
           spacing={1}
           sx={{
             minWidth: {
-              xs: 920,
-              md: 840,
+              xs: Math.max(920, (headers?.length || 0) * 128 + (hasActions ? 190 : 90)),
+              md: Math.max(840, (headers?.length || 0) * 118 + (hasActions ? 170 : 80)),
             },
             width: "100%",
           }}
@@ -211,6 +212,7 @@ const Table = ({
               addFn={addFn}
               editBtn={editBtn}
               setPasswordFn={setPasswordFn}
+              renderCell={renderCell}
               hasActions={hasActions}
             />
           ))}
@@ -323,6 +325,7 @@ const TableItem = ({
   addFn,
   editBtn,
   setPasswordFn,
+  renderCell,
   hasActions,
 }) => {
   const [actionsAnchor, setActionsAnchor] = useState(null);
@@ -394,12 +397,38 @@ const TableItem = ({
       </Typography>
 
       {body?.map((key) => {
+        const rawValue = item?.[key];
         const value =
-          item?.[key] === null ||
-          item?.[key] === undefined ||
-          item?.[key] === ""
+          rawValue === null ||
+          rawValue === undefined ||
+          rawValue === ""
             ? "—"
-            : String(item[key]);
+            : String(rawValue);
+        const customCell = renderCell?.({
+          item,
+          keyName: key,
+          value: rawValue,
+          displayValue: value,
+          index,
+        });
+
+        if (customCell !== undefined && customCell !== null) {
+          return (
+            <Box
+              key={key}
+              sx={{
+                flex: 2,
+                minWidth: 0,
+                px: 0.4,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {customCell}
+            </Box>
+          );
+        }
 
         return (
           <Tooltip

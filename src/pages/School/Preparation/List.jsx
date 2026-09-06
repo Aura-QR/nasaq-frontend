@@ -60,8 +60,12 @@ const SCHOOL_ADMIN_ROLES = [
 
 const REVIEW_STATUS_OPTIONS = [
   {
+    id: "draft",
+    name: "مسودة",
+  },
+  {
     id: "pending",
-    name: "قيد المراجعة",
+    name: "بانتظار المراجعة",
   },
   {
     id: "approved",
@@ -1050,10 +1054,56 @@ const getFileSize = (
 };
 
 
+const PREPARATION_STATUS_META = {
+  draft: { label: "مسودة", color: "warning" },
+  pending: { label: "بانتظار المراجعة", color: "info" },
+  approved: { label: "معتمد", color: "success" },
+  needs_revision: { label: "يحتاج تعديل", color: "error" },
+};
+
+const normalizePreparationStatus = (item) => {
+  const value = String(item?.status || item?.reviewStatus || "draft")
+    .trim()
+    .toLowerCase();
+
+  if (value === "pending_review" || value === "submitted") {
+    return "pending";
+  }
+
+  return PREPARATION_STATUS_META[value] ? value : "draft";
+};
+
+const getPreparationLessonTitle = (item) =>
+  String(
+    item?.lesson?.name ||
+      item?.lesson?.title ||
+      item?.lessonTitle ||
+      ""
+  ).trim() || "—";
+
+const getAssignmentCounts = (item) => {
+  const groups = [
+    ["إثراء", item?.enrichments],
+    ["واجب", item?.homeworks || item?.assignments],
+    ["اختبار", item?.exams],
+    ["نشاط", item?.activities],
+  ];
+
+  return groups
+    .map(([label, value]) => [label, getArray(value).length])
+    .filter(([, count]) => count > 0);
+};
+
+const toArabicNumber = (value) =>
+  new Intl.NumberFormat("ar-EG").format(Number(value) || 0);
+
 const TABLE_HEADERS = [
   "الفصل",
   "المعلم",
   "المادة",
+  "الدرس",
+  "الحالة",
+  "التكليفات",
   "اليوم",
   "الحصة",
   "تاريخ الدرس",
@@ -1063,44 +1113,42 @@ const TABLE_BODY = [
   "className",
   "teacherName",
   "subjectName",
+  "lessonTitleDisplay",
+  "statusDisplay",
+  "assignmentsDisplay",
   "dayOfWeek",
   "slot",
   "lessonDate",
 ];
 
-const mapPreparations = (
-  data
-) =>
-  getArray(data).map(
-    (item) => ({
+const mapPreparations = (data) =>
+  getArray(data).map((item) => {
+    const preparationStatus = normalizePreparationStatus(item);
+    const assignmentCounts = getAssignmentCounts(item);
+
+    return {
       ...item,
-      id:
-        item?._id ||
-        item?.id,
-      className:
-        getClassLabel(item),
-      teacherName:
-        getTeacherName(item),
-      subjectName:
-        getSubjectLabel(item),
-      dayOfWeek:
-        getDayLabel(item),
-      slot:
-        getSlotLabel(item),
-      lessonDate:
-        `${
-          item?.isWeekEstimated
-            ? "~"
-            : ""
-        }${formatDate(
-          item?.lessonDate
-        )}`,
-      filesCount:
-        getArray(
-          item?.files
-        ).length,
-    })
-  );
+      id: item?._id || item?.id,
+      className: getClassLabel(item),
+      teacherName: getTeacherName(item),
+      subjectName: getSubjectLabel(item),
+      lessonTitleDisplay: getPreparationLessonTitle(item),
+      preparationStatus,
+      statusDisplay: PREPARATION_STATUS_META[preparationStatus].label,
+      assignmentCounts,
+      assignmentsDisplay: assignmentCounts.length
+        ? assignmentCounts
+            .map(([label, count]) => `${label} ${toArabicNumber(count)}`)
+            .join(" · ")
+        : "—",
+      dayOfWeek: getDayLabel(item),
+      slot: getSlotLabel(item),
+      lessonDate: `${item?.isWeekEstimated ? "~" : ""}${formatDate(
+        item?.lessonDate
+      )}`,
+      filesCount: getArray(item?.files).length,
+    };
+  });
 
 const List = () => {
   const authUser =
@@ -1332,10 +1380,16 @@ const List = () => {
           return;
         }
 
-        const mapped =
-          mapPreparations(
-            hydrated
+        const mapped = mapPreparations(hydrated);
+
+        if (currentRole === "TEACHER") {
+          const priority = { draft: 0, needs_revision: 1, pending: 2, approved: 3 };
+          mapped.sort(
+            (a, b) =>
+              (priority[a.preparationStatus] ?? 9) -
+              (priority[b.preparationStatus] ?? 9)
           );
+        }
 
         setItems(mapped);
       };
@@ -1347,6 +1401,7 @@ const List = () => {
     };
   }, [
     preparations,
+    currentRole,
   ]);
 
   useEffect(() => {
@@ -1563,8 +1618,10 @@ const List = () => {
             item.dayOfWeek,
           الحصة:
             item.slot,
-          "تاريخ الدرس":
-            item.lessonDate,
+          الدرس: item.lessonTitleDisplay,
+          الحالة: item.statusDisplay,
+          التكليفات: item.assignmentsDisplay,
+          "تاريخ الدرس": item.lessonDate,
         })
       ),
     [items]
@@ -2667,6 +2724,51 @@ const List = () => {
                     ? handleDelete
                     : undefined
                 }
+                renderCell={({ item, keyName }) => {
+                  if (keyName === "statusDisplay") {
+                    const meta =
+                      PREPARATION_STATUS_META[item.preparationStatus] ||
+                      PREPARATION_STATUS_META.draft;
+                    return (
+                      <Chip
+                        size="small"
+                        label={meta.label}
+                        color={meta.color}
+                        variant="outlined"
+                        sx={{ fontSize: 9.5, fontWeight: 900 }}
+                      />
+                    );
+                  }
+
+                  if (keyName === "assignmentsDisplay") {
+                    if (!item.assignmentCounts?.length) return null;
+                    return (
+                      <Stack
+                        direction="row"
+                        gap={0.35}
+                        justifyContent="center"
+                        flexWrap="wrap"
+                      >
+                        {item.assignmentCounts.map(([label, count]) => (
+                          <Chip
+                            key={label}
+                            size="small"
+                            label={`${label} ${toArabicNumber(count)}`}
+                            sx={{
+                              height: 23,
+                              bgcolor: "var(--color-gold-soft)",
+                              color: "var(--color-gold-dark)",
+                              fontSize: 9,
+                              fontWeight: 900,
+                            }}
+                          />
+                        ))}
+                      </Stack>
+                    );
+                  }
+
+                  return undefined;
+                }}
               />
 
               {currentPagination &&

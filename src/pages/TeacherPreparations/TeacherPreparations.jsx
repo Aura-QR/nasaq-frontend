@@ -578,6 +578,40 @@ const getPreparationDate = (preparation) => {
   }).format(date);
 };
 
+const PREPARATION_STATUS_META = {
+  draft: { label: "مسودة", color: COLORS.gold, background: COLORS.goldSoft },
+  pending: { label: "بانتظار المراجعة", color: COLORS.navy, background: COLORS.navySoft },
+  approved: { label: "معتمد", color: COLORS.green, background: COLORS.greenSoft },
+  needs_revision: { label: "يحتاج تعديل", color: COLORS.red, background: COLORS.redSoft },
+};
+
+const getPreparationStatus = (preparation) => {
+  if (!preparation) return "missing";
+
+  const value = String(preparation?.status || preparation?.reviewStatus || "draft")
+    .trim()
+    .toLowerCase();
+
+  if (value === "pending_review" || value === "submitted") return "pending";
+  return PREPARATION_STATUS_META[value] ? value : "draft";
+};
+
+const getPreparationLessonTitle = (preparation) =>
+  String(
+    preparation?.lesson?.name ||
+      preparation?.lesson?.title ||
+      preparation?.lessonTitle ||
+      ""
+  ).trim();
+
+const getAssignmentCount = (preparation) =>
+  [
+    preparation?.enrichments,
+    preparation?.homeworks || preparation?.assignments,
+    preparation?.exams,
+    preparation?.activities,
+  ].reduce((total, value) => total + (Array.isArray(value) ? value.length : 0), 0);
+
 const loadTeacherPreparations = async (teacherId, lectures) => {
   const mainResponse = await fetchPreparations({
     teacherId,
@@ -804,17 +838,23 @@ const TeacherPreparations = () => {
     return map;
   }, [preparations]);
 
-  const rows = useMemo(
-    () =>
-      lectures.map((lecture) => ({
+  const rows = useMemo(() => {
+    const priority = { draft: 0, needs_revision: 1, pending: 2, approved: 3, missing: 4 };
+
+    return lectures
+      .map((lecture) => ({
         lecture,
         lectureId: getLectureId(lecture),
         preparation: preparationByLecture.get(getLectureId(lecture)) || null,
         subject: getSubject(lecture),
         classData: getClassData(lecture),
-      })),
-    [lectures, preparationByLecture]
-  );
+      }))
+      .sort(
+        (a, b) =>
+          (priority[getPreparationStatus(a.preparation)] ?? 9) -
+          (priority[getPreparationStatus(b.preparation)] ?? 9)
+      );
+  }, [lectures, preparationByLecture]);
 
   useEffect(() => {
     if (
@@ -933,8 +973,8 @@ const TeacherPreparations = () => {
         (subjectFilter === "all" || subjectFilter === subjectKey) &&
         (classFilter === "all" || classFilter === classKey) &&
         (statusFilter === "all" ||
-          (statusFilter === "prepared" && prepared) ||
-          (statusFilter === "missing" && !prepared))
+          (statusFilter === "missing" && !prepared) ||
+          (prepared && statusFilter === getPreparationStatus(row.preparation)))
       );
     });
   }, [rows, search, subjectFilter, classFilter, statusFilter]);
@@ -1223,7 +1263,10 @@ const TeacherPreparations = () => {
                   sx={{ ...TEACHER_UI.field, fontSize: 11 }}
                 >
                   <MenuItem value="all">كل الحالات</MenuItem>
-                  <MenuItem value="prepared">تم التحضير</MenuItem>
+                  <MenuItem value="draft">مسودة</MenuItem>
+                  <MenuItem value="pending">بانتظار المراجعة</MenuItem>
+                  <MenuItem value="approved">معتمد</MenuItem>
+                  <MenuItem value="needs_revision">يحتاج تعديل</MenuItem>
                   <MenuItem value="missing">تحتاج تحضير</MenuItem>
                 </Select>
               </FormControl>
@@ -1304,6 +1347,13 @@ const TeacherPreparations = () => {
                 const preparationId = getPreparationId(preparation);
                 const prepared = Boolean(preparationId);
                 const filesCount = getPreparationFiles(preparation).length;
+                const preparationStatus = getPreparationStatus(preparation);
+                const statusMeta = prepared
+                  ? PREPARATION_STATUS_META[preparationStatus] || PREPARATION_STATUS_META.draft
+                  : { label: "تحتاج تحضير", color: COLORS.gold, background: COLORS.goldSoft };
+                const lessonTitle = getPreparationLessonTitle(preparation);
+                const assignmentsCount = getAssignmentCount(preparation);
+                const canEditPreparation = ["draft", "needs_revision"].includes(preparationStatus);
 
                 return (
                   <Grid item xs={12} md={6} key={row.lectureId}>
@@ -1343,23 +1393,28 @@ const TeacherPreparations = () => {
                             </Typography>
                             <Chip
                               size="small"
-                              label={prepared ? "تم التحضير" : "تحتاج تحضير"}
+                              label={statusMeta.label}
                               sx={{
                                 height: 26,
                                 fontSize: 11.5,
                                 fontWeight: 900,
-                                color: prepared ? COLORS.green : COLORS.gold,
-                                bgcolor: prepared ? COLORS.greenSoft : COLORS.goldSoft,
+                                color: statusMeta.color,
+                                bgcolor: statusMeta.background,
                               }}
                             />
                           </Stack>
                           <Typography noWrap sx={{ color: COLORS.muted, fontSize: 12.5, mt: 0.3 }}>
                             {row.classData.label} • {getDayLabel(row.lecture)} • {getSlotLabel(row.lecture)}
                           </Typography>
+                          {prepared && lessonTitle ? (
+                            <Typography noWrap sx={{ color: COLORS.navy, fontSize: 11.5, mt: 0.25, fontWeight: 800 }}>
+                              الدرس: {lessonTitle}
+                            </Typography>
+                          ) : null}
                           <Typography noWrap sx={{ color: "#a2acb6", fontSize: 11.5, mt: 0.25 }}>
                             {prepared
-                              ? `${filesCount} ملف${getPreparationDate(preparation) ? ` • آخر تحديث ${getPreparationDate(preparation)}` : ""}`
-                              : "لم يتم رفع ملف تحضير لهذه الحصة"}
+                              ? `${assignmentsCount ? `${assignmentsCount} تكليف • ` : ""}${filesCount ? `${filesCount} مرفق • ` : ""}${getPreparationDate(preparation) ? `آخر تحديث ${getPreparationDate(preparation)}` : "محفوظ"}`
+                              : "لم يبدأ تحضير هذه الحصة بعد"}
                           </Typography>
                         </Box>
                       </Stack>
@@ -1369,16 +1424,16 @@ const TeacherPreparations = () => {
                           <>
                             <Tooltip title="عرض التحضير">
                               <IconButton
-                                onClick={() => openPreparationDetails(row)}
+                                onClick={() => navigate(`/teacher/preparations/${preparationId}`)}
                                 sx={{ width: 32, height: 32, color: COLORS.navy, bgcolor: COLORS.navySoft }}
                               >
                                 <VisibilityRounded sx={{ fontSize: 17 }} />
                               </IconButton>
                             </Tooltip>
-                            {permissions.edit && (
+                            {permissions.edit && canEditPreparation && (
                             <Tooltip title="تعديل التحضير">
                               <IconButton
-                                onClick={() => openPreparationDetails(row)}
+                                onClick={() => navigate(`/teacher/preparations/edit/${preparationId}`)}
                                 sx={{ width: 32, height: 32, color: COLORS.gold, bgcolor: COLORS.goldSoft }}
                               >
                                 <EditRounded sx={{ fontSize: 17 }} />

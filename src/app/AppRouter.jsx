@@ -26,6 +26,9 @@ import TeacherAttendance from "@/pages/TeacherAttendance/TeacherAttendance";
 import TeacherSchedule from "@/pages/TeacherSchedule/TeacherSchedule";
 import TeacherClasses from "@/pages/TeacherClasses/TeacherClasses";
 import TeacherPreparations from "@/pages/TeacherPreparations/TeacherPreparations";
+import PreparationAdd from "@/pages/School/Preparation/Add";
+import PreparationEdit from "@/pages/School/Preparation/Edit";
+import PreparationProfile from "@/pages/School/Preparation/Profile";
 import TeacherLibrary from "@/pages/TeacherLibrary/TeacherLibrary";
 import TeacherProfile from "@/pages/TeacherProfile/TeacherProfile";
 import TeacherProjects from "@/pages/TeacherProjects/TeacherProjects";
@@ -388,49 +391,24 @@ const AppRouter = () => {
             element={<TeacherPreparations />}
           />
 
-          {/*
-            Teacher preparation routes must stay inside the
-            teacher portal UI. The old School/Preparation
-            components are intentionally not mounted here.
-          */}
           <Route
             path="/teacher/preparations/add"
-            element={
-              <Navigate
-                to="/teacher/schedule?mode=prepare"
-                replace
-              />
-            }
+            element={<PreparationAdd />}
           />
 
           <Route
             path="/teacher/preparation/add"
-            element={
-              <Navigate
-                to="/teacher/schedule?mode=prepare"
-                replace
-              />
-            }
+            element={<PreparationAdd />}
           />
 
           <Route
             path="/teacher/preparations/edit/:id"
-            element={
-              <Navigate
-                to="/teacher/preparations"
-                replace
-              />
-            }
+            element={<PreparationEdit />}
           />
 
           <Route
             path="/teacher/preparations/:id"
-            element={
-              <Navigate
-                to="/teacher/preparations"
-                replace
-              />
-            }
+            element={<PreparationProfile />}
           />
 
           {/* =========================

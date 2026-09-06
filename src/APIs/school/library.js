@@ -343,6 +343,62 @@ export const addLibrary = async (
   }
 };
 
+
+
+/**
+ * Compact creator used by the structured-preparation picker.
+ * Accepts either a link or a file without navigating away from the form.
+ */
+export const addLibraryResource = async ({
+  title,
+  link = "",
+  file = null,
+  subjectId = "",
+  subjectOfferingId = "",
+} = {}) => {
+  const normalizedTitle = String(title || "").trim();
+  const normalizedLink = String(link || "").trim();
+  const normalizedSubjectId = normalizeId(subjectId);
+  const normalizedOfferingId = normalizeId(subjectOfferingId);
+
+  if (!normalizedTitle) {
+    return { status: false, message: "عنوان المحتوى مطلوب" };
+  }
+
+  if (!normalizedLink && !file) {
+    return { status: false, message: "أضف رابطًا أو اختر ملفًا" };
+  }
+
+  try {
+    if (file) {
+      const formData = new FormData();
+      formData.append("title", normalizedTitle);
+      formData.append("file", file);
+      if (normalizedSubjectId) formData.append("subjectId", normalizedSubjectId);
+      if (normalizedOfferingId) {
+        formData.append("subjectOfferingId", normalizedOfferingId);
+      }
+
+      return normalizeSuccess(
+        await api.post(ENDPOINT, formData)
+      );
+    }
+
+    return normalizeSuccess(
+      await api.post(ENDPOINT, {
+        title: normalizedTitle,
+        link: normalizedLink,
+        ...(normalizedSubjectId ? { subjectId: normalizedSubjectId } : {}),
+        ...(normalizedOfferingId
+          ? { subjectOfferingId: normalizedOfferingId }
+          : {}),
+      })
+    );
+  } catch (error) {
+    return normalizeFailure(error, "تعذر إضافة المحتوى إلى المكتبة");
+  }
+};
+
 /* =========================================================
    PATCH /library/:id
 ========================================================= */
@@ -468,9 +524,6 @@ export const fetchLibraryBySubject = async (
     );
     return normalizeSuccess(response);
   } catch (error) {
-    if (error?.response?.status === 404) {
-      return fetchLibraries({ subjectId: id });
-    }
     return normalizeFailure(
       error,
       "تعذر تحميل مصادر المادة"
@@ -498,6 +551,7 @@ export default {
   getLibrary,
 
   addLibrary,
+  addLibraryResource,
 
   createLibrary,
 

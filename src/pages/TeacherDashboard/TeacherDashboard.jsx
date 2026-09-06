@@ -2545,7 +2545,7 @@ const TeacherDashboard = () => {
                             onClick={() => {
                               if (hasPreparation) {
                                 navigate(
-                                  `/teacher/preparations?preparationId=${getPreparationId(
+                                  `/teacher/preparations/${getPreparationId(
                                     preparation
                                   )}`
                                 );
@@ -2698,7 +2698,7 @@ const TeacherDashboard = () => {
                               type="button"
                               onClick={() =>
                                 navigate(
-                                  `/teacher/preparations?preparationId=${id}`
+                                  `/teacher/preparations/${id}`
                                 )
                               }
                               sx={{
