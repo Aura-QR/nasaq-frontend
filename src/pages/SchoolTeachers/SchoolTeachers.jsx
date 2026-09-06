@@ -39,6 +39,7 @@ import {
 } from "react-toastify";
 
 import {
+  adminSetTeacherPassword,
   createSchoolTeacher,
   deleteSchoolTeacher,
   getSchoolTeachers,
@@ -51,6 +52,7 @@ import {
   promoteTeacherToManager,
 } from "@/APIs/school/managers";
 
+import AdminSetPasswordDialog from "@/components/school/AdminSetPasswordDialog";
 import TeacherDeleteDialog from "@/components/school/teachers/TeacherDeleteDialog";
 import TeacherFormDialog from "@/components/school/teachers/TeacherFormDialog";
 import TeacherManagerRoleDialog from "@/components/school/teachers/TeacherManagerRoleDialog";
@@ -214,6 +216,12 @@ const SchoolTeachers = () => {
   const canManageRole =
     fullAccess;
 
+  const canSetPassword =
+    [
+      ROLES.OWNER,
+      ROLES.MANAGER,
+    ].includes(role);
+
   const [teachers, setTeachers] =
     useState([]);
 
@@ -270,6 +278,11 @@ const SchoolTeachers = () => {
   const [
     managerRoleLoading,
     setManagerRoleLoading,
+  ] = useState(false);
+
+  const [
+    passwordOpen,
+    setPasswordOpen,
   ] = useState(false);
 
   const [
@@ -956,6 +969,9 @@ const SchoolTeachers = () => {
             canManageRole={
               canManageRole
             }
+            canSetPassword={
+              canSetPassword
+            }
             onView={(
               teacher
             ) =>
@@ -985,6 +1001,16 @@ const SchoolTeachers = () => {
                 teacher
               );
               setManagerRoleOpen(
+                true
+              );
+            }}
+            onSetPassword={(
+              teacher
+            ) => {
+              setSelectedTeacher(
+                teacher
+              );
+              setPasswordOpen(
                 true
               );
             }}
@@ -1099,6 +1125,34 @@ const SchoolTeachers = () => {
         }}
         onConfirm={
           handleToggleManagerRole
+        }
+      />
+
+      <AdminSetPasswordDialog
+        open={passwordOpen}
+        name={
+          getTeacherName(
+            selectedTeacher
+          )
+        }
+        subjectId={
+          getTeacherId(
+            selectedTeacher
+          )
+        }
+        onClose={() => {
+          setPasswordOpen(false);
+          setSelectedTeacher(
+            null
+          );
+        }}
+        onSubmit={(payload) =>
+          adminSetTeacherPassword(
+            getTeacherId(
+              selectedTeacher
+            ),
+            payload
+          )
         }
       />
 

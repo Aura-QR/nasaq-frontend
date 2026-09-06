@@ -38,6 +38,7 @@ import {
 } from "react-toastify";
 
 import {
+  adminSetStudentPassword,
   createSchoolStudent,
   deleteSchoolStudent,
   getSchoolStudents,
@@ -45,6 +46,7 @@ import {
   updateSchoolStudent,
 } from "@/APIs/school/students";
 
+import AdminSetPasswordDialog from "@/components/school/AdminSetPasswordDialog";
 import StudentDeleteDialog from "@/components/school/students/StudentDeleteDialog";
 import StudentFormDialog from "@/components/school/students/StudentFormDialog";
 import StudentStatusDialog from "@/components/school/students/StudentStatusDialog";
@@ -201,6 +203,12 @@ const SchoolStudents = () => {
       "school.students.delete"
     );
 
+  const canSetPassword =
+    [
+      ROLES.OWNER,
+      ROLES.MANAGER,
+    ].includes(role);
+
   const [students, setStudents] =
     useState([]);
 
@@ -247,6 +255,11 @@ const SchoolStudents = () => {
   const [
     statusLoading,
     setStatusLoading,
+  ] = useState(false);
+
+  const [
+    passwordOpen,
+    setPasswordOpen,
   ] = useState(false);
 
   const [
@@ -839,6 +852,9 @@ const SchoolStudents = () => {
             canDelete={
               canDelete
             }
+            canSetPassword={
+              canSetPassword
+            }
             onView={(
               student
             ) =>
@@ -858,6 +874,16 @@ const SchoolStudents = () => {
                 student
               );
               setStatusOpen(
+                true
+              );
+            }}
+            onSetPassword={(
+              student
+            ) => {
+              setSelectedStudent(
+                student
+              );
+              setPasswordOpen(
                 true
               );
             }}
@@ -949,6 +975,34 @@ const SchoolStudents = () => {
         }}
         onConfirm={
           handleToggleStatus
+        }
+      />
+
+      <AdminSetPasswordDialog
+        open={passwordOpen}
+        name={
+          getStudentName(
+            selectedStudent
+          )
+        }
+        subjectId={
+          getStudentId(
+            selectedStudent
+          )
+        }
+        onClose={() => {
+          setPasswordOpen(false);
+          setSelectedStudent(
+            null
+          );
+        }}
+        onSubmit={(payload) =>
+          adminSetStudentPassword(
+            getStudentId(
+              selectedStudent
+            ),
+            payload
+          )
         }
       />
 

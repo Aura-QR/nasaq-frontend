@@ -875,6 +875,41 @@ export const deleteSchoolTeacher =
     }
   };
 
+export const adminSetTeacherPassword =
+  async (teacherId, payload = {}) => {
+    const normalizedTeacherId =
+      normalizeId(teacherId);
+
+    if (!normalizedTeacherId) {
+      return {
+        status: false,
+        message:
+          "معرّف المعلم غير موجود",
+      };
+    }
+
+    try {
+      const response = await api.patch(
+        `${ENDPOINT}/${normalizedTeacherId}/password`,
+        payload?.password
+          ? { password: payload.password }
+          : {}
+      );
+
+      return normalizeSuccess(
+        response
+      );
+    } catch (error) {
+      return normalizeError(
+        getApiError(
+          error,
+          "تعذر تعيين كلمة المرور"
+        ),
+        "تعذر تعيين كلمة المرور"
+      );
+    }
+  };
+
 export const invalidateTeachersCache =
   clearTeachersCache;
 

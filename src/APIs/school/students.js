@@ -406,3 +406,33 @@ export const setStudentPassword =
       );
     }
   };
+
+export const adminSetStudentPassword =
+  async (studentId, payload = {}) => {
+    const id = normalizeId(studentId);
+
+    if (!id) {
+      return {
+        status: false,
+        message:
+          "معرّف الطالب غير موجود",
+      };
+    }
+
+    try {
+      const response = await api.patch(
+        `${ENDPOINT}/${id}/password`,
+        payload?.password
+          ? { password: payload.password }
+          : {}
+      );
+
+      return response.data;
+    } catch (error) {
+      return getApiError(
+        error,
+        "تعذر تعيين كلمة المرور"
+      );
+    }
+  };
+

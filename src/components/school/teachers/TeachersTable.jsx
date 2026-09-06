@@ -3,6 +3,7 @@ import {
   CheckCircleRounded,
   DeleteOutlineRounded,
   EditRounded,
+  KeyRounded,
   MoreVertRounded,
   PauseCircleOutlineRounded,
   PlayCircleOutlineRounded,
@@ -109,10 +110,12 @@ const TeacherActions = ({
   canUpdate,
   canDelete,
   canManageRole,
+  canSetPassword,
   onView,
   onEdit,
   onToggleStatus,
   onToggleManagerRole,
+  onSetPassword,
   onDelete,
 }) => {
   const [
@@ -124,6 +127,7 @@ const TeacherActions = ({
     Boolean(menuAnchor);
 
   const hasMoreActions =
+    canSetPassword ||
     canManageRole ||
     canDelete;
 
@@ -135,6 +139,14 @@ const TeacherActions = ({
     closeMenu();
 
     onToggleManagerRole?.(
+      teacher
+    );
+  };
+
+  const handleSetPasswordAction = () => {
+    closeMenu();
+
+    onSetPassword?.(
       teacher
     );
   };
@@ -308,6 +320,44 @@ const TeacherActions = ({
           },
         }}
       >
+        {canSetPassword && (
+          <MenuItem
+            onClick={
+              handleSetPasswordAction
+            }
+            sx={{
+              minHeight: 42,
+              gap: 0.8,
+              color: "#244a70",
+              fontSize: "10px",
+              fontWeight: 800,
+            }}
+          >
+            <ListItemIcon
+              sx={{
+                minWidth:
+                  "28px !important",
+                color: "inherit",
+              }}
+            >
+              <KeyRounded
+                sx={{
+                  fontSize: 18,
+                }}
+              />
+            </ListItemIcon>
+
+            <ListItemText
+              primary="تعيين كلمة المرور"
+              primaryTypographyProps={{
+                fontFamily: "inherit",
+                fontSize: "10px",
+                fontWeight: 800,
+              }}
+            />
+          </MenuItem>
+        )}
+
         {canManageRole && (
           <MenuItem
             onClick={
@@ -1297,20 +1347,24 @@ const TeachersTable = ({
   canUpdate = false,
   canDelete = false,
   canManageRole = false,
+  canSetPassword = false,
   onView,
   onEdit,
   onToggleStatus,
   onToggleManagerRole,
+  onSetPassword,
   onDelete,
 }) => {
   const actionProps = {
     canUpdate,
     canDelete,
     canManageRole,
+    canSetPassword,
     onView,
     onEdit,
     onToggleStatus,
     onToggleManagerRole,
+    onSetPassword,
     onDelete,
   };
 
