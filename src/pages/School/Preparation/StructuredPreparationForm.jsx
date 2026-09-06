@@ -65,6 +65,7 @@ import {
   deletePreparationResource,
   editPreparation,
   fetchPreparationReferenceLists,
+  fetchPreparations,
   fetchSinglePreparation,
   submitPreparation,
 } from "@/APIs/school/preparation";
@@ -1140,7 +1141,8 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const currentUser = getCurrentUser(authUser);
   const role = normalizeRole(currentUser?.role);
   const teacherPortal = location.pathname.startsWith("/teacher/");
-  const explicitId = normalizeId(params?.id);
+  const explicitId =
+    mode === "create" ? "" : normalizeId(params?.id);
   const preselectedLectureId = String(searchParams.get("lectureId") || "").trim();
   const requestedReturnTo = String(searchParams.get("returnTo") || "").trim();
   const safeReturnTo =
@@ -1153,7 +1155,9 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [preparationId, setPreparationId] = useState(explicitId);
+  const [preparationId, setPreparationId] = useState(() =>
+    mode === "create" ? "" : explicitId
+  );
   const [preparationStatus, setPreparationStatus] = useState("draft");
   const [reviewNote, setReviewNote] = useState("");
   const [form, setForm] = useState(EMPTY_FORM);
@@ -1204,6 +1208,8 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const objectivePrefillLessonRef = useRef("");
   const mountedRef = useRef(true);
   const createDraftPromiseRef = useRef(null);
+  const savePromiseRef = useRef(null);
+  const preparationIdRef = useRef("");
   const autosaveCreateBlockedRef = useRef(false);
 
   const subject = useMemo(
@@ -1234,6 +1240,10 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   useEffect(() => {
     dirtyRef.current = dirty;
   }, [dirty]);
+
+  useEffect(() => {
+    preparationIdRef.current = normalizeId(preparationId);
+  }, [preparationId]);
 
   const updateForm = useCallback((patch) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -1336,7 +1346,9 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
           savedSnapshotRef.current = snapshot(normalized);
           objectivePrefillLessonRef.current =
             normalizeId(normalized.lessonId);
-          setPreparationId(normalizeId(initialPreparation));
+          const initialPreparationId = normalizeId(initialPreparation);
+          preparationIdRef.current = initialPreparationId;
+          setPreparationId(initialPreparationId);
           setPreparationStatus(getStatus(initialPreparation));
           setReviewNote(String(initialPreparation?.reviewNote || ""));
           setExistingFiles(
@@ -1653,8 +1665,12 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
 
   const createDraftRecord = useCallback(
     async ({ silent = false } = {}) => {
-      if (preparationId) {
-        return preparationId;
+      const existingPreparationId = normalizeId(
+        preparationIdRef.current || preparationId
+      );
+
+      if (existingPreparationId) {
+        return existingPreparationId;
       }
 
       const lectureId =
@@ -1712,19 +1728,62 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
         }
 
         const created =
-          extractEntity(response);
-        const id =
-          normalizeId(created) ||
-          normalizeId(response?.data);
+          response?.data &&
+          !Array.isArray(response.data) &&
+          typeof response.data === "object"
+            ? response.data
+            : extractEntity(response);
 
-        if (!id) {
+        let id = normalizeId(
+          created?._id || created?.id
+        );
+
+        /*
+         * lectureId و preparationId كيانان مختلفان تمامًا.
+         * لا نستخدم معرّف الحصة إطلاقًا كمعرّف للتحضير.
+         * لو response قديم/غير متوقع لم يرجع _id واضحًا، نبحث عن
+         * المسودة التي أنشئت لهذه الحصة بدل PATCH على lectureId.
+         */
+        if (!id || id === lectureId) {
+          const lookupResponse =
+            await fetchPreparations({
+              lectureId,
+              limit: 20,
+            });
+
+          if (lookupResponse?.status) {
+            const matches = extractList(
+              lookupResponse,
+              ["preparations"]
+            );
+
+            const matchingPreparation =
+              matches.find((item) =>
+                normalizeId(
+                  item?.lecture || item?.lectureId
+                ) === lectureId
+              );
+
+            id = normalizeId(
+              matchingPreparation?._id ||
+                matchingPreparation?.id
+            );
+          }
+        }
+
+        if (!id || id === lectureId) {
           if (!silent) {
             toast.error(
-              "تم إنشاء المسودة لكن تعذر قراءة معرّفها"
+              "تم إنشاء المسودة لكن لم يرجع معرّف التحضير الصحيح"
             );
           }
           return false;
         }
+
+        // Persist the id synchronously before React schedules a re-render.
+        // This prevents a step-change/resource action/autosave from issuing
+        // a second POST /preparation in the small state-update window.
+        preparationIdRef.current = id;
 
         if (mountedRef.current) {
           setPreparationId(id);
@@ -1751,140 +1810,140 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
 
   const saveDraft = useCallback(
     async ({ silent = false } = {}) => {
-      if (saving || readOnly) {
-        return preparationId || false;
+      if (readOnly) {
+        return preparationIdRef.current || preparationId || false;
       }
 
-      const lectureId =
-        normalizeId(form.lecture);
+      // Serialize every save operation. React state updates are asynchronous,
+      // so relying on `saving` alone can allow two handlers to enter together.
+      if (savePromiseRef.current) {
+        return savePromiseRef.current;
+      }
+
+      const lectureId = normalizeId(form.lecture);
 
       if (!lectureId) {
         if (!silent) {
-          toast.error(
-            "اختر الحصة الدراسية أولًا"
-          );
+          toast.error("اختر الحصة الدراسية أولًا");
         }
         return false;
       }
 
-      setSaving(true);
+      const savePromise = (async () => {
+        setSaving(true);
 
-      try {
-        let id = preparationId;
-        const hadContentChanges =
-          snapshot(form) !==
-          savedSnapshotRef.current;
-
-        if (!id) {
-          id = await createDraftRecord({
-            silent,
-          });
+        try {
+          let id = normalizeId(
+            preparationIdRef.current || preparationId
+          );
+          const hadContentChanges =
+            snapshot(form) !== savedSnapshotRef.current;
 
           if (!id) {
+            id = await createDraftRecord({ silent });
+
+            if (!id) {
+              return false;
+            }
+          }
+
+          // Keep the synchronous ref authoritative for all subsequent actions.
+          preparationIdRef.current = normalizeId(id);
+
+          // Safety guard: never PATCH /preparation/:lectureId.
+          if (normalizeId(id) === lectureId) {
+            if (!silent) {
+              toast.error(
+                "تعذر تحديد معرّف مسودة التحضير — أعد فتح الصفحة"
+              );
+            }
             return false;
           }
-        }
 
-        let lastResponse = null;
+          let lastResponse = null;
 
-        if (hadContentChanges) {
-          const payload =
-            makeChangedPayload(
+          if (hadContentChanges) {
+            const payload = makeChangedPayload(
               form,
               savedSnapshotRef.current
             );
 
-          if (Object.keys(payload).length) {
-            lastResponse =
-              await editPreparation(
-                payload,
-                id
-              );
+            if (Object.keys(payload).length) {
+              lastResponse = await editPreparation(payload, id);
 
-            if (!lastResponse?.status) {
+              if (!lastResponse?.status) {
+                if (!silent) {
+                  toast.error(
+                    lastResponse?.message || "تعذر حفظ المسودة"
+                  );
+                }
+                return false;
+              }
+            }
+          }
+
+          if (attachment && id) {
+            const uploadResponse = await addPreparationFiles(id, attachment);
+
+            if (!uploadResponse?.status) {
               if (!silent) {
                 toast.error(
-                  lastResponse?.message ||
-                    "تعذر حفظ المسودة"
+                  uploadResponse?.message ||
+                    "تم حفظ المسودة لكن تعذر رفع المرفق"
                 );
               }
               return false;
             }
-          }
-        }
 
-        if (attachment && id) {
-          const uploadResponse =
-            await addPreparationFiles(
-              id,
-              attachment
-            );
+            const uploadedFile = attachment;
 
-          if (!uploadResponse?.status) {
-            if (!silent) {
-              toast.error(
-                uploadResponse?.message ||
-                  "تم حفظ المسودة لكن تعذر رفع المرفق"
-              );
-            }
-            return false;
-          }
-
-          const uploadedFile =
-            attachment;
-
-          setAttachment(null);
-          setExistingFiles(
-            (current) => [
+            setAttachment(null);
+            setExistingFiles((current) => [
               ...current,
               {
-                name:
-                  uploadedFile.name,
-                size:
-                  uploadedFile.size,
+                name: uploadedFile.name,
+                size: uploadedFile.size,
               },
-            ]
-          );
+            ]);
 
-          lastResponse =
-            uploadResponse;
-        }
+            lastResponse = uploadResponse;
+          }
 
-        const savedEntity =
-          extractEntity(
-            lastResponse || {}
-          );
-        const responseStatus =
-          Object.keys(savedEntity).length
+          const savedEntity = extractEntity(lastResponse || {});
+          const responseStatus = Object.keys(savedEntity).length
             ? getStatus(savedEntity)
             : "draft";
 
-        savedSnapshotRef.current =
-          snapshot(form);
-        lastSaveRef.current =
-          new Date();
-        setPreparationStatus(
-          responseStatus
-        );
+          savedSnapshotRef.current = snapshot(form);
+          lastSaveRef.current = new Date();
+          setPreparationStatus(responseStatus);
 
-        if (!silent) {
-          toast.success(
-            "تم حفظ المسودة"
-          );
-        }
+          if (!silent) {
+            toast.success("تم حفظ المسودة");
+          }
 
-        return id;
-      } catch (error) {
-        if (!silent) {
-          toast.error(
-            error?.response?.data?.message ||
-              "تعذر حفظ المسودة"
-          );
+          return id;
+        } catch (error) {
+          if (!silent) {
+            toast.error(
+              error?.response?.data?.message || "تعذر حفظ المسودة"
+            );
+          }
+          return false;
+        } finally {
+          if (mountedRef.current) {
+            setSaving(false);
+          }
         }
-        return false;
+      })();
+
+      savePromiseRef.current = savePromise;
+
+      try {
+        return await savePromise;
       } finally {
-        if (mountedRef.current) {
-          setSaving(false);
+        if (savePromiseRef.current === savePromise) {
+          savePromiseRef.current = null;
         }
       }
     },
@@ -1894,7 +1953,6 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
       form,
       preparationId,
       readOnly,
-      saving,
     ]
   );
 
@@ -2049,7 +2107,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   };
 
   const refreshResourceState = useCallback(
-    async (idValue) => {
+    async (idValue, { preserveExistingOnEmpty = false } = {}) => {
       const id = normalizeId(idValue);
       if (!id) return false;
 
@@ -2062,20 +2120,74 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
 
       const entity =
         extractEntity(response);
-      const grouped =
-        groupResources(
-          entity?.resources
-        );
+      const hasResourcesField =
+        Array.isArray(entity?.resources);
 
-      setForm((current) => ({
-        ...current,
-        ...grouped,
-      }));
+      if (hasResourcesField) {
+        const grouped =
+          groupResources(entity.resources);
+        const serverCount =
+          Object.values(grouped).reduce(
+            (total, items) => total + items.length,
+            0
+          );
+
+        /*
+         * بعد POST /resources قد يرجع GET /preparation/:id للحظات بدون
+         * الـ resource الجديد. لا نمسح العنصر الذي أضفناه من الواجهة في
+         * هذه الحالة؛ نثق في POST 201 ونترك الـ refresh التالي يصالح الحالة.
+         */
+        if (!(preserveExistingOnEmpty && serverCount === 0)) {
+          setForm((current) => ({
+            ...current,
+            ...grouped,
+          }));
+        }
+      }
+
       setPreparationStatus(
         getStatus(entity)
       );
 
       return entity;
+    },
+    []
+  );
+
+  const applyCreatedResource = useCallback(
+    (response, groupKey, fallbackPayload = {}) => {
+      const created = extractEntity(response);
+      const candidate =
+        created &&
+        typeof created === "object" &&
+        !Array.isArray(created)
+          ? { ...fallbackPayload, ...created }
+          : fallbackPayload;
+
+      const normalized =
+        normalizeAssignmentItems([candidate])[0];
+
+      if (!normalized) return;
+
+      setForm((current) => {
+        const currentItems = Array.isArray(current[groupKey])
+          ? current[groupKey]
+          : [];
+        const resourceId = normalizeId(
+          normalized.resourceId || normalized.id
+        );
+        const withoutDuplicate = resourceId
+          ? currentItems.filter(
+              (item) =>
+                normalizeId(item?.resourceId || item?.id) !== resourceId
+            )
+          : currentItems;
+
+        return {
+          ...current,
+          [groupKey]: [...withoutDuplicate, normalized],
+        };
+      });
     },
     []
   );
@@ -2239,7 +2351,16 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
       return;
     }
 
-    await refreshResourceState(id);
+    applyCreatedResource(
+      response,
+      "exams",
+      {
+        type: "quiz",
+        examId: normalizeId(exam),
+        title: getName(exam, exam?.examTitle || "اختبار"),
+      }
+    );
+    await refreshResourceState(id, { preserveExistingOnEmpty: true });
     setAssignmentDialog(null);
     toast.success(
       "تمت إضافة الاختبار للتحضير"
@@ -2275,7 +2396,16 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
       return;
     }
 
-    await refreshResourceState(id);
+    applyCreatedResource(
+      response,
+      "activities",
+      {
+        type: "activity",
+        projectId: normalizeId(project),
+        title: getName(project, "نشاط / مشروع"),
+      }
+    );
+    await refreshResourceState(id, { preserveExistingOnEmpty: true });
     setAssignmentDialog(null);
     toast.success(
       "تمت إضافة النشاط للتحضير"
@@ -2424,6 +2554,13 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
       return;
     }
 
+    // POST نجح بالفعل؛ اعرض التكليف فورًا بدل انتظار GET detail.
+    applyCreatedResource(
+      createResponse,
+      group.key,
+      payload
+    );
+
     if (oldItem?.resourceId) {
       const deleteResponse =
         await deletePreparationResource(
@@ -2444,7 +2581,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
     }
 
     setResourceSaving(false);
-    await refreshResourceState(id);
+    await refreshResourceState(id, { preserveExistingOnEmpty: true });
     setAssignmentDialog(null);
     setAssignmentEditIndex(null);
     toast.success(
