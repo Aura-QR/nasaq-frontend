@@ -306,6 +306,15 @@ const Sidebar = ({ active, setActive }) => {
               subjectsPermissions.read,
           },
           {
+            name: "منهج المدرسة",
+            Icon: AutoStoriesRounded,
+            iconType: "mui",
+            to: "/school/curriculum",
+            show:
+              role === "OWNER" ||
+              role === "MANAGER",
+          },
+          {
             name: "إدارة الفصول",
             icon: userIcon,
             to: "/school/classes",

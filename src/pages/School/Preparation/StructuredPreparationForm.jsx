@@ -56,6 +56,7 @@ import {
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
+import { api } from "@/APIs/Axios";
 import Loading from "@/components/Loading";
 import {
   addPreparation,
@@ -191,6 +192,55 @@ const extractEntity = (value) => {
   return payload.preparation || payload.lecture || payload.item || payload;
 };
 
+const extractLectureDetail = (response) => {
+  const candidates = [
+    response?.data?.data,
+    response?.data,
+    response?.lecture,
+    response,
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      candidate &&
+      !Array.isArray(candidate) &&
+      typeof candidate === "object" &&
+      (candidate?._id || candidate?.id) &&
+      (candidate?.subjectOfferingId || candidate?.subjectOffering)
+    ) {
+      return candidate;
+    }
+  }
+
+  const fallback = extractEntity(response);
+  return fallback && typeof fallback === "object" ? fallback : {};
+};
+
+const extractSubjectOfferingDetail = (response) => {
+  const candidates = [
+    response?.data?.data,
+    response?.data,
+    response?.subjectOffering,
+    response?.item,
+    response,
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      candidate &&
+      !Array.isArray(candidate) &&
+      typeof candidate === "object" &&
+      (candidate?._id || candidate?.id) &&
+      (candidate?.subjectId || candidate?.subject)
+    ) {
+      return candidate;
+    }
+  }
+
+  const fallback = extractEntity(response);
+  return fallback && typeof fallback === "object" ? fallback : {};
+};
+
 const getName = (value, fallback = "") => {
   if (value && typeof value === "object") {
     return String(
@@ -308,8 +358,19 @@ const getLectureGrade = (lecture) => {
   };
 };
 
-const hydrateLectureCurriculumContext = async (lecture) => {
-  if (!lecture || typeof lecture !== "object") return lecture || null;
+const resolveLectureCurriculumContext = async (lecture) => {
+  if (!lecture || typeof lecture !== "object") {
+    return {
+      lecture: lecture || null,
+      context: {
+        subjectId: "",
+        subjectName: "المادة",
+        subjectOfferingId: "",
+        gradeLevelId: "",
+        gradeName: "الصف الدراسي",
+      },
+    };
+  }
 
   const rawOffering = lecture?.subjectOfferingId || lecture?.subjectOffering;
   const offeringId = normalizeId(rawOffering);
@@ -318,31 +379,86 @@ const hydrateLectureCurriculumContext = async (lecture) => {
       ? rawOffering
       : {};
 
-  const hasCurriculumIds =
-    normalizeId(offering?.subjectId || offering?.subject) &&
-    normalizeId(offering?.gradeLevelId || offering?.gradeLevel);
+  const offeringHasSubjectAndGrade = (value) =>
+    Boolean(
+      normalizeId(value?.subjectId || value?.subject) &&
+        normalizeId(value?.gradeLevelId || value?.gradeLevel)
+    );
 
-  if (offeringId && !hasCurriculumIds) {
+  // The lecture endpoint normally returns the offering populated. Some list/detail
+  // variants only return its id, so resolve the offering explicitly in that case.
+  if (offeringId && !offeringHasSubjectAndGrade(offering)) {
     const response = await fetchSingleSubjectOffering(offeringId);
     if (response?.status) {
-      offering = {
-        ...offering,
-        ...extractEntity(response),
-      };
+      const resolvedOffering = extractEntity(response);
+      if (resolvedOffering && typeof resolvedOffering === "object") {
+        offering = {
+          ...offering,
+          ...resolvedOffering,
+        };
+      }
     }
   }
 
-  if (!offeringId && !Object.keys(offering).length) return lecture;
+  const subjectNode = offering?.subjectId || offering?.subject || null;
+  const gradeNode = offering?.gradeLevelId || offering?.gradeLevel || null;
+
+  const subjectId = normalizeId(subjectNode);
+  const gradeLevelId = normalizeId(gradeNode);
 
   const normalizedOffering = {
     ...offering,
     ...(offeringId ? { _id: offering?._id || offeringId } : {}),
   };
 
-  return {
+  const normalizedLecture = {
     ...lecture,
     subjectOfferingId: normalizedOffering,
     subjectOffering: normalizedOffering,
+  };
+
+  return {
+    lecture: normalizedLecture,
+    context: {
+      subjectId,
+      subjectName:
+        getName(subjectNode) ||
+        String(
+          subjectNode?.subjectName ||
+            offering?.subjectName ||
+            lecture?.subjectName ||
+            ""
+        ).trim() ||
+        "المادة",
+      subjectOfferingId: offeringId || normalizeId(normalizedOffering),
+      gradeLevelId,
+      gradeName:
+        getName(gradeNode) ||
+        String(
+          gradeNode?.gradeName ||
+            offering?.gradeLevelName ||
+            offering?.gradeName ||
+            lecture?.gradeName ||
+            ""
+        ).trim() ||
+        "الصف الدراسي",
+    },
+  };
+};
+
+const hydrateLectureCurriculumContext = async (lecture) =>
+  (await resolveLectureCurriculumContext(lecture)).lecture;
+
+const getLectureCurriculumContext = (lecture) => {
+  const subject = getLectureSubject(lecture || {});
+  const grade = getLectureGrade(lecture || {});
+
+  return {
+    subjectId: subject.id,
+    subjectName: subject.name,
+    subjectOfferingId: subject.offeringId,
+    gradeLevelId: grade.id,
+    gradeName: grade.name,
   };
 };
 
@@ -1044,6 +1160,13 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const [step, setStep] = useState(1);
   const [lectures, setLectures] = useState([]);
   const [lecture, setLecture] = useState(null);
+  const [lectureContext, setLectureContext] = useState({
+    subjectId: "",
+    subjectName: "المادة",
+    subjectOfferingId: "",
+    gradeLevelId: "",
+    gradeName: "الصف الدراسي",
+  });
   const [units, setUnits] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [curriculumLoading, setCurriculumLoading] = useState(false);
@@ -1083,8 +1206,21 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const createDraftPromiseRef = useRef(null);
   const autosaveCreateBlockedRef = useRef(false);
 
-  const subject = useMemo(() => getLectureSubject(lecture || {}), [lecture]);
-  const grade = useMemo(() => getLectureGrade(lecture || {}), [lecture]);
+  const subject = useMemo(
+    () => ({
+      id: lectureContext.subjectId,
+      name: lectureContext.subjectName || "المادة",
+      offeringId: lectureContext.subjectOfferingId,
+    }),
+    [lectureContext]
+  );
+  const grade = useMemo(
+    () => ({
+      id: lectureContext.gradeLevelId,
+      name: lectureContext.gradeName || "الصف الدراسي",
+    }),
+    [lectureContext]
+  );
   const currentSnapshot = useMemo(() => snapshot(form), [form]);
   const dirty = currentSnapshot !== savedSnapshotRef.current || Boolean(attachment);
   const readOnly =
@@ -1155,16 +1291,17 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
         }
 
         let lectureRows = [];
+        let initialLectureContext = null;
         if (lectureId) {
           const lectureResponse = await fetchSingleLecture(lectureId, { force: true });
           if (lectureResponse?.status) {
-            // The lecture detail endpoint returns subjectOfferingId populated as:
-            // { _id, subjectId: { _id, subjectName }, gradeLevelId: { _id, name } }.
-            // Hydrate/normalize it before putting the lecture in state so the
-            // curriculum and library effects can run on the very first render.
+            // Resolve the curriculum context from the exact lecture detail
+            // response once and keep that exact result. Do not recompute it
+            // from a second state snapshot during initial render.
             const rawLecture = extractEntity(lectureResponse);
-            const hydratedLecture = await hydrateLectureCurriculumContext(rawLecture);
-            lectureRows = [hydratedLecture].filter(Boolean);
+            const resolvedLecture = await resolveLectureCurriculumContext(rawLecture);
+            lectureRows = [resolvedLecture.lecture].filter(Boolean);
+            initialLectureContext = resolvedLecture.context;
           }
         } else {
           const filters = SCHOOL_ADMIN_ROLES.includes(role)
@@ -1183,8 +1320,14 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
         setLectures(lectureRows.filter((item) => normalizeId(item)));
 
         if (lectureId) {
-          const selectedLecture = lectureRows.find((item) => normalizeId(item) === lectureId) || lectureRows[0] || null;
+          const selectedLecture =
+            lectureRows.find((item) => normalizeId(item) === lectureId) ||
+            lectureRows[0] ||
+            null;
           setLecture(selectedLecture);
+          if (selectedLecture && initialLectureContext) {
+            setLectureContext(initialLectureContext);
+          }
         }
 
         if (initialPreparation) {
@@ -1221,124 +1364,202 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   }, [explicitId, preselectedLectureId, role]);
 
   useEffect(() => {
-    let active = true;
     const targetLectureId = normalizeId(form.lecture);
+    let cancelled = false;
 
-    // During the initial create-page load, `lectures` and `form.lecture` are
-    // populated in separate state updates. Do not clear a successfully loaded
-    // lecture just because one of those updates has not rendered yet.
     if (!targetLectureId) {
+      setLecture(null);
+      setLectureContext({
+        subjectId: "",
+        subjectName: "المادة",
+        subjectOfferingId: "",
+        gradeLevelId: "",
+        gradeName: "الصف الدراسي",
+      });
+      setUnits([]);
+      setLessons([]);
+      setCurriculumMessage("");
       return () => {
-        active = false;
+        cancelled = true;
       };
     }
 
-    const currentLectureId = normalizeId(lecture);
-    const currentSubject = getLectureSubject(lecture || {});
-    const currentGrade = getLectureGrade(lecture || {});
+    const run = async () => {
+      setCurriculumLoading(true);
+      setCurriculumMessage("");
 
-    if (
-      currentLectureId === targetLectureId &&
-      currentSubject.id &&
-      currentGrade.id
-    ) {
-      return () => {
-        active = false;
-      };
-    }
-
-    const selected = lectures.find(
-      (item) => normalizeId(item) === targetLectureId
-    );
-
-    const hydrate = async () => {
       try {
-        let source = selected;
+        // Use the shared Axios instance directly here so we consume the exact
+        // backend envelope visible in DevTools, independent of any lecture API
+        // helper normalization/caching version.
+        const lectureHttpResponse = await api.get(`/lectures/${targetLectureId}`);
+        if (cancelled) return;
 
-        // A preselected lecture can be opened before the lecture list is ready.
-        // In that case, resolve the detail directly instead of setting the
-        // context to null; the detail endpoint already returns the offering,
-        // school subject and grade populated.
-        if (!source) {
-          const response = await fetchSingleLecture(targetLectureId, {
-            force: true,
-          });
-
-          if (!response?.status) return;
-          source = extractEntity(response);
+        const lectureEnvelope = lectureHttpResponse?.data || {};
+        if (lectureEnvelope?.status === false) {
+          setUnits([]);
+          setLessons([]);
+          setCurriculumMessage(
+            lectureEnvelope?.message || "تعذر تحميل بيانات الحصة"
+          );
+          return;
         }
 
-        const hydrated = await hydrateLectureCurriculumContext(source);
-        if (!active || normalizeId(hydrated) !== targetLectureId) return;
+        const rawLecture =
+          lectureEnvelope?.data && typeof lectureEnvelope.data === "object"
+            ? lectureEnvelope.data
+            : lectureEnvelope;
 
-        setLecture(hydrated);
+        let rawOffering =
+          rawLecture?.subjectOfferingId || rawLecture?.subjectOffering || null;
+        const offeringId = normalizeId(rawOffering);
+        let offering =
+          rawOffering &&
+          typeof rawOffering === "object" &&
+          !Array.isArray(rawOffering)
+            ? rawOffering
+            : {};
+
+        const hasSubjectAndGrade = (value) =>
+          Boolean(
+            normalizeId(value?.subjectId || value?.subject) &&
+              normalizeId(value?.gradeLevelId || value?.gradeLevel)
+          );
+
+        if (offeringId && !hasSubjectAndGrade(offering)) {
+          const offeringHttpResponse = await api.get(
+            `/subject-offerings/${offeringId}`
+          );
+          if (cancelled) return;
+
+          const offeringEnvelope = offeringHttpResponse?.data || {};
+          if (offeringEnvelope?.status !== false) {
+            const offeringPayload =
+              offeringEnvelope?.data && typeof offeringEnvelope.data === "object"
+                ? offeringEnvelope.data
+                : offeringEnvelope;
+            if (offeringPayload && typeof offeringPayload === "object") {
+              offering = { ...offering, ...offeringPayload };
+              rawOffering = offering;
+            }
+          }
+        }
+
+        const subjectNode = offering?.subjectId || offering?.subject || null;
+        const gradeNode = offering?.gradeLevelId || offering?.gradeLevel || null;
+        const subjectId = normalizeId(subjectNode);
+        const gradeLevelId = normalizeId(gradeNode);
+        const subjectName =
+          String(
+            subjectNode?.subjectName ||
+              subjectNode?.name ||
+              offering?.subjectName ||
+              ""
+          ).trim() || "المادة";
+        const gradeName =
+          String(
+            gradeNode?.name ||
+              gradeNode?.gradeName ||
+              offering?.gradeLevelName ||
+              offering?.gradeName ||
+              ""
+          ).trim() || "الصف الدراسي";
+
+        const normalizedOffering = {
+          ...offering,
+          ...(offeringId ? { _id: offering?._id || offeringId } : {}),
+        };
+        const nextLecture = {
+          ...rawLecture,
+          subjectOfferingId: normalizedOffering,
+          subjectOffering: normalizedOffering,
+        };
+
+        // Update the visible subject/grade immediately from the exact backend
+        // paths before any curriculum request.
+        setLecture(nextLecture);
+        setLectureContext({
+          subjectId,
+          subjectName,
+          subjectOfferingId: offeringId || normalizeId(normalizedOffering),
+          gradeLevelId,
+          gradeName,
+        });
+
         setLectures((current) => {
           const exists = current.some(
             (item) => normalizeId(item) === targetLectureId
           );
           if (exists) {
             return current.map((item) =>
-              normalizeId(item) === targetLectureId ? hydrated : item
+              normalizeId(item) === targetLectureId ? nextLecture : item
             );
           }
-          return [hydrated, ...current];
+          return nextLecture ? [nextLecture, ...current] : current;
         });
-      } catch {
-        // Keep the last valid lecture context. The curriculum effect will show
-        // a useful message if subject/grade context is genuinely unavailable.
-      }
-    };
 
-    hydrate();
-    return () => {
-      active = false;
-    };
-  }, [form.lecture, lectures, lecture]);
-
-  useEffect(() => {
-    if (!lecture) {
-      setUnits([]);
-      setLessons([]);
-      setCurriculumMessage("");
-      return;
-    }
-
-    if (!subject.id || !grade.id) {
-      setUnits([]);
-      setLessons([]);
-      setCurriculumMessage(
-        "تعذر تحديد مادة أو صف الحصة — حدّث الصفحة أو راجع إعداد عرض المادة"
-      );
-      return;
-    }
-
-    let active = true;
-    const run = async () => {
-      setCurriculumLoading(true);
-      setCurriculumMessage("");
-      const response = await fetchCurriculumUnits({
-        subjectId: subject.id,
-        gradeLevelId: grade.id,
-      });
-      if (!active) return;
-
-      if (!response?.status) {
-        setUnits([]);
-        setCurriculumMessage(response?.message || "تعذر تحميل وحدات المنهج");
-      } else {
-        const rows = extractList(response, ["units"]);
-        setUnits(rows);
-        if (!rows.length) {
-          setCurriculumMessage("لم يتم إعداد دروس هذه المادة بعد — تواصل مع إدارة المدرسة");
+        if (!subjectId || !gradeLevelId) {
+          setUnits([]);
+          setLessons([]);
+          setCurriculumMessage(
+            "تعذر تحديد مادة أو صف الحصة — راجع إعداد عرض المادة"
+          );
+          return;
         }
+
+        // Also call curriculum directly with the exact IDs read above so this
+        // path cannot be blocked by a stale helper/cache response.
+        const unitsHttpResponse = await api.get("/curriculum/units", {
+          params: { subjectId, gradeLevelId },
+        });
+        if (cancelled) return;
+
+        const unitsEnvelope = unitsHttpResponse?.data || {};
+        if (unitsEnvelope?.status === false) {
+          setUnits([]);
+          setLessons([]);
+          setCurriculumMessage(
+            unitsEnvelope?.message || "تعذر تحميل وحدات المنهج"
+          );
+          return;
+        }
+
+        const unitsPayload =
+          unitsEnvelope?.data !== undefined
+            ? unitsEnvelope.data
+            : unitsEnvelope;
+        const rows = Array.isArray(unitsPayload)
+          ? unitsPayload
+          : Array.isArray(unitsPayload?.units)
+            ? unitsPayload.units
+            : [];
+
+        setUnits(rows);
+        setLessons([]);
+        setCurriculumMessage(
+          rows.length
+            ? ""
+            : "لم يتم إعداد دروس هذه المادة بعد — تواصل مع إدارة المدرسة"
+        );
+      } catch (error) {
+        if (cancelled) return;
+        setUnits([]);
+        setLessons([]);
+        setCurriculumMessage(
+          error?.response?.data?.message ||
+            error?.message ||
+            "تعذر تحميل بيانات مادة وصف الحصة"
+        );
+      } finally {
+        if (!cancelled) setCurriculumLoading(false);
       }
-      setCurriculumLoading(false);
     };
+
     run();
     return () => {
-      active = false;
+      cancelled = true;
     };
-  }, [lecture, subject.id, grade.id]);
+  }, [form.lecture]);
 
   useEffect(() => {
     if (!form.unitId) {
