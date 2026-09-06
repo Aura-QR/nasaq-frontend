@@ -1158,7 +1158,13 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
         if (lectureId) {
           const lectureResponse = await fetchSingleLecture(lectureId, { force: true });
           if (lectureResponse?.status) {
-            lectureRows = [extractEntity(lectureResponse)].filter(Boolean);
+            // The lecture detail endpoint returns subjectOfferingId populated as:
+            // { _id, subjectId: { _id, subjectName }, gradeLevelId: { _id, name } }.
+            // Hydrate/normalize it before putting the lecture in state so the
+            // curriculum and library effects can run on the very first render.
+            const rawLecture = extractEntity(lectureResponse);
+            const hydratedLecture = await hydrateLectureCurriculumContext(rawLecture);
+            lectureRows = [hydratedLecture].filter(Boolean);
           }
         } else {
           const filters = SCHOOL_ADMIN_ROLES.includes(role)
@@ -1216,32 +1222,93 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
 
   useEffect(() => {
     let active = true;
-    const selected = lectures.find(
-      (item) => normalizeId(item) === normalizeId(form.lecture)
-    );
+    const targetLectureId = normalizeId(form.lecture);
 
-    if (!selected) {
-      setLecture(null);
+    // During the initial create-page load, `lectures` and `form.lecture` are
+    // populated in separate state updates. Do not clear a successfully loaded
+    // lecture just because one of those updates has not rendered yet.
+    if (!targetLectureId) {
       return () => {
         active = false;
       };
     }
 
+    const currentLectureId = normalizeId(lecture);
+    const currentSubject = getLectureSubject(lecture || {});
+    const currentGrade = getLectureGrade(lecture || {});
+
+    if (
+      currentLectureId === targetLectureId &&
+      currentSubject.id &&
+      currentGrade.id
+    ) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const selected = lectures.find(
+      (item) => normalizeId(item) === targetLectureId
+    );
+
     const hydrate = async () => {
-      const hydrated = await hydrateLectureCurriculumContext(selected);
-      if (active) setLecture(hydrated);
+      try {
+        let source = selected;
+
+        // A preselected lecture can be opened before the lecture list is ready.
+        // In that case, resolve the detail directly instead of setting the
+        // context to null; the detail endpoint already returns the offering,
+        // school subject and grade populated.
+        if (!source) {
+          const response = await fetchSingleLecture(targetLectureId, {
+            force: true,
+          });
+
+          if (!response?.status) return;
+          source = extractEntity(response);
+        }
+
+        const hydrated = await hydrateLectureCurriculumContext(source);
+        if (!active || normalizeId(hydrated) !== targetLectureId) return;
+
+        setLecture(hydrated);
+        setLectures((current) => {
+          const exists = current.some(
+            (item) => normalizeId(item) === targetLectureId
+          );
+          if (exists) {
+            return current.map((item) =>
+              normalizeId(item) === targetLectureId ? hydrated : item
+            );
+          }
+          return [hydrated, ...current];
+        });
+      } catch {
+        // Keep the last valid lecture context. The curriculum effect will show
+        // a useful message if subject/grade context is genuinely unavailable.
+      }
     };
 
     hydrate();
     return () => {
       active = false;
     };
-  }, [form.lecture, lectures]);
+  }, [form.lecture, lectures, lecture]);
 
   useEffect(() => {
-    if (!lecture || !subject.id || !grade.id) {
+    if (!lecture) {
       setUnits([]);
       setLessons([]);
+      setCurriculumMessage("");
+      return;
+    }
+
+    if (!subject.id || !grade.id) {
+      setUnits([]);
+      setLessons([]);
+      setCurriculumMessage(
+        "تعذر تحديد مادة أو صف الحصة — حدّث الصفحة أو راجع إعداد عرض المادة"
+      );
       return;
     }
 
