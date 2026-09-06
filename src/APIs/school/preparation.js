@@ -95,6 +95,10 @@ const normalizeFailure = (
   fallback = "حدث خطأ ما"
 ) => ({
   status: false,
+  statusCode:
+    error?.response?.status ||
+    error?.response?.data?.statusCode ||
+    500,
   message:
     error?.response?.data
       ?.message ||
@@ -535,31 +539,123 @@ export const submitPreparation = async (id) => {
     };
   }
 
-  // Structured-preparation backends expose a dedicated submit action.
-  // The two method attempts keep the frontend compatible during rollout,
-  // while the final PATCH fallback works with the legacy reviewStatus model.
   try {
-    const response = await api.post(`${ENDPOINT}/${preparationId}/submit`, {});
+    const response = await api.post(
+      `${ENDPOINT}/${preparationId}/submit`
+    );
     return normalizeSuccess(response);
   } catch (error) {
-    if (![404, 405].includes(error?.response?.status)) {
-      return normalizeFailure(error, "تعذر إرسال التحضير للمراجعة");
-    }
+    return normalizeFailure(
+      error,
+      "تعذر إرسال التحضير للمراجعة"
+    );
   }
-
-  try {
-    const response = await api.patch(`${ENDPOINT}/${preparationId}/submit`, {});
-    return normalizeSuccess(response);
-  } catch (error) {
-    if (![404, 405].includes(error?.response?.status)) {
-      return normalizeFailure(error, "تعذر إرسال التحضير للمراجعة");
-    }
-  }
-
-  return patchPreparation(preparationId, {
-    reviewStatus: "pending",
-  });
 };
+
+export const addPreparationResource = async (
+  preparationIdValue,
+  resource = {}
+) => {
+  const preparationId = normalizeId(
+    preparationIdValue
+  );
+
+  if (!preparationId) {
+    return {
+      status: false,
+      message:
+        "يجب حفظ المسودة أولًا قبل إضافة التكليف",
+    };
+  }
+
+  try {
+    const response = await api.post(
+      `${ENDPOINT}/${preparationId}/resources`,
+      resource
+    );
+
+    return normalizeSuccess(
+      response
+    );
+  } catch (error) {
+    return normalizeFailure(
+      error,
+      "تعذر إضافة التكليف"
+    );
+  }
+};
+
+export const deletePreparationResource =
+  async (
+    preparationIdValue,
+    resourceIdValue
+  ) => {
+    const preparationId =
+      normalizeId(
+        preparationIdValue
+      );
+    const resourceId =
+      normalizeId(
+        resourceIdValue
+      );
+
+    if (
+      !preparationId ||
+      !resourceId
+    ) {
+      return {
+        status: false,
+        message:
+          "بيانات التكليف غير مكتملة",
+      };
+    }
+
+    try {
+      const response =
+        await api.delete(
+          `${ENDPOINT}/${preparationId}/resources/${resourceId}`
+        );
+
+      return normalizeSuccess(
+        response
+      );
+    } catch (error) {
+      return normalizeFailure(
+        error,
+        "تعذر حذف التكليف"
+      );
+    }
+  };
+
+export const fetchPreparationStudentView =
+  async (id) => {
+    const preparationId =
+      normalizeId(id);
+
+    if (!preparationId) {
+      return {
+        status: false,
+        message:
+          "معرّف التحضير غير موجود",
+      };
+    }
+
+    try {
+      const response =
+        await api.get(
+          `${ENDPOINT}/${preparationId}/student-view`
+        );
+
+      return normalizeSuccess(
+        response
+      );
+    } catch (error) {
+      return normalizeFailure(
+        error,
+        "تعذر تحميل محتوى الدرس"
+      );
+    }
+  };
 
 /*
  * Aliases للتوافق مع الملفات القديمة.
@@ -595,4 +691,7 @@ export default {
   deletePreparationFile,
   replacePreparationFile,
   submitPreparation,
+  addPreparationResource,
+  deletePreparationResource,
+  fetchPreparationStudentView,
 };

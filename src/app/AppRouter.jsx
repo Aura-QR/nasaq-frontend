@@ -51,6 +51,7 @@ import SubjectOfferings from "@/pages/SubjectOfferings/SubjectOfferings";
 import SchoolSettings from "@/pages/SchoolSettings/SchoolSettings";
 import SchoolDashboard from "@/pages/SchoolDashboard/SchoolDashboard";
 import Terms from "@/pages/School/Terms/Terms";
+import CurriculumManagement from "@/pages/School/Curriculum/CurriculumManagement";
 
 // =========================
 // Platform Pages
@@ -233,6 +234,27 @@ const AppRouter = () => {
           <Route
             path="/school/permissions"
             element={<SchoolPermissions />}
+          />
+        </Route>
+
+        {/* =====================================================
+            CURRICULUM ADMINISTRATION
+            OWNER / MANAGER ONLY
+        ===================================================== */}
+
+        <Route
+          element={
+            <RoleRoute
+              allowedRoles={[
+                ROLES.OWNER,
+                ROLES.MANAGER,
+              ]}
+            />
+          }
+        >
+          <Route
+            path="/school/curriculum"
+            element={<CurriculumManagement />}
           />
         </Route>
 

@@ -604,13 +604,26 @@ const getPreparationLessonTitle = (preparation) =>
       ""
   ).trim();
 
-const getAssignmentCount = (preparation) =>
-  [
+const getAssignmentCount = (preparation) => {
+  if (Array.isArray(preparation?.resources)) {
+    return preparation.resources.length;
+  }
+
+  if (Number(preparation?.resourcesCount || 0) > 0) {
+    return Number(preparation.resourcesCount);
+  }
+
+  return [
     preparation?.enrichments,
     preparation?.homeworks || preparation?.assignments,
     preparation?.exams,
     preparation?.activities,
-  ].reduce((total, value) => total + (Array.isArray(value) ? value.length : 0), 0);
+  ].reduce(
+    (total, value) =>
+      total + (Array.isArray(value) ? value.length : 0),
+    0
+  );
+};
 
 const loadTeacherPreparations = async (teacherId, lectures) => {
   const mainResponse = await fetchPreparations({

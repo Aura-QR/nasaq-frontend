@@ -60,6 +60,8 @@ import Loading from "@/components/Loading";
 import {
   addPreparation,
   addPreparationFiles,
+  addPreparationResource,
+  deletePreparationResource,
   editPreparation,
   fetchPreparationReferenceLists,
   fetchSinglePreparation,
@@ -69,18 +71,23 @@ import {
   fetchLectures,
   fetchSingleLecture,
 } from "@/APIs/school/lectures";
+import { fetchSingleSubjectOffering } from "@/APIs/school/subjectOfferings";
 import {
   fetchCurriculumLessons,
   fetchCurriculumUnits,
 } from "@/APIs/school/curriculum";
 import {
   addLibraryResource,
-  fetchLibraryBySubject,
+  fetchLibraries,
 } from "@/APIs/school/library";
 import {
   fetchExams,
   fetchTeacherExams,
 } from "@/APIs/school/exams";
+import {
+  fetchProjects,
+  fetchTeacherProjects,
+} from "@/APIs/school/projects";
 
 const AUTOSAVE_MS = 30_000;
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
@@ -223,15 +230,17 @@ const getCurrentUser = (authUser) => {
   return auth?.user || auth || {};
 };
 
+const getLectureOffering = (lecture) =>
+  (lecture?.subjectOfferingId && typeof lecture.subjectOfferingId === "object"
+    ? lecture.subjectOfferingId
+    : null) ||
+  (lecture?.subjectOffering && typeof lecture.subjectOffering === "object"
+    ? lecture.subjectOffering
+    : null) ||
+  {};
+
 const getLectureSubject = (lecture) => {
-  const offering =
-    (lecture?.subjectOfferingId && typeof lecture.subjectOfferingId === "object"
-      ? lecture.subjectOfferingId
-      : null) ||
-    (lecture?.subjectOffering && typeof lecture.subjectOffering === "object"
-      ? lecture.subjectOffering
-      : null) ||
-    {};
+  const offering = getLectureOffering(lecture);
 
   const subjectCandidates = [
     lecture?.subjectId,
@@ -249,7 +258,13 @@ const getLectureSubject = (lecture) => {
     id,
     name:
       getName(entity) ||
-      String(lecture?.subjectName || offering?.subjectName || "").trim() ||
+      String(
+        lecture?.subjectName ||
+          offering?.subjectName ||
+          offering?.subject?.name ||
+          offering?.subjectId?.name ||
+          ""
+      ).trim() ||
       "المادة",
     offeringId: normalizeId(
       lecture?.subjectOfferingId || lecture?.subjectOffering
@@ -258,6 +273,7 @@ const getLectureSubject = (lecture) => {
 };
 
 const getLectureGrade = (lecture) => {
+  const offering = getLectureOffering(lecture);
   const classroom =
     (lecture?.classId && typeof lecture.classId === "object"
       ? lecture.classId
@@ -265,6 +281,8 @@ const getLectureGrade = (lecture) => {
     (lecture?.class && typeof lecture.class === "object" ? lecture.class : null) ||
     {};
   const candidates = [
+    offering?.gradeLevelId,
+    offering?.gradeLevel,
     classroom?.gradeLevelId,
     classroom?.gradeLevel,
     lecture?.gradeLevelId,
@@ -279,10 +297,60 @@ const getLectureGrade = (lecture) => {
     id: candidates.map(normalizeId).find(Boolean) || "",
     name:
       getName(entity) ||
-      String(classroom?.gradeName || lecture?.gradeName || "").trim() ||
+      String(
+        offering?.gradeLevelName ||
+          offering?.gradeName ||
+          classroom?.gradeName ||
+          lecture?.gradeName ||
+          ""
+      ).trim() ||
       "الصف الدراسي",
   };
 };
+
+const hydrateLectureCurriculumContext = async (lecture) => {
+  if (!lecture || typeof lecture !== "object") return lecture || null;
+
+  const rawOffering = lecture?.subjectOfferingId || lecture?.subjectOffering;
+  const offeringId = normalizeId(rawOffering);
+  let offering =
+    rawOffering && typeof rawOffering === "object" && !Array.isArray(rawOffering)
+      ? rawOffering
+      : {};
+
+  const hasCurriculumIds =
+    normalizeId(offering?.subjectId || offering?.subject) &&
+    normalizeId(offering?.gradeLevelId || offering?.gradeLevel);
+
+  if (offeringId && !hasCurriculumIds) {
+    const response = await fetchSingleSubjectOffering(offeringId);
+    if (response?.status) {
+      offering = {
+        ...offering,
+        ...extractEntity(response),
+      };
+    }
+  }
+
+  if (!offeringId && !Object.keys(offering).length) return lecture;
+
+  const normalizedOffering = {
+    ...offering,
+    ...(offeringId ? { _id: offering?._id || offeringId } : {}),
+  };
+
+  return {
+    ...lecture,
+    subjectOfferingId: normalizedOffering,
+    subjectOffering: normalizedOffering,
+  };
+};
+
+const getLectureClassId = (lecture) =>
+  normalizeId(
+    lecture?.classId ||
+      lecture?.class
+  );
 
 const getLectureLabel = (lecture) => {
   const subject = getLectureSubject(lecture);
@@ -332,20 +400,93 @@ const normalizeChoiceArray = (value) =>
 const normalizeAssignmentItems = (value) =>
   (Array.isArray(value) ? value : []).map((item, index) => {
     if (typeof item === "string") {
-      return { id: item, title: item };
+      return { id: item, resourceId: item, title: item };
     }
     return {
       ...item,
-      id: normalizeId(item) || String(item?.key || `local-${index}`),
+      id:
+        normalizeId(item) ||
+        String(item?.key || `local-${index}`),
+      resourceId:
+        normalizeId(
+          item?._id ||
+            item?.resourceId
+        ) || "",
+      examId:
+        normalizeId(item?.examId) || "",
+      projectId:
+        normalizeId(item?.projectId) || "",
       title:
         getName(item) ||
         item?.examTitle ||
         item?.lessonTitle ||
         `عنصر ${index + 1}`,
-      startDate: item?.startDate || item?.from || "",
-      endDate: item?.endDate || item?.to || "",
+      startDate:
+        String(
+          item?.startAt ||
+            item?.startDate ||
+            item?.from ||
+            ""
+        ).slice(0, 10),
+      endDate:
+        String(
+          item?.dueAt ||
+            item?.endDate ||
+            item?.to ||
+            ""
+        ).slice(0, 10),
+      description:
+        String(item?.description || ""),
+      link:
+        String(item?.link || ""),
+      totalGrade:
+        item?.totalGrade ?? "",
     };
   });
+
+const RESOURCE_GROUP_BY_TYPE = {
+  enrichment: "enrichments",
+  homework: "homeworks",
+  quiz: "exams",
+  activity: "activities",
+};
+
+const RESOURCE_TYPE_BY_GROUP = {
+  enrichments: "enrichment",
+  homeworks: "homework",
+  exams: "quiz",
+  activities: "activity",
+};
+
+const groupResources = (resources = []) => {
+  const grouped = {
+    enrichments: [],
+    homeworks: [],
+    exams: [],
+    activities: [],
+  };
+
+  (Array.isArray(resources) ? resources : []).forEach(
+    (resource) => {
+      const group =
+        RESOURCE_GROUP_BY_TYPE[
+          String(resource?.type || "")
+            .trim()
+            .toLowerCase()
+        ];
+
+      if (!group) return;
+
+      grouped[group].push(
+        normalizeAssignmentItems(
+          [resource]
+        )[0]
+      );
+    }
+  );
+
+  return grouped;
+};
 
 const getStatus = (preparation) => {
   const status = String(
@@ -360,8 +501,8 @@ const getStatus = (preparation) => {
 
 const snapshot = (form) =>
   JSON.stringify({
-    ...form,
-    objectives: form.objectives.map((item) => String(item || "")),
+    lecture: normalizeId(form.lecture),
+    ...makePayload(form),
   });
 
 const assignmentCount = (form) =>
@@ -412,51 +553,233 @@ const getReferenceLists = (response) => {
   };
 };
 
-const getStructuredForm = (preparation = {}) => ({
-  lecture: normalizeId(preparation?.lecture || preparation?.lectureId),
-  unitId: normalizeId(preparation?.unitId || preparation?.unit),
-  lessonId: normalizeId(preparation?.lessonId || preparation?.lesson),
-  lessonTitle: String(preparation?.lessonTitle || ""),
-  warmup: String(preparation?.warmup || preparation?.introduction || ""),
-  vocabulary: String(preparation?.vocabulary || preparation?.lessonVocabulary || ""),
-  objectives: normalizeObjectiveRows(preparation?.objectives),
-  digitalContentIds: normalizeIds(
-    preparation?.digitalContentIds || preparation?.digitalContents || preparation?.libraryItems
-  ),
-  teachingStrategies: normalizeChoiceArray(preparation?.teachingStrategies),
-  otherTeachingStrategy: String(preparation?.otherTeachingStrategy || ""),
-  educationalAids: normalizeChoiceArray(preparation?.educationalAids),
-  otherEducationalAid: String(preparation?.otherEducationalAid || ""),
-  thinkingSkills: String(preparation?.thinkingSkills || ""),
-  lessonClosing: String(preparation?.lessonClosing || preparation?.closing || ""),
-  enrichments: normalizeAssignmentItems(preparation?.enrichments),
-  homeworks: normalizeAssignmentItems(preparation?.homeworks || preparation?.assignments),
-  exams: normalizeAssignmentItems(preparation?.exams),
-  activities: normalizeAssignmentItems(preparation?.activities),
-  teacherInstructions: String(preparation?.teacherInstructions || ""),
-});
+const getStructuredForm = (preparation = {}) => {
+  const lessonRef =
+    preparation?.lessonId ||
+    preparation?.lesson ||
+    null;
+  const resources =
+    groupResources(
+      preparation?.resources
+    );
 
-const makePayload = (form) => ({
-  lecture: normalizeId(form.lecture),
-  unitId: normalizeId(form.unitId) || null,
-  lessonId: normalizeId(form.lessonId) || null,
-  lessonTitle: String(form.lessonTitle || "").trim(),
-  warmup: form.warmup,
-  vocabulary: form.vocabulary,
-  objectives: form.objectives.map((item) => String(item || "").trim()).filter(Boolean),
-  digitalContentIds: form.digitalContentIds,
-  teachingStrategies: form.teachingStrategies,
-  otherTeachingStrategy: form.otherTeachingStrategy,
-  educationalAids: form.educationalAids,
-  otherEducationalAid: form.otherEducationalAid,
-  thinkingSkills: form.thinkingSkills,
-  lessonClosing: form.lessonClosing,
-  enrichments: form.enrichments,
-  homeworks: form.homeworks,
-  exams: form.exams,
-  activities: form.activities,
-  teacherInstructions: form.teacherInstructions,
-});
+  return {
+    lecture:
+      normalizeId(
+        preparation?.lecture ||
+          preparation?.lectureId
+      ),
+    unitId:
+      normalizeId(
+        preparation?.unitId ||
+          preparation?.unit ||
+          lessonRef?.unitId ||
+          lessonRef?.unit
+      ),
+    lessonId:
+      normalizeId(lessonRef),
+    lessonTitle:
+      String(
+        preparation?.lessonTitle ||
+          getName(lessonRef) ||
+          ""
+      ),
+    warmup:
+      String(
+        preparation?.warmUp ||
+          preparation?.warmup ||
+          preparation?.introduction ||
+          ""
+      ),
+    vocabulary:
+      String(
+        preparation?.vocabulary ||
+          preparation?.lessonVocabulary ||
+          ""
+      ),
+    objectives:
+      normalizeObjectiveRows(
+        preparation?.objectives
+      ),
+    digitalContentIds:
+      normalizeIds(
+        preparation?.digitalContentIds ||
+          preparation?.digitalContents ||
+          preparation?.libraryItems
+      ),
+    teachingStrategies:
+      normalizeChoiceArray(
+        preparation?.teachingStrategies
+      ),
+    otherTeachingStrategy:
+      String(
+        preparation?.strategiesOther ||
+          preparation?.otherTeachingStrategy ||
+          ""
+      ),
+    educationalAids:
+      normalizeChoiceArray(
+        preparation?.teachingAids ||
+          preparation?.educationalAids
+      ),
+    otherEducationalAid: "",
+    thinkingSkills:
+      String(
+        preparation?.thinkingSkills ||
+          ""
+      ),
+    lessonClosing:
+      String(
+        preparation?.closure ||
+          preparation?.lessonClosing ||
+          preparation?.closing ||
+          ""
+      ),
+    enrichments:
+      resources.enrichments.length
+        ? resources.enrichments
+        : normalizeAssignmentItems(
+            preparation?.enrichments
+          ),
+    homeworks:
+      resources.homeworks.length
+        ? resources.homeworks
+        : normalizeAssignmentItems(
+            preparation?.homeworks ||
+              preparation?.assignments
+          ),
+    exams:
+      resources.exams.length
+        ? resources.exams
+        : normalizeAssignmentItems(
+            preparation?.exams
+          ),
+    activities:
+      resources.activities.length
+        ? resources.activities
+        : normalizeAssignmentItems(
+            preparation?.activities
+          ),
+    teacherInstructions:
+      String(
+        preparation?.teacherInstructions ||
+          ""
+      ),
+  };
+};
+
+const makePayload = (form) => {
+  const teachingAids = [
+    ...form.educationalAids,
+  ];
+
+  if (
+    form.educationalAids.some(
+      (value) =>
+        String(value)
+          .trim()
+          .toLowerCase() === "other" ||
+        String(value).trim() === "أخرى"
+    ) &&
+    String(
+      form.otherEducationalAid || ""
+    ).trim()
+  ) {
+    teachingAids.push(
+      String(
+        form.otherEducationalAid
+      ).trim()
+    );
+  }
+
+  const payload = {
+    warmUp:
+      String(form.warmup || ""),
+    vocabulary:
+      String(form.vocabulary || ""),
+    objectives:
+      form.objectives
+        .map((item) =>
+          String(item || "").trim()
+        )
+        .filter(Boolean),
+    digitalContentIds:
+      form.digitalContentIds
+        .map(normalizeId)
+        .filter(Boolean),
+    teachingStrategies:
+      form.teachingStrategies,
+    strategiesOther:
+      String(
+        form.otherTeachingStrategy ||
+          ""
+      ),
+    teachingAids,
+    thinkingSkills:
+      String(
+        form.thinkingSkills || ""
+      ),
+    closure:
+      String(
+        form.lessonClosing || ""
+      ),
+    teacherInstructions:
+      String(
+        form.teacherInstructions ||
+          ""
+      ),
+  };
+
+  const lessonId =
+    normalizeId(form.lessonId);
+
+  if (lessonId) {
+    payload.lessonId =
+      lessonId;
+  }
+
+  return payload;
+};
+
+const makeChangedPayload = (form, previousSnapshot = "") => {
+  const current = makePayload(form);
+
+  let previous = {};
+  try {
+    const parsed = JSON.parse(previousSnapshot || "{}");
+    previous = parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    previous = {};
+  }
+
+  const changed = {};
+
+  Object.entries(current).forEach(([key, value]) => {
+    const before = previous?.[key];
+    if (JSON.stringify(value) !== JSON.stringify(before)) {
+      changed[key] = value;
+    }
+  });
+
+  return changed;
+};
+
+const dateOnlyToIso = (
+  value,
+  endOfDay = false
+) => {
+  const date = String(
+    value || ""
+  ).trim();
+
+  if (!date) return "";
+
+  const suffix = endOfDay
+    ? "T23:59:59.999Z"
+    : "T00:00:00.000Z";
+
+  return `${date}${suffix}`;
+};
 
 const StudentBadge = () => (
   <Chip
@@ -734,9 +1057,19 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const [librarySaving, setLibrarySaving] = useState(false);
   const [assignmentDialog, setAssignmentDialog] = useState(null);
   const [assignmentEditIndex, setAssignmentEditIndex] = useState(null);
-  const [assignmentDraft, setAssignmentDraft] = useState({ title: "", startDate: "", endDate: "" });
+  const [assignmentDraft, setAssignmentDraft] = useState({
+    title: "",
+    description: "",
+    startDate: "",
+    endDate: "",
+    totalGrade: "",
+    link: "",
+  });
   const [examOptions, setExamOptions] = useState([]);
   const [examLoading, setExamLoading] = useState(false);
+  const [projectOptions, setProjectOptions] = useState([]);
+  const [projectLoading, setProjectLoading] = useState(false);
+  const [resourceSaving, setResourceSaving] = useState(false);
   const [attachment, setAttachment] = useState(null);
   const [existingFiles, setExistingFiles] = useState([]);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -747,6 +1080,8 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const dirtyRef = useRef(false);
   const objectivePrefillLessonRef = useRef("");
   const mountedRef = useRef(true);
+  const createDraftPromiseRef = useRef(null);
+  const autosaveCreateBlockedRef = useRef(false);
 
   const subject = useMemo(() => getLectureSubject(lecture || {}), [lecture]);
   const grade = useMemo(() => getLectureGrade(lecture || {}), [lecture]);
@@ -754,10 +1089,10 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const dirty = currentSnapshot !== savedSnapshotRef.current || Boolean(attachment);
   const readOnly =
     mode === "view" ||
-    ["pending", "approved"].includes(preparationStatus);
+    preparationStatus === "pending";
   const editable =
     mode !== "view" &&
-    !["pending", "approved"].includes(preparationStatus);
+    preparationStatus !== "pending";
   const canPickLecture = mode === "create" && !preselectedLectureId && !preparationId;
 
   useEffect(() => {
@@ -850,6 +1185,8 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
           const normalized = getStructuredForm(initialPreparation);
           setForm(normalized);
           savedSnapshotRef.current = snapshot(normalized);
+          objectivePrefillLessonRef.current =
+            normalizeId(normalized.lessonId);
           setPreparationId(normalizeId(initialPreparation));
           setPreparationStatus(getStatus(initialPreparation));
           setReviewNote(String(initialPreparation?.reviewNote || ""));
@@ -878,8 +1215,27 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   }, [explicitId, preselectedLectureId, role]);
 
   useEffect(() => {
-    const selected = lectures.find((item) => normalizeId(item) === normalizeId(form.lecture));
-    if (selected) setLecture(selected);
+    let active = true;
+    const selected = lectures.find(
+      (item) => normalizeId(item) === normalizeId(form.lecture)
+    );
+
+    if (!selected) {
+      setLecture(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    const hydrate = async () => {
+      const hydrated = await hydrateLectureCurriculumContext(selected);
+      if (active) setLecture(hydrated);
+    };
+
+    hydrate();
+    return () => {
+      active = false;
+    };
   }, [form.lecture, lectures]);
 
   useEffect(() => {
@@ -943,106 +1299,315 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
 
   useEffect(() => {
     if (!form.lessonId) return;
-    const selected = lessons.find((item) => normalizeId(item) === normalizeId(form.lessonId));
+    const selected = lessons.find(
+      (item) =>
+        normalizeId(item) ===
+        normalizeId(form.lessonId)
+    );
     if (!selected) return;
 
     const title = getName(selected);
     if (title && title !== form.lessonTitle) {
-      setForm((current) => ({ ...current, lessonTitle: title }));
+      setForm((current) => ({
+        ...current,
+        lessonTitle: title,
+      }));
     }
-
-    const suggestions = normalizeObjectiveRows(selected?.objectives).filter(Boolean);
-    const currentObjectives = form.objectives.map((item) => String(item || "").trim()).filter(Boolean);
-    if (
-      suggestions.length &&
-      !currentObjectives.length &&
-      objectivePrefillLessonRef.current !== normalizeId(selected)
-    ) {
-      objectivePrefillLessonRef.current = normalizeId(selected);
-      setSuggestedObjectives(true);
-      setForm((current) => ({ ...current, objectives: suggestions }));
-    }
-  }, [form.lessonId, form.lessonTitle, form.objectives, lessons]);
+  }, [form.lessonId, form.lessonTitle, lessons]);
 
   useEffect(() => {
-    if (!subject.id) {
+    if (!subject.offeringId) {
       setLibraryItems([]);
       return;
     }
+
     let active = true;
+
     const run = async () => {
       setLibraryLoading(true);
-      const response = await fetchLibraryBySubject(subject.id);
+
+      const response =
+        await fetchLibraries(
+          {
+            subjectOfferingId:
+              subject.offeringId,
+            limit: 500,
+          },
+          { force: true }
+        );
+
       if (!active) return;
+
       if (response?.status) {
-        setLibraryItems(extractList(response, ["library", "libraries", "items"]));
+        setLibraryItems(
+          extractList(
+            response,
+            [
+              "library",
+              "libraries",
+              "items",
+            ]
+          )
+        );
       } else {
         setLibraryItems([]);
       }
+
       setLibraryLoading(false);
     };
+
     run();
+
     return () => {
       active = false;
     };
-  }, [subject.id]);
+  }, [subject.offeringId]);
+
+  const createDraftRecord = useCallback(
+    async ({ silent = false } = {}) => {
+      if (preparationId) {
+        return preparationId;
+      }
+
+      const lectureId =
+        normalizeId(form.lecture);
+
+      if (!lectureId) {
+        if (!silent) {
+          toast.error(
+            "اختر الحصة الدراسية أولًا"
+          );
+        }
+        return false;
+      }
+
+      if (
+        silent &&
+        autosaveCreateBlockedRef.current
+      ) {
+        return false;
+      }
+
+      if (createDraftPromiseRef.current) {
+        return createDraftPromiseRef.current;
+      }
+
+      if (!silent) {
+        autosaveCreateBlockedRef.current = false;
+      }
+
+      const createPromise = (async () => {
+        const response =
+          await addPreparation({
+            lecture: lectureId,
+          });
+
+        if (!response?.status) {
+          if (
+            !response?.statusCode ||
+            Number(response.statusCode) >= 500
+          ) {
+            /*
+             * لا نعيد POST تلقائيًا بعد فشل شبكة مبهم؛
+             * المستخدم يستطيع المحاولة يدويًا بعد التحقق.
+             */
+            autosaveCreateBlockedRef.current = true;
+          }
+
+          if (!silent) {
+            toast.error(
+              response?.message ||
+                "تعذر إنشاء مسودة التحضير"
+            );
+          }
+          return false;
+        }
+
+        const created =
+          extractEntity(response);
+        const id =
+          normalizeId(created) ||
+          normalizeId(response?.data);
+
+        if (!id) {
+          if (!silent) {
+            toast.error(
+              "تم إنشاء المسودة لكن تعذر قراءة معرّفها"
+            );
+          }
+          return false;
+        }
+
+        if (mountedRef.current) {
+          setPreparationId(id);
+          setPreparationStatus(
+            getStatus(created)
+          );
+        }
+
+        autosaveCreateBlockedRef.current = false;
+        return id;
+      })();
+
+      createDraftPromiseRef.current =
+        createPromise;
+
+      try {
+        return await createPromise;
+      } finally {
+        createDraftPromiseRef.current = null;
+      }
+    },
+    [form.lecture, preparationId]
+  );
 
   const saveDraft = useCallback(
     async ({ silent = false } = {}) => {
-      if (saving || readOnly) return preparationId || false;
-      const lectureId = normalizeId(form.lecture);
+      if (saving || readOnly) {
+        return preparationId || false;
+      }
+
+      const lectureId =
+        normalizeId(form.lecture);
+
       if (!lectureId) {
-        if (!silent) toast.error("اختر الحصة الدراسية أولًا");
+        if (!silent) {
+          toast.error(
+            "اختر الحصة الدراسية أولًا"
+          );
+        }
         return false;
       }
 
       setSaving(true);
+
       try {
-        const payload = makePayload(form);
-        let response;
         let id = preparationId;
+        const hadContentChanges =
+          snapshot(form) !==
+          savedSnapshotRef.current;
 
-        if (id) {
-          response = await editPreparation(payload, id);
-        } else {
-          response = await addPreparation({ ...payload, reviewStatus: "draft" });
-          id = normalizeId(extractEntity(response));
-          if (!id) id = normalizeId(response?.data);
-        }
+        if (!id) {
+          id = await createDraftRecord({
+            silent,
+          });
 
-        if (!response?.status) {
-          if (!silent) toast.error(response?.message || "تعذر حفظ المسودة");
-          return false;
-        }
-
-        if (id && !preparationId) setPreparationId(id);
-
-        if (attachment && id) {
-          const uploadResponse = await addPreparationFiles(id, attachment);
-          if (!uploadResponse?.status) {
-            if (!silent) toast.error(uploadResponse?.message || "تم حفظ المسودة لكن تعذر رفع المرفق");
-          } else {
-            const uploadedFile = attachment;
-            setAttachment(null);
-            setExistingFiles((current) => [
-              ...current,
-              { name: uploadedFile.name, size: uploadedFile.size },
-            ]);
+          if (!id) {
+            return false;
           }
         }
 
-        savedSnapshotRef.current = snapshot(form);
-        lastSaveRef.current = new Date();
-        setPreparationStatus((current) => (current === "needs_revision" ? current : "draft"));
-        if (!silent) toast.success("تم حفظ المسودة");
-        return id || true;
+        let lastResponse = null;
+
+        if (hadContentChanges) {
+          const payload =
+            makeChangedPayload(
+              form,
+              savedSnapshotRef.current
+            );
+
+          if (Object.keys(payload).length) {
+            lastResponse =
+              await editPreparation(
+                payload,
+                id
+              );
+
+            if (!lastResponse?.status) {
+              if (!silent) {
+                toast.error(
+                  lastResponse?.message ||
+                    "تعذر حفظ المسودة"
+                );
+              }
+              return false;
+            }
+          }
+        }
+
+        if (attachment && id) {
+          const uploadResponse =
+            await addPreparationFiles(
+              id,
+              attachment
+            );
+
+          if (!uploadResponse?.status) {
+            if (!silent) {
+              toast.error(
+                uploadResponse?.message ||
+                  "تم حفظ المسودة لكن تعذر رفع المرفق"
+              );
+            }
+            return false;
+          }
+
+          const uploadedFile =
+            attachment;
+
+          setAttachment(null);
+          setExistingFiles(
+            (current) => [
+              ...current,
+              {
+                name:
+                  uploadedFile.name,
+                size:
+                  uploadedFile.size,
+              },
+            ]
+          );
+
+          lastResponse =
+            uploadResponse;
+        }
+
+        const savedEntity =
+          extractEntity(
+            lastResponse || {}
+          );
+        const responseStatus =
+          Object.keys(savedEntity).length
+            ? getStatus(savedEntity)
+            : "draft";
+
+        savedSnapshotRef.current =
+          snapshot(form);
+        lastSaveRef.current =
+          new Date();
+        setPreparationStatus(
+          responseStatus
+        );
+
+        if (!silent) {
+          toast.success(
+            "تم حفظ المسودة"
+          );
+        }
+
+        return id;
       } catch (error) {
-        if (!silent) toast.error(error?.response?.data?.message || "تعذر حفظ المسودة");
+        if (!silent) {
+          toast.error(
+            error?.response?.data?.message ||
+              "تعذر حفظ المسودة"
+          );
+        }
         return false;
       } finally {
-        if (mountedRef.current) setSaving(false);
+        if (mountedRef.current) {
+          setSaving(false);
+        }
       }
-    }, [attachment, form, preparationId, readOnly, saving]
+    },
+    [
+      attachment,
+      createDraftRecord,
+      form,
+      preparationId,
+      readOnly,
+      saving,
+    ]
   );
 
   useEffect(() => {
@@ -1084,6 +1649,86 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
     updateForm({ objectives: next.length ? next : [""] });
   };
 
+  const handleLessonSelection = (lessonIdValue) => {
+    const nextLessonId =
+      normalizeId(lessonIdValue);
+    const selected =
+      lessons.find(
+        (item) =>
+          normalizeId(item) ===
+          nextLessonId
+      );
+
+    if (!selected) {
+      updateForm({
+        lessonId: "",
+        lessonTitle: "",
+      });
+      setSuggestedObjectives(false);
+      return;
+    }
+
+    const suggestions =
+      normalizeObjectiveRows(
+        selected?.objectives
+      )
+        .map((item) =>
+          String(item || "").trim()
+        )
+        .filter(Boolean);
+    const currentObjectives =
+      form.objectives
+        .map((item) =>
+          String(item || "").trim()
+        )
+        .filter(Boolean);
+    const changingLesson =
+      Boolean(form.lessonId) &&
+      normalizeId(form.lessonId) !==
+        nextLessonId;
+
+    let objectives =
+      form.objectives;
+    let usingSuggestions = false;
+
+    if (
+      currentObjectives.length === 0
+    ) {
+      objectives =
+        suggestions.length
+          ? suggestions
+          : [""];
+      usingSuggestions =
+        suggestions.length > 0;
+    } else if (changingLesson) {
+      const replace =
+        window.confirm(
+          "تم تغيير الدرس. هل تريد استخدام الأهداف المقترحة للدرس الجديد؟\n\nاضغط إلغاء للاحتفاظ بالأهداف الحالية."
+        );
+
+      if (replace) {
+        objectives =
+          suggestions.length
+            ? suggestions
+            : [""];
+        usingSuggestions =
+          suggestions.length > 0;
+      }
+    }
+
+    objectivePrefillLessonRef.current =
+      nextLessonId;
+    setSuggestedObjectives(
+      usingSuggestions
+    );
+    updateForm({
+      lessonId: nextLessonId,
+      lessonTitle:
+        getName(selected),
+      objectives,
+    });
+  };
+
   const toggleLibraryItem = (id) => {
     const next = new Set(form.digitalContentIds);
     if (next.has(id)) next.delete(id);
@@ -1115,84 +1760,465 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
     toast.success("تمت إضافة المحتوى إلى مكتبة المدرسة");
   };
 
+  const refreshResourceState = useCallback(
+    async (idValue) => {
+      const id = normalizeId(idValue);
+      if (!id) return false;
+
+      const response =
+        await fetchSinglePreparation(id);
+
+      if (!response?.status) {
+        return false;
+      }
+
+      const entity =
+        extractEntity(response);
+      const grouped =
+        groupResources(
+          entity?.resources
+        );
+
+      setForm((current) => ({
+        ...current,
+        ...grouped,
+      }));
+      setPreparationStatus(
+        getStatus(entity)
+      );
+
+      return entity;
+    },
+    []
+  );
+
+  const ensureDraftForResource = async () => {
+    if (preparationId) {
+      return preparationId;
+    }
+
+    const id =
+      await createDraftRecord({
+        silent: false,
+      });
+
+    return normalizeId(id);
+  };
+
+  const matchesPreparationContext = (item) => {
+    const offeringId = normalizeId(
+      item?.subjectOfferingId ||
+        item?.subjectOffering ||
+        item?.offeringId ||
+        item?.offering
+    );
+    const classId =
+      getLectureClassId(
+        lecture || {}
+      );
+    const itemClassIds = (
+      Array.isArray(item?.classIds)
+        ? item.classIds
+        : item?.classId
+          ? [item.classId]
+          : item?.class
+            ? [item.class]
+            : []
+    )
+      .map(normalizeId)
+      .filter(Boolean);
+
+    const offeringMatches =
+      !subject.offeringId
+        ? true
+        : offeringId ===
+          subject.offeringId;
+    const classMatches =
+      !classId
+        ? true
+        : itemClassIds.includes(
+            classId
+          );
+
+    return (
+      offeringMatches &&
+      classMatches
+    );
+  };
+
   const openAssignment = async (groupKey) => {
     setAssignmentDialog(groupKey);
     setAssignmentEditIndex(null);
-    setAssignmentDraft({ title: "", startDate: "", endDate: "" });
-    if (groupKey !== "exams") return;
+    setAssignmentDraft({
+      title: "",
+      description: "",
+      startDate: "",
+      endDate: "",
+      totalGrade: "",
+      link: "",
+    });
 
-    setExamLoading(true);
-    const filters = subject.offeringId ? { subjectOfferingId: subject.offeringId } : {};
-    const response = role === "TEACHER"
-      ? await fetchTeacherExams(filters)
-      : await fetchExams(filters);
-    setExamOptions(response?.status ? extractList(response, ["exams"]) : []);
-    setExamLoading(false);
+    if (groupKey === "exams") {
+      setExamLoading(true);
+
+      const filters = {
+        ...(subject.offeringId
+          ? {
+              subjectOfferingId:
+                subject.offeringId,
+            }
+          : {}),
+        ...(getLectureClassId(
+          lecture || {}
+        )
+          ? {
+              classIds:
+                getLectureClassId(
+                  lecture || {}
+                ),
+            }
+          : {}),
+      };
+
+      const response =
+        role === "TEACHER"
+          ? await fetchTeacherExams(
+              filters
+            )
+          : await fetchExams(
+              filters
+            );
+
+      setExamOptions(
+        response?.status
+          ? extractList(
+              response,
+              ["exams"]
+            ).filter(
+              matchesPreparationContext
+            )
+          : []
+      );
+      setExamLoading(false);
+    }
+
+    if (groupKey === "activities") {
+      setProjectLoading(true);
+
+      const response =
+        role === "TEACHER"
+          ? await fetchTeacherProjects()
+          : await fetchProjects();
+
+      setProjectOptions(
+        extractList(
+          response,
+          ["projects"]
+        ).filter(
+          matchesPreparationContext
+        )
+      );
+      setProjectLoading(false);
+    }
   };
 
-  const addExistingExam = (exam) => {
-    const item = {
-      id: normalizeId(exam),
-      title: getName(exam, exam?.examTitle || "اختبار"),
-      startDate: exam?.startDate || "",
-      endDate: exam?.endDate || "",
-      examType: exam?.examType,
-    };
-    const existing = new Set(form.exams.map((row) => normalizeId(row)));
-    if (!existing.has(item.id)) updateForm({ exams: [...form.exams, item] });
+  const addExistingExam = async (exam) => {
+    if (resourceSaving) return;
+
+    const id =
+      await ensureDraftForResource();
+    if (!id) return;
+
+    setResourceSaving(true);
+
+    const response =
+      await addPreparationResource(
+        id,
+        {
+          type: "quiz",
+          examId:
+            normalizeId(exam),
+        }
+      );
+
+    setResourceSaving(false);
+
+    if (!response?.status) {
+      toast.error(
+        response?.message ||
+          "تعذر ربط الاختبار بالتحضير"
+      );
+      return;
+    }
+
+    await refreshResourceState(id);
     setAssignmentDialog(null);
+    toast.success(
+      "تمت إضافة الاختبار للتحضير"
+    );
+  };
+
+  const addExistingProject = async (project) => {
+    if (resourceSaving) return;
+
+    const id =
+      await ensureDraftForResource();
+    if (!id) return;
+
+    setResourceSaving(true);
+
+    const response =
+      await addPreparationResource(
+        id,
+        {
+          type: "activity",
+          projectId:
+            normalizeId(project),
+        }
+      );
+
+    setResourceSaving(false);
+
+    if (!response?.status) {
+      toast.error(
+        response?.message ||
+          "تعذر ربط النشاط بالتحضير"
+      );
+      return;
+    }
+
+    await refreshResourceState(id);
+    setAssignmentDialog(null);
+    toast.success(
+      "تمت إضافة النشاط للتحضير"
+    );
   };
 
   const editAssignment = (groupKey, index) => {
-    const item = form[groupKey]?.[index];
+    const item =
+      form[groupKey]?.[index];
     if (!item) return;
+
     setAssignmentDialog(groupKey);
     setAssignmentEditIndex(index);
     setAssignmentDraft({
       title: item.title || "",
-      startDate: item.startDate || "",
-      endDate: item.endDate || "",
+      description:
+        item.description || "",
+      startDate:
+        item.startDate || "",
+      endDate:
+        item.endDate || "",
+      totalGrade:
+        item.totalGrade ?? "",
+      link: item.link || "",
     });
   };
 
-  const addCustomAssignment = () => {
-    const group = ASSIGNMENT_GROUPS.find((item) => item.key === assignmentDialog);
-    if (!group) return;
-    const title = String(assignmentDraft.title || "").trim();
-    if (!title) {
-      toast.error("اكتب عنوان التكليف");
+  const addCustomAssignment = async () => {
+    const group =
+      ASSIGNMENT_GROUPS.find(
+        (item) =>
+          item.key ===
+          assignmentDialog
+      );
+
+    if (!group || resourceSaving) {
       return;
     }
 
-    if (Number.isInteger(assignmentEditIndex)) {
-      const next = [...form[group.key]];
-      next[assignmentEditIndex] = {
-        ...next[assignmentEditIndex],
-        title,
-        startDate: assignmentDraft.startDate,
-        endDate: assignmentDraft.endDate,
-      };
-      updateForm({ [group.key]: next });
-    } else {
-      const item = {
-        id: `local-${Date.now()}`,
-        title,
-        startDate: assignmentDraft.startDate,
-        endDate: assignmentDraft.endDate,
-      };
-      updateForm({ [group.key]: [...form[group.key], item] });
+    const title =
+      String(
+        assignmentDraft.title || ""
+      ).trim();
+
+    if (!title) {
+      toast.error(
+        "اكتب عنوان التكليف"
+      );
+      return;
     }
 
+    if (
+      assignmentDraft.startDate &&
+      assignmentDraft.endDate &&
+      assignmentDraft.endDate <
+        assignmentDraft.startDate
+    ) {
+      toast.error(
+        "تاريخ النهاية يجب ألا يسبق البداية"
+      );
+      return;
+    }
+
+    const id =
+      await ensureDraftForResource();
+    if (!id) return;
+
+    const payload = {
+      type:
+        RESOURCE_TYPE_BY_GROUP[
+          group.key
+        ],
+      title,
+      ...(String(
+        assignmentDraft.description || ""
+      ).trim()
+        ? {
+            description:
+              String(
+                assignmentDraft.description
+              ).trim(),
+          }
+        : {}),
+      ...(assignmentDraft.startDate
+        ? {
+            startAt:
+              dateOnlyToIso(
+                assignmentDraft.startDate
+              ),
+          }
+        : {}),
+      ...(assignmentDraft.endDate
+        ? {
+            dueAt:
+              dateOnlyToIso(
+                assignmentDraft.endDate,
+                true
+              ),
+          }
+        : {}),
+      ...(String(
+        assignmentDraft.totalGrade ?? ""
+      ).trim() !== ""
+        ? {
+            totalGrade:
+              Number(
+                assignmentDraft.totalGrade
+              ),
+          }
+        : {}),
+      ...(String(
+        assignmentDraft.link || ""
+      ).trim()
+        ? {
+            link:
+              String(
+                assignmentDraft.link
+              ).trim(),
+          }
+        : {}),
+    };
+
+    const oldItem =
+      Number.isInteger(
+        assignmentEditIndex
+      )
+        ? form[group.key]?.[
+            assignmentEditIndex
+          ]
+        : null;
+
+    setResourceSaving(true);
+
+    const createResponse =
+      await addPreparationResource(
+        id,
+        payload
+      );
+
+    if (!createResponse?.status) {
+      setResourceSaving(false);
+      toast.error(
+        createResponse?.message ||
+          "تعذر إضافة التكليف"
+      );
+      return;
+    }
+
+    if (oldItem?.resourceId) {
+      const deleteResponse =
+        await deletePreparationResource(
+          id,
+          oldItem.resourceId
+        );
+
+      if (!deleteResponse?.status) {
+        setResourceSaving(false);
+        await refreshResourceState(id);
+        toast.warning(
+          "تم إنشاء النسخة الجديدة، لكن تعذر حذف التكليف القديم"
+        );
+        setAssignmentDialog(null);
+        setAssignmentEditIndex(null);
+        return;
+      }
+    }
+
+    setResourceSaving(false);
+    await refreshResourceState(id);
     setAssignmentDialog(null);
     setAssignmentEditIndex(null);
+    toast.success(
+      oldItem
+        ? "تم استبدال التكليف"
+        : "تمت إضافة التكليف"
+    );
   };
 
-  const removeAssignment = (groupKey, index) => {
-    updateForm({ [groupKey]: form[groupKey].filter((_, rowIndex) => rowIndex !== index) });
+  const removeAssignment = async (
+    groupKey,
+    index
+  ) => {
+    const item =
+      form[groupKey]?.[index];
+    const resourceId =
+      normalizeId(
+        item?.resourceId ||
+          item?._id
+      );
+
+    if (!resourceId) {
+      return;
+    }
+
+    if (resourceSaving) return;
+
+    setResourceSaving(true);
+
+    const response =
+      await deletePreparationResource(
+        preparationId,
+        resourceId
+      );
+
+    setResourceSaving(false);
+
+    if (!response?.status) {
+      toast.error(
+        response?.message ||
+          "تعذر حذف التكليف"
+      );
+      return;
+    }
+
+    await refreshResourceState(
+      preparationId
+    );
+    toast.success(
+      "تم حذف التكليف"
+    );
   };
 
   const validateForSubmit = () => {
     const errors = [];
+    if (!normalizeId(form.lessonId)) {
+      errors.push({
+        message: "اختر درسًا من المنهج",
+        target: "lesson-section",
+        step: 1,
+      });
+    }
     if (!form.objectives.some((item) => String(item || "").trim())) {
       errors.push({ message: "أضف هدفاً واحداً على الأقل", target: "objectives-section", step: 1 });
     }
@@ -1323,6 +2349,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
 
         <Stack spacing={1.15} mt={1.15}>
           <SectionCard
+            id="lesson-section"
             title="الدرس"
             subtitle="المادة والصف من الحصة الدراسية، ويمكنك اختيار الوحدة والدرس فقط."
             icon={<MenuBookRounded />}
@@ -1393,11 +2420,11 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
                     label="الدرس"
                     value={form.lessonId}
                     disabled={!editable || curriculumLoading || !form.unitId || !lessons.length}
-                    onChange={(event) => {
-                      objectivePrefillLessonRef.current = "";
-                      setSuggestedObjectives(false);
-                      updateForm({ lessonId: event.target.value });
-                    }}
+                    onChange={(event) =>
+                      handleLessonSelection(
+                        event.target.value
+                      )
+                    }
                   >
                     {lessons.map((item) => (
                       <MenuItem key={normalizeId(item)} value={normalizeId(item)}>
@@ -1665,17 +2692,20 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
                                 readOnly={!editable}
                                 onRemove={() => removeAssignment(group.key, index)}
                                 onEdit={() => {
-                                  const existingId = normalizeId(item);
-                                  const isExistingExam =
-                                    group.key === "exams" &&
-                                    existingId &&
-                                    !String(item.id || "").startsWith("local-");
-
-                                  if (isExistingExam) {
+                                  if (item.examId) {
                                     navigateAway(
                                       role === "TEACHER"
-                                        ? `/teacher/exams/edit/${existingId}`
-                                        : `/school/exams/edit/${existingId}`
+                                        ? `/teacher/exams/edit/${item.examId}`
+                                        : `/school/exams/edit/${item.examId}`
+                                    );
+                                    return;
+                                  }
+
+                                  if (item.projectId) {
+                                    navigateAway(
+                                      role === "TEACHER"
+                                        ? `/teacher/projects`
+                                        : `/school/projects/edit/${item.projectId}`
                                     );
                                     return;
                                   }
@@ -1683,14 +2713,12 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
                                   editAssignment(group.key, index);
                                 }}
                                 onAnswers={
-                                  group.key === "exams" &&
-                                  normalizeId(item) &&
-                                  !String(item.id || "").startsWith("local-")
+                                  item.examId
                                     ? () =>
                                         navigateAway(
                                           role === "TEACHER"
-                                            ? `/teacher/grading/exams?examId=${normalizeId(item)}`
-                                            : `/school/exams/${normalizeId(item)}`
+                                            ? `/teacher/grading/exams?examId=${item.examId}`
+                                            : `/school/exams/${item.examId}`
                                         )
                                     : undefined
                                 }
@@ -1799,7 +2827,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
                   <Button
                     variant="contained"
                     startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <SendRounded />}
-                    disabled={saving || submitting || !form.lecture}
+                    disabled={saving || submitting || resourceSaving || !form.lecture}
                     onClick={handleSubmitForReview}
                     sx={{ fontWeight: 900, textTransform: "none", bgcolor: "var(--color-navy)" }}
                   >
@@ -1850,6 +2878,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
         <Dialog
           open={Boolean(assignmentDialog)}
           onClose={() => {
+            if (resourceSaving) return;
             setAssignmentDialog(null);
             setAssignmentEditIndex(null);
           }}
@@ -1877,7 +2906,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
                             <Typography noWrap sx={{ fontSize: 11.5, fontWeight: 900 }}>{getName(exam, exam?.examTitle || "اختبار")}</Typography>
                             <Typography sx={{ fontSize: 9.5, color: "var(--color-muted)" }}>{exam?.examType || "اختبار"}</Typography>
                           </Box>
-                          <Button size="small" onClick={() => addExistingExam(exam)}>استخدام</Button>
+                          <Button size="small" disabled={resourceSaving} onClick={() => addExistingExam(exam)}>استخدام</Button>
                         </Stack>
                       </Paper>
                     ))}
@@ -1896,8 +2925,64 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
                 <Divider sx={{ my: 1.2 }}>أو أضف وصفًا سريعًا</Divider>
               </Box>
             )}
+            {assignmentDialog === "activities" && (
+              <Box mb={1.5}>
+                <Typography sx={{ color: "var(--color-navy-deep)", fontWeight: 900, fontSize: 12, mb: 0.7 }}>
+                  مشروعات موجودة بالفعل
+                </Typography>
+                {projectLoading ? (
+                  <CircularProgress size={22} />
+                ) : projectOptions.length ? (
+                  <Stack spacing={0.5} sx={{ maxHeight: 220, overflowY: "auto" }}>
+                    {projectOptions.map((project) => (
+                      <Paper key={normalizeId(project)} variant="outlined" sx={{ p: 0.8, borderRadius: "11px" }}>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography noWrap sx={{ fontSize: 11.5, fontWeight: 900 }}>
+                              {getName(project, "نشاط / مشروع")}
+                            </Typography>
+                            <Typography sx={{ fontSize: 9.5, color: "var(--color-muted)" }}>
+                              نشاط موجود لنفس الحصة والمادة
+                            </Typography>
+                          </Box>
+                          <Button
+                            size="small"
+                            disabled={resourceSaving}
+                            onClick={() => addExistingProject(project)}
+                          >
+                            استخدام
+                          </Button>
+                        </Stack>
+                      </Paper>
+                    ))}
+                  </Stack>
+                ) : (
+                  <Typography sx={{ color: "var(--color-muted)", fontSize: 10.5 }}>
+                    لا توجد مشروعات مناسبة لهذه الحصة.
+                  </Typography>
+                )}
+                <Button
+                  size="small"
+                  startIcon={<AddRounded />}
+                  onClick={() => navigateAway(role === "TEACHER" ? "/teacher/projects" : "/school/projects/add")}
+                  sx={{ mt: 0.7, fontWeight: 900, textTransform: "none" }}
+                >
+                  إنشاء مشروع جديد
+                </Button>
+                <Divider sx={{ my: 1.2 }}>أو أضف نشاطًا سريعًا</Divider>
+              </Box>
+            )}
             <Stack spacing={1}>
               <TextField fullWidth size="small" label="العنوان" value={assignmentDraft.title} onChange={(event) => setAssignmentDraft((current) => ({ ...current, title: event.target.value }))} />
+              <TextField
+                fullWidth
+                size="small"
+                multiline
+                minRows={2}
+                label="الوصف (اختياري)"
+                value={assignmentDraft.description}
+                onChange={(event) => setAssignmentDraft((current) => ({ ...current, description: event.target.value }))}
+              />
               <Grid container spacing={1}>
                 <Grid item xs={12} sm={6}>
                   <TextField fullWidth size="small" type="date" label="البداية" InputLabelProps={{ shrink: true }} value={assignmentDraft.startDate} onChange={(event) => setAssignmentDraft((current) => ({ ...current, startDate: event.target.value }))} />
@@ -1905,11 +2990,33 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
                 <Grid item xs={12} sm={6}>
                   <TextField fullWidth size="small" type="date" label="النهاية" InputLabelProps={{ shrink: true }} value={assignmentDraft.endDate} onChange={(event) => setAssignmentDraft((current) => ({ ...current, endDate: event.target.value }))} />
                 </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="number"
+                    label="الدرجة (اختياري)"
+                    inputProps={{ min: 0 }}
+                    value={assignmentDraft.totalGrade}
+                    onChange={(event) => setAssignmentDraft((current) => ({ ...current, totalGrade: event.target.value }))}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="رابط (اختياري)"
+                    placeholder="https://..."
+                    value={assignmentDraft.link}
+                    onChange={(event) => setAssignmentDraft((current) => ({ ...current, link: event.target.value }))}
+                  />
+                </Grid>
               </Grid>
             </Stack>
           </DialogContent>
           <DialogActions>
             <Button
+              disabled={resourceSaving}
               onClick={() => {
                 setAssignmentDialog(null);
                 setAssignmentEditIndex(null);
@@ -1917,7 +3024,12 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
             >
               إلغاء
             </Button>
-            <Button variant="contained" onClick={addCustomAssignment} startIcon={<AddRounded />}>
+            <Button
+              variant="contained"
+              disabled={resourceSaving}
+              onClick={addCustomAssignment}
+              startIcon={resourceSaving ? <CircularProgress size={15} color="inherit" /> : <AddRounded />}
+            >
               {Number.isInteger(assignmentEditIndex) ? "حفظ" : "إضافة"}
             </Button>
           </DialogActions>

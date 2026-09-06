@@ -353,12 +353,10 @@ export const addLibraryResource = async ({
   title,
   link = "",
   file = null,
-  subjectId = "",
   subjectOfferingId = "",
 } = {}) => {
   const normalizedTitle = String(title || "").trim();
   const normalizedLink = String(link || "").trim();
-  const normalizedSubjectId = normalizeId(subjectId);
   const normalizedOfferingId = normalizeId(subjectOfferingId);
 
   if (!normalizedTitle) {
@@ -373,24 +371,34 @@ export const addLibraryResource = async ({
     if (file) {
       const formData = new FormData();
       formData.append("title", normalizedTitle);
+      formData.append("kind", "file");
       formData.append("file", file);
-      if (normalizedSubjectId) formData.append("subjectId", normalizedSubjectId);
+
       if (normalizedOfferingId) {
-        formData.append("subjectOfferingId", normalizedOfferingId);
+        formData.append(
+          "subjectOfferingId",
+          normalizedOfferingId
+        );
       }
 
       return normalizeSuccess(
-        await api.post(ENDPOINT, formData)
+        await api.post(
+          ENDPOINT,
+          formData
+        )
       );
     }
 
     return normalizeSuccess(
       await api.post(ENDPOINT, {
         title: normalizedTitle,
+        kind: "link",
         link: normalizedLink,
-        ...(normalizedSubjectId ? { subjectId: normalizedSubjectId } : {}),
         ...(normalizedOfferingId
-          ? { subjectOfferingId: normalizedOfferingId }
+          ? {
+              subjectOfferingId:
+                normalizedOfferingId,
+            }
           : {}),
       })
     );

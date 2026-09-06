@@ -1,911 +1,840 @@
-import "./Sidebar.scss";
+import {
+  AccountBalanceWalletRounded,
+  AccountTreeRounded,
+  AssessmentRounded,
+  AssignmentRounded,
+  AutoStoriesRounded,
+  CalendarMonthRounded,
+  CategoryRounded,
+  DashboardRounded,
+  DirectionsBusRounded,
+  EventNoteRounded,
+  FactCheckRounded,
+  FolderCopyOutlined,
+  GroupsRounded,
+  LibraryBooksRounded,
+  LocalOfferRounded,
+  LogoutRounded,
+  MenuBookRounded,
+  MenuOpenRounded,
+  MeetingRoomRounded,
+  MoneyOffRounded,
+  ReceiptLongRounded,
+  RouteRounded,
+  SchoolRounded,
+  SecurityRounded,
+  SupervisorAccountRounded,
+  ViewListRounded,
+} from "@mui/icons-material";
 
 import {
-  Collapse,
+  Box,
+  Divider,
+  IconButton,
   Stack,
   Typography,
 } from "@mui/material";
 
 import {
-  AccountBalanceWallet,
-  AddCardRounded,
-  AccountTreeRounded,
-  AutoStoriesRounded,
-  CalendarMonthRounded,
-  EventNoteRounded,
-  Category as CategoryIcon,
-  DashboardRounded,
-  GroupsRounded,
-  HowToRegRounded,
-  ShieldRounded,
-  EventBusyRounded,
-  InsightsRounded,
-  FactCheckRounded,
-  AssignmentTurnedInRounded,
-  AccountCircleRounded,
-  DirectionsBus,
-  ExpandLess,
-  ExpandMore,
-  FolderCopyOutlined,
-  LocalOffer,
-  Logout,
-  ManageAccountsRounded,
-  PersonAddAlt1Rounded,
-  MoneyOff,
-  ReceiptLong,
-  Route,
-  SchoolRounded,
-  SettingsRounded,
-  UpgradeRounded,
-  ViewList,
-} from "@mui/icons-material";
-
-import {
   NavLink,
-  useLocation,
   useNavigate,
 } from "react-router-dom";
-
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
 
 import {
   useAuthUser,
   useSignOut,
 } from "react-auth-kit";
 
-import { toast } from "react-toastify";
-import Cookies from "js-cookie";
-
 import nasaqLogo from "@/images/wadq-logo.png";
 
-import userIcon from "@/icons/user.json";
-import teacherIcon from "@/icons/teacher.json";
-import subjectIcon from "@/icons/subject.json";
-import booksIcon from "@/icons/books.json";
-import lectureIcon from "@/icons/Lecture.json";
-import absenceIcon from "@/icons/absence.json";
-import gradesCriteriaIcon from "@/icons/gradesCriteria.json";
-import examsIcon from "@/icons/exams.json";
-import projectsIcon from "@/icons/projects.json";
-import scheduleIcon from "@/icons/schedule.json";
-import preparationIcon from "@/icons/preparation.json";
+import {
+  clearAuthSession,
+} from "@/shared/auth/session";
 
-import HoverLottie from "../HoverLottie";
+import {
+  ROLES,
+} from "@/shared/auth/roles";
+
 import usePermissions from "@/utils/hooks/usePermissions";
 
-const normalizeRole = (role) =>
-  String(role || "")
-    .trim()
-    .toUpperCase();
+import {
+  getSchoolRoleLabel,
+  getSchoolSessionInfo,
+} from "@/utils/school/schoolSession";
 
-const getAuthenticatedUser = (authState) => {
-  const candidates = [
-    authState?.user,
-    authState?.admin,
-    authState?.data?.user,
-    authState?.data?.admin,
-    authState?.data?.data?.user,
-    authState?.data?.data?.admin,
-    authState,
-  ];
+const SIDEBAR_WIDTH = 280;
 
-  return (
-    candidates.find(
-      (candidate) =>
-        candidate &&
-        typeof candidate === "object" &&
-        (candidate.role ||
-          candidate.email ||
-          candidate.username ||
-          candidate.name ||
-          candidate.fullName)
-    ) || {}
-  );
-};
+const NAVIGATION_SECTIONS = [
+  {
+    title: "الأفراد",
 
-const getDisplayName = (user) => {
-  const emailName = user?.email
-    ? String(user.email).split("@")[0]
-    : "";
-
-  return String(
-    user?.username ||
-      user?.name ||
-      user?.fullName ||
-      user?.ownerName ||
-      user?.firstName ||
-      emailName ||
-      "المستخدم"
-  ).trim();
-};
-
-const ROLE_LABELS = {
-  OWNER: "مالك المدرسة",
-  SUPERVISOR: "مدير المدرسة",
-  MANAGER: "مساعد إداري",
-  TEACHER: "معلم",
-  STUDENT: "طالب",
-  SUPER_ADMIN: "مدير المنصة",
-};
-
-const Sidebar = ({ active, setActive }) => {
-  /*
-   * نظام الصلاحيات الجديد يخزن الصلاحيات كمصفوفة:
-   * ["school.students.read", ...]
-   *
-   * نطلب صلاحيات كل قسم منفصلة حتى يظل تصميم
-   * الـSidebar القديم كما هو بدون أي تغيير بصري.
-   */
-  const studentsPermissions =
-    usePermissions("students");
-
-  const teachersPermissions =
-    usePermissions("teachers");
-
-  const subjectsPermissions =
-    usePermissions("subjects");
-
-  const subjectOfferingsPermissions =
-    usePermissions("subjectOfferings");
-
-  const classesPermissions =
-    usePermissions("classes");
-
-  const lecturesPermissions =
-    usePermissions("lectures");
-
-  const gradesCriteriaPermissions =
-    usePermissions("gradesCriteria");
-
-  const examsPermissions =
-    usePermissions("exams");
-
-  const projectsPermissions =
-    usePermissions("projects");
-
-  const attendancePermissions =
-    usePermissions("attendance");
-
-  const preparationPermissions =
-    usePermissions("preparation");
-
-  const libraryPermissions =
-    usePermissions("library");
-
-  const financialPermissions =
-    usePermissions("financial");
-
-  const expensesPermissions =
-    usePermissions("expenses");
-
-  const getAuthUser = useAuthUser();
-  const signOut = useSignOut();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const sidebarRef = useRef(null);
-
-  const authState = getAuthUser?.() || {};
-  const user = getAuthenticatedUser(authState);
-
-  const role = normalizeRole(
-    user?.role || authState?.role
-  );
-
-  const displayName = getDisplayName(user);
-
-  const roleLabel =
-    ROLE_LABELS[role] || "مستخدم";
-
-  const isTeacher = role === "TEACHER";
-
-  const canManageAcademicYears =
-    role === "OWNER" ||
-    role === "SUPERVISOR";
-
-  const canManageSchoolSettings =
-    role === "OWNER" ||
-    role === "MANAGER" ||
-    role === "SUPERVISOR";
-
-  const categories = useMemo(() => {
-    const baseCategories = [
+    items: [
       {
-        title: "الرئيسية",
-        items: [
-          {
-            name: "لوحة التحكم",
-            Icon: DashboardRounded,
-            iconType: "mui",
-            to: "/school/dashboard",
-            show: !isTeacher,
-          },
+        label: "الطلاب",
+        path: "/users/students",
+        icon: <GroupsRounded />,
+        module: "students",
+      },
+      {
+        label: "المعلمون",
+        path: "/users/teachers",
+        icon: <SchoolRounded />,
+        module: "teachers",
+      },
+    ],
+  },
+
+  {
+    title: "الإدارة الأكاديمية",
+
+    items: [
+      {
+        label: "السنوات الدراسية",
+        path: "/school/academic-years",
+        icon: <CalendarMonthRounded />,
+        allowedRoles: [
+          ROLES.OWNER,
+          ROLES.SUPERVISOR,
         ],
       },
       {
-        title: "الأفراد",
-        items: [
-          {
-            name: "إدارة الطلاب",
-            icon: userIcon,
-            to: "/users/students",
-            show: studentsPermissions.read,
-          },
-          {
-            name: "إدارة المعلمين",
-            icon: teacherIcon,
-            to: "/users/teachers",
-            show: teachersPermissions.read,
-          },
-          {
-            name: "المديرون والمساعدون",
-            Icon: ManageAccountsRounded,
-            iconType: "mui",
-            to: "/school/managers",
-            show:
-              role === "OWNER" ||
-              role === "SUPERVISOR",
-          },
+        label: "المواد",
+        path: "/school/subjects",
+        icon: <MenuBookRounded />,
+        module: "subjects",
+      },
+      {
+        label: "منهج المدرسة",
+        path: "/school/curriculum",
+        icon: <AutoStoriesRounded />,
+        allowedRoles: [
+          ROLES.OWNER,
+          ROLES.MANAGER,
         ],
       },
       {
-        title: "الإدارة الأكاديمية",
-        items: [
-          {
-            name: "السنوات الدراسية",
-            Icon: CalendarMonthRounded,
-            iconType: "mui",
-            to: "/school/academic-years",
-            show: canManageAcademicYears,
-          },
-          {
-            name: "ترقية الطلاب",
-            Icon: UpgradeRounded,
-            iconType: "mui",
-            to: "/school/student-promotion",
-            show: canManageAcademicYears,
-          },
-          {
-            name: "إدارة الترمات",
-            Icon: EventNoteRounded,
-            iconType: "mui",
-            to: "/school/terms",
-            show: canManageAcademicYears,
-          },
-          {
-            name: "إدارة المراحل",
-            Icon: AccountTreeRounded,
-            iconType: "mui",
-            to: "/school/stages",
-            show: classesPermissions.read,
-          },
-          {
-            name: "إدارة الصفوف",
-            Icon: SchoolRounded,
-            iconType: "mui",
-            to: "/school/grade-levels",
-            show: classesPermissions.read,
-          },
-          {
-            name: "إدارة المواد",
-            icon: subjectIcon,
-            to: "/school/subjects",
-            show: subjectsPermissions.read,
-          },
-          {
-            name: "عروض المواد",
-            Icon: AutoStoriesRounded,
-            iconType: "mui",
-            to: "/subject-offerings",
-            show:
-              subjectOfferingsPermissions.read ||
-              subjectsPermissions.read,
-          },
-          {
-            name: "إدارة الفصول",
-            icon: userIcon,
-            to: "/school/classes",
-            show: classesPermissions.read,
-          },
-          {
-            name: "إدارة الحصص",
-            icon: lectureIcon,
-            to: "/school/lectures",
-            show: lecturesPermissions.read,
-          },
-        ],
+        label: "الفصول",
+        path: "/school/classes",
+        icon: <MeetingRoomRounded />,
+        module: "classes",
       },
       {
-        title: "إعدادات النظام",
-        items: [
-          {
-            name: "إعدادات المدرسة",
-            Icon: SettingsRounded,
-            iconType: "mui",
-            to: "/school/settings",
-            show: canManageSchoolSettings,
-          },
-        ],
+        label: "الحصص",
+        path: "/school/lectures",
+        icon: <EventNoteRounded />,
+        module: "lectures",
       },
-      {
-        title: "التقييم والاختبارات",
-        items: [
-          {
-            name: "توزيع الدرجات",
-            icon: gradesCriteriaIcon,
-            to: "/school/gradesCriteria",
-            show: gradesCriteriaPermissions.read,
-          },
-          {
-            name: "إدارة الاختبارات",
-            icon: examsIcon,
-            to: "/school/exams",
-            show: examsPermissions.read,
-          },
-          {
-            name: "إدارة المشروعات",
-            icon: projectsIcon,
-            to: "/school/projects",
-            show: projectsPermissions.read,
-          },
-        ],
-      },
-      {
-        title: "الخدمات والمتابعة",
-        items: [
-          {
-            name: "إدارة حضور الطلاب",
-            icon: absenceIcon,
-            to: "/school/attendance",
-            show: attendancePermissions.read,
-          },
-          {
-            name: "حضور المعلمين",
-            Icon: HowToRegRounded,
-            iconType: "mui",
-            to: "/school/teacher-attendance",
-            show: canManageSchoolSettings,
-          },
-          {
-            name: "الاحتياطي والمناوبة",
-            Icon: ShieldRounded,
-            iconType: "mui",
-            to: "/school/duty",
-            show: canManageSchoolSettings,
-          },
-          {
-            name: "طلبات الاستئذان",
-            Icon: EventBusyRounded,
-            iconType: "mui",
-            to: "/school/leave-requests",
-            show: canManageSchoolSettings,
-          },
-          {
-            name: "تقرير الاحتياطي",
-            Icon: InsightsRounded,
-            iconType: "mui",
-            to: "/school/cover-report",
-            show: canManageSchoolSettings,
-          },
-          {
-            name: "إدارة التحضير",
-            icon: preparationIcon,
-            to: "/school/preparation",
-            show: preparationPermissions.read,
-          },
-          {
-            name: "إدارة المكتبة",
-            icon: booksIcon,
-            to: "/school/library",
-            show: libraryPermissions.read,
-          },
-        ],
-      },
-      {
-        title: "الماليات والحسابات",
-        items: [
-          {
-            name: "السجلات المالية",
-            Icon: FolderCopyOutlined,
-            iconType: "mui",
-            to: "/financial/all-records",
-            show: financialPermissions.read,
-          },
-          {
-            name: "مصاريف الطلاب",
-            Icon: AccountBalanceWallet,
-            iconType: "mui",
-            to: "/financial/records",
-            show: financialPermissions.read,
-          },
-          {
-            name: "الباص",
-            Icon: DirectionsBus,
-            iconType: "mui",
-            to: "/financial/bus",
-            show: financialPermissions.read,
-          },
-          {
-            name: "الرحلات",
-            Icon: Route,
-            iconType: "mui",
-            to: "/financial/trips",
-            show: financialPermissions.read,
-          },
-          {
-            name: "الرسوم الإضافية",
-            Icon: AddCardRounded,
-            iconType: "mui",
-            to: "/financial/additional-fees",
-            show: financialPermissions.read,
-          },
-          {
-            name: "إعدادات الرسوم",
-            Icon: ReceiptLong,
-            iconType: "mui",
-            to: "/financial/fee-configs",
-            show: financialPermissions.read,
-          },
-          {
-            name: "خطط التقسيط",
-            Icon: ViewList,
-            iconType: "mui",
-            to: "/financial/installment-plans",
-            show: financialPermissions.read,
-          },
-          {
-            name: "الخصومات",
-            Icon: LocalOffer,
-            iconType: "mui",
-            to: "/financial/discounts",
-            show: financialPermissions.read,
-          },
-        ],
-      },
-      {
-        title: "المصروفات",
-        items: [
-          {
-            name: "المصروفات",
-            Icon: MoneyOff,
-            iconType: "mui",
-            to: "/expenses",
-            show: expensesPermissions.read,
-          },
-          {
-            name: "تصنيفات المصروفات",
-            Icon: CategoryIcon,
-            iconType: "mui",
-            to: "/expenses/categories",
-            show: expensesPermissions.read,
-          },
-        ],
-      },
-    ];
+    ],
+  },
 
-    if (isTeacher) {
-      /*
-       * المعلم يستخدم نفس هيكل لوحة الإدارة، لكن كل رابط
-       * إداري يظهر فقط عند وجود الصلاحية الفعلية في الجلسة.
-       * مهام المعلم الشخصية تظل متاحة دائمًا عبر /teacher/*.
-       */
-      return [
-        {
-          title: "الرئيسية",
-          items: [
-            {
-              name: "لوحة التحكم",
-              Icon: DashboardRounded,
-              iconType: "mui",
-              to: "/teacher/dashboard",
-              show: true,
-            },
-            {
-              name: "جدولي الدراسي",
-              icon: scheduleIcon,
-              to: "/teacher/schedule",
-              show: true,
-            },
-            {
-              name: "فصولي وطلابي",
-              Icon: GroupsRounded,
-              iconType: "mui",
-              to: "/teacher/classes",
-              show: true,
-            },
-          ],
-        },
-        {
-          title: "الأفراد",
-          items: [
-            {
-              name: "إدارة الطلاب",
-              icon: userIcon,
-              // صفحة الطلاب الخاصة بالمعلم تعرض طلاب فصوله فقط.
-              to: "/teacher/students",
-              show: studentsPermissions.read,
-            },
-            {
-              name: "إضافة طالب",
-              Icon: PersonAddAlt1Rounded,
-              iconType: "mui",
-              to: "/users/students/add",
-              show: studentsPermissions.add,
-            },
-            {
-              name: "إدارة المعلمين",
-              icon: teacherIcon,
-              to: "/users/teachers",
-              show: teachersPermissions.read,
-            },
-          ],
-        },
-        {
-          title: "الإدارة الأكاديمية",
-          items: [
-            {
-              name: "إدارة المواد",
-              icon: subjectIcon,
-              to: "/school/subjects",
-              show: subjectsPermissions.read,
-            },
-            {
-              name: "عروض المواد",
-              Icon: AutoStoriesRounded,
-              iconType: "mui",
-              to: "/subject-offerings",
-              show:
-                subjectOfferingsPermissions.read ||
-                subjectsPermissions.read,
-            },
-            {
-              name: "إدارة الفصول",
-              icon: userIcon,
-              // نستخدم صفحة فصول المعلم بدل صفحة الإدارة العامة.
-              to: "/teacher/classes",
-              show: classesPermissions.read,
-            },
-            {
-              name: "إدارة الحصص",
-              icon: lectureIcon,
-              // مسار مستقل للحصص داخل بوابة المعلم.
-              to: "/teacher/lectures",
-              show: lecturesPermissions.read,
-            },
-          ],
-        },
-        {
-          title: "التقييم والاختبارات",
-          items: [
-            {
-              name: "اختباراتي",
-              icon: examsIcon,
-              to: "/teacher/exams",
-              show: true,
-            },
-            {
-              name: "تصحيح الاختبارات",
-              Icon: FactCheckRounded,
-              iconType: "mui",
-              to: "/teacher/grading/exams",
-              show: true,
-            },
-            {
-              name: "مشروعاتي",
-              icon: projectsIcon,
-              to: "/teacher/projects",
-              show: true,
-            },
-            {
-              name: "تصحيح المشروعات",
-              Icon: AssignmentTurnedInRounded,
-              iconType: "mui",
-              to: "/teacher/grading/projects",
-              show: true,
-            },
-            {
-              name: "توزيع الدرجات",
-              icon: gradesCriteriaIcon,
-              to: "/school/gradesCriteria",
-              show: gradesCriteriaPermissions.read,
-            },
-          ],
-        },
-        {
-          title: "الخدمات والمتابعة",
-          items: [
-            {
-              name: "حضور الطلاب",
-              Icon: HowToRegRounded,
-              iconType: "mui",
-              to: "/teacher/attendance",
-              show: true,
-            },
-            {
-              name: "تسجيل حضوري",
-              Icon: HowToRegRounded,
-              iconType: "mui",
-              to: "/teacher/check-in",
-              show: true,
-            },
-            {
-              name: "الاستئذان والاحتياطي",
-              Icon: EventBusyRounded,
-              iconType: "mui",
-              to: "/teacher/duty",
-              show: true,
-            },
-            {
-              name: "تحضيراتي",
-              icon: preparationIcon,
-              to: "/teacher/preparations",
-              show: true,
-            },
-            {
-              name: "المكتبة",
-              icon: booksIcon,
-              to: "/teacher/library",
-              show: true,
-            },
-          ],
-        },
-        {
-          title: "الماليات والحسابات",
-          items: [
-            {
-              name: "السجلات المالية",
-              Icon: FolderCopyOutlined,
-              iconType: "mui",
-              to: "/financial/all-records",
-              show: financialPermissions.read,
-            },
-            {
-              name: "مصاريف الطلاب",
-              Icon: AccountBalanceWallet,
-              iconType: "mui",
-              to: "/financial/records",
-              show: financialPermissions.read,
-            },
-          ],
-        },
-        {
-          title: "الحساب",
-          items: [
-            {
-              name: "حسابي",
-              Icon: AccountCircleRounded,
-              iconType: "mui",
-              to: "/teacher/profile",
-              show: true,
-            },
-          ],
-        },
-      ];
-    }
+  {
+    title: "التقييم والاختبارات",
 
-    return baseCategories;
-  }, [
+    items: [
+      {
+        label: "توزيع الدرجات",
+        path: "/school/gradesCriteria",
+        icon: <AssessmentRounded />,
+        module: "gradesCriteria",
+      },
+      {
+        label: "الاختبارات",
+        path: "/school/exams",
+        icon: <FactCheckRounded />,
+        module: "exams",
+      },
+      {
+        label: "المشروعات",
+        path: "/school/projects",
+        icon: <AccountTreeRounded />,
+        module: "projects",
+      },
+    ],
+  },
+
+  {
+    title: "الخدمات والمتابعة",
+
+    items: [
+      {
+        label: "الحضور",
+        path: "/school/attendance",
+        icon: <AssignmentRounded />,
+        module: "attendance",
+      },
+      {
+        label: "التحضير",
+        path: "/school/preparation",
+        icon: <AutoStoriesRounded />,
+        module: "preparation",
+      },
+      {
+        label: "المكتبة",
+        path: "/school/library",
+        icon: <LibraryBooksRounded />,
+        module: "library",
+      },
+    ],
+  },
+
+  {
+    title: "الماليات والحسابات",
+
+    items: [
+      {
+        label: "السجلات المالية",
+        path: "/financial/all-records",
+        icon: <FolderCopyOutlined />,
+        module: "financial",
+      },
+      {
+        label: "مصاريف الطلاب",
+        path: "/financial/records",
+        icon: <AccountBalanceWalletRounded />,
+        module: "financial",
+      },
+      {
+        label: "الباص",
+        path: "/financial/bus",
+        icon: <DirectionsBusRounded />,
+        module: "financial",
+      },
+      {
+        label: "الرحلات",
+        path: "/financial/trips",
+        icon: <RouteRounded />,
+        module: "financial",
+      },
+      {
+        label: "إعدادات الرسوم",
+        path: "/financial/fee-configs",
+        icon: <ReceiptLongRounded />,
+        module: "financial",
+      },
+      {
+        label: "خطط التقسيط",
+        path: "/financial/installment-plans",
+        icon: <ViewListRounded />,
+        module: "financial",
+      },
+      {
+        label: "الخصومات",
+        path: "/financial/discounts",
+        icon: <LocalOfferRounded />,
+        module: "financial",
+      },
+    ],
+  },
+
+  {
+    title: "المصروفات",
+
+    items: [
+      {
+        label: "المصروفات",
+        path: "/expenses",
+        icon: <MoneyOffRounded />,
+        module: "expenses",
+      },
+      {
+        label: "تصنيفات المصروفات",
+        path: "/expenses/categories",
+        icon: <CategoryRounded />,
+        module: "expenses",
+      },
+    ],
+  },
+];
+
+const SchoolSidebar = ({
+  onClose,
+  mobile = false,
+}) => {
+  const navigate =
+    useNavigate();
+
+  const signOut =
+    useSignOut();
+
+  const getAuthUser =
+    useAuthUser();
+
+  const authState =
+    getAuthUser();
+
+  const {
     role,
-    isTeacher,
-    canManageAcademicYears,
-    canManageSchoolSettings,
-    studentsPermissions.read,
-    studentsPermissions.add,
-    teachersPermissions.read,
-    subjectsPermissions.read,
-    subjectOfferingsPermissions.read,
-    classesPermissions.read,
-    lecturesPermissions.read,
-    gradesCriteriaPermissions.read,
-    examsPermissions.read,
-    projectsPermissions.read,
-    attendancePermissions.read,
-    preparationPermissions.read,
-    libraryPermissions.read,
-    financialPermissions.read,
-    expensesPermissions.read,
-  ]);
-
-  const handleSignOut = () => {
-    toast.info(
-      `تم تسجيل خروجك بنجاح، وداعًا ${displayName}`
+    email,
+    displayName,
+    schoolName,
+  } =
+    getSchoolSessionInfo(
+      authState
     );
 
-    signOut();
-
+  const canManageManagers =
     [
-      "_auth",
-      "_auth_state",
-      "_auth_storage",
-      "_auth_type",
-    ].forEach((cookieName) => {
-      Cookies.remove(cookieName, { path: "/" });
-      Cookies.remove(cookieName, {
-        path: "/",
-        domain: window.location.hostname,
-      });
+      ROLES.OWNER,
+      ROLES.SUPERVISOR,
+    ].includes(role);
+
+  const modulePermissions = {
+    students:
+      usePermissions(
+        "students"
+      ),
+
+    teachers:
+      usePermissions(
+        "teachers"
+      ),
+
+    subjects:
+      usePermissions(
+        "subjects"
+      ),
+
+    classes:
+      usePermissions(
+        "classes"
+      ),
+
+    lectures:
+      usePermissions(
+        "lectures"
+      ),
+
+    gradesCriteria:
+      usePermissions(
+        "gradesCriteria"
+      ),
+
+    exams:
+      usePermissions(
+        "exams"
+      ),
+
+    projects:
+      usePermissions(
+        "projects"
+      ),
+
+    attendance:
+      usePermissions(
+        "attendance"
+      ),
+
+    preparation:
+      usePermissions(
+        "preparation"
+      ),
+
+    library:
+      usePermissions(
+        "library"
+      ),
+
+    financial:
+      usePermissions(
+        "financial"
+      ),
+
+    expenses:
+      usePermissions(
+        "expenses"
+      ),
+  };
+
+  const visibleSections =
+    NAVIGATION_SECTIONS
+      .map((section) => ({
+        ...section,
+
+        items:
+          section.items.filter(
+            (item) =>
+              item.allowedRoles
+                ? item.allowedRoles.includes(
+                    role
+                  )
+                : modulePermissions[
+                    item.module
+                  ]?.read
+          ),
+      }))
+      .filter(
+        (section) =>
+          section.items.length > 0
+      );
+
+  const handleLogout = () => {
+    signOut();
+    clearAuthSession();
+
+    navigate("/login", {
+      replace: true,
     });
-
-    localStorage.removeItem("permissions");
-    localStorage.removeItem("role");
-    localStorage.removeItem("user");
-
-    navigate("/", { replace: true });
   };
 
   return (
-    <div
-      ref={sidebarRef}
-      className={`sideContainer${
-        active ? " sidebar-open" : ""
-      }`}
-      style={{ maxWidth: active ? 280 : 0 }}
+    <Box
       dir="rtl"
-    >
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          <img
-            src={nasaqLogo}
-            alt="شعار منصة نَسّق"
-          />
+      sx={{
+        width:
+          SIDEBAR_WIDTH,
 
-          <div>
-            <strong>{isTeacher ? "بوابة المعلم" : "لوحة الإدارة"}</strong>
-            <small>
-              {isTeacher
-                ? "لوحتك التعليمية بصلاحيات المعلم"
-                : "نَسّق لإدارة المنصة"}
-            </small>
-          </div>
-        </div>
+        height:
+          "100%",
 
-        <div className="sidebar-content">
-          <Stack spacing={1.2}>
-            {categories.map((category) => (
-              <Category
-                key={category.title}
-                category={category}
-                pathname={location.pathname}
-                setActive={setActive}
-              />
-            ))}
-          </Stack>
-        </div>
+        display:
+          "flex",
 
-        <div className="sidebar-footer">
-          <div className="sidebar-user">
-            <span className="sidebar-user__avatar">
-              {displayName.charAt(0) || "م"}
-            </span>
+        flexDirection:
+          "column",
 
-            <span className="sidebar-user__copy">
-              <strong>{displayName}</strong>
-              <small>{roleLabel}</small>
-            </span>
-          </div>
+        overflow:
+          "hidden",
 
-          <button
-            type="button"
-            className="logout-container"
-            onClick={handleSignOut}
-          >
-            <Logout className="logout-icon" />
-            <span className="logout-button">
-              تسجيل الخروج
-            </span>
-          </button>
-        </div>
-      </aside>
-    </div>
-  );
-};
+        color:
+          "#ffffff",
 
-const Category = ({ category, pathname, setActive }) => {
-  const visibleItems = category.items.filter(
-    (item) => item.show
-  );
+        background:
+          "linear-gradient(180deg, #193f64 0%, #244f78 100%)",
 
-  const isActiveCategory = visibleItems.some(
-    (item) =>
-      item.to &&
-      (pathname === item.to ||
-        pathname.startsWith(`${item.to}/`))
-  );
-
-  const [open, setOpen] = useState(
-    isActiveCategory
-  );
-
-  useEffect(() => {
-    if (isActiveCategory) {
-      setOpen(true);
-    }
-  }, [isActiveCategory]);
-
-  if (visibleItems.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="category">
-      <button
-        type="button"
-        className="category-header"
-        onClick={() =>
-          setOpen((previous) => !previous)
-        }
-        aria-expanded={open}
-      >
-        <Typography
-          component="span"
-          sx={{
-            fontWeight: 800,
-            fontSize: "13px",
-          }}
-        >
-          {category.title}
-        </Typography>
-
-        {open ? (
-          <ExpandLess fontSize="small" />
-        ) : (
-          <ExpandMore fontSize="small" />
-        )}
-      </button>
-
-      <Collapse in={open}>
-        <Stack spacing={0.7} mt={0.8}>
-          {visibleItems.map((item) => (
-            <Item key={item.to} element={item} setActive={setActive} />
-          ))}
-        </Stack>
-      </Collapse>
-    </section>
-  );
-};
-
-const Item = ({ element, setActive }) => {
-  const [hovered, setHovered] =
-    useState(false);
-  const IconComponent = element.Icon;
-
-  return (
-    <NavLink
-      to={element.to}
-      className={({ isActive }) =>
-        `item${isActive ? " active" : ""}`
-      }
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onClick={() => {
-        if (window.innerWidth < 769) {
-          setActive?.(false);
-        }
+        fontFamily:
+          "Tajawal, Arial, sans-serif",
       }}
     >
-      <span className="item-icon">
-        {element.iconType === "mui" &&
-        IconComponent ? (
-          <IconComponent sx={{ fontSize: 19 }} />
-        ) : (
-          <HoverLottie
-            icon={element.icon}
-            w={25}
-            h={25}
-            play={hovered}
-          />
-        )}
-      </span>
+      <Box
+        sx={{
+          flexShrink: 0,
+          px: 2,
+          pt: 1.75,
+          pb: 1.35,
+        }}
+      >
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+        >
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.9}
+            sx={{
+              minWidth: 0,
+            }}
+          >
+            <Box
+              component="img"
+              src={nasaqLogo}
+              alt="نَسّق"
+              sx={{
+                width: 54,
+                height: 54,
+                flexShrink: 0,
+                objectFit:
+                  "contain",
+                p: 0.4,
+                borderRadius:
+                  "15px",
+                backgroundColor:
+                  "#ffffff",
+                boxShadow:
+                  "0 8px 18px rgba(7,22,41,0.16)",
+              }}
+            />
 
-      <span className="item-label">
-        {element.name}
-      </span>
-    </NavLink>
+            <Box
+              sx={{
+                minWidth: 0,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize:
+                    "20px",
+                  fontWeight:
+                    800,
+                  lineHeight:
+                    1.15,
+                }}
+              >
+                نَسّق
+              </Typography>
+
+              <Typography
+                noWrap
+                title={
+                  schoolName
+                }
+                sx={{
+                  mt: 0.25,
+                  maxWidth:
+                    150,
+                  color:
+                    "rgba(255,255,255,0.68)",
+                  fontSize:
+                    "8px",
+                  fontWeight:
+                    700,
+                }}
+              >
+                {schoolName}
+              </Typography>
+            </Box>
+          </Stack>
+
+          {mobile && (
+            <IconButton
+              onClick={
+                onClose
+              }
+              aria-label="إغلاق القائمة"
+              sx={{
+                color:
+                  "#ffffff",
+              }}
+            >
+              <MenuOpenRounded />
+            </IconButton>
+          )}
+        </Stack>
+
+        <Divider
+          sx={{
+            mt: 1.6,
+            borderColor:
+              "rgba(255,255,255,0.12)",
+          }}
+        />
+      </Box>
+
+      <Box
+        sx={{
+          flex: 1,
+          overflowY:
+            "auto",
+          overflowX:
+            "hidden",
+          px: 1.45,
+          pb: 1,
+          scrollbarWidth:
+            "thin",
+          "&::-webkit-scrollbar":
+            {
+              width: 5,
+            },
+          "&::-webkit-scrollbar-thumb":
+            {
+              borderRadius:
+                "10px",
+              backgroundColor:
+                "rgba(255,255,255,0.18)",
+            },
+        }}
+      >
+        <Stack spacing={1.15}>
+          <Box>
+            <SidebarLink
+              item={{
+                label:
+                  "لوحة المدرسة",
+                path:
+                  "/school/dashboard",
+                icon:
+                  <DashboardRounded />,
+              }}
+              mobile={
+                mobile
+              }
+              onClose={
+                onClose
+              }
+            />
+
+            {canManageManagers && (
+              <>
+                <SidebarLink
+                  item={{
+                    label:
+                      "المديرون والمساعدون",
+                    path:
+                      "/school/managers",
+                    icon:
+                      <SupervisorAccountRounded />,
+                  }}
+                  mobile={
+                    mobile
+                  }
+                  onClose={
+                    onClose
+                  }
+                />
+
+                <SidebarLink
+                  item={{
+                    label:
+                      "إدارة الصلاحيات",
+                    path:
+                      "/school/permissions",
+                    icon:
+                      <SecurityRounded />,
+                  }}
+                  mobile={
+                    mobile
+                  }
+                  onClose={
+                    onClose
+                  }
+                />
+              </>
+            )}
+          </Box>
+
+          {visibleSections.map(
+            (section) => (
+              <Box
+                key={
+                  section.title
+                }
+              >
+                <Typography
+                  sx={{
+                    px: 1.2,
+                    mb: 0.55,
+                    color:
+                      "rgba(242,215,146,0.86)",
+                    fontSize:
+                      "8px",
+                    fontWeight:
+                      800,
+                  }}
+                >
+                  {section.title}
+                </Typography>
+
+                <Stack
+                  spacing={0.45}
+                >
+                  {section.items.map(
+                    (item) => (
+                      <SidebarLink
+                        key={
+                          item.path
+                        }
+                        item={
+                          item
+                        }
+                        mobile={
+                          mobile
+                        }
+                        onClose={
+                          onClose
+                        }
+                      />
+                    )
+                  )}
+                </Stack>
+              </Box>
+            )
+          )}
+        </Stack>
+      </Box>
+
+      <Box
+        sx={{
+          flexShrink: 0,
+          p: 1.35,
+          pt: 0.65,
+        }}
+      >
+        <Box
+          sx={{
+            p: 1.2,
+            borderRadius:
+              "15px",
+            backgroundColor:
+              "rgba(255,255,255,0.075)",
+            border:
+              "1px solid rgba(255,255,255,0.1)",
+            boxShadow:
+              "0 10px 22px rgba(7,22,41,0.1)",
+          }}
+        >
+          <Typography
+            noWrap
+            title={
+              displayName
+            }
+            sx={{
+              color:
+                "#ffffff",
+              fontSize:
+                "9.5px",
+              fontWeight:
+                800,
+            }}
+          >
+            {displayName}
+          </Typography>
+
+          {email &&
+            email !==
+              displayName && (
+              <Typography
+                noWrap
+                title={email}
+                sx={{
+                  mt: 0.2,
+                  color:
+                    "rgba(255,255,255,0.65)",
+                  direction:
+                    "ltr",
+                  textAlign:
+                    "right",
+                  fontSize:
+                    "7.5px",
+                }}
+              >
+                {email}
+              </Typography>
+            )}
+
+          <Typography
+            sx={{
+              mt: 0.35,
+              color:
+                "#f2d792",
+              fontSize:
+                "7.5px",
+              fontWeight:
+                700,
+            }}
+          >
+            {getSchoolRoleLabel(
+              role
+            )}
+          </Typography>
+
+          <Box
+            component="button"
+            type="button"
+            onClick={
+              handleLogout
+            }
+            sx={{
+              width: "100%",
+              minHeight:
+                38,
+              mt: 1,
+              px: 1,
+              display:
+                "flex",
+              alignItems:
+                "center",
+              justifyContent:
+                "center",
+              gap: 0.65,
+              border: 0,
+              borderRadius:
+                "11px",
+              cursor:
+                "pointer",
+              color:
+                "#ffffff",
+              backgroundColor:
+                "rgba(255,255,255,0.08)",
+              fontFamily:
+                "inherit",
+              fontSize:
+                "8.5px",
+              fontWeight:
+                800,
+              transition:
+                "background-color 0.2s ease",
+              "&:hover": {
+                backgroundColor:
+                  "rgba(255,255,255,0.14)",
+              },
+              "& svg": {
+                fontSize:
+                  16,
+              },
+            }}
+          >
+            <LogoutRounded />
+            تسجيل الخروج
+          </Box>
+        </Box>
+      </Box>
+    </Box>
   );
 };
 
-export default Sidebar;
+const SidebarLink = ({
+  item,
+  mobile,
+  onClose,
+}) => (
+  <Box
+    component={NavLink}
+    to={item.path}
+    onClick={
+      mobile
+        ? onClose
+        : undefined
+    }
+    sx={{
+      minHeight: 46,
+      px: 1.45,
+      display:
+        "flex",
+      alignItems:
+        "center",
+      gap: 1,
+      borderRadius:
+        "14px",
+      color:
+        "rgba(255,255,255,0.77)",
+      textDecoration:
+        "none",
+      fontSize:
+        "9.5px",
+      fontWeight:
+        800,
+      transition:
+        "all 0.2s ease",
+      "& svg": {
+        fontSize:
+          18,
+      },
+      "&:hover": {
+        color:
+          "#ffffff",
+        backgroundColor:
+          "rgba(255,255,255,0.08)",
+        transform:
+          "translateX(-2px)",
+      },
+      "&.active": {
+        color:
+          "#173c5d",
+        backgroundColor:
+          "#f3d78b",
+        boxShadow:
+          "0 10px 24px rgba(7,22,41,0.18)",
+      },
+    }}
+  >
+    {item.icon}
+    {item.label}
+  </Box>
+);
+
+export {
+  SIDEBAR_WIDTH,
+};
+
+export default SchoolSidebar;

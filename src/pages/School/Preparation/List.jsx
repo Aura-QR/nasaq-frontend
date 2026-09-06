@@ -1082,6 +1082,28 @@ const getPreparationLessonTitle = (item) =>
   ).trim() || "—";
 
 const getAssignmentCounts = (item) => {
+  const resources = getArray(item?.resources);
+
+  if (resources.length) {
+    const labels = {
+      enrichment: "إثراء",
+      homework: "واجب",
+      quiz: "اختبار",
+      activity: "نشاط",
+    };
+    const counts = resources.reduce((result, resource) => {
+      const type = String(resource?.type || "").trim().toLowerCase();
+      if (labels[type]) {
+        result[type] = (result[type] || 0) + 1;
+      }
+      return result;
+    }, {});
+
+    return Object.entries(labels)
+      .map(([type, label]) => [label, counts[type] || 0])
+      .filter(([, count]) => count > 0);
+  }
+
   const groups = [
     ["إثراء", item?.enrichments],
     ["واجب", item?.homeworks || item?.assignments],
@@ -1089,9 +1111,14 @@ const getAssignmentCounts = (item) => {
     ["نشاط", item?.activities],
   ];
 
-  return groups
+  const legacyCounts = groups
     .map(([label, value]) => [label, getArray(value).length])
     .filter(([, count]) => count > 0);
+
+  if (legacyCounts.length) return legacyCounts;
+
+  const total = Number(item?.resourcesCount || 0);
+  return total > 0 ? [["تكليف", total]] : [];
 };
 
 const toArabicNumber = (value) =>
