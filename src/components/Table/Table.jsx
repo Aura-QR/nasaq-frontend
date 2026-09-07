@@ -67,9 +67,6 @@ const Table = ({
   schedule,
   addFn,
   editBtn,
-  cellRenderers,
-  emptyTitle = "لا توجد بيانات لعرضها",
-  emptyMessage = "غيّر الفلاتر أو أضف بيانات جديدة.",
   setPasswordFn,
   renderCell,
   renderActions,
@@ -138,7 +135,7 @@ const Table = ({
               fontWeight: 800,
             }}
           >
-            {emptyTitle}
+            لا توجد بيانات لعرضها
           </Typography>
 
           <Typography
@@ -147,7 +144,7 @@ const Table = ({
               fontSize: "11px",
             }}
           >
-            {emptyMessage}
+            غيّر الفلاتر أو أضف بيانات جديدة.
           </Typography>
         </Stack>
       </Box>
@@ -220,7 +217,6 @@ const Table = ({
               renderCell={renderCell}
               renderActions={renderActions}
               hasActions={hasActions}
-              cellRenderers={cellRenderers}
             />
           ))}
         </Stack>
@@ -335,7 +331,6 @@ const TableItem = ({
   renderCell,
   renderActions,
   hasActions,
-  cellRenderers,
 }) => {
   const [actionsAnchor, setActionsAnchor] = useState(null);
 
@@ -412,12 +407,6 @@ const TableItem = ({
           rawValue === undefined ||
           rawValue === ""
             ? "—"
-            : String(item[key]);
-        const renderedValue =
-          cellRenderers?.[key]?.(
-            item,
-            value
-          );
             : String(rawValue);
         const customCell = renderCell?.({
           item,
@@ -452,7 +441,6 @@ const TableItem = ({
             arrow
           >
             <Typography
-              component="div"
               sx={{
                 ...cellTextSx,
                 flex: 2,
@@ -460,10 +448,9 @@ const TableItem = ({
                 textAlign: "center",
               }}
             >
-              {renderedValue ??
-                (value.length > 20
-                  ? `${value.slice(0, 20)}…`
-                  : value)}
+              {value.length > 20
+                ? `${value.slice(0, 20)}…`
+                : value}
             </Typography>
           </Tooltip>
         );

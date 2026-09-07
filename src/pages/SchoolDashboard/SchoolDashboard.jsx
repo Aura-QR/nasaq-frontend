@@ -579,13 +579,6 @@ const SchoolDashboard = () => {
   const counts =
     dashboard?.counts || {};
 
-  const academicYearName =
-    dashboard?.academicYear?.name || "";
-
-  const studentCountHelper = academicYearName
-    ? `السنة ${academicYearName}`
-    : "لا توجد سنة دراسية نشطة";
-
   const countedAcademicYearLabel =
     getAcademicYearLabel(
       dashboard?.academicYear
@@ -1206,7 +1199,6 @@ const SchoolDashboard = () => {
                   value={displayNumber(
                     counts?.students
                   )}
-                  helper={studentCountHelper}
                   helper={studentsCountHelper}
                   icon={
                     <GroupsRounded />
@@ -1225,7 +1217,6 @@ const SchoolDashboard = () => {
                   value={displayNumber(
                     counts?.activeStudents
                   )}
-                  helper={studentCountHelper}
                   helper={studentsCountHelper}
                   icon={
                     <CheckCircleRounded />
