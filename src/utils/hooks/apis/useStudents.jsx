@@ -131,7 +131,8 @@ const loadStudents = async (
 };
 
 export const useStudents = (
-  filters = {}
+  filters = {},
+  { enabled = true } = {}
 ) => {
   const [students, setStudents] =
     useState([]);
@@ -167,6 +168,14 @@ export const useStudents = (
 
   useEffect(() => {
     let active = true;
+
+    if (!enabled) {
+      setLoading(true);
+
+      return () => {
+        active = false;
+      };
+    }
 
     const fetchData =
       async () => {
@@ -211,7 +220,7 @@ export const useStudents = (
     return () => {
       active = false;
     };
-  }, [cacheKey]);
+  }, [cacheKey, enabled]);
 
   return {
     students,

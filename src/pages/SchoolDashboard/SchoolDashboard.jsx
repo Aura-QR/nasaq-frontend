@@ -114,6 +114,24 @@ const displaySignedMoney = (value) => {
   return absoluteAmount;
 };
 
+const getAcademicYearLabel = (value) => {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    return /^[a-f\d]{24}$/i.test(value)
+      ? ""
+      : value;
+  }
+
+  return (
+    value?.name ||
+    value?.label ||
+    value?.title ||
+    value?.year ||
+    ""
+  );
+};
+
 const roleTitle = (role) => {
   if (role === "MANAGER") {
     return "لوحة مساعد إداري";
@@ -560,6 +578,16 @@ const SchoolDashboard = () => {
 
   const counts =
     dashboard?.counts || {};
+
+  const countedAcademicYearLabel =
+    getAcademicYearLabel(
+      dashboard?.academicYear
+    );
+
+  const studentsCountHelper =
+    countedAcademicYearLabel
+      ? `السنة ${countedAcademicYearLabel}`
+      : "كل الطلاب المسجلين";
 
   const financialSummary =
     dashboard?.financialSummary || {};
@@ -1171,7 +1199,7 @@ const SchoolDashboard = () => {
                   value={displayNumber(
                     counts?.students
                   )}
-                  helper="كل الطلاب المسجلين"
+                  helper={studentsCountHelper}
                   icon={
                     <GroupsRounded />
                   }
@@ -1189,7 +1217,7 @@ const SchoolDashboard = () => {
                   value={displayNumber(
                     counts?.activeStudents
                   )}
-                  helper="الحسابات النشطة"
+                  helper={studentsCountHelper}
                   icon={
                     <CheckCircleRounded />
                   }

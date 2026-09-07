@@ -18,7 +18,7 @@ import {
   SortRounded,
 } from "@mui/icons-material";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CSVLink } from "react-csv";
 import { toast } from "react-toastify";
 import { Link } from "react-router-dom";
@@ -257,6 +257,7 @@ const safeFormatDate = (value) => {
 const mapStudents = (data = []) =>
   data.map((item) => ({
     id: item._id || item.id,
+    isUnplaced: item?.isUnplaced === true,
     birthdate: safeFormatDate(
       item.birthDate
     ),
@@ -319,6 +320,7 @@ const List = () => {
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordStudent, setPasswordStudent] = useState(null);
+  const didInitializeAcademicYear = useRef(false);
 
   const canSetPassword = [
     ROLES.OWNER,
@@ -327,6 +329,49 @@ const List = () => {
   ].includes(getStoredRole());
 
   const debouncedSearch = useDebounce(search, 700);
+
+  const {
+    academicYears = [],
+    activeAcademicYear,
+    loadingAcademicYears,
+  } = useAcademicYears();
+
+  const resolvedActiveAcademicYear = useMemo(() => {
+    if (getReferenceId(activeAcademicYear)) {
+      return activeAcademicYear;
+    }
+
+    return (
+      academicYears.find(
+        (year) => year.status === "active"
+      ) || null
+    );
+  }, [activeAcademicYear, academicYears]);
+
+  const activeAcademicYearId = useMemo(
+    () => getReferenceId(resolvedActiveAcademicYear),
+    [resolvedActiveAcademicYear]
+  );
+
+  useEffect(() => {
+    if (
+      didInitializeAcademicYear.current ||
+      loadingAcademicYears
+    ) {
+      return;
+    }
+
+    didInitializeAcademicYear.current = true;
+
+    if (activeAcademicYearId) {
+      setAcademicYear(activeAcademicYearId);
+    }
+  }, [activeAcademicYearId, loadingAcademicYears]);
+
+  const requestedAcademicYearId =
+    didInitializeAcademicYear.current
+      ? academicYear
+      : activeAcademicYearId;
 
   const filters = useMemo(
     () => ({
@@ -337,6 +382,8 @@ const List = () => {
         status !== ""
           ? Boolean(Number(status))
           : undefined,
+      academicYearId:
+        requestedAcademicYearId || undefined,
       classId: studentClass || undefined,
     }),
     [
@@ -344,7 +391,7 @@ const List = () => {
       limit,
       debouncedSearch,
       status,
-      academicYear,
+      requestedAcademicYearId,
       studentClass,
     ]
   );
@@ -354,14 +401,11 @@ const List = () => {
     loading,
     pagination,
     setPagination,
-  } = useStudents(filters);
+  } = useStudents(filters, {
+    enabled: !loadingAcademicYears,
+  });
 
   const permissions = usePermissions("students");
-
-  const {
-    academicYears = [],
-    loadingAcademicYears,
-  } = useAcademicYears();
 
   const academicYearOptions = useMemo(
     () =>
@@ -374,6 +418,40 @@ const List = () => {
       })),
     [academicYears]
   );
+
+  const selectedAcademicYearLabel = useMemo(() => {
+    if (!academicYear) {
+      return "جميع السنوات";
+    }
+
+    const selectedYear = academicYears.find(
+      (year) => year.id === academicYear
+    );
+
+    if (selectedYear?.name) {
+      return `السنة ${selectedYear.name}`;
+    }
+
+    if (academicYear === activeAcademicYearId) {
+      const activeName =
+        resolvedActiveAcademicYear?.name ||
+        resolvedActiveAcademicYear?.label ||
+        resolvedActiveAcademicYear?.title ||
+        resolvedActiveAcademicYear?.year ||
+        "";
+
+      if (activeName) {
+        return `السنة ${activeName}`;
+      }
+    }
+
+    return "السنة المحددة";
+  }, [
+    academicYear,
+    academicYears,
+    resolvedActiveAcademicYear,
+    activeAcademicYearId,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -596,6 +674,73 @@ const List = () => {
       passwordStudent?.id,
       payload
     );
+
+  const renderStudentCell = ({
+    item,
+    keyName,
+    displayValue,
+  }) => {
+    if (keyName !== "name") {
+      return null;
+    }
+
+    return (
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="center"
+        spacing={0.7}
+        sx={{ minWidth: 0, width: "100%" }}
+      >
+        <Typography
+          title={displayValue}
+          sx={{
+            minWidth: 0,
+            overflow: "hidden",
+            color: "var(--color-muted)",
+            fontSize: "12px",
+            fontWeight: 600,
+            lineHeight: 1.5,
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {displayValue}
+        </Typography>
+
+        {item?.isUnplaced && (
+          <Chip
+            label="غير مسجّل"
+            size="small"
+            sx={{
+              height: 22,
+              flexShrink: 0,
+              color: "var(--color-gold-dark)",
+              backgroundColor: "rgba(211,164,79,0.10)",
+              border: "1px solid rgba(211,164,79,0.22)",
+              fontSize: "9px",
+              fontWeight: 800,
+              "& .MuiChip-label": {
+                px: 0.8,
+              },
+            }}
+          />
+        )}
+      </Stack>
+    );
+  };
+
+  const showActiveYearEmptyState = Boolean(
+    !loading &&
+      !enrollmentsLoading &&
+      !loadingAcademicYears &&
+      items.length === 0 &&
+      activeAcademicYearId &&
+      academicYear === activeAcademicYearId &&
+      !search &&
+      status === "" &&
+      !studentClass
+  );
 
   return (
     <Container>
@@ -936,6 +1081,20 @@ const List = () => {
                 >
                   {stats[card.key]}
                 </Typography>
+
+                {(card.key === "total" ||
+                  card.key === "active") && (
+                  <Typography
+                    sx={{
+                      mt: 0.25,
+                      color: "var(--color-muted)",
+                      fontSize: "9px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {selectedAcademicYearLabel}
+                  </Typography>
+                )}
               </Box>
 
               <Box
@@ -1247,24 +1406,54 @@ const List = () => {
               overflowX: "auto",
             }}
           >
-            <Table
-              headers={TABLE_HEADERS}
-              data={items}
-              loading={loading || enrollmentsLoading}
-              edit={permissions.edit}
-              profile
-              body={TABLE_BODY}
-              deleteFn={
-                permissions.delete
-                  ? handleDelete
-                  : undefined
-              }
-              setPasswordFn={
-                canSetPassword
-                  ? openPasswordDialog
-                  : undefined
-              }
-            />
+            {showActiveYearEmptyState ? (
+              <Box
+                sx={{
+                  minHeight: 180,
+                  display: "grid",
+                  placeItems: "center",
+                  px: 2,
+                  py: 4,
+                }}
+              >
+                <Typography
+                  sx={{
+                    maxWidth: 520,
+                    color: "var(--color-navy-deep)",
+                    fontSize: "14px",
+                    fontWeight: 800,
+                    lineHeight: 1.8,
+                    textAlign: "center",
+                  }}
+                >
+                  لا يوجد طلاب مسجّلون في السنة الحالية — جرّبي تغيير السنة من الفلتر
+                </Typography>
+              </Box>
+            ) : (
+              <Table
+                headers={TABLE_HEADERS}
+                data={items}
+                loading={
+                  loading ||
+                  enrollmentsLoading ||
+                  loadingAcademicYears
+                }
+                edit={permissions.edit}
+                profile
+                body={TABLE_BODY}
+                renderCell={renderStudentCell}
+                deleteFn={
+                  permissions.delete
+                    ? handleDelete
+                    : undefined
+                }
+                setPasswordFn={
+                  canSetPassword
+                    ? openPasswordDialog
+                    : undefined
+                }
+              />
+            )}
           </Box>
 
           {pagination && (
