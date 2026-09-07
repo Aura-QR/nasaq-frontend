@@ -890,12 +890,13 @@ const TeacherSchedule = () => {
       return;
     }
 
-    setSelectedLecture(
-      requestedLecture
-    );
+    const returnTo = `/teacher/schedule?mode=prepare&weekOf=${formatLocalDate(weekStart)}`;
 
-    setUploadedFile(
-      null
+    navigate(
+      `/teacher/preparations/add?lectureId=${requestedPreparationLectureId}&returnTo=${encodeURIComponent(
+        returnTo
+      )}`,
+      { replace: true }
     );
   }, [
     isPreparationMode,
@@ -1236,38 +1237,19 @@ const TeacherSchedule = () => {
     }
 
     /*
-     * الـ Dialog الخاص برفع التحضير موجود داخل وضع prepare.
-     * لذلك عند الضغط من الجدول العادي ننقل لنفس الصفحة بوضع
-     * التحضير ونمرر lectureId، وبعد التحميل يتم فتح الـ Dialog
-     * تلقائيًا بواسطة الـ effect الموجود أعلى الصفحة.
+     * التحضير الجديد يتم من خلال StructuredPreparationForm.
+     * لا نفتح Dialog رفع PDF القديم؛ ننتقل مباشرة إلى نموذج التحضير
+     * مع تمرير الحصة المختارة والصفحة التي نعود إليها بعد الحفظ.
      */
-    if (!isPreparationMode) {
-      const params = new URLSearchParams();
-      params.set("mode", "prepare");
-      params.set("lectureId", lectureId);
-      params.set("weekOf", formatLocalDate(weekStart));
+    const returnTo = isPreparationMode
+      ? `/teacher/schedule?mode=prepare&weekOf=${formatLocalDate(weekStart)}`
+      : `/teacher/schedule?weekOf=${formatLocalDate(weekStart)}`;
 
-      navigate(`/teacher/schedule?${params.toString()}`);
-      return;
-    }
-
-    /*
-     * داخل وضع التحضير نفتح نموذج الرفع الحديث مباشرة.
-     */
-    setSelectedLecture(
-      lecture
+    navigate(
+      `/teacher/preparations/add?lectureId=${lectureId}&returnTo=${encodeURIComponent(
+        returnTo
+      )}`
     );
-
-    setUploadedFile(
-      null
-    );
-
-    if (
-      fileInputRef.current
-    ) {
-      fileInputRef.current.value =
-        "";
-    }
   };
 
   const closePreparationDialog = () => {
