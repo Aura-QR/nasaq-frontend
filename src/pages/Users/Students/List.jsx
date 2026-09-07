@@ -18,7 +18,7 @@ import {
   SortRounded,
 } from "@mui/icons-material";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CSVLink } from "react-csv";
 import { toast } from "react-toastify";
 import { Link } from "react-router-dom";
@@ -320,7 +320,6 @@ const List = () => {
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordStudent, setPasswordStudent] = useState(null);
-  const didInitializeAcademicYear = useRef(false);
 
   const canSetPassword = [
     ROLES.OWNER,
@@ -353,26 +352,6 @@ const List = () => {
     [resolvedActiveAcademicYear]
   );
 
-  useEffect(() => {
-    if (
-      didInitializeAcademicYear.current ||
-      loadingAcademicYears
-    ) {
-      return;
-    }
-
-    didInitializeAcademicYear.current = true;
-
-    if (activeAcademicYearId) {
-      setAcademicYear(activeAcademicYearId);
-    }
-  }, [activeAcademicYearId, loadingAcademicYears]);
-
-  const requestedAcademicYearId =
-    didInitializeAcademicYear.current
-      ? academicYear
-      : activeAcademicYearId;
-
   const filters = useMemo(
     () => ({
       page,
@@ -383,7 +362,7 @@ const List = () => {
           ? Boolean(Number(status))
           : undefined,
       academicYearId:
-        requestedAcademicYearId || undefined,
+        academicYear || undefined,
       classId: studentClass || undefined,
     }),
     [
@@ -391,7 +370,7 @@ const List = () => {
       limit,
       debouncedSearch,
       status,
-      requestedAcademicYearId,
+      academicYear,
       studentClass,
     ]
   );
@@ -401,9 +380,7 @@ const List = () => {
     loading,
     pagination,
     setPagination,
-  } = useStudents(filters, {
-    enabled: !loadingAcademicYears,
-  });
+  } = useStudents(filters);
 
   const permissions = usePermissions("students");
 
@@ -418,40 +395,6 @@ const List = () => {
       })),
     [academicYears]
   );
-
-  const selectedAcademicYearLabel = useMemo(() => {
-    if (!academicYear) {
-      return "جميع السنوات";
-    }
-
-    const selectedYear = academicYears.find(
-      (year) => year.id === academicYear
-    );
-
-    if (selectedYear?.name) {
-      return `السنة ${selectedYear.name}`;
-    }
-
-    if (academicYear === activeAcademicYearId) {
-      const activeName =
-        resolvedActiveAcademicYear?.name ||
-        resolvedActiveAcademicYear?.label ||
-        resolvedActiveAcademicYear?.title ||
-        resolvedActiveAcademicYear?.year ||
-        "";
-
-      if (activeName) {
-        return `السنة ${activeName}`;
-      }
-    }
-
-    return "السنة المحددة";
-  }, [
-    academicYear,
-    academicYears,
-    resolvedActiveAcademicYear,
-    activeAcademicYearId,
-  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1082,19 +1025,6 @@ const List = () => {
                   {stats[card.key]}
                 </Typography>
 
-                {(card.key === "total" ||
-                  card.key === "active") && (
-                  <Typography
-                    sx={{
-                      mt: 0.25,
-                      color: "var(--color-muted)",
-                      fontSize: "9px",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {selectedAcademicYearLabel}
-                  </Typography>
-                )}
               </Box>
 
               <Box
@@ -1433,11 +1363,7 @@ const List = () => {
               <Table
                 headers={TABLE_HEADERS}
                 data={items}
-                loading={
-                  loading ||
-                  enrollmentsLoading ||
-                  loadingAcademicYears
-                }
+                loading={loading || enrollmentsLoading}
                 edit={permissions.edit}
                 profile
                 body={TABLE_BODY}
