@@ -23,6 +23,8 @@ import {
   ArrowBackRounded,
   CalendarMonthRounded,
   CheckCircleRounded,
+  ChevronLeftRounded,
+  ChevronRightRounded,
   CloseRounded,
   CloudUploadRounded,
   EventAvailableRounded,
@@ -38,6 +40,7 @@ import {
 } from "@mui/icons-material";
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -62,7 +65,6 @@ import {
 
 import nasaqLogo from "../../images/wadq-logo.png";
 import NotificationBell from "@/components/Notifications/NotificationBell";
-import usePermissions from "@/utils/hooks/usePermissions";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
 
@@ -502,53 +504,17 @@ const formatWeekRange = (weekStart) => {
 
 const loadPreparationsForTeacher = async (
   teacherId,
-  lectures
+  weekOf
 ) => {
-  const mainResponse = await fetchPreparations({
+  const response = await fetchPreparations({
     teacherId,
+    weekOf,
     limit: 500,
   });
 
-  let list = isFailedResponse(mainResponse)
+  return isFailedResponse(response)
     ? []
-    : extractCollection(mainResponse, ["preparations"]);
-
-  if (list.length > 0 || lectures.length === 0) {
-    return list;
-  }
-
-  const results = await Promise.allSettled(
-    lectures.map(async (lecture) => {
-      const lectureId = getLectureId(lecture);
-      if (!lectureId) return [];
-
-      const response = await fetchPreparations({
-        lectureId,
-        limit: 10,
-      });
-
-      const primary = isFailedResponse(response)
-        ? []
-        : extractCollection(response, ["preparations"]);
-
-      if (primary.length > 0) return primary;
-
-      const legacyResponse = await fetchPreparations({
-        lecture: lectureId,
-        limit: 10,
-      });
-
-      return isFailedResponse(legacyResponse)
-        ? []
-        : extractCollection(legacyResponse, ["preparations"]);
-    })
-  );
-
-  list = results.flatMap((result) =>
-    result.status === "fulfilled" ? result.value : []
-  );
-
-  return list;
+    : extractCollection(response, ["preparations"]);
 };
 
 const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
@@ -577,25 +543,25 @@ const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
     <Paper
       variant="outlined"
       sx={{
-        borderRadius: 3,
+        borderRadius: 2.2,
         borderColor: "#e3e9ef",
-        p: { xs: 1.15, md: 1.25 },
-        minHeight: 82,
-        boxShadow: "0 6px 16px rgba(25, 58, 86, 0.035)",
+        p: { xs: 0.75, md: 0.8 },
+        minHeight: 62,
+        boxShadow: "0 4px 12px rgba(25, 58, 86, 0.028)",
       }}
     >
       <Stack
         direction="row"
         alignItems="center"
         justifyContent="space-between"
-        spacing={1.5}
+        spacing={0.9}
       >
         <Box sx={{ textAlign: "right", minWidth: 0 }}>
           <Typography
             sx={{
               color: "#78879a",
               fontWeight: 800,
-              fontSize: 11.5,
+              fontSize: 9.8,
             }}
           >
             {title}
@@ -604,7 +570,7 @@ const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
             sx={{
               color: "#082a4b",
               fontWeight: 900,
-              fontSize: 22,
+              fontSize: 18,
               lineHeight: 1.15,
               mt: 0.2,
             }}
@@ -614,7 +580,7 @@ const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
           <Typography
             sx={{
               color: "#a0aaba",
-              fontSize: 10,
+              fontSize: 8.8,
               mt: 0.15,
             }}
           >
@@ -624,9 +590,9 @@ const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
 
         <Box
           sx={{
-            width: 38,
-            height: 38,
-            borderRadius: 1.8,
+            width: 32,
+            height: 32,
+            borderRadius: 1.6,
             display: "grid",
             placeItems: "center",
             bgcolor: palette.iconBg,
@@ -643,7 +609,6 @@ const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
 
 const TeacherSchedule = () => {
   const navigate = useNavigate();
-  const preparationPermissions = usePermissions("preparation");
   const [searchParams] = useSearchParams();
   const getAuthUser = useAuthUser();
 
@@ -662,10 +627,37 @@ const TeacherSchedule = () => {
   const teacherId = resolveTeacherId(authRoot, currentUser);
 
   const today = useMemo(() => new Date(), []);
-  const weekStart = useMemo(() => getStartOfWeek(today), [today]);
+  const currentWeekStart = useMemo(() => getStartOfWeek(today), [today]);
+
+  const [weekStart, setWeekStart] = useState(() => {
+    const queryWeek = String(searchParams.get("weekOf") || "").trim();
+    if (queryWeek) {
+      const parsed = new Date(`${queryWeek}T12:00:00`);
+      if (!Number.isNaN(parsed.getTime())) {
+        return getStartOfWeek(parsed);
+      }
+    }
+    return getStartOfWeek(today);
+  });
+
   const todayKey = DAYS.find(
     (day) => day.jsDay === today.getDay()
   )?.key;
+
+  const isCurrentWeek =
+    formatLocalDate(weekStart) === formatLocalDate(currentWeekStart);
+
+  const changeWeek = useCallback((offset) => {
+    setWeekStart((current) => {
+      const next = new Date(current);
+      next.setDate(current.getDate() + offset * 7);
+      return getStartOfWeek(next);
+    });
+  }, []);
+
+  const goToCurrentWeek = useCallback(() => {
+    setWeekStart(getStartOfWeek(today));
+  }, [today]);
 
   const [lectures, setLectures] = useState([]);
   const [preparations, setPreparations] = useState([]);
@@ -756,7 +748,7 @@ const TeacherSchedule = () => {
         const preparationList =
           await loadPreparationsForTeacher(
             teacherId,
-            lectureList
+            formatLocalDate(weekStart)
           );
 
         // `my-day` هو المصدر الحقيقي للاستئذان والاحتياطي في يوم محدد.
@@ -892,17 +884,18 @@ const TeacherSchedule = () => {
 
     if (preparationId) {
       navigate(
-        `/teacher/preparations/${preparationId}`,
+        `/teacher/preparations?preparationId=${preparationId}`,
         { replace: true }
       );
       return;
     }
 
-    navigate(
-      `/teacher/preparations/add?lectureId=${requestedPreparationLectureId}&returnTo=${encodeURIComponent(
-        "/teacher/schedule"
-      )}`,
-      { replace: true }
+    setSelectedLecture(
+      requestedLecture
+    );
+
+    setUploadedFile(
+      null
     );
   }, [
     isPreparationMode,
@@ -1078,6 +1071,24 @@ const TeacherSchedule = () => {
     );
   }, [isPreparationMode, visibleDays, lecturesByDay]);
 
+  const scheduleSlots = useMemo(() => {
+    const slots = new Set();
+
+    displayedDays.forEach((day) => {
+      (lecturesByDay.get(day.key) || []).forEach((lecture) => {
+        const slot = Number(lecture?.scheduleSlot);
+        if (Number.isFinite(slot) && slot > 0) slots.add(slot);
+      });
+
+      (coverSlotsByDay.get(day.key) || []).forEach((cover) => {
+        const slot = Number(cover?.slot);
+        if (Number.isFinite(slot) && slot > 0) slots.add(slot);
+      });
+    });
+
+    return Array.from(slots).sort((a, b) => a - b);
+  }, [displayedDays, lecturesByDay, coverSlotsByDay]);
+
   const visibleCoverCount = useMemo(
     () =>
       Array.from(coverSlotsByDay.values()).reduce(
@@ -1212,7 +1223,7 @@ const TeacherSchedule = () => {
        * لا نفتح School/Preparation/Profile القديمة.
        */
       navigate(
-        `/teacher/preparations/${preparationId}`
+        `/teacher/preparations?preparationId=${preparationId}`
       );
       return;
     }
@@ -1234,19 +1245,29 @@ const TeacherSchedule = () => {
       const params = new URLSearchParams();
       params.set("mode", "prepare");
       params.set("lectureId", lectureId);
+      params.set("weekOf", formatLocalDate(weekStart));
 
       navigate(`/teacher/schedule?${params.toString()}`);
       return;
     }
 
     /*
-     * داخل وضع التحضير نفتح نموذج التحضير المنظم للحصة مباشرة.
+     * داخل وضع التحضير نفتح نموذج الرفع الحديث مباشرة.
      */
-    navigate(
-      `/teacher/preparations/add?lectureId=${lectureId}&returnTo=${encodeURIComponent(
-        "/teacher/schedule"
-      )}`
+    setSelectedLecture(
+      lecture
     );
+
+    setUploadedFile(
+      null
+    );
+
+    if (
+      fileInputRef.current
+    ) {
+      fileInputRef.current.value =
+        "";
+    }
   };
 
   const closePreparationDialog = () => {
@@ -1305,6 +1326,7 @@ const TeacherSchedule = () => {
 
       const formData = new FormData();
       formData.append("lecture", lectureId);
+      formData.append("weekOf", formatLocalDate(weekStart));
       formData.append("files", uploadedFile);
 
       const response = await addPreparation(formData);
@@ -1461,7 +1483,7 @@ const TeacherSchedule = () => {
           <Paper
             elevation={0}
             sx={{
-              borderRadius: 2.5,
+              borderRadius: 2.15,
               p: 1,
               mb: 1.25,
               border: "1px solid #e1e6eb",
@@ -1654,7 +1676,6 @@ const TeacherSchedule = () => {
                         </Box>
                       </Stack>
 
-                      {(getPreparationId(lecture.schedulePreparation) || preparationPermissions.add) && (
                       <Button
                         fullWidth
                         variant={
@@ -1707,7 +1728,6 @@ const TeacherSchedule = () => {
                           ? "فتح التحضير الموجود"
                           : "إضافة تحضير"}
                       </Button>
-                      )}
                     </Box>
                   ));
                 })}
@@ -1832,7 +1852,6 @@ const TeacherSchedule = () => {
             >
               إلغاء
             </Button>
-            {preparationPermissions.add && (
             <Button
               variant="contained"
               startIcon={
@@ -1853,7 +1872,6 @@ const TeacherSchedule = () => {
             >
               حفظ التحضير
             </Button>
-            )}
           </DialogActions>
         </Dialog>
       </Box>
@@ -1866,23 +1884,34 @@ const TeacherSchedule = () => {
       sx={{
         minHeight: "100dvh",
         bgcolor: "#fff",
-        px: { xs: 1, md: 1.5 },
-        py: { xs: 1, md: 1.15 },
+        px: { xs: 0.7, md: 0.9 },
+        py: { xs: 0.7, md: 0.75 },
       }}
     >
-      <Box sx={{ maxWidth: 1520, mx: "auto" }}>
+      <Box
+        sx={{
+          maxWidth: 1600,
+          mx: "auto",
+          "& .MuiChip-root": {
+            minHeight: 20,
+          },
+          "& .MuiChip-label": {
+            px: 0.75,
+          },
+        }}
+      >
         <Paper
           elevation={0}
           sx={{
             position: "relative",
             overflow: "hidden",
-            borderRadius: { xs: 2.5, md: 3 },
+            borderRadius: { xs: 2.2, md: 2.5 },
             color: "#fff",
             background:
               "linear-gradient(115deg, #173f64 0%, #245b86 58%, #2d6b99 100%)",
-            px: { xs: 1.5, md: 2 },
-            py: { xs: 1.25, md: 1.4 },
-            mb: 1,
+            px: { xs: 1.15, md: 1.35 },
+            py: { xs: 0.8, md: 0.85 },
+            mb: 0.7,
           }}
         >
           <Box
@@ -1911,9 +1940,9 @@ const TeacherSchedule = () => {
             >
               <Box
                 sx={{
-                  width: { xs: 46, md: 52 },
-                  height: { xs: 46, md: 52 },
-                  borderRadius: 2.5,
+                  width: { xs: 38, md: 42 },
+                  height: { xs: 38, md: 42 },
+                  borderRadius: 2,
                   bgcolor: "#fff",
                   display: "grid",
                   placeItems: "center",
@@ -1939,7 +1968,9 @@ const TeacherSchedule = () => {
                   label={isPreparationMode ? "مسار التحضير" : "بوابة المعلم"}
                   icon={<ScheduleRounded />}
                   sx={{
-                    mb: 0.3,
+                    mb: 0.15,
+                    height: 22,
+                    fontSize: 10,
                     bgcolor: "rgba(255, 216, 128, .13)",
                     color: "#ffdc8e",
                     border: "1px solid rgba(255, 220, 142, .28)",
@@ -1949,7 +1980,7 @@ const TeacherSchedule = () => {
                 />
                 <Typography
                   sx={{
-                    fontSize: { xs: 23, md: 28 },
+                    fontSize: { xs: 20, md: 24 },
                     fontWeight: 900,
                     lineHeight: 1.05,
                   }}
@@ -1961,8 +1992,8 @@ const TeacherSchedule = () => {
                 <Typography
                   sx={{
                     color: "rgba(255,255,255,.75)",
-                    mt: 0.3,
-                    fontSize: { xs: 10.5, md: 11.5 },
+                    mt: 0.15,
+                    fontSize: { xs: 9.5, md: 10.25 },
                   }}
                 >
                   {isPreparationMode
@@ -1987,9 +2018,9 @@ const TeacherSchedule = () => {
                   color: "#fff",
                   borderColor: "rgba(255,255,255,.28)",
                   borderRadius: 1.8,
-                  px: 1.4,
-                  minHeight: 36,
-                  fontSize: 12,
+                  px: 1.1,
+                  minHeight: 31,
+                  fontSize: 10.5,
                   fontWeight: 900,
                   "&:hover": {
                     borderColor: "rgba(255,255,255,.55)",
@@ -2002,8 +2033,8 @@ const TeacherSchedule = () => {
 
               <NotificationBell
                 sx={{
-                  width: 36,
-                  height: 36,
+                  width: 31,
+                  height: 31,
                   color: "#fff",
                   border: "1px solid rgba(255,255,255,.28)",
                   borderRadius: 2.2,
@@ -2019,15 +2050,15 @@ const TeacherSchedule = () => {
                     }
                     disabled={refreshing}
                     sx={{
-                      width: 36,
-                      height: 36,
+                      width: 31,
+                      height: 31,
                       color: "#fff",
                       border: "1px solid rgba(255,255,255,.28)",
-                      borderRadius: 2.2,
+                      borderRadius: 1.8,
                     }}
                   >
                     {refreshing ? (
-                      <CircularProgress size={21} color="inherit" />
+                      <CircularProgress size={17} color="inherit" />
                     ) : (
                       <RefreshRounded />
                     )}
@@ -2268,8 +2299,8 @@ const TeacherSchedule = () => {
               xs: "1fr 1fr",
               lg: "repeat(4, minmax(0, 1fr))",
             },
-            gap: 0.8,
-            mb: 1,
+            gap: 0.55,
+            mb: 0.65,
           }}
         >
           <StatCard
@@ -2320,10 +2351,17 @@ const TeacherSchedule = () => {
         <Paper
           variant="outlined"
           sx={{
-            borderRadius: 2.2,
+            borderRadius: 2,
             borderColor: "#e5ebf0",
-            p: 0.8,
-            mb: 1,
+            p: 0.55,
+            mb: 0.65,
+            "& .MuiInputBase-root": {
+              minHeight: 34,
+              fontSize: 10.75,
+            },
+            "& .MuiInputLabel-root": {
+              fontSize: 10.25,
+            },
           }}
         >
           <Box
@@ -2335,7 +2373,7 @@ const TeacherSchedule = () => {
                   ? "minmax(280px, 1fr) 220px 220px"
                   : "minmax(260px, 1fr) 220px 220px 210px",
               },
-              gap: 0.7,
+              gap: 0.5,
             }}
           >
             <TextField
@@ -2410,70 +2448,147 @@ const TeacherSchedule = () => {
         <Paper
           variant="outlined"
           sx={{
+            width: "100%",
+            maxWidth: 1280,
+            mx: "auto",
             borderRadius: 2.5,
             borderColor: "#e5ebf0",
             overflow: "hidden",
           }}
         >
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            alignItems={{ xs: "flex-start", sm: "center" }}
-            justifyContent="space-between"
-            spacing={1}
+          <Box
             sx={{
-              px: { xs: 1.1, md: 1.35 },
-              py: 0.85,
-              borderBottom: "1px solid #e9edf2",
+              px: { xs: 0.8, md: 1.05 },
+              py: 0.7,
+              borderBottom: "1px solid #dfe6ed",
+              bgcolor: "#fbfcfd",
             }}
           >
-            <Box>
-              <Typography
-                sx={{
-                  color: "#082a4b",
-                  fontWeight: 900,
-                  fontSize: 16,
-                }}
-              >
-                {isPreparationMode
-                  ? "الحصص التي تحتاج تحضير"
-                  : "الجدول الأسبوعي"}
-              </Typography>
-              <Typography sx={{ color: "#98a3b2", fontSize: 12 }}>
-                {isPreparationMode
-                  ? `${filteredLectures.length} حصة جاهزة لاختيار التحضير`
-                  : formatWeekRange(weekStart)}
-              </Typography>
-            </Box>
-
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Chip
-                size="small"
-                icon={<CalendarMonthRounded />}
-                label={`اليوم: ${
-                  DAYS.find((day) => day.key === todayKey)?.label || ""
-                }`}
-                sx={{
-                  bgcolor: "#edf5fb",
-                  color: "#1f527c",
-                  fontWeight: 800,
-                  "& .MuiChip-icon": { color: "#1f527c" },
-                }}
-              />
-
-              {(search ||
-                subjectFilter ||
-                classFilter ||
-                preparationFilter !== "all") && (
-                <Button
-                  size="small"
-                  onClick={clearFilters}
-                  sx={{ fontWeight: 800 }}
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              alignItems={{ xs: "stretch", md: "center" }}
+              justifyContent="space-between"
+              spacing={0.8}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    color: "#082a4b",
+                    fontWeight: 900,
+                    fontSize: 14,
+                  }}
                 >
-                  مسح الفلاتر
-                </Button>
-              )}
+                  {isPreparationMode
+                    ? "الحصص التي تحتاج تحضير"
+                    : "الجدول الأسبوعي"}
+                </Typography>
+                <Typography sx={{ color: "#7f8c9b", fontSize: 10.5 }}>
+                  {isPreparationMode
+                    ? `${filteredLectures.length} حصة جاهزة لاختيار التحضير`
+                    : formatWeekRange(weekStart)}
+                </Typography>
+              </Box>
+
+              {!isPreparationMode ? (
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="center"
+                  spacing={0.55}
+                  sx={{
+                    p: 0.35,
+                    border: "1px solid #dde5ec",
+                    borderRadius: 2,
+                    bgcolor: "#fff",
+                  }}
+                >
+                  <Button
+                    size="small"
+                    startIcon={<ChevronRightRounded />}
+                    onClick={() => changeWeek(-1)}
+                    sx={{
+                      minHeight: 29,
+                      px: 0.9,
+                      color: "#1f527c",
+                      fontWeight: 900,
+                      fontSize: 10.25,
+                    }}
+                  >
+                    الأسبوع السابق
+                  </Button>
+
+                  <Button
+                    size="small"
+                    variant={isCurrentWeek ? "contained" : "outlined"}
+                    onClick={goToCurrentWeek}
+                    disabled={isCurrentWeek}
+                    sx={{
+                      minHeight: 29,
+                      px: 1,
+                      fontWeight: 900,
+                      fontSize: 10.25,
+                      bgcolor: isCurrentWeek ? "#214f77" : undefined,
+                      "&:hover": {
+                        bgcolor: isCurrentWeek ? "#214f77" : undefined,
+                      },
+                    }}
+                  >
+                    هذا الأسبوع
+                  </Button>
+
+                  <Button
+                    size="small"
+                    endIcon={<ChevronLeftRounded />}
+                    onClick={() => changeWeek(1)}
+                    sx={{
+                      minHeight: 29,
+                      px: 0.9,
+                      color: "#1f527c",
+                      fontWeight: 900,
+                      fontSize: 10.25,
+                    }}
+                  >
+                    الأسبوع القادم
+                  </Button>
+                </Stack>
+              ) : null}
+
+              <Stack direction="row" spacing={0.7} alignItems="center">
+                <Chip
+                  size="small"
+                  icon={<CalendarMonthRounded />}
+                  label={
+                    isCurrentWeek
+                      ? `اليوم: ${
+                          DAYS.find((day) => day.key === todayKey)?.label || ""
+                        }`
+                      : "أسبوع مختلف"
+                  }
+                  sx={{
+                    bgcolor: isCurrentWeek ? "#edf5fb" : "#fff6df",
+                    color: isCurrentWeek ? "#1f527c" : "#986816",
+                    fontWeight: 800,
+                    "& .MuiChip-icon": {
+                      color: isCurrentWeek ? "#1f527c" : "#986816",
+                    },
+                  }}
+                />
+
+                {(search ||
+                  subjectFilter ||
+                  classFilter ||
+                  preparationFilter !== "all") && (
+                  <Button
+                    size="small"
+                    onClick={clearFilters}
+                    sx={{ fontWeight: 800 }}
+                  >
+                    مسح الفلاتر
+                  </Button>
+                )}
+              </Stack>
             </Stack>
-          </Stack>
+          </Box>
 
           {loading ? (
             <Box
@@ -2545,414 +2660,502 @@ const TeacherSchedule = () => {
           ) : (
             <Box
               sx={{
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "1fr",
-                  sm: "repeat(2, minmax(0, 1fr))",
-                  lg: isPreparationMode
-                    ? "repeat(2, minmax(0, 1fr))"
-                    : `repeat(${Math.min(
-                        displayedDays.length,
-                        5
-                      )}, minmax(0, 1fr))`,
-                  xl: isPreparationMode
-                    ? "repeat(3, minmax(0, 1fr))"
-                    : undefined,
-                },
-                gap: 0.8,
-                p: { xs: 0.8, md: 1 },
-                alignItems: "start",
+                overflowX: "auto",
+                p: { xs: 0.6, md: 0.85 },
+                bgcolor: "#f4f7fa",
               }}
             >
-              {displayedDays.map((day) => {
-                const dayDate = getDateForDay(weekStart, day.jsDay);
-                const dayLectures = lecturesByDay.get(day.key) || [];
-                const dayCovers = coverSlotsByDay.get(day.key) || [];
-                const dayItems = [
-                  ...dayLectures.map((lecture) => ({
-                    kind: "own",
-                    slot: lecture.scheduleSlot,
-                    lecture,
-                  })),
-                  ...dayCovers.map((cover, index) => ({
-                    kind: "cover",
-                    slot: Number(cover?.slot) || 0,
-                    cover,
-                    key:
-                      normalizeId(cover?.substitutionId) ||
-                      normalizeId(cover?.lectureId) ||
-                      `${day.key}-${cover?.slot ?? index}-${index}`,
-                  })),
-                ].sort((a, b) => a.slot - b.slot);
-                const isToday = day.key === todayKey;
-
-                return (
-                  <Paper
-                    key={day.key}
-                    variant="outlined"
+              <Box
+                sx={{
+                  minWidth: {
+                    xs: `${90 + Math.max(displayedDays.length, 1) * 178}px`,
+                    md: `${96 + Math.max(displayedDays.length, 1) * 190}px`,
+                  },
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: `90px repeat(${Math.max(
+                      displayedDays.length,
+                      1
+                    )}, minmax(178px, 1fr))`,
+                    md: `96px repeat(${Math.max(
+                      displayedDays.length,
+                      1
+                    )}, minmax(190px, 1fr))`,
+                  },
+                  border: "1px solid #d8e1e8",
+                  borderRadius: 2.5,
+                  overflow: "hidden",
+                  bgcolor: "#fff",
+                  boxShadow: "0 8px 24px rgba(20, 52, 79, .055)",
+                }}
+              >
+                <Box
+                  sx={{
+                    minHeight: 54,
+                    px: 0.7,
+                    display: "grid",
+                    placeItems: "center",
+                    bgcolor: "#eef3f7",
+                    borderBottom: "1px solid #cfd9e3",
+                    borderLeft: "1px solid #cfd9e3",
+                  }}
+                >
+                  <Typography
                     sx={{
-                      borderRadius: 2.2,
-                      overflow: "hidden",
-                      borderColor: isPreparationMode
-                        ? "#ead7aa"
-                        : isToday
-                        ? "#2f6f9f"
-                        : "#e3e8ee",
-                      boxShadow: isPreparationMode
-                        ? "0 8px 22px rgba(127, 91, 22, .07)"
-                        : isToday
-                        ? "0 10px 24px rgba(34, 91, 134, .09)"
-                        : "none",
+                      color: "#536b7f",
+                      fontWeight: 900,
+                      fontSize: 10.5,
                     }}
                   >
-                    <Stack
-                      direction="row"
-                      alignItems="center"
-                      justifyContent="space-between"
+                    الحصة
+                  </Typography>
+                </Box>
+
+                {displayedDays.map((day) => {
+                  const dayDate = getDateForDay(weekStart, day.jsDay);
+                  const isToday = isCurrentWeek && day.key === todayKey;
+
+                  return (
+                    <Box
+                      key={`head-${day.key}`}
                       sx={{
-                        px: 1,
-                        py: 0.75,
-                        bgcolor: isPreparationMode
-                          ? "#fff8e9"
-                          : isToday
-                          ? "#214f77"
-                          : "#f7f9fb",
-                        color: isPreparationMode
-                          ? "#8a5c0d"
-                          : isToday
-                          ? "#fff"
-                          : "#173d60",
+                        minHeight: 54,
+                        px: 0.9,
+                        py: 0.5,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 0.5,
+                        bgcolor: isToday ? "#214f77" : "#fbfcfd",
+                        color: isToday ? "#fff" : "#143c5e",
+                        borderBottom: "1px solid #cfd9e3",
+                        borderLeft: "1px solid #cfd9e3",
                       }}
                     >
                       <Box>
-                        <Typography sx={{ fontWeight: 900, fontSize: 13.5 }}>
+                        <Typography
+                          sx={{
+                            fontWeight: 900,
+                            fontSize: 11.75,
+                            lineHeight: 1.2,
+                          }}
+                        >
                           {day.label}
                         </Typography>
                         <Typography
                           sx={{
+                            mt: 0.15,
+                            fontSize: 8.8,
                             color: isToday
                               ? "rgba(255,255,255,.72)"
-                              : "#9aa6b5",
-                            fontSize: 11,
+                              : "#8e9aa8",
                           }}
                         >
                           {formatDayDate(dayDate)}
                         </Typography>
                       </Box>
 
-                      <Chip
-                        size="small"
-                        label={
-                          dayCovers.length > 0
-                            ? `${dayItems.length} حصة · ${dayCovers.length} احتياطي`
-                            : `${dayItems.length} حصة`
-                        }
-                        sx={{
-                          bgcolor: isToday
-                            ? "rgba(255,255,255,.13)"
-                            : "#e9eef3",
-                          color: isToday ? "#fff" : "#315571",
-                          fontWeight: 900,
-                        }}
-                      />
-                    </Stack>
+                      {isToday ? (
+                        <Chip
+                          size="small"
+                          label="اليوم"
+                          sx={{
+                            height: 18,
+                            bgcolor: "rgba(255,255,255,.16)",
+                            color: "#fff",
+                            fontWeight: 900,
+                            fontSize: 8.75,
+                          }}
+                        />
+                      ) : null}
+                    </Box>
+                  );
+                })}
 
-                    <Stack spacing={0.7} sx={{ p: 0.7 }}>
-                      {dayItems.length === 0 ? (
+                {scheduleSlots.map((slot) => (
+                  <Fragment key={`slot-row-${slot}`}>
+                    <Box
+                      sx={{
+                        minHeight: 84,
+                        px: 0.6,
+                        display: "grid",
+                        placeItems: "center",
+                        textAlign: "center",
+                        bgcolor: "#f7f9fb",
+                        borderBottom: "1px solid #dbe3e9",
+                        borderLeft: "1px solid #dbe3e9",
+                      }}
+                    >
+                      <Stack spacing={0.35} alignItems="center">
                         <Box
                           sx={{
-                            minHeight: 76,
+                            width: 26,
+                            height: 26,
+                            borderRadius: "50%",
                             display: "grid",
                             placeItems: "center",
-                            textAlign: "center",
-                            color: "#a4aebb",
+                            bgcolor: "#e8f0f6",
+                            color: "#25577f",
+                            fontWeight: 900,
+                            fontSize: 10,
                           }}
                         >
-                          <Box>
-                            <CalendarMonthRounded sx={{ fontSize: 22 }} />
-                            <Typography sx={{ fontSize: 12, mt: 0.3 }}>
-                              لا توجد حصص
-                            </Typography>
-                          </Box>
+                          {slot}
                         </Box>
-                      ) : (
-                        dayItems.map((item) => {
-                          if (item.kind === "cover") {
-                            const cover = item.cover;
+                        <Typography
+                          sx={{
+                            color: "#173d60",
+                            fontWeight: 900,
+                            fontSize: 9.6,
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {SLOT_LABELS[slot] || `الحصة ${slot}`}
+                        </Typography>
+                      </Stack>
+                    </Box>
 
-                            return (
-                              <Paper
-                                key={`cover-${item.key}`}
-                                variant="outlined"
-                                sx={{
-                                  borderRadius: 2,
-                                  borderColor: "#b9d4ec",
-                                  bgcolor: "#f4f9fd",
-                                  p: 0.85,
-                                }}
-                              >
-                                <Stack spacing={0.6}>
-                                  <Stack
-                                    direction="row"
-                                    alignItems="center"
-                                    justifyContent="space-between"
-                                    spacing={1}
-                                  >
-                                    <Chip
-                                      size="small"
-                                      label={
-                                        SLOT_LABELS[item.slot] ||
-                                        `الحصة ${item.slot}`
-                                      }
-                                      sx={{
-                                        bgcolor: "#e5f1fb",
-                                        color: "#245d88",
-                                        fontWeight: 900,
-                                        fontSize: 10.5,
-                                      }}
-                                    />
-                                    <Chip
-                                      size="small"
-                                      color="info"
-                                      label="احتياطي"
-                                      sx={{ fontWeight: 900, fontSize: 10.5 }}
-                                    />
-                                  </Stack>
+                    {displayedDays.map((day) => {
+                      const lecture = (lecturesByDay.get(day.key) || []).find(
+                        (item) => Number(item?.scheduleSlot) === Number(slot)
+                      );
+                      const cover = (coverSlotsByDay.get(day.key) || []).find(
+                        (item) => Number(item?.slot) === Number(slot)
+                      );
+                      const isToday = isCurrentWeek && day.key === todayKey;
 
-                                  <Box>
-                                    <Typography
-                                      sx={{
-                                        color: "#082a4b",
-                                        fontWeight: 900,
-                                        fontSize: 12.5,
-                                        lineHeight: 1.35,
-                                      }}
-                                    >
-                                      {cover?.subjectName || "حصة احتياطي"}
-                                    </Typography>
-                                    <Typography
-                                      sx={{
-                                        color: "#71879a",
-                                        fontSize: 10.5,
-                                        mt: 0.15,
-                                      }}
-                                    >
-                                      {[
-                                        cover?.className,
-                                        cover?.roomNumber
-                                          ? `غرفة ${cover.roomNumber}`
-                                          : "",
-                                      ]
-                                        .filter(Boolean)
-                                        .join(" · ") || "—"}
-                                    </Typography>
-                                    {cover?.coveringFor ? (
-                                      <Typography
-                                        sx={{
-                                          color: "#4f7390",
-                                          fontSize: 10.5,
-                                          mt: 0.2,
-                                          fontWeight: 800,
-                                        }}
-                                      >
-                                        بدل {cover.coveringFor}
-                                      </Typography>
-                                    ) : null}
-                                  </Box>
-                                </Stack>
-                              </Paper>
-                            );
-                          }
-
-                          const lecture = item.lecture;
-                          const lectureId = getLectureId(lecture);
-                          const hasPreparation = Boolean(
-                            getPreparationId(
-                              lecture.schedulePreparation
-                            )
-                          );
-                          const isExcused = Boolean(
-                            lecture.scheduleExcusedByLeave
-                          );
-
-                          return (
-                            <Paper
-                              key={lectureId}
-                              variant="outlined"
+                      if (!lecture && !cover) {
+                        return (
+                          <Box
+                            key={`${day.key}-${slot}-empty`}
+                            sx={{
+                              minHeight: 84,
+                              display: "grid",
+                              placeItems: "center",
+                              bgcolor: isToday ? "#f7fbfe" : "#fff",
+                              borderBottom: "1px solid #dbe3e9",
+                              borderLeft: "1px solid #dbe3e9",
+                            }}
+                          >
+                            <Typography
                               sx={{
-                                borderRadius: 2,
-                                borderColor: isExcused
-                                  ? "#e5c98a"
-                                  : hasPreparation
-                                    ? "#dcebe3"
-                                    : "#f0dfbb",
-                                bgcolor: isExcused
-                                  ? "#fff8e9"
-                                  : hasPreparation
-                                    ? "#fbfefc"
-                                    : "#fffcf6",
-                                p: 0.85,
+                                color: "#d0d6dc",
+                                fontSize: 14,
+                                fontWeight: 700,
                               }}
                             >
-                              <Stack spacing={0.6}>
+                              —
+                            </Typography>
+                          </Box>
+                        );
+                      }
+
+                      return (
+                        <Box
+                          key={`${day.key}-${slot}`}
+                          sx={{
+                            minHeight: 84,
+                            p: 0.45,
+                            bgcolor: isToday ? "#f7fbfe" : "#fff",
+                            borderBottom: "1px solid #dbe3e9",
+                            borderLeft: "1px solid #dbe3e9",
+                            transition: "background-color .16s ease",
+                            "&:hover": {
+                              bgcolor: isToday ? "#f1f8fd" : "#fbfcfd",
+                            },
+                          }}
+                        >
+                          <Stack spacing={0.45}>
+                            {cover ? (
+                              <Box
+                                sx={{
+                                  border: "none",
+                                  borderRight: "3px solid #4f91bd",
+                                  borderRadius: 1,
+                                  bgcolor: "#f7fbfe",
+                                  px: 0.55,
+                                  py: 0.35,
+                                }}
+                              >
                                 <Stack
                                   direction="row"
                                   alignItems="center"
                                   justifyContent="space-between"
-                                  spacing={1}
+                                  spacing={0.5}
                                 >
+                                  <Typography
+                                    noWrap
+                                    sx={{
+                                      minWidth: 0,
+                                      color: "#173d60",
+                                      fontWeight: 900,
+                                      fontSize: 10.25,
+                                    }}
+                                  >
+                                    {cover?.subjectName || "حصة احتياطي"}
+                                  </Typography>
                                   <Chip
                                     size="small"
-                                    label={getSlotLabel(lecture)}
+                                    label="احتياطي"
                                     sx={{
-                                      bgcolor: "#eef3f7",
-                                      color: "#284f6d",
+                                      height: 19,
+                                      bgcolor: "#dfeef8",
+                                      color: "#28658f",
                                       fontWeight: 900,
-                                      fontSize: 10.5,
+                                      fontSize: 8.5,
                                     }}
                                   />
+                                </Stack>
+                                <Typography
+                                  noWrap
+                                  sx={{
+                                    mt: 0.2,
+                                    color: "#7b8f9f",
+                                    fontSize: 8.75,
+                                  }}
+                                >
+                                  {[
+                                    cover?.className,
+                                    cover?.roomNumber
+                                      ? `غرفة ${cover.roomNumber}`
+                                      : "",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ") || "—"}
+                                </Typography>
+                              </Box>
+                            ) : null}
+
+                            {lecture ? (() => {
+                              const lectureId = getLectureId(lecture);
+                              const hasPreparation = Boolean(
+                                getPreparationId(
+                                  lecture.schedulePreparation
+                                )
+                              );
+                              const isExcused = Boolean(
+                                lecture.scheduleExcusedByLeave
+                              );
+
+                              return (
+                                <Box
+                                  sx={{
+                                    height: "100%",
+                                    minHeight: 74,
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    justifyContent: "space-between",
+                                    borderRadius: 1.5,
+                                    px: 0.7,
+                                    py: 0.55,
+                                    bgcolor: hasPreparation
+                                      ? "rgba(38, 144, 106, .035)"
+                                      : "rgba(207, 146, 33, .035)",
+                                    boxShadow: `inset -3px 0 0 ${
+                                      isExcused
+                                        ? "#c58b20"
+                                        : hasPreparation
+                                          ? "#25906a"
+                                          : "#cf9221"
+                                    }`,
+                                  }}
+                                >
+                                  <Stack spacing={0.2}>
+                                    <Stack
+                                      direction="row"
+                                      alignItems="center"
+                                      justifyContent="space-between"
+                                      spacing={0.4}
+                                    >
+                                      <Typography
+                                        noWrap
+                                        sx={{
+                                          minWidth: 0,
+                                          color: "#082a4b",
+                                          fontWeight: 900,
+                                          fontSize: 10.2,
+                                        }}
+                                      >
+                                        {lecture.scheduleSubject.label}
+                                      </Typography>
+
+                                      <Stack
+                                        direction="row"
+                                        spacing={0.3}
+                                        alignItems="center"
+                                        sx={{ flex: "0 0 auto" }}
+                                      >
+                                        <Box
+                                          sx={{
+                                            width: 7,
+                                            height: 7,
+                                            borderRadius: "50%",
+                                            bgcolor: hasPreparation
+                                              ? "#25906a"
+                                              : "#cf9221",
+                                          }}
+                                        />
+                                        <Typography
+                                          sx={{
+                                            color: hasPreparation
+                                              ? "#197857"
+                                              : "#97630f",
+                                            fontWeight: 900,
+                                            fontSize: 8.15,
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          {hasPreparation
+                                            ? "تم التحضير"
+                                            : "تحتاج تحضير"}
+                                        </Typography>
+                                      </Stack>
+                                    </Stack>
+
+                                    <Typography
+                                      noWrap
+                                      sx={{
+                                        color: "#8a98a6",
+                                        fontSize: 8.5,
+                                      }}
+                                    >
+                                      {lecture.scheduleClassLabel}
+                                    </Typography>
+                                  </Stack>
 
                                   <Stack
                                     direction="row"
-                                    spacing={0.4}
                                     alignItems="center"
+                                    justifyContent="space-between"
+                                    spacing={0.45}
+                                    sx={{ mt: 0.45 }}
                                   >
-                                    {isExcused ? (
-                                      <Chip
-                                        size="small"
-                                        color="warning"
-                                        label="مستأذن"
-                                        sx={{
-                                          fontWeight: 900,
-                                          fontSize: 10.5,
-                                        }}
-                                      />
-                                    ) : null}
-                                    <Chip
+                                    <Button
                                       size="small"
-                                      icon={
-                                        hasPreparation ? (
-                                          <CheckCircleRounded />
-                                        ) : (
-                                          <WarningAmberRounded />
-                                        )
-                                      }
-                                      label={
-                                        hasPreparation
-                                          ? "تم التحضير"
-                                          : "تحتاج تحضير"
+                                      variant="text"
+                                      startIcon={<MenuBookRounded />}
+                                      onClick={() =>
+                                        openPreparation(lecture)
                                       }
                                       sx={{
-                                        bgcolor: hasPreparation
-                                          ? "#e7f4ed"
-                                          : "#fff0d0",
-                                        color: hasPreparation
-                                          ? "#19825f"
-                                          : "#a86d0e",
+                                        minHeight: 23,
+                                        px: 0.45,
+                                        borderRadius: 1,
                                         fontWeight: 900,
-                                        fontSize: 10.5,
-                                        "& .MuiChip-icon": {
-                                          color: "inherit",
+                                        fontSize: 8.3,
+                                        color: hasPreparation
+                                          ? "#188064"
+                                          : "#a66e12",
+                                        "& .MuiButton-startIcon": {
+                                          mr: 0.25,
+                                          ml: 0.25,
+                                        },
+                                        "&:hover": {
+                                          bgcolor: hasPreparation
+                                            ? "rgba(24,128,100,.06)"
+                                            : "rgba(207,146,33,.08)",
                                         },
                                       }}
-                                    />
+                                    >
+                                      {hasPreparation
+                                        ? "عرض التحضير"
+                                        : "إضافة تحضير"}
+                                    </Button>
+
+                                    <Tooltip
+                                      title={
+                                        isExcused
+                                          ? "الحصة معفاة باستئذان معتمد"
+                                          : "تسجيل الحضور"
+                                      }
+                                    >
+                                      <span>
+                                        <IconButton
+                                          size="small"
+                                          disabled={isExcused}
+                                          onClick={() =>
+                                            openAttendance(lecture, day)
+                                          }
+                                          sx={{
+                                            width: 24,
+                                            height: 24,
+                                            flex: "0 0 auto",
+                                            color: "#356786",
+                                            bgcolor: "#fff",
+                                            border: "1px solid #dce4ea",
+                                            borderRadius: "50%",
+                                            "&:hover": {
+                                              bgcolor: "#f4f8fb",
+                                            },
+                                          }}
+                                        >
+                                          <HowToRegRounded
+                                            sx={{ fontSize: 14 }}
+                                          />
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
                                   </Stack>
-                                </Stack>
-
-                                <Box>
-                                  <Typography
-                                    sx={{
-                                      color: "#082a4b",
-                                      fontWeight: 900,
-                                      fontSize: 12.5,
-                                      lineHeight: 1.35,
-                                    }}
-                                  >
-                                    {lecture.scheduleSubject.label}
-                                  </Typography>
-                                  <Typography
-                                    sx={{
-                                      color: "#8d99a8",
-                                      fontSize: 10.5,
-                                      mt: 0.15,
-                                    }}
-                                  >
-                                    {lecture.scheduleClassLabel}
-                                  </Typography>
                                 </Box>
+                              );
+                            })() : null}
+                          </Stack>
+                        </Box>
+                      );
+                    })}
+                  </Fragment>
+                ))}
+              </Box>
 
-                                <Stack
-                                  direction="row"
-                                  spacing={0.7}
-                                  sx={{ pt: 0.3 }}
-                                >
-                                  {(hasPreparation || preparationPermissions.add) && (
-                                  <Button
-                                    fullWidth
-                                    size="small"
-                                    variant={
-                                      hasPreparation
-                                        ? "outlined"
-                                        : "contained"
-                                    }
-                                    startIcon={<MenuBookRounded />}
-                                    onClick={() =>
-                                      openPreparation(lecture)
-                                    }
-                                    sx={{
-                                      borderRadius: 1.8,
-                                      fontWeight: 900,
-                                      fontSize: 10.5,
-                                      bgcolor: hasPreparation
-                                        ? undefined
-                                        : "#c89027",
-                                      "&:hover": {
-                                        bgcolor: hasPreparation
-                                          ? undefined
-                                          : "#ad7718",
-                                      },
-                                    }}
-                                  >
-                                    {hasPreparation
-                                      ? "فتح التحضير"
-                                      : "إضافة تحضير"}
-                                  </Button>
-                                  )}
-
-                                  <Tooltip
-                                    title={
-                                      isExcused
-                                        ? "الحصة معفاة باستئذان معتمد"
-                                        : "تسجيل الحضور"
-                                    }
-                                  >
-                                    <span>
-                                      <IconButton
-                                        size="small"
-                                        disabled={isExcused}
-                                        onClick={() =>
-                                          openAttendance(lecture, day)
-                                        }
-                                        sx={{
-                                          border: "1px solid #d9e2ea",
-                                          borderRadius: 1.8,
-                                          color: "#1d5d86",
-                                        }}
-                                      >
-                                        <HowToRegRounded fontSize="small" />
-                                      </IconButton>
-                                    </span>
-                                  </Tooltip>
-                                </Stack>
-                              </Stack>
-                            </Paper>
-                          );
-                        })
-                      )}
-                    </Stack>
-                  </Paper>
-                );
-              })}
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                justifyContent="flex-start"
+                sx={{ pt: 0.65, px: 0.4, color: "#8795a2" }}
+              >
+                <Stack direction="row" spacing={0.4} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      bgcolor: "#25906a",
+                    }}
+                  />
+                  <Typography sx={{ fontSize: 8.8 }}>
+                    تم التحضير
+                  </Typography>
+                </Stack>
+                <Stack direction="row" spacing={0.4} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      bgcolor: "#cf9221",
+                    }}
+                  />
+                  <Typography sx={{ fontSize: 8.8 }}>
+                    تحتاج تحضير
+                  </Typography>
+                </Stack>
+                {visibleCoverCount > 0 ? (
+                  <Stack direction="row" spacing={0.4} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        bgcolor: "#4f91bd",
+                      }}
+                    />
+                    <Typography sx={{ fontSize: 8.8 }}>
+                      احتياطي
+                    </Typography>
+                  </Stack>
+                ) : null}
+              </Stack>
             </Box>
           )}
         </Paper>
