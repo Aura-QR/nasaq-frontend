@@ -561,6 +561,13 @@ const SchoolDashboard = () => {
   const counts =
     dashboard?.counts || {};
 
+  const academicYearName =
+    dashboard?.academicYear?.name || "";
+
+  const studentCountHelper = academicYearName
+    ? `السنة ${academicYearName}`
+    : "لا توجد سنة دراسية نشطة";
+
   const financialSummary =
     dashboard?.financialSummary || {};
 
@@ -1171,7 +1178,7 @@ const SchoolDashboard = () => {
                   value={displayNumber(
                     counts?.students
                   )}
-                  helper="كل الطلاب المسجلين"
+                  helper={studentCountHelper}
                   icon={
                     <GroupsRounded />
                   }
@@ -1189,7 +1196,7 @@ const SchoolDashboard = () => {
                   value={displayNumber(
                     counts?.activeStudents
                   )}
-                  helper="الحسابات النشطة"
+                  helper={studentCountHelper}
                   icon={
                     <CheckCircleRounded />
                   }

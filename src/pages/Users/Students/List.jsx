@@ -18,7 +18,7 @@ import {
   SortRounded,
 } from "@mui/icons-material";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CSVLink } from "react-csv";
 import { toast } from "react-toastify";
 import { Link } from "react-router-dom";
@@ -278,6 +278,8 @@ const mapStudents = (data = []) =>
       getStudentClassLabel(
         item
       ),
+    isUnplaced:
+      item?.isUnplaced === true,
   }));
 
 const STAT_CARDS = [
@@ -314,6 +316,41 @@ const List = () => {
   const [enrollmentsByStudentId, setEnrollmentsByStudentId] = useState({});
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
 
+  const {
+    academicYears = [],
+    activeAcademicYear,
+    loadingAcademicYears,
+  } = useAcademicYears();
+
+  const didDefaultAcademicYear = useRef(false);
+  const [academicYearReady, setAcademicYearReady] = useState(false);
+
+  const activeAcademicYearId = useMemo(
+    () =>
+      getReferenceId(activeAcademicYear) ||
+      getReferenceId(
+        academicYears.find(
+          (year) => year.status === "active"
+        )
+      ),
+    [academicYears, activeAcademicYear]
+  );
+
+  useEffect(() => {
+    if (
+      loadingAcademicYears ||
+      didDefaultAcademicYear.current
+    ) {
+      return;
+    }
+
+    didDefaultAcademicYear.current = true;
+    if (activeAcademicYearId) {
+      setAcademicYear(activeAcademicYearId);
+    }
+    setAcademicYearReady(true);
+  }, [activeAcademicYearId, loadingAcademicYears]);
+
   const debouncedSearch = useDebounce(search, 700);
 
   const filters = useMemo(
@@ -326,6 +363,7 @@ const List = () => {
           ? Boolean(Number(status))
           : undefined,
       classId: studentClass || undefined,
+      academicYearId: academicYear || undefined,
     }),
     [
       page,
@@ -342,14 +380,13 @@ const List = () => {
     loading,
     pagination,
     setPagination,
-  } = useStudents(filters);
+  } = useStudents(filters, {
+    enabled:
+      !loadingAcademicYears &&
+      academicYearReady,
+  });
 
   const permissions = usePermissions("students");
-
-  const {
-    academicYears = [],
-    loadingAcademicYears,
-  } = useAcademicYears();
 
   const academicYearOptions = useMemo(
     () =>
@@ -361,6 +398,60 @@ const List = () => {
             : year.name,
       })),
     [academicYears]
+  );
+
+  const selectedAcademicYearName = useMemo(
+    () =>
+      academicYears.find(
+        (year) => year.id === academicYear
+      )?.name || "",
+    [academicYears, academicYear]
+  );
+
+  const tableCellRenderers = useMemo(
+    () => ({
+      name: (student) => (
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="center"
+          spacing={0.6}
+          sx={{ minWidth: 0 }}
+        >
+          <Typography
+            component="span"
+            sx={{
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontSize: "12px",
+              fontWeight: 600,
+            }}
+          >
+            {student.name}
+          </Typography>
+
+          {student.isUnplaced && (
+            <Chip
+              label="غير مسجّل"
+              size="small"
+              sx={{
+                height: 21,
+                flexShrink: 0,
+                color: "var(--color-muted)",
+                backgroundColor: "rgba(126, 135, 145, 0.10)",
+                border: "1px solid rgba(126, 135, 145, 0.16)",
+                fontSize: "9px",
+                fontWeight: 700,
+                "& .MuiChip-label": { px: 0.8 },
+              }}
+            />
+          )}
+        </Stack>
+      ),
+    }),
+    []
   );
 
   useEffect(() => {
@@ -906,6 +997,21 @@ const List = () => {
                 >
                   {stats[card.key]}
                 </Typography>
+
+                {["total", "active"].includes(card.key) && (
+                  <Typography
+                    sx={{
+                      mt: 0.15,
+                      color: "var(--color-muted)",
+                      fontSize: "9px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {selectedAcademicYearName
+                      ? `السنة ${selectedAcademicYearName}`
+                      : "جميع السنوات"}
+                  </Typography>
+                )}
               </Box>
 
               <Box
@@ -1227,6 +1333,15 @@ const List = () => {
               deleteFn={
                 permissions.delete
                   ? handleDelete
+                  : undefined
+              }
+              cellRenderers={tableCellRenderers}
+              emptyTitle={
+                academicYear === activeAcademicYearId &&
+                !debouncedSearch &&
+                !status &&
+                !studentClass
+                  ? "لا يوجد طلاب مسجّلون في السنة الحالية — جرّبي تغيير السنة من الفلتر"
                   : undefined
               }
             />

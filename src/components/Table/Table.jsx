@@ -63,6 +63,9 @@ const Table = ({
   schedule,
   addFn,
   editBtn,
+  cellRenderers,
+  emptyTitle = "لا توجد بيانات لعرضها",
+  emptyMessage = "غيّر الفلاتر أو أضف بيانات جديدة.",
 }) => {
   const [activeDelete, setActiveDelete] =
     useState(false);
@@ -126,7 +129,7 @@ const Table = ({
               fontWeight: 800,
             }}
           >
-            لا توجد بيانات لعرضها
+            {emptyTitle}
           </Typography>
 
           <Typography
@@ -135,7 +138,7 @@ const Table = ({
               fontSize: "11px",
             }}
           >
-            غيّر الفلاتر أو أضف بيانات جديدة.
+            {emptyMessage}
           </Typography>
         </Stack>
       </Box>
@@ -205,6 +208,7 @@ const Table = ({
               addFn={addFn}
               editBtn={editBtn}
               hasActions={hasActions}
+              cellRenderers={cellRenderers}
             />
           ))}
         </Stack>
@@ -316,6 +320,7 @@ const TableItem = ({
   addFn,
   editBtn,
   hasActions,
+  cellRenderers,
 }) => {
   const openDeletePopup = () => {
     setDeleteId(item.id);
@@ -377,6 +382,11 @@ const TableItem = ({
           item?.[key] === ""
             ? "—"
             : String(item[key]);
+        const renderedValue =
+          cellRenderers?.[key]?.(
+            item,
+            value
+          );
 
         return (
           <Tooltip
@@ -385,6 +395,7 @@ const TableItem = ({
             arrow
           >
             <Typography
+              component="div"
               sx={{
                 ...cellTextSx,
                 flex: 2,
@@ -392,9 +403,10 @@ const TableItem = ({
                 textAlign: "center",
               }}
             >
-              {value.length > 20
-                ? `${value.slice(0, 20)}…`
-                : value}
+              {renderedValue ??
+                (value.length > 20
+                  ? `${value.slice(0, 20)}…`
+                  : value)}
             </Typography>
           </Tooltip>
         );
