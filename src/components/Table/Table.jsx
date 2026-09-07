@@ -69,6 +69,7 @@ const Table = ({
   editBtn,
   setPasswordFn,
   renderCell,
+  renderActions,
 }) => {
   const [activeDelete, setActiveDelete] =
     useState(false);
@@ -83,7 +84,8 @@ const Table = ({
       schedule ||
       addFn ||
       editBtn ||
-      setPasswordFn
+      setPasswordFn ||
+      renderActions
   );
 
   if (loading) {
@@ -213,6 +215,7 @@ const Table = ({
               editBtn={editBtn}
               setPasswordFn={setPasswordFn}
               renderCell={renderCell}
+              renderActions={renderActions}
               hasActions={hasActions}
             />
           ))}
@@ -326,6 +329,7 @@ const TableItem = ({
   editBtn,
   setPasswordFn,
   renderCell,
+  renderActions,
   hasActions,
 }) => {
   const [actionsAnchor, setActionsAnchor] = useState(null);
@@ -456,7 +460,7 @@ const TableItem = ({
         <Box
           sx={{
             flex: 1.45,
-            minWidth: setPasswordFn ? 190 : 148,
+            minWidth: setPasswordFn || renderActions ? 190 : 148,
 
             display: "flex",
             alignItems: "center",
@@ -559,6 +563,18 @@ const TableItem = ({
                 </IconButton>
               </Tooltip>
             ))}
+
+          {renderActions && (
+            <Box
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.6,
+              }}
+            >
+              {renderActions(item)}
+            </Box>
+          )}
 
           {profile && (
             <Tooltip

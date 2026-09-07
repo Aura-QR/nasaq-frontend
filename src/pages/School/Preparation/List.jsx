@@ -2,16 +2,24 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
   Paper,
   Stack,
   TextField,
   MenuItem,
+  Tooltip,
   Typography,
 } from "@mui/material";
 
 import {
   AddCircleOutlineOutlined,
   AutoStoriesRounded,
+  CheckCircleRounded,
+  EditNoteRounded,
   FileDownloadOutlined,
   FilterAltRounded,
   MenuBookRounded,
@@ -42,7 +50,10 @@ import { usePreparations } from "@/utils/hooks/apis/usePreparations";
 import useDebounce from "@/utils/hooks/useDebounce";
 
 import { api } from "@/APIs/Axios";
-import { deletePreparation } from "@/APIs/school/preparation";
+import {
+  deletePreparation,
+  reviewPreparation,
+} from "@/APIs/school/preparation";
 
 import Days from "@/utils/constants/Days";
 import Slots from "@/utils/constants/Slots";
@@ -1204,6 +1215,14 @@ const List = () => {
   const [items, setItems] =
     useState([]);
 
+  const [reviewDialog, setReviewDialog] = useState({
+    open: false,
+    action: "",
+    item: null,
+  });
+  const [reviewNote, setReviewNote] = useState("");
+  const [reviewing, setReviewing] = useState(false);
+
   const [page, setPage] =
     useState(1);
 
@@ -1374,6 +1393,9 @@ const List = () => {
 
   const permissions =
     usePermissions("preparation");
+
+  const canReviewPreparations =
+    usePermissions("preparation", "review");
 
   useEffect(() => {
     let active = true;
@@ -1746,6 +1768,72 @@ const List = () => {
           ?.message ||
           "حدث خطأ أثناء حذف التحضير"
       );
+    }
+  };
+
+  const openReviewDialog = (item, action) => {
+    setReviewNote("");
+    setReviewDialog({ open: true, action, item });
+  };
+
+  const closeReviewDialog = () => {
+    if (reviewing) return;
+    setReviewDialog({ open: false, action: "", item: null });
+    setReviewNote("");
+  };
+
+  const handleReview = async () => {
+    const item = reviewDialog.item;
+    const action = reviewDialog.action;
+
+    if (!item?.id || !["approved", "needs_revision"].includes(action)) {
+      return;
+    }
+
+    setReviewing(true);
+    try {
+      const response = await reviewPreparation(item.id, {
+        reviewStatus: action,
+        reviewNote: action === "needs_revision" ? reviewNote : "",
+      });
+
+      if (!response?.status) {
+        toast.error(
+          getErrorMessage(
+            response,
+            action === "approved"
+              ? "تعذر اعتماد التحضير"
+              : "تعذر طلب التعديل"
+          )
+        );
+        return;
+      }
+
+      setItems((previousItems) =>
+        previousItems.map((current) =>
+          current.id === item.id
+            ? {
+                ...current,
+                preparationStatus: action,
+                statusDisplay:
+                  PREPARATION_STATUS_META[action]?.label || action,
+                reviewStatus: action,
+                reviewNote:
+                  action === "needs_revision" ? reviewNote.trim() : "",
+              }
+            : current
+        )
+      );
+
+      toast.success(
+        action === "approved"
+          ? "تم اعتماد التحضير"
+          : "تم إرسال التحضير للمعلم للتعديل"
+      );
+      setReviewDialog({ open: false, action: "", item: null });
+      setReviewNote("");
+    } finally {
+      setReviewing(false);
     }
   };
 
@@ -2751,6 +2839,53 @@ const List = () => {
                     ? handleDelete
                     : undefined
                 }
+                renderActions={(item) => {
+                  if (
+                    !canReviewPreparations ||
+                    item.preparationStatus !== "pending"
+                  ) {
+                    return null;
+                  }
+
+                  return (
+                    <>
+                      <Tooltip title="اعتماد التحضير" arrow>
+                        <IconButton
+                          type="button"
+                          onClick={() => openReviewDialog(item, "approved")}
+                          aria-label="اعتماد التحضير"
+                          sx={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: "10px",
+                            color: "#238f55",
+                            bgcolor: "rgba(35,143,85,.09)",
+                            border: "1px solid rgba(35,143,85,.14)",
+                          }}
+                        >
+                          <CheckCircleRounded sx={{ fontSize: 19 }} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="طلب تعديل" arrow>
+                        <IconButton
+                          type="button"
+                          onClick={() => openReviewDialog(item, "needs_revision")}
+                          aria-label="طلب تعديل"
+                          sx={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: "10px",
+                            color: "var(--color-gold-dark)",
+                            bgcolor: "rgba(211,164,79,.10)",
+                            border: "1px solid rgba(211,164,79,.16)",
+                          }}
+                        >
+                          <EditNoteRounded sx={{ fontSize: 19 }} />
+                        </IconButton>
+                      </Tooltip>
+                    </>
+                  );
+                }}
                 renderCell={({ item, keyName }) => {
                   if (keyName === "statusDisplay") {
                     const meta =
@@ -2819,6 +2954,65 @@ const List = () => {
           )}
         </Paper>
       </Box>
+
+      <Dialog
+        open={reviewDialog.open}
+        onClose={closeReviewDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle sx={{ fontWeight: 900 }}>
+          {reviewDialog.action === "approved"
+            ? "اعتماد التحضير"
+            : "طلب تعديل التحضير"}
+        </DialogTitle>
+        <DialogContent dividers>
+          {reviewDialog.action === "approved" ? (
+            <Typography sx={{ lineHeight: 1.8 }}>
+              هل تريد اعتماد هذا التحضير؟
+            </Typography>
+          ) : (
+            <TextField
+              autoFocus
+              fullWidth
+              multiline
+              minRows={4}
+              label="ملاحظة للمعلم"
+              placeholder="مثال: يرجى توضيح الأهداف وإضافة نشاط مناسب للدرس"
+              value={reviewNote}
+              onChange={(event) => setReviewNote(event.target.value)}
+              inputProps={{ maxLength: 1000 }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.3 }}>
+          <Button
+            onClick={closeReviewDialog}
+            disabled={reviewing}
+            sx={{ fontWeight: 800 }}
+          >
+            إلغاء
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleReview}
+            disabled={reviewing}
+            sx={{
+              fontWeight: 900,
+              bgcolor:
+                reviewDialog.action === "approved"
+                  ? "#238f55"
+                  : "var(--color-gold-dark)",
+            }}
+          >
+            {reviewing
+              ? "جاري الحفظ..."
+              : reviewDialog.action === "approved"
+                ? "اعتماد"
+                : "إرسال طلب التعديل"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

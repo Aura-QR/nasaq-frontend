@@ -14,6 +14,10 @@ const OPERATION_MAP = {
   delete: "delete",
 
   manage: "manage",
+
+  // Review uses the backend preparation update ability, but is
+  // kept separate from content editing in the frontend.
+  review: "update",
 };
 
 const LEGACY_OPERATION_MAP = {
@@ -88,6 +92,15 @@ const normalizeOperation = (
   OPERATION_MAP[
     operation
   ] || operation;
+
+const isReviewOperation = (operation) =>
+  String(operation || "")
+    .trim()
+    .toLowerCase() === "review";
+
+const canRoleReviewPreparation = (role, module) =>
+  module === "preparation" &&
+  !["TEACHER", "STUDENT", "SUPER_ADMIN"].includes(role);
 
 /*
  * استخرج المستخدم الحالي
@@ -475,6 +488,10 @@ const usePermissions = (
     )
   ) {
     if (operation) {
+      if (isReviewOperation(operation)) {
+        return canRoleReviewPreparation(role, module);
+      }
+
       if (
         isTeacherAuthoredOperationBlocked(
           role,
@@ -526,6 +543,10 @@ const usePermissions = (
     )
   ) {
     if (operation) {
+      if (isReviewOperation(operation)) {
+        return canRoleReviewPreparation(role, module);
+      }
+
       if (
         isTeacherAuthoredOperationBlocked(
           role,
@@ -583,6 +604,13 @@ const usePermissions = (
       );
 
     if (operation) {
+      if (isReviewOperation(operation)) {
+        return (
+          canRoleReviewPreparation(role, module) &&
+          hasOperation("update")
+        );
+      }
+
       if (
         isTeacherAuthoredOperationBlocked(
           role,
@@ -653,6 +681,13 @@ const usePermissions = (
       );
 
     if (operation) {
+      if (isReviewOperation(operation)) {
+        return (
+          canRoleReviewPreparation(role, module) &&
+          hasOperation("update")
+        );
+      }
+
       if (
         isTeacherAuthoredOperationBlocked(
           role,

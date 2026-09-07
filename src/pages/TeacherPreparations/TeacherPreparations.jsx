@@ -14,6 +14,7 @@ import {
   WarningAmberRounded,
   CloseRounded,
   DescriptionRounded,
+  NotificationsActiveRounded,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -596,6 +597,37 @@ const getPreparationStatus = (preparation) => {
   return PREPARATION_STATUS_META[value] ? value : "draft";
 };
 
+const getReviewTime = (preparation) => {
+  const raw =
+    preparation?.reviewedAt ||
+    preparation?.updatedAt ||
+    preparation?.createdAt ||
+    "";
+  const time = raw ? new Date(raw).getTime() : 0;
+  return Number.isFinite(time) ? time : 0;
+};
+
+const choosePreferredPreparation = (current, candidate) => {
+  if (!current) return candidate;
+  if (!candidate) return current;
+
+  const currentTime = getReviewTime(current);
+  const candidateTime = getReviewTime(candidate);
+  if (candidateTime !== currentTime) {
+    return candidateTime > currentTime ? candidate : current;
+  }
+
+  const priority = {
+    needs_revision: 4,
+    approved: 3,
+    pending: 2,
+    draft: 1,
+  };
+  const currentPriority = priority[getPreparationStatus(current)] || 0;
+  const candidatePriority = priority[getPreparationStatus(candidate)] || 0;
+  return candidatePriority > currentPriority ? candidate : current;
+};
+
 const getPreparationLessonTitle = (preparation) =>
   String(
     preparation?.lesson?.name ||
@@ -846,7 +878,11 @@ const TeacherPreparations = () => {
     const map = new Map();
     preparations.forEach((preparation) => {
       const lectureId = getPreparationLectureId(preparation);
-      if (lectureId) map.set(lectureId, preparation);
+      if (!lectureId) return;
+      map.set(
+        lectureId,
+        choosePreferredPreparation(map.get(lectureId), preparation)
+      );
     });
     return map;
   }, [preparations]);
@@ -1001,6 +1037,19 @@ const TeacherPreparations = () => {
   const completionRate = rows.length
     ? Math.round((preparedCount / rows.length) * 100)
     : 0;
+
+  const reviewUpdates = useMemo(
+    () =>
+      preparations
+        .filter((preparation) =>
+          ["approved", "needs_revision"].includes(
+            getPreparationStatus(preparation)
+          )
+        )
+        .sort((a, b) => getReviewTime(b) - getReviewTime(a))
+        .slice(0, 3),
+    [preparations]
+  );
 
   const nextMissing = rows.find((row) => !row.preparation);
 
@@ -1205,6 +1254,79 @@ const TeacherPreparations = () => {
           </Grid>
         </Grid>
 
+        {reviewUpdates.length > 0 && (
+          <Paper
+            elevation={0}
+            sx={{
+              ...TEACHER_UI.section,
+              mt: 1.1,
+              border: `1px solid ${COLORS.border}`,
+              bgcolor: "#fff",
+            }}
+          >
+            <Stack direction="row" alignItems="center" gap={0.8} mb={0.9}>
+              <Box
+                sx={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 1.8,
+                  display: "grid",
+                  placeItems: "center",
+                  color: COLORS.navy,
+                  bgcolor: COLORS.navySoft,
+                }}
+              >
+                <NotificationsActiveRounded fontSize="small" />
+              </Box>
+              <Box>
+                <Typography sx={{ color: COLORS.navyDark, fontSize: 14, fontWeight: 900 }}>
+                  مستجدات مراجعة التحضير
+                </Typography>
+                <Typography sx={{ color: COLORS.muted, fontSize: 9.5 }}>
+                  آخر قرارات الإدارة على تحاضيرك
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Stack spacing={0.65}>
+              {reviewUpdates.map((preparation) => {
+                const id = getPreparationId(preparation);
+                const status = getPreparationStatus(preparation);
+                const needsRevision = status === "needs_revision";
+                const note = String(preparation?.reviewNote || "").trim();
+                const lesson = getPreparationLessonTitle(preparation) || "التحضير";
+                return (
+                  <Alert
+                    key={`${id}-${status}-${preparation?.reviewedAt || preparation?.updatedAt || ""}`}
+                    severity={needsRevision ? "warning" : "success"}
+                    action={
+                      <Button
+                        size="small"
+                        onClick={() => navigate(`/teacher/preparations/${id}`)}
+                        sx={{ fontWeight: 900, textTransform: "none" }}
+                      >
+                        فتح
+                      </Button>
+                    }
+                    sx={{ borderRadius: 2, alignItems: "center" }}
+                  >
+                    <Typography sx={{ fontSize: 11.5, fontWeight: 900 }}>
+                      {needsRevision
+                        ? `مطلوب تعديل: ${lesson}`
+                        : `تم اعتماد: ${lesson}`}
+                    </Typography>
+                    {needsRevision && note ? (
+                      <Typography sx={{ mt: 0.2, fontSize: 10.5 }}>
+                        ملاحظة المراجع: {note}
+                      </Typography>
+                    ) : null}
+                  </Alert>
+                );
+              })}
+            </Stack>
+          </Paper>
+        )}
+
         <Paper
           elevation={0}
           sx={{
@@ -1375,8 +1497,27 @@ const TeacherPreparations = () => {
                       sx={{
                         ...TEACHER_UI.listCard,
                         minHeight: 92,
-                        border: `1px solid ${prepared ? "#cce9dd" : "#eeddb4"}`,
-                        bgcolor: prepared ? "#fbfffd" : "#fffdf8",
+                        border: `1px solid ${
+                          !prepared
+                            ? "#eeddb4"
+                            : preparationStatus === "needs_revision"
+                              ? "#f0c8c8"
+                              : preparationStatus === "approved"
+                                ? "#cce9dd"
+                                : preparationStatus === "pending"
+                                  ? "#cfdce8"
+                                  : "#eeddb4"
+                        }`,
+                        bgcolor:
+                          !prepared
+                            ? "#fffdf8"
+                            : preparationStatus === "needs_revision"
+                              ? "#fffafa"
+                              : preparationStatus === "approved"
+                                ? "#fbfffd"
+                                : preparationStatus === "pending"
+                                  ? "#fbfdff"
+                                  : "#fffdf8",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
@@ -1422,6 +1563,22 @@ const TeacherPreparations = () => {
                           {prepared && lessonTitle ? (
                             <Typography noWrap sx={{ color: COLORS.navy, fontSize: 11.5, mt: 0.25, fontWeight: 800 }}>
                               الدرس: {lessonTitle}
+                            </Typography>
+                          ) : null}
+                          {prepared && preparationStatus === "needs_revision" && String(preparation?.reviewNote || "").trim() ? (
+                            <Typography
+                              sx={{
+                                color: COLORS.red,
+                                fontSize: 10.5,
+                                mt: 0.3,
+                                fontWeight: 800,
+                                display: "-webkit-box",
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                              }}
+                            >
+                              ملاحظة المراجع: {preparation.reviewNote}
                             </Typography>
                           ) : null}
                           <Typography noWrap sx={{ color: "#a2acb6", fontSize: 11.5, mt: 0.25 }}>

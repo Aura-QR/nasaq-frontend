@@ -56,8 +56,10 @@ import {
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
+import PreparationDocumentView from "./PreparationDocumentView";
 import { api } from "@/APIs/Axios";
 import Loading from "@/components/Loading";
+import usePermissions from "@/utils/hooks/usePermissions";
 import {
   addPreparation,
   addPreparationFiles,
@@ -67,6 +69,7 @@ import {
   fetchPreparationReferenceLists,
   fetchPreparations,
   fetchSinglePreparation,
+  reviewPreparation,
   submitPreparation,
 } from "@/APIs/school/preparation";
 import {
@@ -91,7 +94,59 @@ import {
   fetchTeacherProjects,
 } from "@/APIs/school/projects";
 
-const AUTOSAVE_MS = 30_000;
+const DRAFT_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
+
+const getDraftCacheKey = (lectureId) => {
+  const id = normalizeId(lectureId);
+  return id ? `nasaq:structured-preparation:${id}` : "";
+};
+
+const readDraftCache = (lectureId) => {
+  if (typeof window === "undefined") return null;
+  const key = getDraftCacheKey(lectureId);
+  if (!key) return null;
+
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(key) || "null");
+    if (!parsed?.form || !parsed?.updatedAt) return null;
+    if (Date.now() - Number(parsed.updatedAt) > DRAFT_CACHE_TTL_MS) {
+      window.sessionStorage.removeItem(key);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writeDraftCache = (lectureId, form) => {
+  if (typeof window === "undefined") return;
+  const key = getDraftCacheKey(lectureId);
+  if (!key) return;
+
+  try {
+    window.sessionStorage.setItem(
+      key,
+      JSON.stringify({
+        updatedAt: Date.now(),
+        form: { ...form, lecture: normalizeId(lectureId) },
+      })
+    );
+  } catch {
+    // sessionStorage may be unavailable in hardened/private browser modes.
+  }
+};
+
+const clearDraftCache = (lectureId) => {
+  if (typeof window === "undefined") return;
+  const key = getDraftCacheKey(lectureId);
+  if (!key) return;
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+};
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
 
 const EMPTY_FORM = {
@@ -921,44 +976,72 @@ const FieldLabel = ({ children, studentVisible = false, required = false }) => (
   </Stack>
 );
 
+const PreparationPageWrapper = ({ teacherPortal, children }) =>
+  teacherPortal ? (
+    <Box
+      sx={{
+        minHeight: "100dvh",
+        bgcolor: "#fff",
+        px: { xs: 1, md: 1.5 },
+        py: 1.2,
+      }}
+    >
+      <Box sx={{ maxWidth: 1380, mx: "auto" }}>{children}</Box>
+    </Box>
+  ) : (
+    <Container>{children}</Container>
+  );
+
 const SectionCard = ({ title, subtitle, icon, children, id }) => (
   <Paper
     id={id}
     elevation={0}
     sx={{
-      p: { xs: 1.25, md: 1.7 },
-      border: "1px solid rgba(36,74,112,.09)",
-      borderRadius: "18px",
+      p: { xs: 1.25, md: 1.65 },
+      border: "1px solid rgba(36,74,112,.10)",
+      borderRadius: "20px",
       bgcolor: "#fff",
-      boxShadow: "0 10px 26px rgba(18,47,77,.045)",
-      scrollMarginTop: 120,
+      boxShadow: "0 12px 30px rgba(18,47,77,.05)",
+      scrollMarginTop: 145,
+      overflow: "hidden",
     }}
   >
-    <Stack direction="row" alignItems="center" gap={1} mb={1.4}>
-      <Box
-        sx={{
-          width: 40,
-          height: 40,
-          borderRadius: "12px",
-          bgcolor: "var(--color-gold-soft)",
-          color: "var(--color-gold-dark)",
-          display: "grid",
-          placeItems: "center",
-          flexShrink: 0,
-        }}
-      >
-        {icon}
-      </Box>
-      <Box>
-        <Typography sx={{ color: "var(--color-navy-deep)", fontWeight: 900, fontSize: 15 }}>
-          {title}
-        </Typography>
-        {subtitle ? (
-          <Typography sx={{ color: "var(--color-muted)", fontSize: 10.5, mt: 0.2 }}>
-            {subtitle}
+    <Stack
+      direction={{ xs: "column", sm: "row" }}
+      alignItems={{ xs: "flex-start", sm: "center" }}
+      justifyContent="space-between"
+      gap={0.8}
+      mb={1.35}
+      sx={{ pb: 1, borderBottom: "1px solid rgba(36,74,112,.07)" }}
+    >
+      <Stack direction="row" alignItems="center" gap={1}>
+        <Box
+          sx={{
+            width: 42,
+            height: 42,
+            borderRadius: "13px",
+            bgcolor: "linear-gradient(135deg, var(--color-gold-soft), #fff)",
+            background: "linear-gradient(135deg, var(--color-gold-soft), #fff)",
+            border: "1px solid rgba(200,146,36,.16)",
+            color: "var(--color-gold-dark)",
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </Box>
+        <Box>
+          <Typography sx={{ color: "var(--color-navy-deep)", fontWeight: 900, fontSize: 15.5 }}>
+            {title}
           </Typography>
-        ) : null}
-      </Box>
+          {subtitle ? (
+            <Typography sx={{ color: "var(--color-muted)", fontSize: 10.5, mt: 0.18, lineHeight: 1.7 }}>
+              {subtitle}
+            </Typography>
+          ) : null}
+        </Box>
+      </Stack>
     </Stack>
     {children}
   </Paper>
@@ -1040,6 +1123,74 @@ const WizardSteps = ({ step, onStep, stepTwoEnabled }) => (
   </Paper>
 );
 
+const PreparationProgress = ({ form, step, assignmentTotal = 0 }) => {
+  const objectivesCount = (form.objectives || []).filter((item) => String(item || "").trim()).length;
+  const digitalCount = (form.digitalContentIds || []).length;
+  const checks = [
+    { label: "الدرس", done: Boolean(form.lessonId) },
+    { label: "الأهداف", done: objectivesCount > 0 },
+    { label: "المحتوى الرقمي", done: digitalCount > 0 },
+    { label: "تكليف واحد على الأقل", done: assignmentTotal > 0 },
+  ];
+  const completed = checks.filter((item) => item.done).length;
+  const percent = Math.round((completed / checks.length) * 100);
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        mt: 1,
+        p: 1.05,
+        borderRadius: "16px",
+        border: "1px solid rgba(36,74,112,.09)",
+        bgcolor: "#fbfcfe",
+      }}
+    >
+      <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "stretch", md: "center" }} justifyContent="space-between" gap={1}>
+        <Box sx={{ minWidth: 180 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1} mb={0.45}>
+            <Typography sx={{ color: "var(--color-navy-deep)", fontSize: 11.5, fontWeight: 900 }}>
+              جاهزية التحضير للإرسال
+            </Typography>
+            <Typography sx={{ color: percent === 100 ? "#18865d" : "var(--color-gold-dark)", fontSize: 11, fontWeight: 900 }}>
+              {percent}%
+            </Typography>
+          </Stack>
+          <Box sx={{ height: 6, borderRadius: 99, bgcolor: "rgba(36,74,112,.09)", overflow: "hidden" }}>
+            <Box sx={{ width: `${percent}%`, height: "100%", borderRadius: 99, bgcolor: percent === 100 ? "#18865d" : "var(--color-gold)" }} />
+          </Box>
+        </Box>
+        <Stack direction="row" flexWrap="wrap" gap={0.55} justifyContent={{ xs: "flex-start", md: "flex-end" }}>
+          {checks.map((item) => (
+            <Chip
+              key={item.label}
+              size="small"
+              icon={item.done ? <CheckCircleRounded /> : undefined}
+              label={item.label}
+              sx={{
+                height: 27,
+                fontSize: 9.5,
+                fontWeight: 900,
+                bgcolor: item.done ? "#eaf7f1" : "#fff7e5",
+                color: item.done ? "#18865d" : "#9a6815",
+                border: `1px solid ${item.done ? "rgba(24,134,93,.16)" : "rgba(200,146,36,.18)"}`,
+                "& .MuiChip-icon": { color: "inherit" },
+              }}
+            />
+          ))}
+        </Stack>
+      </Stack>
+      <Typography sx={{ mt: 0.55, color: "var(--color-muted)", fontSize: 9.5 }}>
+        {step === 1
+          ? "أكمل بيانات الدرس ثم انتقل إلى إعداد الدرس. الحفظ التلقائي يعمل أثناء الكتابة."
+          : percent === 100
+            ? "التحضير مستوفٍ المتطلبات الأساسية ويمكن إرساله للمراجعة."
+            : "أكمل العناصر الناقصة قبل إرسال التحضير للمراجعة."}
+      </Typography>
+    </Paper>
+  );
+};
+
 const ChoiceChecklist = ({ options, values, onChange, disabled, otherValue, onOtherChange }) => {
   const selected = new Set(values);
   const hasOther = options.some((option) => isOtherChoice(option) && selected.has(option.value));
@@ -1064,7 +1215,20 @@ const ChoiceChecklist = ({ options, values, onChange, disabled, otherValue, onOt
                 />
               }
               label={option.label}
-              sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: 11.5, fontWeight: 700 } }}
+              sx={{
+                m: 0,
+                width: "100%",
+                minHeight: 40,
+                px: 0.7,
+                borderRadius: "11px",
+                border: selected.has(option.value)
+                  ? "1px solid rgba(24,134,93,.24)"
+                  : "1px solid rgba(36,74,112,.08)",
+                bgcolor: selected.has(option.value) ? "#f1faf6" : "#fbfcfe",
+                transition: "all .18s ease",
+                "&:hover": { bgcolor: disabled ? undefined : "#f7fafc" },
+                "& .MuiFormControlLabel-label": { fontSize: 11.5, fontWeight: 800, color: "var(--color-navy-deep)" },
+              }}
             />
           </Grid>
         ))}
@@ -1094,7 +1258,13 @@ const AssignmentCard = ({
 }) => (
   <Paper
     variant="outlined"
-    sx={{ p: 1, borderRadius: "13px", borderColor: "rgba(36,74,112,.11)", bgcolor: "#fcfdff" }}
+    sx={{
+      p: 1.05,
+      borderRadius: "14px",
+      borderColor: "rgba(36,74,112,.10)",
+      bgcolor: "#fff",
+      boxShadow: "0 5px 16px rgba(18,47,77,.035)",
+    }}
   >
     <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between" gap={1}>
       <Box sx={{ minWidth: 0 }}>
@@ -1140,6 +1310,8 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const authUser = useAuthUser();
   const currentUser = getCurrentUser(authUser);
   const role = normalizeRole(currentUser?.role);
+  const preparationPermissions = usePermissions("preparation");
+  const canReviewPreparation = usePermissions("preparation", "review");
   const teacherPortal = location.pathname.startsWith("/teacher/");
   const explicitId =
     mode === "create" ? "" : normalizeId(params?.id);
@@ -1159,7 +1331,11 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
     mode === "create" ? "" : explicitId
   );
   const [preparationStatus, setPreparationStatus] = useState("draft");
+  const [preparationRecord, setPreparationRecord] = useState(null);
   const [reviewNote, setReviewNote] = useState("");
+  const [reviewDialog, setReviewDialog] = useState(false);
+  const [reviewDraft, setReviewDraft] = useState("");
+  const [reviewing, setReviewing] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [step, setStep] = useState(1);
   const [lectures, setLectures] = useState([]);
@@ -1203,7 +1379,6 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const [suggestedObjectives, setSuggestedObjectives] = useState(false);
   const savedSnapshotRef = useRef(snapshot(EMPTY_FORM));
   const lastSaveRef = useRef(null);
-  const saveDraftRef = useRef(null);
   const dirtyRef = useRef(false);
   const objectivePrefillLessonRef = useRef("");
   const mountedRef = useRef(true);
@@ -1236,6 +1411,10 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
     mode !== "view" &&
     preparationStatus !== "pending";
   const canPickLecture = mode === "create" && !preselectedLectureId && !preparationId;
+  const canReview =
+    mode === "view" &&
+    preparationStatus === "pending" &&
+    canReviewPreparation;
 
   useEffect(() => {
     dirtyRef.current = dirty;
@@ -1248,6 +1427,18 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const updateForm = useCallback((patch) => {
     setForm((current) => ({ ...current, ...patch }));
   }, []);
+
+  useEffect(() => {
+    if (mode !== "create") return undefined;
+    const lectureId = normalizeId(form.lecture);
+    if (!lectureId) return undefined;
+
+    const timer = window.setTimeout(() => {
+      writeDraftCache(lectureId, form);
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [form, mode]);
 
   const goBack = useCallback(() => {
     if (dirty && !window.confirm("لديك تغييرات لم يتم حفظها. هل تريد المغادرة؟")) {
@@ -1289,15 +1480,72 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
         const refsPromise = fetchPreparationReferenceLists();
         let initialPreparation = null;
         let lectureId = preselectedLectureId;
+        let cachedDraft = !explicitId && lectureId
+          ? readDraftCache(lectureId)
+          : null;
 
         if (explicitId) {
-          const prepResponse = await fetchSinglePreparation(explicitId);
-          if (!prepResponse?.status) {
-            toast.error(prepResponse?.message || "تعذر تحميل التحضير");
+          // اقرأ detail الخام مباشرة من Axios. صفحة العرض تعتمد على read model
+          // الكامل (lesson/resources/digitalContent/review fields)، وبعض helpers
+          // القديمة كانت تطبع envelope بشكل مختلف حسب النسخة.
+          const prepHttpResponse = await api.get(`/preparation/${explicitId}`);
+          const prepEnvelope = prepHttpResponse?.data || {};
+          if (prepEnvelope?.status === false) {
+            toast.error(prepEnvelope?.message || "تعذر تحميل التحضير");
             return;
           }
-          initialPreparation = extractEntity(prepResponse);
+          initialPreparation =
+            prepEnvelope?.data &&
+            !Array.isArray(prepEnvelope.data) &&
+            typeof prepEnvelope.data === "object"
+              ? prepEnvelope.data
+              : prepEnvelope;
           lectureId = normalizeId(initialPreparation?.lecture || initialPreparation?.lectureId);
+        } else if (lectureId) {
+          /*
+           * /add can be revisited or remounted after the first draft POST.
+           * Re-open the existing preparation for this exact lecture instead of
+           * starting from EMPTY_FORM again. This is what keeps the chosen unit
+           * and lesson visible after the first save.
+           */
+          const existingResponse = await fetchPreparations({
+            lectureId,
+            page: 1,
+            limit: 20,
+          });
+
+          if (existingResponse?.status) {
+            const matching = extractList(existingResponse, ["preparations"])
+              .filter(
+                (item) =>
+                  normalizeId(item?.lecture || item?.lectureId) ===
+                  normalizeId(lectureId)
+              )
+              .sort((a, b) => {
+                const aTime = Date.parse(a?.updatedAt || a?.createdAt || 0) || 0;
+                const bTime = Date.parse(b?.updatedAt || b?.createdAt || 0) || 0;
+                return bTime - aTime;
+              });
+
+            const existingId = normalizeId(matching[0]);
+            if (existingId) {
+              const prepHttpResponse = await api.get(`/preparation/${existingId}`);
+              const prepEnvelope = prepHttpResponse?.data || {};
+              if (prepEnvelope?.status !== false) {
+                initialPreparation =
+                  prepEnvelope?.data &&
+                  !Array.isArray(prepEnvelope.data) &&
+                  typeof prepEnvelope.data === "object"
+                    ? prepEnvelope.data
+                    : prepEnvelope;
+                lectureId = normalizeId(
+                  initialPreparation?.lecture ||
+                    initialPreparation?.lectureId ||
+                    lectureId
+                );
+              }
+            }
+          }
         }
 
         let lectureRows = [];
@@ -1341,7 +1589,28 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
         }
 
         if (initialPreparation) {
-          const normalized = getStructuredForm(initialPreparation);
+          let normalized = getStructuredForm(initialPreparation);
+
+          // If the add screen was remounted while a PATCH was still finishing,
+          // the server detail may briefly lag behind what the teacher had on
+          // screen. Restore only a newer session snapshot for editable drafts.
+          const serverUpdatedAt =
+            Date.parse(initialPreparation?.updatedAt || initialPreparation?.createdAt || 0) ||
+            0;
+          const cachedUpdatedAt = Number(cachedDraft?.updatedAt || 0);
+          const status = getStatus(initialPreparation);
+          if (
+            cachedDraft?.form &&
+            cachedUpdatedAt > serverUpdatedAt &&
+            ["draft", "needs_revision"].includes(status)
+          ) {
+            normalized = {
+              ...normalized,
+              ...cachedDraft.form,
+              lecture: lectureId || normalized.lecture,
+            };
+          }
+
           setForm(normalized);
           savedSnapshotRef.current = snapshot(normalized);
           objectivePrefillLessonRef.current =
@@ -1350,6 +1619,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
           preparationIdRef.current = initialPreparationId;
           setPreparationId(initialPreparationId);
           setPreparationStatus(getStatus(initialPreparation));
+          setPreparationRecord(initialPreparation);
           setReviewNote(String(initialPreparation?.reviewNote || ""));
           setExistingFiles(
             extractList(
@@ -1358,7 +1628,10 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
             )
           );
         } else {
-          const initial = { ...EMPTY_FORM, lecture: lectureId || "" };
+          const cachedForm = cachedDraft?.form;
+          const initial = cachedForm
+            ? { ...EMPTY_FORM, ...cachedForm, lecture: lectureId || cachedForm.lecture || "" }
+            : { ...EMPTY_FORM, lecture: lectureId || "" };
           setForm(initial);
           savedSnapshotRef.current = snapshot(initial);
         }
@@ -1596,6 +1869,47 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
       active = false;
     };
   }, [form.unitId]);
+
+  useEffect(() => {
+    const selectedLessonId = normalizeId(form.lessonId);
+    if (!selectedLessonId || normalizeId(form.unitId) || !units.length) {
+      return undefined;
+    }
+
+    let active = true;
+
+    const recoverUnitForLesson = async () => {
+      for (const unit of units) {
+        const unitId = normalizeId(unit);
+        if (!unitId) continue;
+
+        const response = await fetchCurriculumLessons(unitId);
+        if (!active) return;
+        if (!response?.status) continue;
+
+        const unitLessons = extractList(response, ["lessons"]);
+        const selectedLesson = unitLessons.find(
+          (lesson) => normalizeId(lesson) === selectedLessonId
+        );
+
+        if (!selectedLesson) continue;
+
+        setLessons(unitLessons);
+        setForm((current) => ({
+          ...current,
+          unitId,
+          lessonId: selectedLessonId,
+          lessonTitle: current.lessonTitle || getName(selectedLesson),
+        }));
+        return;
+      }
+    };
+
+    recoverUnitForLesson();
+    return () => {
+      active = false;
+    };
+  }, [form.lessonId, form.unitId, units]);
 
   useEffect(() => {
     if (!form.lessonId) return;
@@ -1956,29 +2270,11 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
     ]
   );
 
-  useEffect(() => {
-    saveDraftRef.current = saveDraft;
-  }, [saveDraft]);
-
-  useEffect(() => {
-    if (!editable) return undefined;
-
-    const timer = window.setInterval(() => {
-      if (dirtyRef.current) {
-        saveDraftRef.current?.({ silent: true });
-      }
-    }, AUTOSAVE_MS);
-
-    return () => window.clearInterval(timer);
-  }, [editable]);
-
-  const changeStep = async (nextStep) => {
+  // Step navigation must never persist data by itself.
+  // Drafts are saved only from the explicit "حفظ كمسودة" action, while
+  // "إرسال للمراجعة" persists the latest form data and then submits it.
+  const changeStep = (nextStep) => {
     if (nextStep === step) return;
-
-    if (editable) {
-      const saved = await saveDraft({ silent: Boolean(preparationId) });
-      if (!saved) return;
-    }
 
     setStep(nextStep);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2694,9 +2990,72 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
       setPreparationStatus("pending");
       savedSnapshotRef.current = snapshot(form);
       setValidationErrors([]);
+      clearDraftCache(form.lecture);
       toast.success("تم إرسال التحضير للمراجعة");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleApprovePreparation = async () => {
+    const id = normalizeId(preparationIdRef.current || preparationId);
+    if (!id || reviewing) return;
+
+    setReviewing(true);
+    try {
+      const response = await reviewPreparation(id, {
+        reviewStatus: "approved",
+      });
+
+      if (!response?.status) {
+        toast.error(response?.message || "تعذر اعتماد التحضير");
+        return;
+      }
+
+      const reviewedEntity = extractEntity(response);
+      setPreparationStatus("approved");
+      setPreparationRecord((current) => ({
+        ...(current || {}),
+        ...(reviewedEntity || {}),
+        reviewStatus: "approved",
+      }));
+      setReviewNote("");
+      toast.success("تم اعتماد التحضير");
+    } finally {
+      setReviewing(false);
+    }
+  };
+
+  const handleRequestRevision = async () => {
+    const id = normalizeId(preparationIdRef.current || preparationId);
+    if (!id || reviewing) return;
+
+    setReviewing(true);
+    try {
+      const response = await reviewPreparation(id, {
+        reviewStatus: "needs_revision",
+        reviewNote: reviewDraft,
+      });
+
+      if (!response?.status) {
+        toast.error(response?.message || "تعذر طلب التعديل");
+        return;
+      }
+
+      const reviewedEntity = extractEntity(response);
+      setPreparationStatus("needs_revision");
+      setPreparationRecord((current) => ({
+        ...(current || {}),
+        ...(reviewedEntity || {}),
+        reviewStatus: "needs_revision",
+        reviewNote: reviewDraft.trim(),
+      }));
+      setReviewNote(reviewDraft.trim());
+      setReviewDialog(false);
+      setReviewDraft("");
+      toast.success("تم إرسال التحضير للمعلم للتعديل");
+    } finally {
+      setReviewing(false);
     }
   };
 
@@ -2713,23 +3072,84 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
 
   if (loading) return <Loading />;
 
-  const Wrapper = ({ children }) =>
-    teacherPortal ? (
-      <Box sx={{ minHeight: "100dvh", bgcolor: "#fff", px: { xs: 1, md: 1.5 }, py: 1.2 }}>
-        <Box sx={{ maxWidth: 1380, mx: "auto" }}>{children}</Box>
-      </Box>
-    ) : (
-      <Container>{children}</Container>
-    );
-
   const selectedLibraryItems = libraryItems.filter((item) => form.digitalContentIds.includes(normalizeId(item)));
   const filteredLibraryItems = libraryItems.filter((item) =>
     getName(item).toLowerCase().includes(librarySearch.trim().toLowerCase())
   );
   const statusMeta = STATUS_META[preparationStatus] || STATUS_META.draft;
 
+  if (mode === "view") {
+    return (
+      <PreparationPageWrapper teacherPortal={teacherPortal}>
+        <PreparationDocumentView
+          form={form}
+          subject={subject}
+          grade={grade}
+          lecture={lecture}
+          units={units}
+          lessons={lessons}
+          libraryItems={libraryItems}
+          existingFiles={existingFiles}
+          preparationRecord={preparationRecord}
+          preparationStatus={preparationStatus}
+          reviewNote={reviewNote}
+          canReview={canReview}
+          reviewing={reviewing}
+          onApprove={handleApprovePreparation}
+          onRequestRevision={() => {
+            setReviewDraft("");
+            setReviewDialog(true);
+          }}
+          onBack={goBack}
+        />
+
+        <Dialog
+          open={reviewDialog}
+          onClose={() => !reviewing && setReviewDialog(false)}
+          fullWidth
+          maxWidth="sm"
+          dir="rtl"
+        >
+          <DialogTitle sx={{ fontWeight: 900 }}>طلب تعديل التحضير</DialogTitle>
+          <DialogContent>
+            <Typography sx={{ color: "var(--color-muted)", fontSize: 11, mb: 1 }}>
+              اكتب ملاحظة واضحة للمعلم توضح المطلوب تعديله.
+            </Typography>
+            <TextField
+              autoFocus
+              fullWidth
+              multiline
+              minRows={4}
+              value={reviewDraft}
+              onChange={(event) => setReviewDraft(event.target.value)}
+              inputProps={{ maxLength: 1000 }}
+              placeholder="مثال: يرجى توضيح الأهداف وإضافة نشاط مناسب للدرس"
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => setReviewDialog(false)}
+              disabled={reviewing}
+              sx={{ fontWeight: 800, textTransform: "none" }}
+            >
+              إلغاء
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleRequestRevision}
+              disabled={reviewing}
+              sx={{ fontWeight: 900, textTransform: "none" }}
+            >
+              {reviewing ? "جاري الحفظ..." : "إرسال طلب التعديل"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </PreparationPageWrapper>
+    );
+  }
+
   return (
-    <Wrapper>
+    <PreparationPageWrapper teacherPortal={teacherPortal}>
       <Box dir="rtl" sx={{ pb: 4 }}>
         <Paper
           elevation={0}
@@ -2770,9 +3190,75 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
           </Alert>
         )}
 
-        <WizardSteps step={step} onStep={changeStep} stepTwoEnabled={Boolean(preparationId) || mode !== "create"} />
+        {canReview && (
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 1.1,
+              p: 1.1,
+              border: "1px solid rgba(36,74,112,.09)",
+              borderRadius: "16px",
+              bgcolor: "var(--color-cream)",
+            }}
+          >
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              justifyContent="space-between"
+              gap={1}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: 900, color: "var(--color-navy-deep)" }}>
+                  مراجعة التحضير
+                </Typography>
+                <Typography sx={{ mt: 0.2, color: "var(--color-muted)", fontSize: 10.5 }}>
+                  التحضير بانتظار قرار المراجع. يمكنك اعتماده أو إعادته للمعلم مع ملاحظة.
+                </Typography>
+              </Box>
+              <Stack direction={{ xs: "column", sm: "row" }} gap={0.7}>
+                <Button
+                  variant="contained"
+                  startIcon={<CheckCircleRounded />}
+                  disabled={reviewing}
+                  onClick={handleApprovePreparation}
+                  sx={{
+                    fontWeight: 900,
+                    textTransform: "none",
+                    bgcolor: "#238f55",
+                  }}
+                >
+                  اعتماد التحضير
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<EditNoteRounded />}
+                  disabled={reviewing}
+                  onClick={() => {
+                    setReviewDraft("");
+                    setReviewDialog(true);
+                  }}
+                  sx={{
+                    fontWeight: 900,
+                    textTransform: "none",
+                    color: "var(--color-gold-dark)",
+                    borderColor: "rgba(211,164,79,.45)",
+                  }}
+                >
+                  طلب تعديل
+                </Button>
+              </Stack>
+            </Stack>
+          </Paper>
+        )}
 
-        <Stack spacing={1.15} mt={1.15}>
+        <WizardSteps step={step} onStep={changeStep} stepTwoEnabled={Boolean(preparationId) || mode !== "create"} />
+        <PreparationProgress
+          form={form}
+          step={step}
+          assignmentTotal={assignmentCount(form)}
+        />
+
+        <Stack spacing={1.15} mt={1.05}>
           <SectionCard
             id="lesson-section"
             title="الدرس"
@@ -3229,10 +3715,15 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
           <Paper
             elevation={0}
             sx={{
-              p: 1.1,
-              border: "1px solid rgba(36,74,112,.09)",
-              borderRadius: "16px",
-              bgcolor: "var(--color-cream)",
+              position: "sticky",
+              bottom: 8,
+              zIndex: 18,
+              p: 1.05,
+              border: "1px solid rgba(36,74,112,.11)",
+              borderRadius: "17px",
+              bgcolor: "rgba(255,253,250,.96)",
+              backdropFilter: "blur(14px)",
+              boxShadow: "0 12px 34px rgba(18,47,77,.12)",
             }}
           >
             <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={0.8}>
@@ -3268,7 +3759,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
                 )}
                 {step === 1 && editable && (
                   <Button variant="contained" onClick={() => changeStep(2)} sx={{ fontWeight: 900, textTransform: "none", bgcolor: "var(--color-gold-dark)" }}>
-                    حفظ ومتابعة
+                    متابعة
                   </Button>
                 )}
                 <Button variant="text" startIcon={<CloseRounded />} onClick={goBack} sx={{ fontWeight: 900, textTransform: "none", color: "var(--color-muted)" }}>
@@ -3278,6 +3769,45 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
             </Stack>
           </Paper>
         </Stack>
+
+        <Dialog
+          open={reviewDialog}
+          onClose={() => !reviewing && setReviewDialog(false)}
+          fullWidth
+          maxWidth="sm"
+        >
+          <DialogTitle sx={{ fontWeight: 900 }}>طلب تعديل التحضير</DialogTitle>
+          <DialogContent dividers>
+            <TextField
+              autoFocus
+              fullWidth
+              multiline
+              minRows={4}
+              label="ملاحظة للمعلم"
+              placeholder="مثال: يرجى توضيح الأهداف وإضافة نشاط مناسب للدرس"
+              value={reviewDraft}
+              onChange={(event) => setReviewDraft(event.target.value)}
+              inputProps={{ maxLength: 1000 }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => setReviewDialog(false)}
+              disabled={reviewing}
+              sx={{ fontWeight: 800 }}
+            >
+              إلغاء
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleRequestRevision}
+              disabled={reviewing}
+              sx={{ fontWeight: 900, bgcolor: "var(--color-gold-dark)" }}
+            >
+              {reviewing ? "جاري الحفظ..." : "إرسال طلب التعديل"}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Dialog open={libraryDialog} onClose={() => !librarySaving && setLibraryDialog(false)} fullWidth maxWidth="sm">
           <DialogTitle sx={{ fontWeight: 900 }}>أضف رابط أو ملف إلى مكتبة المدرسة</DialogTitle>
@@ -3460,7 +3990,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
           </DialogActions>
         </Dialog>
       </Box>
-    </Wrapper>
+    </PreparationPageWrapper>
   );
 };
 

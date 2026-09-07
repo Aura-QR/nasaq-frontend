@@ -529,6 +529,39 @@ export const fetchPreparationReferenceLists = async () => {
   }
 };
 
+export const reviewPreparation = async (id, review = {}) => {
+  const preparationId = normalizeId(id);
+
+  if (!preparationId) {
+    return { status: false, message: "معرّف التحضير غير موجود" };
+  }
+
+  const reviewStatus = String(review?.reviewStatus || "").trim();
+  const reviewNote = String(review?.reviewNote || "").trim();
+
+  if (!["approved", "needs_revision", "pending"].includes(reviewStatus)) {
+    return { status: false, message: "حالة المراجعة غير صحيحة" };
+  }
+
+  try {
+    const response = await api.patch(
+      `${ENDPOINT}/${preparationId}/review`,
+      {
+        reviewStatus,
+        ...(reviewNote ? { reviewNote } : {}),
+      }
+    );
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeFailure(
+      error,
+      reviewStatus === "approved"
+        ? "تعذر اعتماد التحضير"
+        : "تعذر إرسال طلب التعديل"
+    );
+  }
+};
+
 export const submitPreparation = async (id) => {
   const preparationId = normalizeId(id);
 
@@ -691,6 +724,7 @@ export default {
   deletePreparationFile,
   replacePreparationFile,
   submitPreparation,
+  reviewPreparation,
   addPreparationResource,
   deletePreparationResource,
   fetchPreparationStudentView,
