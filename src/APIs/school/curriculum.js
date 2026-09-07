@@ -149,13 +149,18 @@ export const importSchoolCurriculum = async ({
 };
 
 export const createCurriculumUnit = async (data = {}) => {
+  const rawOrder = Number(data.order);
+  const body = {
+    subjectId: normalizeId(data.subjectId),
+    gradeLevelId: normalizeId(data.gradeLevelId),
+    name: String(data.name || "").trim(),
+    // Current backend DTO requires a non-negative order. The screen derives
+    // this automatically, so there is still no order input in the UI.
+    order: Number.isFinite(rawOrder) && rawOrder >= 0 ? rawOrder : 0,
+  };
+
   try {
-    return unwrap(await api.post("/curriculum/units", {
-      subjectId: normalizeId(data.subjectId),
-      gradeLevelId: normalizeId(data.gradeLevelId),
-      name: String(data.name || "").trim(),
-      order: Number(data.order || 0),
-    }));
+    return unwrap(await api.post("/curriculum/units", body));
   } catch (error) {
     return fail(error, "تعذر إضافة الوحدة");
   }
@@ -206,6 +211,45 @@ export const createCurriculumLesson = async (unitId, data = {}) => {
   }
 };
 
+
+/**
+ * POST /curriculum/units/:id/lessons-bulk
+ *
+ * The backend cleans pasted table-of-contents text. `dryRun: true` returns the
+ * exact cleaned preview without writing; `dryRun: false` commits the same text.
+ */
+export const bulkCurriculumLessons = async (unitId, { text, dryRun = false } = {}) => {
+  const id = normalizeId(unitId);
+  const value = String(text || "").trim();
+
+  if (!id) {
+    return { status: false, message: "معرّف الوحدة غير موجود" };
+  }
+
+  const names = value
+    .split(/\r?\n/)
+    .map((line) => String(line || "").trim())
+    .filter(Boolean);
+
+  if (!names.length) {
+    return { status: false, message: "الصق أسماء الدروس أولًا" };
+  }
+
+  try {
+    return unwrap(
+      await api.post(`/curriculum/units/${id}/lessons-bulk`, {
+        names,
+        dryRun: Boolean(dryRun),
+      })
+    );
+  } catch (error) {
+    return fail(
+      error,
+      dryRun ? "تعذر معاينة الدروس" : "تعذر إضافة الدروس"
+    );
+  }
+};
+
 export const updateCurriculumLesson = async (lessonId, data = {}) => {
   const id = normalizeId(lessonId);
   if (!id) return { status: false, message: "معرّف الدرس غير موجود" };
@@ -249,6 +293,7 @@ export default {
   updateCurriculumUnit,
   deleteCurriculumUnit,
   createCurriculumLesson,
+  bulkCurriculumLessons,
   updateCurriculumLesson,
   deleteCurriculumLesson,
 };

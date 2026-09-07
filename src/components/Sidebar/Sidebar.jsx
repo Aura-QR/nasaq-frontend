@@ -306,7 +306,7 @@ const Sidebar = ({ active, setActive }) => {
               subjectsPermissions.read,
           },
           {
-            name: "منهج المدرسة",
+            name: "المناهج والدروس",
             Icon: AutoStoriesRounded,
             iconType: "mui",
             to: "/school/curriculum",
