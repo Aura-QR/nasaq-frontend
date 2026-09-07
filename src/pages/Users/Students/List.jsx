@@ -318,6 +318,7 @@ const List = () => {
   const [limit, setLimit] = useState(10);
   const [enrollmentsByStudentId, setEnrollmentsByStudentId] = useState({});
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
+
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordStudent, setPasswordStudent] = useState(null);
 
@@ -678,6 +679,8 @@ const List = () => {
       !enrollmentsLoading &&
       !loadingAcademicYears &&
       items.length === 0 &&
+      pagination !== null &&
+      Number(pagination?.totalDocs ?? 0) === 0 &&
       activeAcademicYearId &&
       academicYear === activeAcademicYearId &&
       !search &&

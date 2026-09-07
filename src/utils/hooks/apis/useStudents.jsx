@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useMemo,
   useState,
 } from "react";
 import { toast } from "react-toastify";
@@ -144,25 +143,8 @@ export const useStudents = (
     setPagination,
   ] = useState(null);
 
-  const normalizedFilters =
-    useMemo(
-      () =>
-        normalizeFilters(
-          filters
-        ),
-      [
-        JSON.stringify(
-          normalizeFilters(filters)
-        ),
-      ]
-    );
-
-  const cacheKey = useMemo(
-    () =>
-      JSON.stringify(
-        normalizedFilters
-      ),
-    [normalizedFilters]
+  const cacheKey = JSON.stringify(
+    normalizeFilters(filters)
   );
 
   useEffect(() => {
@@ -172,9 +154,12 @@ export const useStudents = (
       async () => {
         setLoading(true);
 
+        const requestFilters =
+          JSON.parse(cacheKey);
+
         const result =
           await loadStudents(
-            normalizedFilters,
+            requestFilters,
             cacheKey
           );
 
