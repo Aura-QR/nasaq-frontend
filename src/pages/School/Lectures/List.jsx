@@ -22,7 +22,6 @@ import {
   AutoAwesomeRounded,
   CalendarMonthRounded,
   DeleteOutlineRounded,
-  EditRounded,
   FileDownloadOutlined,
   GroupsRounded,
   MenuBookRounded,
@@ -41,7 +40,10 @@ import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
 import Popup from "@/components/Popup/Popup";
-import ClassFilter from "@/components/Filters/ClassFilter";
+import FeasibilityPanel from "./FeasibilityPanel";
+import GenerateTimetablePanel from "./GenerateTimetablePanel";
+
+import { api } from "@/APIs/Axios";
 
 import {
   copyLectureSchedule,
@@ -239,19 +241,8 @@ const getClassLabel = (item) => {
     return "";
   }
 
-  const academicYear =
-    getEntityName(item?.academicYear) ||
-    getEntityName(item?.academicYearId) ||
-    getEntityName(item?.gradeLevelId) ||
-    getEntityName(item?.gradeLevel) ||
-    "";
-
-  const className =
-    item?.name || "";
-
-  const roomNumber =
-    item?.roomNumber || "";
-
+  // الصفحة أصلًا تعرض فصول السنة الدراسية الحالية فقط،
+  // لذلك لا نعرض academicYearId حتى لا يظهر ObjectId للمستخدم.
   const gender =
     item?.gender === "male"
       ? "بنين"
@@ -259,17 +250,37 @@ const getClassLabel = (item) => {
       ? "بنات"
       : "";
 
+  const rawClassName = String(
+    item?.name ||
+      item?.title ||
+      item?.label ||
+      ""
+  ).trim();
+
+  // بعض أسماء الفصول تأتي مثل: "أولى متوسط/بنات".
+  // نحذف نوع الطلاب من الاسم ثم نضيفه مرة واحدة بشكل واضح في النهاية.
+  const className = rawClassName
+    .replace(/\s*[\/|\-–—]\s*(بنين|بنات)\s*$/u, "")
+    .trim();
+
+  const roomNumber = String(
+    item?.roomNumber || ""
+  ).trim();
+
+  const roomLabel =
+    roomNumber &&
+    roomNumber !== className &&
+    !className.includes(roomNumber)
+      ? `فصل ${roomNumber}`
+      : "";
+
   return (
-    [
-      academicYear,
-      className,
-      roomNumber &&
-      roomNumber !== className
-        ? `فصل ${roomNumber}`
-        : "",
-      gender,
-    ]
+    [className, roomLabel, gender]
       .filter(Boolean)
+      .filter(
+        (value, index, array) =>
+          array.indexOf(value) === index
+      )
       .join(" - ") || "الفصل المختار"
   );
 };
@@ -507,6 +518,16 @@ const List = () => {
   ] = useState(null);
 
   const [
+    automationOpen,
+    setAutomationOpen,
+  ] = useState(false);
+
+  const [
+    automationScope,
+    setAutomationScope,
+  ] = useState("current");
+
+  const [
     copyOpen,
     setCopyOpen,
   ] = useState(false);
@@ -574,42 +595,93 @@ const List = () => {
     const loadClasses = async () => {
       setClassesLoading(true);
 
-      const classesResponse =
-        await fetchClassesList();
+      try {
+        const [
+          classesResponse,
+          activeYearResponse,
+        ] = await Promise.all([
+          fetchClassesList(),
+          api
+            .get(
+              "/academic-years/active"
+            )
+            .catch(() => null),
+        ]);
 
-      if (!mounted) {
-        return;
-      }
+        if (!mounted) {
+          return;
+        }
 
-      if (
-        classesResponse?.status ===
-        false
-      ) {
+        if (
+          classesResponse?.status ===
+          false
+        ) {
+          setClassRows([]);
+          setClassesLoading(false);
+          return;
+        }
+
+        const allRows =
+          extractList(classesResponse);
+
+        const activeYear =
+          unwrapData(
+            activeYearResponse
+          );
+
+        const activeYearId =
+          getId(activeYear);
+
+        const rows = activeYearId
+          ? allRows.filter(
+              (item) =>
+                getId(
+                  getAcademicYear(
+                    item
+                  )
+                ) ===
+                activeYearId
+            )
+          : allRows;
+
+        setClassRows(rows);
+
+        if (
+          classFilter &&
+          !rows.some(
+            (item) =>
+              getId(item) ===
+              classFilter
+          )
+        ) {
+          setClassFilter("");
+          setTermId("");
+          setDefaultTermId("");
+
+          localStorage.removeItem(
+            "nasaq:lectures:lastClassId"
+          );
+
+          localStorage.removeItem(
+            "nasaq:lectures:lastTermId"
+          );
+        }
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+
         setClassRows([]);
-        setClassesLoading(false);
-        return;
-      }
-
-      const rows =
-        extractList(classesResponse);
-
-      setClassRows(rows);
-
-      if (
-        classFilter &&
-        !rows.some(
-          (item) =>
-            getId(item) ===
-            classFilter
-        )
-      ) {
-        setClassFilter("");
-        localStorage.removeItem(
-          "nasaq:lectures:lastClassId"
+        toast.error(
+          error?.response?.data
+            ?.message ||
+            "تعذر تحميل فصول السنة الدراسية الحالية"
         );
+      } finally {
+        if (mounted) {
+          setClassesLoading(false);
+        }
       }
-
-      setClassesLoading(false);
     };
 
     loadClasses();
@@ -619,15 +691,31 @@ const List = () => {
     };
   }, [classFilter]);
 
+  const safeClassFilter =
+    useMemo(
+      () =>
+        classRows.some(
+          (item) =>
+            getId(item) ===
+            classFilter
+        )
+          ? classFilter
+          : "",
+      [classRows, classFilter]
+    );
+
   const selectedClass =
     useMemo(
       () =>
         classRows.find(
           (item) =>
             getId(item) ===
-            classFilter
+            safeClassFilter
         ) || null,
-      [classRows, classFilter]
+      [
+        classRows,
+        safeClassFilter,
+      ]
     );
 
   const selectedClassLabel =
@@ -1350,80 +1438,57 @@ const List = () => {
           minWidth: 0,
           pb: 4,
           overflowX: "hidden",
-          color:
-            "var(--color-text)",
+          color: "var(--color-text)",
         }}
       >
         {/* =========================================
-            HEADER
+            SIMPLE HEADER
         ========================================= */}
 
         <Paper
           elevation={0}
           sx={{
-            mb: 1.2,
-            px: {
-              xs: 1.5,
-              md: 2,
-            },
-            py: 1.35,
-            border:
-              "1px solid rgba(36,74,112,0.08)",
+            mb: 1,
+            px: { xs: 1.4, md: 1.8 },
+            py: 1.2,
+            border: "1px solid rgba(36,74,112,0.08)",
             borderRadius: "18px",
             background:
-              "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.42))",
-            boxShadow:
-              "0 10px 24px rgba(18,47,77,0.06)",
+              "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.34))",
+            boxShadow: "0 8px 20px rgba(18,47,77,0.045)",
           }}
         >
           <Stack
-            direction={{
-              xs: "column",
-              md: "row",
-            }}
-            alignItems={{
-              xs: "stretch",
-              md: "center",
-            }}
+            direction={{ xs: "column", md: "row" }}
+            alignItems={{ xs: "stretch", md: "center" }}
             justifyContent="space-between"
-            gap={1.25}
+            gap={1.1}
           >
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-            >
+            <Stack direction="row" spacing={1} alignItems="center">
               <Box
                 sx={{
-                  width: 44,
-                  height: 44,
+                  width: 42,
+                  height: 42,
                   display: "grid",
                   placeItems: "center",
                   flexShrink: 0,
-                  borderRadius: "13px",
-                  color:
-                    "var(--color-gold-dark)",
-                  backgroundColor:
-                    "var(--color-gold-soft)",
-                  border:
-                    "1px solid rgba(211,164,79,0.22)",
+                  borderRadius: "12px",
+                  color: "var(--color-gold-dark)",
+                  backgroundColor: "var(--color-gold-soft)",
+                  border: "1px solid rgba(211,164,79,0.20)",
                 }}
               >
-                <CalendarMonthRounded />
+                <CalendarMonthRounded sx={{ fontSize: 22 }} />
               </Box>
 
               <Box>
                 <Typography
                   component="h1"
                   sx={{
-                    color:
-                      "var(--color-navy-deep)",
-                    fontSize: {
-                      xs: "20px",
-                      md: "24px",
-                    },
+                    color: "var(--color-navy-deep)",
+                    fontSize: { xs: "20px", md: "24px" },
                     fontWeight: 900,
-                    lineHeight: 1.25,
+                    lineHeight: 1.2,
                   }}
                 >
                   الجدول الدراسي
@@ -1431,14 +1496,12 @@ const List = () => {
 
                 <Typography
                   sx={{
-                    mt: 0.25,
-                    color:
-                      "var(--color-muted)",
-                    fontSize: "10px",
+                    mt: 0.2,
+                    color: "var(--color-muted)",
+                    fontSize: "9px",
                   }}
                 >
-                  اختَر الفصل، وسيتم تحديد الترم تلقائيًا.
-                  أضف الحصص مباشرة من علامة + داخل الجدول.
+                  اختر الفصل ثم أدر الحصص مباشرة من الجدول، أو استخدم الإنشاء التلقائي عند الحاجة.
                 </Typography>
               </Box>
             </Stack>
@@ -1450,71 +1513,28 @@ const List = () => {
               flexWrap="wrap"
               alignItems="center"
             >
-              {readyForSchedule && (
-                <>
-                  <MiniInfoChip
-                    icon={
-                      <CalendarMonthRounded />
-                    }
-                    label={`${stats.total} حصة`}
-                  />
-
-                  <MiniInfoChip
-                    icon={
-                      <MenuBookRounded />
-                    }
-                    label={`${stats.subjects} مواد`}
-                  />
-
-                  <MiniInfoChip
-                    icon={
-                      <GroupsRounded />
-                    }
-                    label={`${stats.teachers} معلمين`}
-                  />
-                </>
-              )}
-
               {permissions.add &&
                 selectedClassAcademicYearId &&
                 termOptions.length > 0 && (
                   <Button
                     type="button"
                     variant="outlined"
-                    startIcon={
-                      <AutoAwesomeRounded />
-                    }
-                    onClick={
-                      openCopySchedule
-                    }
+                    startIcon={<AutoAwesomeRounded />}
+                    onClick={openCopySchedule}
                     sx={{
-                      minHeight: 38,
-                      px: 1.4,
-                      borderRadius:
-                        "11px",
-                      color:
-                        "var(--color-gold-dark)",
-                      backgroundColor:
-                        "rgba(255,255,255,0.72)",
-                      borderColor:
-                        "rgba(211,164,79,0.28)",
-                      fontSize:
-                        "10px",
+                      minHeight: 36,
+                      px: 1.25,
+                      borderRadius: "10px",
+                      color: "var(--color-gold-dark)",
+                      backgroundColor: "rgba(255,255,255,0.72)",
+                      borderColor: "rgba(211,164,79,0.26)",
+                      fontSize: "9px",
                       fontWeight: 800,
-                      textTransform:
-                        "none",
-                      "&:hover": {
-                        borderColor:
-                          "rgba(211,164,79,0.48)",
-                        backgroundColor:
-                          "rgba(251,240,216,0.38)",
+                      textTransform: "none",
+                      "& .MuiButton-startIcon": {
+                        marginLeft: "5px",
+                        marginRight: 0,
                       },
-                      "& .MuiButton-startIcon":
-                        {
-                          marginLeft:
-                            "6px",
-                          marginRight: 0,
-                        },
                     }}
                   >
                     نسخ الجدول
@@ -1525,43 +1545,26 @@ const List = () => {
                 component={CSVLink}
                 data={csvData}
                 filename="lectures.csv"
-                sx={{
-                  display:
-                    "inline-flex",
-                  textDecoration:
-                    "none",
-                }}
+                sx={{ display: "inline-flex", textDecoration: "none" }}
               >
                 <Button
-                  disabled={
-                    visibleItems.length ===
-                    0
-                  }
+                  disabled={visibleItems.length === 0}
                   variant="outlined"
-                  startIcon={
-                    <FileDownloadOutlined />
-                  }
+                  startIcon={<FileDownloadOutlined />}
                   sx={{
-                    minHeight: 38,
-                    px: 1.4,
-                    borderRadius:
-                      "11px",
-                    color:
-                      "var(--color-navy)",
-                    backgroundColor:
-                      "rgba(255,255,255,0.72)",
-                    borderColor:
-                      "rgba(36,74,112,0.14)",
-                    fontSize: "10px",
+                    minHeight: 36,
+                    px: 1.25,
+                    borderRadius: "10px",
+                    color: "var(--color-navy)",
+                    backgroundColor: "rgba(255,255,255,0.72)",
+                    borderColor: "rgba(36,74,112,0.14)",
+                    fontSize: "9px",
                     fontWeight: 800,
-                    textTransform:
-                      "none",
-                    "& .MuiButton-startIcon":
-                      {
-                        marginLeft:
-                          "6px",
-                        marginRight: 0,
-                      },
+                    textTransform: "none",
+                    "& .MuiButton-startIcon": {
+                      marginLeft: "5px",
+                      marginRight: 0,
+                    },
                   }}
                 >
                   تصدير
@@ -1572,225 +1575,267 @@ const List = () => {
         </Paper>
 
         {/* =========================================
-            CLASS SELECTOR
+            CLASS + PRIMARY ACTION
         ========================================= */}
 
         <Paper
           elevation={0}
           sx={{
-            mb: 1.1,
-            px: {
-              xs: 1.1,
-              md: 1.35,
-            },
-            py: 0.9,
+            mb: 1,
+            p: { xs: 1.1, md: 1.25 },
             overflow: "visible",
-            border:
-              "1px solid rgba(36,74,112,0.08)",
-            borderRadius: "15px",
-            backgroundColor:
-              "var(--color-cream)",
-            boxShadow:
-              "0 6px 16px rgba(18,47,77,0.04)",
+            border: "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "16px",
+            backgroundColor: "#fff",
+            boxShadow: "0 6px 16px rgba(18,47,77,0.035)",
           }}
         >
-          <Stack
-            direction={{
-              xs: "column",
-              md: "row",
-            }}
-            alignItems={{
-              xs: "stretch",
-              md: "center",
-            }}
-            justifyContent="space-between"
-            spacing={1}
-          >
+          <Stack spacing={0.9}>
             <Stack
-              direction="row"
-              alignItems="center"
-              spacing={0.8}
-              sx={{
-                minWidth: 0,
-              }}
+              direction={{ xs: "column", md: "row" }}
+              alignItems={{ xs: "stretch", md: "center" }}
+              gap={0.9}
             >
-              <Box
-                sx={{
-                  width: 34,
-                  height: 34,
-                  flexShrink: 0,
-                  display: "grid",
-                  placeItems: "center",
-                  borderRadius: "10px",
-                  color:
-                    "var(--color-navy)",
-                  backgroundColor:
-                    "rgba(36,74,112,0.055)",
-                }}
-              >
-                <SchoolRounded
-                  sx={{
-                    fontSize: 18,
-                  }}
-                />
-              </Box>
-
-              <Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography
                   sx={{
-                    color:
-                      "var(--color-navy-deep)",
-                    fontSize: "11px",
+                    mb: 0.55,
+                    color: "var(--color-navy-deep)",
+                    fontSize: "9px",
                     fontWeight: 900,
                   }}
                 >
-                  الفصل
+                  الفصل الدراسي
                 </Typography>
 
-                <Typography
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  value={safeClassFilter}
+                  disabled={classesLoading}
+                  onChange={(event) => {
+                    const nextValue = event.target.value || "";
+                    setClassFilter(nextValue);
+                    setTermId("");
+                    setDefaultTermId("");
+                    localStorage.removeItem("nasaq:lectures:lastTermId");
+                  }}
+                  SelectProps={{
+                    displayEmpty: true,
+                    MenuProps: {
+                      PaperProps: { sx: { maxHeight: 320 } },
+                    },
+                  }}
                   sx={{
-                    mt: 0.05,
-                    color:
-                      "var(--color-muted)",
-                    fontSize: "7.5px",
+                    "& .MuiOutlinedInput-root": {
+                      minHeight: 42,
+                      height: 42,
+                      backgroundColor: "var(--color-white)",
+                      borderRadius: "11px",
+                      fontSize: "10px",
+                    },
                   }}
                 >
-                  اختَر الفصل لعرض جدوله الدراسي
-                </Typography>
+                  <MenuItem value="">
+                    <em>اختر الفصل لعرض الجدول</em>
+                  </MenuItem>
+
+                  {classRows.map((classItem) => {
+                    const classId = getId(classItem);
+
+                    return (
+                      <MenuItem key={classId} value={classId}>
+                        {getClassLabel(classItem)}
+                      </MenuItem>
+                    );
+                  })}
+                </TextField>
               </Box>
-            </Stack>
 
-            <Box
-              sx={{
-                width: {
-                  xs: "100%",
-                  md: 430,
-                  xl: 520,
-                },
-                maxWidth: "100%",
-                "& .MuiFormControl-root": {
-                  width: "100%",
-                  minWidth: 0,
-                  m: 0,
-                },
-                "& .MuiInputBase-root, & .MuiOutlinedInput-root":
-                  {
-                    minHeight: 42,
-                    height: 42,
-                    backgroundColor:
-                      "var(--color-white)",
-                    borderRadius: "11px",
-                    fontSize: "10px",
-                  },
-              }}
-            >
-              <ClassFilter
-                classId={
-                  classFilter
-                }
-                setClassId={(value) => {
-                  const nextValue =
-                    value || "";
-
-                  setClassFilter(
-                    nextValue
-                  );
-
-                  setTermId("");
-                  setDefaultTermId(
-                    ""
-                  );
-
-                  localStorage.removeItem(
-                    "nasaq:lectures:lastTermId"
-                  );
-                }}
-              />
-            </Box>
-
-            {classFilter &&
-              selectedTermLabel && (
+              {classFilter && selectedTermLabel && (
                 <Chip
-                  icon={
-                    <CalendarMonthRounded />
-                  }
-                  label={
-                    selectedTermLabel
-                  }
+                  icon={<CalendarMonthRounded />}
+                  label={selectedTermLabel}
                   size="small"
                   sx={{
+                    alignSelf: { xs: "flex-start", md: "center" },
                     flexShrink: 0,
-                    height: 27,
-                    color:
-                      "var(--color-gold-dark)",
-                    backgroundColor:
-                      "var(--color-gold-soft)",
-                    border:
-                      "1px solid rgba(211,164,79,0.14)",
-                    fontSize: "8px",
-                    fontWeight: 800,
+                    height: 30,
+                    color: "var(--color-gold-dark)",
+                    backgroundColor: "var(--color-gold-soft)",
+                    border: "1px solid rgba(211,164,79,0.14)",
+                    fontSize: "8.5px",
+                    fontWeight: 900,
                     "& .MuiChip-icon": {
-                      color:
-                        "var(--color-gold-dark)",
-                      fontSize: 13,
+                      color: "var(--color-gold-dark)",
+                      fontSize: 14,
                     },
                   }}
                 />
               )}
+
+              {permissions.add && (
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={0.7}
+                  useFlexGap
+                  flexWrap="wrap"
+                  sx={{
+                    flexShrink: 0,
+                    width: { xs: "100%", md: "auto" },
+                  }}
+                >
+                  <Button
+                    type="button"
+                    variant="contained"
+                    startIcon={<AutoAwesomeRounded />}
+                    disabled={!readyForSchedule}
+                    onClick={() => {
+                      setAutomationScope("current");
+                      setAutomationOpen(true);
+                    }}
+                    sx={{
+                      minHeight: 42,
+                      px: 1.6,
+                      borderRadius: "11px",
+                      color: "var(--color-white)",
+                      background:
+                        "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
+                      boxShadow: "none",
+                      fontSize: "9.5px",
+                      fontWeight: 900,
+                      textTransform: "none",
+                      whiteSpace: "nowrap",
+                      "&:hover": { boxShadow: "none" },
+                      "& .MuiButton-startIcon": {
+                        marginLeft: "6px",
+                        marginRight: 0,
+                      },
+                    }}
+                  >
+                    إنشاء جدول للفصل
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outlined"
+                    startIcon={<AutoAwesomeRounded />}
+                    disabled={!termId || classesLoading || termsLoading}
+                    onClick={() => {
+                      setAutomationScope("all");
+                      setAutomationOpen(true);
+                    }}
+                    sx={{
+                      minHeight: 42,
+                      px: 1.6,
+                      borderRadius: "11px",
+                      color: "var(--color-gold-dark)",
+                      backgroundColor: "rgba(255,255,255,0.72)",
+                      borderColor: "rgba(211,164,79,0.42)",
+                      boxShadow: "none",
+                      fontSize: "9.5px",
+                      fontWeight: 900,
+                      textTransform: "none",
+                      whiteSpace: "nowrap",
+                      "&:hover": {
+                        borderColor: "var(--color-gold-dark)",
+                        backgroundColor: "rgba(251,240,216,0.42)",
+                      },
+                      "& .MuiButton-startIcon": {
+                        marginLeft: "6px",
+                        marginRight: 0,
+                      },
+                    }}
+                  >
+                    إنشاء جداول كل الفصول
+                  </Button>
+                </Stack>
+              )}
+            </Stack>
+
+            {readyForSchedule ? (
+              <Stack
+                direction="row"
+                spacing={0.65}
+                useFlexGap
+                flexWrap="wrap"
+                alignItems="center"
+              >
+                <Typography
+                  sx={{
+                    ml: 0.25,
+                    color: "var(--color-muted)",
+                    fontSize: "8px",
+                    fontWeight: 700,
+                  }}
+                >
+                  ملخص الفصل:
+                </Typography>
+                <MiniInfoChip
+                  icon={<CalendarMonthRounded />}
+                  label={`${stats.total} حصة`}
+                />
+                <MiniInfoChip
+                  icon={<MenuBookRounded />}
+                  label={`${stats.subjects} مواد`}
+                />
+                <MiniInfoChip
+                  icon={<GroupsRounded />}
+                  label={`${stats.teachers} معلمين`}
+                />
+              </Stack>
+            ) : (
+              <Typography
+                sx={{
+                  color: "var(--color-muted)",
+                  fontSize: "8px",
+                }}
+              >
+                اختر الفصل أولًا، وسيتم تحديد الترم المناسب تلقائيًا.
+              </Typography>
+            )}
           </Stack>
         </Paper>
 
         {/* =========================================
-            SCHEDULE
+            SCHEDULE FIRST
         ========================================= */}
 
         <Paper
           elevation={0}
           sx={{
             overflow: "hidden",
-            border:
-              "1px solid rgba(36,74,112,0.08)",
+            border: "1px solid rgba(36,74,112,0.08)",
             borderRadius: "18px",
-            backgroundColor:
-              "var(--color-cream)",
-            boxShadow:
-              "0 12px 28px rgba(18,47,77,0.055)",
+            backgroundColor: "var(--color-cream)",
+            boxShadow: "0 10px 24px rgba(18,47,77,0.045)",
           }}
         >
           <Stack
-            direction={{
-              xs: "column",
-              sm: "row",
-            }}
-            alignItems={{
-              xs: "stretch",
-              sm: "center",
-            }}
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ xs: "stretch", sm: "center" }}
             justifyContent="space-between"
-            gap={1}
+            gap={0.8}
             sx={{
-              px: {
-                xs: 1.4,
-                md: 1.8,
-              },
-              py: 1.15,
-              borderBottom:
-                "1px solid rgba(36,74,112,0.07)",
+              px: { xs: 1.3, md: 1.6 },
+              py: 1,
+              borderBottom: "1px solid rgba(36,74,112,0.07)",
+              backgroundColor: "rgba(255,255,255,0.58)",
             }}
           >
             <Box>
               <Stack
                 direction="row"
-                spacing={0.7}
+                spacing={0.6}
                 alignItems="center"
                 useFlexGap
                 flexWrap="wrap"
               >
                 <Typography
                   sx={{
-                    color:
-                      "var(--color-navy-deep)",
-                    fontSize: "15px",
+                    color: "var(--color-navy-deep)",
+                    fontSize: "14px",
                     fontWeight: 900,
                   }}
                 >
@@ -1798,88 +1843,76 @@ const List = () => {
                 </Typography>
 
                 {selectedClassLabel && (
-                  <Tooltip
-                    title={selectedClassLabel}
-                    arrow
-                  >
+                  <Tooltip title={selectedClassLabel} arrow>
                     <Chip
-                      icon={
-                        <SchoolRounded />
-                      }
-                      label={
-                        selectedClassLabel
-                      }
+                      icon={<SchoolRounded />}
+                      label={selectedClassLabel}
                       size="small"
                       sx={{
-                        maxWidth: {
-                          xs: 210,
-                          md: 300,
-                        },
-                        height: 25,
-                        color:
-                          "var(--color-navy)",
-                        backgroundColor:
-                          "rgba(36,74,112,0.055)",
-                        fontSize: "8px",
+                        maxWidth: { xs: 210, md: 300 },
+                        height: 24,
+                        color: "var(--color-navy)",
+                        backgroundColor: "rgba(36,74,112,0.055)",
+                        fontSize: "7.8px",
                         fontWeight: 800,
-                        "& .MuiChip-label":
-                          {
-                            overflow:
-                              "hidden",
-                            textOverflow:
-                              "ellipsis",
-                            whiteSpace:
-                              "nowrap",
-                          },
-                        "& .MuiChip-icon":
-                          {
-                            color:
-                              "var(--color-navy)",
-                            fontSize: 14,
-                          },
+                        "& .MuiChip-label": {
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        },
+                        "& .MuiChip-icon": {
+                          color: "var(--color-navy)",
+                          fontSize: 13,
+                        },
                       }}
                     />
                   </Tooltip>
-                )}
-
-                {selectedTermLabel && (
-                  <Chip
-                    label={
-                      selectedTermLabel
-                    }
-                    size="small"
-                    sx={{
-                      height: 25,
-                      color:
-                        "var(--color-gold-dark)",
-                      backgroundColor:
-                        "var(--color-gold-soft)",
-                      fontSize: "8px",
-                      fontWeight: 800,
-                    }}
-                  />
                 )}
               </Stack>
 
               <Typography
                 sx={{
-                  mt: 0.25,
-                  color:
-                    "var(--color-muted)",
-                  fontSize: "8.5px",
+                  mt: 0.2,
+                  color: "var(--color-muted)",
+                  fontSize: "8px",
                 }}
               >
-                اضغط على علامة + لإضافة
-                حصة، أو على الحصة الحالية
-                لتعديلها.
+                اضغط على الخانة الفارغة لإضافة حصة، واضغط على الحصة لتعديلها.
               </Typography>
             </Box>
+
+            {readyForSchedule && permissions.add && (
+              <Button
+                type="button"
+                variant="text"
+                startIcon={<AutoAwesomeRounded />}
+                onClick={() => {
+                  setAutomationScope("current");
+                  setAutomationOpen(true);
+                }}
+                sx={{
+                  alignSelf: { xs: "flex-start", sm: "center" },
+                  minHeight: 32,
+                  px: 1,
+                  color: "var(--color-navy)",
+                  fontSize: "8.5px",
+                  fontWeight: 900,
+                  textTransform: "none",
+                  "& .MuiButton-startIcon": {
+                    marginLeft: "5px",
+                    marginRight: 0,
+                  },
+                }}
+              >
+                أدوات الإنشاء التلقائي
+              </Button>
+            )}
           </Stack>
 
           {!classFilter ? (
             <SchedulePlaceholder
-              title="جاهز تبني جدول الفصل؟"
-              description="اختَر الفصل من الشريط بالأعلى، وسيتم تحديد الترم المناسب وعرض الجدول مباشرة. بعدها اضغط + داخل أي خانة فارغة لإضافة الحصة."
+              title="اختر الفصل لعرض الجدول"
+              description="بمجرد اختيار الفصل سيظهر الترم المناسب والجدول مباشرة، ويمكنك بعدها إضافة الحصص أو استخدام الإنشاء التلقائي."
             />
           ) : termsLoading ? (
             <ScheduleLoading />
@@ -1891,76 +1924,159 @@ const List = () => {
           ) : loading ? (
             <ScheduleLoading />
           ) : (
-            <Box
-              sx={{
-                width: "100%",
-                overflowX: "auto",
-              }}
-            >
+            <Box sx={{ width: "100%", overflowX: "auto" }}>
               <Box
                 sx={{
-                  minWidth:
-                    Math.max(
-                      1080,
-                      116 +
-                        Slots.length *
-                          132
-                    ),
+                  minWidth: Math.max(960, 92 + Slots.length * 112),
                   display: "grid",
-                  gridTemplateColumns: `116px repeat(${Slots.length}, minmax(132px, 1fr))`,
+                  gridTemplateColumns: `92px repeat(${Slots.length}, minmax(112px, 1fr))`,
                   direction: "rtl",
                 }}
               >
-                <ScheduleHeaderCell>
-                  اليوم
-                </ScheduleHeaderCell>
+                <ScheduleHeaderCell>اليوم</ScheduleHeaderCell>
 
-                {Slots.map(
-                  (slotItem) => (
-                    <ScheduleHeaderCell
-                      key={slotItem.id}
-                    >
-                      {slotItem.name ||
-                        `الحصة ${slotItem.id}`}
-                    </ScheduleHeaderCell>
-                  )
-                )}
+                {Slots.map((slotItem) => (
+                  <ScheduleHeaderCell key={slotItem.id}>
+                    {slotItem.name || `الحصة ${slotItem.id}`}
+                  </ScheduleHeaderCell>
+                ))}
 
-                {Days.map(
-                  (day) => (
-                    <ScheduleDayRow
-                      key={day.id}
-                      day={day}
-                      scheduleMap={
-                        scheduleMap
-                      }
-                      permissions={
-                        permissions
-                      }
-                      onAdd={
-                        openAddFromCell
-                      }
-                      onEdit={
-                        openEditLecture
-                      }
-                      onDelete={(
-                        lectureId
-                      ) => {
-                        setSelectedLectureId(
-                          lectureId
-                        );
-                        setDeleteOpen(
-                          true
-                        );
-                      }}
-                    />
-                  )
-                )}
+                {Days.map((day) => (
+                  <ScheduleDayRow
+                    key={day.id}
+                    day={day}
+                    scheduleMap={scheduleMap}
+                    permissions={permissions}
+                    onAdd={openAddFromCell}
+                    onEdit={openEditLecture}
+                    onDelete={(lectureId) => {
+                      setSelectedLectureId(lectureId);
+                      setDeleteOpen(true);
+                    }}
+                  />
+                ))}
               </Box>
             </Box>
           )}
         </Paper>
       </Box>
+
+      {/* =========================================
+          AUTOMATION TOOLS DIALOG
+      ========================================= */}
+
+      <Dialog
+        open={automationOpen}
+        onClose={() => setAutomationOpen(false)}
+        fullWidth
+        maxWidth="lg"
+        PaperProps={{
+          sx: {
+            borderRadius: "18px",
+            overflow: "hidden",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            pb: 1,
+            borderBottom: "1px solid rgba(36,74,112,0.07)",
+          }}
+        >
+          <Typography
+            sx={{
+              color: "var(--color-navy-deep)",
+              fontSize: "16px",
+              fontWeight: 900,
+            }}
+          >
+            {automationScope === "all"
+              ? "إنشاء جداول كل الفصول"
+              : "إنشاء جدول الفصل تلقائيًا"}
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.25,
+              color: "var(--color-muted)",
+              fontSize: "8.5px",
+            }}
+          >
+            {automationScope === "all"
+              ? "سيتم تطبيق المعاينة على كل الفصول النشطة في الترم الحالي قبل الاعتماد النهائي."
+              : "افحص جاهزية الفصل الحالي، ثم استخدم المعاينة قبل اعتماد التوزيع النهائي."}
+          </Typography>
+        </DialogTitle>
+
+        <DialogContent
+          sx={{
+            p: { xs: 1.2, md: 1.6 },
+            backgroundColor: "#F8FAFC",
+          }}
+        >
+          <Stack spacing={1.1}>
+            <Alert severity="info" sx={{ borderRadius: "12px", fontSize: "9px" }}>
+              {automationScope === "all"
+                ? "سيتم العمل على كل الفصول النشطة في هذا الترم. ابدأ بالمعاينة، وراجع النتيجة، ثم اعتمدها."
+                : "سيتم العمل على الفصل المحدد فقط. ابدأ بالمعاينة، وراجع النتيجة، ثم اعتمدها."}
+            </Alert>
+
+            <FeasibilityPanel
+              key={`feasibility-${automationScope}-${automationOpen ? "open" : "closed"}`}
+              termId={termId}
+              termLabel={selectedTermLabel}
+              classId={classFilter}
+              classLabel={selectedClassLabel}
+              initialScope={automationScope}
+              onNavigateToCurriculum={(gradeLevelId) => {
+                const params = new URLSearchParams();
+                if (termId) params.set("termId", termId);
+                if (gradeLevelId) params.set("gradeLevelId", gradeLevelId);
+                navigate(`/subject-offerings?${params.toString()}`);
+              }}
+            />
+
+            <GenerateTimetablePanel
+              key={`generate-${automationScope}-${automationOpen ? "open" : "closed"}`}
+              termId={termId}
+              termLabel={selectedTermLabel}
+              classId={classFilter}
+              classLabel={selectedClassLabel}
+              initialScope={automationScope}
+              onCommitted={async () => {
+                const refreshed = await fetchLectures(
+                  {
+                    page: 1,
+                    limit: 1000,
+                    classId: classFilter || undefined,
+                    termId: termId || undefined,
+                  },
+                  { force: true }
+                );
+
+                if (refreshed?.status) {
+                  setItems(mapLectures(refreshed?.data));
+                }
+              }}
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions sx={{ px: 2, py: 1.2 }}>
+          <Button
+            type="button"
+            onClick={() => setAutomationOpen(false)}
+            sx={{
+              borderRadius: "10px",
+              color: "var(--color-navy)",
+              fontWeight: 900,
+              textTransform: "none",
+            }}
+          >
+            إغلاق
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={copyOpen}
@@ -2421,7 +2537,7 @@ const ScheduleHeaderCell = ({
 }) => (
   <Box
     sx={{
-      minHeight: 50,
+      minHeight: 44,
       px: 0.8,
       display: "grid",
       placeItems: "center",
@@ -2457,7 +2573,7 @@ const ScheduleDayRow = ({
     <>
       <Box
         sx={{
-          minHeight: 112,
+          minHeight: 96,
           px: 0.8,
           display: "grid",
           placeItems: "center",
@@ -2634,8 +2750,8 @@ const ScheduleCell = ({
       }}
       sx={{
         position: "relative",
-        minHeight: 112,
-        p: 0.8,
+        minHeight: 96,
+        p: 0.55,
         display: "flex",
         alignItems: "stretch",
         justifyContent:
@@ -2676,7 +2792,7 @@ const ScheduleCell = ({
           sx={{
             width: "100%",
             minWidth: 0,
-            p: 1,
+            p: 0.85,
             position: "relative",
             display: "flex",
             flexDirection:
@@ -2684,17 +2800,22 @@ const ScheduleCell = ({
             justifyContent:
               "center",
             borderRadius:
-              "13px",
+              "11px",
             backgroundColor:
               tone.bg,
             border: `1px solid ${tone.border}`,
-            borderRight: `4px solid ${tone.accent}`,
+            borderRight: `3px solid ${tone.accent}`,
             opacity:
               highlighted
                 ? 1
                 : 0.28,
             transition:
               "opacity 160ms ease, transform 160ms ease",
+            "& .lecture-delete-action": {
+              opacity: 0,
+              transform: "scale(0.92)",
+              transition: "opacity 140ms ease, transform 140ms ease",
+            },
             "&:hover": {
               opacity: 1,
               transform:
@@ -2702,11 +2823,16 @@ const ScheduleCell = ({
                   ? "translateY(-1px)"
                   : "none",
             },
+            "&:hover .lecture-delete-action": {
+              opacity: 1,
+              transform: "scale(1)",
+            },
           }}
         >
           {canDelete && (
             <Tooltip title="حذف الحصة">
               <IconButton
+                className="lecture-delete-action"
                 type="button"
                 onClick={(
                   event
@@ -2719,8 +2845,8 @@ const ScheduleCell = ({
                     "absolute",
                   top: 5,
                   left: 5,
-                  width: 27,
-                  height: 27,
+                  width: 25,
+                  height: 25,
                   color: "#D76760",
                   backgroundColor:
                     "rgba(255,255,255,0.82)",
@@ -2809,15 +2935,7 @@ const ScheduleCell = ({
               <Box />
             )}
 
-            {canEdit && (
-              <EditRounded
-                sx={{
-                  color:
-                    tone.accent,
-                  fontSize: 15,
-                }}
-              />
-            )}
+<Box />
           </Stack>
         </Box>
       ) : canAdd ? (
@@ -2827,7 +2945,7 @@ const ScheduleCell = ({
           spacing={0.5}
           sx={{
             width: "100%",
-            minHeight: 94,
+            minHeight: 82,
             color:
               "var(--color-muted)",
             border:
@@ -2848,8 +2966,8 @@ const ScheduleCell = ({
         >
           <Box
             sx={{
-              width: 32,
-              height: 32,
+              width: 28,
+              height: 28,
               display: "grid",
               placeItems:
                 "center",
@@ -2861,7 +2979,7 @@ const ScheduleCell = ({
           >
             <AddRounded
               sx={{
-                fontSize: 20,
+                fontSize: 18,
               }}
             />
           </Box>
@@ -2879,7 +2997,7 @@ const ScheduleCell = ({
         <Box
           sx={{
             width: "100%",
-            minHeight: 94,
+            minHeight: 82,
             borderRadius:
               "13px",
             backgroundColor:
@@ -2897,7 +3015,7 @@ const SchedulePlaceholder = ({
 }) => (
   <Box
     sx={{
-      minHeight: 290,
+      minHeight: 220,
       px: {
         xs: 1.5,
         md: 2.4,

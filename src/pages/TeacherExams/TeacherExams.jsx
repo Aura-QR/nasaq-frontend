@@ -46,7 +46,10 @@ import {
   useState,
 } from "react";
 
-import { useNavigate } from "react-router-dom";
+import {
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import { toast } from "react-toastify";
 
 import {
@@ -56,6 +59,7 @@ import {
 } from "@/APIs/school/exams";
 
 import nasaqLogo from "../../images/wadq-logo.png";
+import usePermissions from "@/utils/hooks/usePermissions";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
 
@@ -160,20 +164,54 @@ const getExamTypeLabel = (exam) =>
   exam?.typeLabel ||
   "اختبار";
 
-const getSubjectOffering = (exam) =>
-  exam?.subjectOfferingId ||
-  exam?.subjectOffering ||
-  exam?.offering ||
-  {};
+const getSubjectOffering = (exam) => {
+  const candidates = [
+    exam?.subjectOffering,
+    exam?.offering,
+    exam?.gradesCriteria?.subjectOfferingId,
+    exam?.gradesCriteria?.subjectOffering,
+    exam?.subjectOfferingId,
+  ];
+
+  // Prefer a populated offering object over a raw Mongo id string.
+  return (
+    candidates.find(
+      (candidate) =>
+        candidate &&
+        typeof candidate === "object" &&
+        !Array.isArray(candidate)
+    ) ||
+    candidates.find(Boolean) ||
+    {}
+  );
+};
 
 const getSubjectEntity = (exam) => {
   const offering = getSubjectOffering(exam);
 
+  const criteriaOffering =
+    exam?.gradesCriteria?.subjectOfferingId ||
+    exam?.gradesCriteria?.subjectOffering ||
+    {};
+
+  const candidates = [
+    offering?.subjectId,
+    offering?.subject,
+    criteriaOffering?.subjectId,
+    criteriaOffering?.subject,
+    exam?.subjectId,
+    exam?.subject,
+  ];
+
+  // Prefer the populated subject object, because subjectId may also be a raw id.
   return (
-    offering?.subjectId ||
-    offering?.subject ||
-    exam?.subjectId ||
-    exam?.subject ||
+    candidates.find(
+      (candidate) =>
+        candidate &&
+        typeof candidate === "object" &&
+        !Array.isArray(candidate)
+    ) ||
+    candidates.find(Boolean) ||
     {}
   );
 };
@@ -381,6 +419,16 @@ const StatCard = ({ icon, label, value, helper, accent = "navy" }) => {
 
 const TeacherExams = () => {
   const navigate = useNavigate();
+  const permissions = usePermissions("exams");
+
+  const [
+    searchParams,
+    setSearchParams,
+  ] = useSearchParams();
+
+  const requestedExamId = String(
+    searchParams.get("examId") || ""
+  ).trim();
 
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -435,6 +483,77 @@ const TeacherExams = () => {
   useEffect(() => {
     loadExams();
   }, [loadExams]);
+
+  useEffect(() => {
+    if (!requestedExamId || !exams.length) {
+      return;
+    }
+
+    const requestedExam =
+      exams.find(
+        (exam) =>
+          getExamId(exam) ===
+          requestedExamId
+      ) || null;
+
+    if (
+      requestedExam &&
+      getExamId(selectedExam) !==
+        requestedExamId
+    ) {
+      setSelectedExam(
+        requestedExam
+      );
+    }
+  }, [
+    requestedExamId,
+    exams,
+    selectedExam,
+  ]);
+
+  const openExamDetails = (exam) => {
+    setSelectedExam(exam);
+
+    const examId =
+      getExamId(exam);
+
+    if (!examId) {
+      return;
+    }
+
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+
+    next.set(
+      "examId",
+      examId
+    );
+
+    setSearchParams(
+      next,
+      { replace: true }
+    );
+  };
+
+  const closeExamDetails = () => {
+    setSelectedExam(null);
+
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+
+    next.delete(
+      "examId"
+    );
+
+    setSearchParams(
+      next,
+      { replace: true }
+    );
+  };
 
   const counts = useMemo(() => {
     const result = {
@@ -724,6 +843,7 @@ const TeacherExams = () => {
                 تصحيح الاختبارات
               </Button>
 
+              {permissions.add && (
               <Button
                 type="button"
                 onClick={() => navigate("/teacher/exams/add")}
@@ -751,6 +871,7 @@ const TeacherExams = () => {
               >
                 إنشاء اختبار
               </Button>
+              )}
             </Stack>
           </Stack>
         </Paper>
@@ -957,6 +1078,7 @@ const TeacherExams = () => {
                 >
                   غيّر الفلاتر أو أنشئ اختبارًا جديدًا ليظهر هنا.
                 </Typography>
+                {permissions.add && (
                 <Button
                   type="button"
                   onClick={() => navigate("/teacher/exams/add")}
@@ -983,6 +1105,7 @@ const TeacherExams = () => {
                 >
                   إنشاء اختبار
                 </Button>
+                )}
               </Stack>
             </Paper>
           ) : (
@@ -1200,7 +1323,7 @@ const TeacherExams = () => {
                           <Tooltip title="عرض سريع">
                             <IconButton
                               type="button"
-                              onClick={() => setSelectedExam(exam)}
+                              onClick={() => openExamDetails(exam)}
                               sx={{
                                 width: 36,
                                 height: 36,
@@ -1213,11 +1336,12 @@ const TeacherExams = () => {
                             </IconButton>
                           </Tooltip>
 
+                          {permissions.edit && (
                           <Tooltip title="تعديل الاختبار والأسئلة">
                             <IconButton
                               type="button"
                               onClick={() =>
-                                navigate(`/school/exams/edit/${examId}`)
+                                navigate(`/teacher/exams/edit/${examId}`)
                               }
                               sx={{
                                 width: 36,
@@ -1230,7 +1354,9 @@ const TeacherExams = () => {
                               <EditRounded sx={{ fontSize: 18 }} />
                             </IconButton>
                           </Tooltip>
+                          )}
 
+                          {permissions.delete && (
                           <Tooltip title="حذف الاختبار">
                             <IconButton
                               type="button"
@@ -1246,11 +1372,12 @@ const TeacherExams = () => {
                               <DeleteOutlineRounded sx={{ fontSize: 18 }} />
                             </IconButton>
                           </Tooltip>
+                          )}
                         </Stack>
 
                         <Button
                           type="button"
-                          onClick={() => navigate(`/school/exams/${examId}`)}
+                          onClick={() => openExamDetails(exam)}
                           variant="contained"
                           endIcon={<ArrowBackRounded />}
                           sx={{
@@ -1282,7 +1409,7 @@ const TeacherExams = () => {
 
       <Dialog
         open={Boolean(selectedExam)}
-        onClose={() => setSelectedExam(null)}
+        onClose={closeExamDetails}
         fullWidth
         maxWidth="md"
         PaperProps={{
@@ -1433,15 +1560,16 @@ const TeacherExams = () => {
             <DialogActions sx={{ p: 1.2 }}>
               <Button
                 type="button"
-                onClick={() => setSelectedExam(null)}
+                onClick={closeExamDetails}
                 sx={{ borderRadius: "10px", fontWeight: 800 }}
               >
                 إغلاق
               </Button>
+              {permissions.edit && (
               <Button
                 type="button"
                 onClick={() =>
-                  navigate(`/school/exams/edit/${getExamId(selectedExam)}`)
+                  navigate(`/teacher/exams/edit/${getExamId(selectedExam)}`)
                 }
                 variant="contained"
                 startIcon={<EditRounded />}
@@ -1458,6 +1586,7 @@ const TeacherExams = () => {
               >
                 تعديل وإدارة الأسئلة
               </Button>
+              )}
             </DialogActions>
           </>
         )}

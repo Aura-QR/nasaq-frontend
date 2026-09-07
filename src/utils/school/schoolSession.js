@@ -104,8 +104,8 @@ export const getSchoolRoleLabel =
     const labels = {
       OWNER: "مالك المدرسة",
       SUPERVISOR:
-        "مشرف المدرسة",
-      MANAGER: "مدير",
+        "مدير المدرسة",
+      MANAGER: "مساعد إداري",
       TEACHER: "معلم",
       STUDENT: "طالب",
     };

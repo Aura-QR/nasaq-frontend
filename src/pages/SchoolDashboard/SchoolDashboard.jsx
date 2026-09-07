@@ -114,13 +114,31 @@ const displaySignedMoney = (value) => {
   return absoluteAmount;
 };
 
+const getAcademicYearLabel = (value) => {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    return /^[a-f\d]{24}$/i.test(value)
+      ? ""
+      : value;
+  }
+
+  return (
+    value?.name ||
+    value?.label ||
+    value?.title ||
+    value?.year ||
+    ""
+  );
+};
+
 const roleTitle = (role) => {
   if (role === "MANAGER") {
-    return "لوحة المدير";
+    return "لوحة مساعد إداري";
   }
 
   if (role === "SUPERVISOR") {
-    return "لوحة المشرف";
+    return "لوحة مدير المدرسة";
   }
 
   return "لوحة مالك المدرسة";
@@ -568,6 +586,16 @@ const SchoolDashboard = () => {
     ? `السنة ${academicYearName}`
     : "لا توجد سنة دراسية نشطة";
 
+  const countedAcademicYearLabel =
+    getAcademicYearLabel(
+      dashboard?.academicYear
+    );
+
+  const studentsCountHelper =
+    countedAcademicYearLabel
+      ? `السنة ${countedAcademicYearLabel}`
+      : "كل الطلاب المسجلين";
+
   const financialSummary =
     dashboard?.financialSummary || {};
 
@@ -620,7 +648,7 @@ const SchoolDashboard = () => {
     },
     {
       to: "/school/managers",
-      title: "المديرون والمشرفون",
+      title: "المديرون والمساعدون",
       description: "إدارة الحسابات الإدارية",
       icon: <GroupsRounded />,
     },
@@ -1179,6 +1207,7 @@ const SchoolDashboard = () => {
                     counts?.students
                   )}
                   helper={studentCountHelper}
+                  helper={studentsCountHelper}
                   icon={
                     <GroupsRounded />
                   }
@@ -1197,6 +1226,7 @@ const SchoolDashboard = () => {
                     counts?.activeStudents
                   )}
                   helper={studentCountHelper}
+                  helper={studentsCountHelper}
                   icon={
                     <CheckCircleRounded />
                   }

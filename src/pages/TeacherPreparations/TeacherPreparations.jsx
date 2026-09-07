@@ -12,6 +12,9 @@ import {
   SearchRounded,
   VisibilityRounded,
   WarningAmberRounded,
+  CloseRounded,
+  DescriptionRounded,
+  NotificationsActiveRounded,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -19,6 +22,11 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
   FormControl,
   Grid,
   IconButton,
@@ -39,8 +47,12 @@ import {
   useState,
 } from "react";
 import { useAuthUser } from "react-auth-kit";
-import { useNavigate } from "react-router-dom";
+import {
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import { toast } from "react-toastify";
+import usePermissions from "@/utils/hooks/usePermissions";
 
 import nasaqLogo from "@/images/wadq-logo.png";
 import {
@@ -512,6 +524,49 @@ const getPreparationFiles = (preparation) => {
   return candidates.find(Array.isArray) || [];
 };
 
+const getPreparationFileLabel = (
+  file,
+  index = 0
+) => {
+  if (
+    typeof file ===
+    "string"
+  ) {
+    const parts =
+      file.split("/");
+
+    return (
+      decodeURIComponent(
+        parts[
+          parts.length - 1
+        ] ||
+          ""
+      ) ||
+      `ملف ${index + 1}`
+    );
+  }
+
+  const path =
+    file?.path ||
+    file?.url ||
+    file?.filePath ||
+    "";
+
+  const pathName =
+    typeof path ===
+    "string"
+      ? path.split("/").pop()
+      : "";
+
+  return (
+    file?.originalName ||
+    file?.name ||
+    file?.filename ||
+    pathName ||
+    `ملف ${index + 1}`
+  );
+};
+
 const getPreparationDate = (preparation) => {
   const raw = preparation?.updatedAt || preparation?.createdAt;
   if (!raw) return "";
@@ -522,6 +577,84 @@ const getPreparationDate = (preparation) => {
     month: "long",
     year: "numeric",
   }).format(date);
+};
+
+const PREPARATION_STATUS_META = {
+  draft: { label: "مسودة", color: COLORS.gold, background: COLORS.goldSoft },
+  pending: { label: "بانتظار المراجعة", color: COLORS.navy, background: COLORS.navySoft },
+  approved: { label: "معتمد", color: COLORS.green, background: COLORS.greenSoft },
+  needs_revision: { label: "يحتاج تعديل", color: COLORS.red, background: COLORS.redSoft },
+};
+
+const getPreparationStatus = (preparation) => {
+  if (!preparation) return "missing";
+
+  const value = String(preparation?.status || preparation?.reviewStatus || "draft")
+    .trim()
+    .toLowerCase();
+
+  if (value === "pending_review" || value === "submitted") return "pending";
+  return PREPARATION_STATUS_META[value] ? value : "draft";
+};
+
+const getReviewTime = (preparation) => {
+  const raw =
+    preparation?.reviewedAt ||
+    preparation?.updatedAt ||
+    preparation?.createdAt ||
+    "";
+  const time = raw ? new Date(raw).getTime() : 0;
+  return Number.isFinite(time) ? time : 0;
+};
+
+const choosePreferredPreparation = (current, candidate) => {
+  if (!current) return candidate;
+  if (!candidate) return current;
+
+  const currentTime = getReviewTime(current);
+  const candidateTime = getReviewTime(candidate);
+  if (candidateTime !== currentTime) {
+    return candidateTime > currentTime ? candidate : current;
+  }
+
+  const priority = {
+    needs_revision: 4,
+    approved: 3,
+    pending: 2,
+    draft: 1,
+  };
+  const currentPriority = priority[getPreparationStatus(current)] || 0;
+  const candidatePriority = priority[getPreparationStatus(candidate)] || 0;
+  return candidatePriority > currentPriority ? candidate : current;
+};
+
+const getPreparationLessonTitle = (preparation) =>
+  String(
+    preparation?.lesson?.name ||
+      preparation?.lesson?.title ||
+      preparation?.lessonTitle ||
+      ""
+  ).trim();
+
+const getAssignmentCount = (preparation) => {
+  if (Array.isArray(preparation?.resources)) {
+    return preparation.resources.length;
+  }
+
+  if (Number(preparation?.resourcesCount || 0) > 0) {
+    return Number(preparation.resourcesCount);
+  }
+
+  return [
+    preparation?.enrichments,
+    preparation?.homeworks || preparation?.assignments,
+    preparation?.exams,
+    preparation?.activities,
+  ].reduce(
+    (total, value) =>
+      total + (Array.isArray(value) ? value.length : 0),
+    0
+  );
 };
 
 const loadTeacherPreparations = async (teacherId, lectures) => {
@@ -635,6 +768,14 @@ const LoadingView = () => (
 
 const TeacherPreparations = () => {
   const navigate = useNavigate();
+  const permissions = usePermissions("preparation");
+
+  const [
+    searchParams,
+    setSearchParams,
+  ] =
+    useSearchParams();
+
   const getAuthUser = useAuthUser();
   const authState = getAuthUser?.() || {};
   const teacherId = resolveTeacherId(authState);
@@ -650,6 +791,19 @@ const TeacherPreparations = () => {
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  const [
+    detailsRow,
+    setDetailsRow,
+  ] =
+    useState(null);
+
+  const focusedPreparationId =
+    String(
+      searchParams.get(
+        "preparationId"
+      ) || ""
+    ).trim();
 
   const loadData = useCallback(
     async ({ silent = false } = {}) => {
@@ -724,22 +878,110 @@ const TeacherPreparations = () => {
     const map = new Map();
     preparations.forEach((preparation) => {
       const lectureId = getPreparationLectureId(preparation);
-      if (lectureId) map.set(lectureId, preparation);
+      if (!lectureId) return;
+      map.set(
+        lectureId,
+        choosePreferredPreparation(map.get(lectureId), preparation)
+      );
     });
     return map;
   }, [preparations]);
 
-  const rows = useMemo(
-    () =>
-      lectures.map((lecture) => ({
+  const rows = useMemo(() => {
+    const priority = { draft: 0, needs_revision: 1, pending: 2, approved: 3, missing: 4 };
+
+    return lectures
+      .map((lecture) => ({
         lecture,
         lectureId: getLectureId(lecture),
         preparation: preparationByLecture.get(getLectureId(lecture)) || null,
         subject: getSubject(lecture),
         classData: getClassData(lecture),
-      })),
-    [lectures, preparationByLecture]
-  );
+      }))
+      .sort(
+        (a, b) =>
+          (priority[getPreparationStatus(a.preparation)] ?? 9) -
+          (priority[getPreparationStatus(b.preparation)] ?? 9)
+      );
+  }, [lectures, preparationByLecture]);
+
+  useEffect(() => {
+    if (
+      !focusedPreparationId ||
+      detailsRow
+    ) {
+      return;
+    }
+
+    const matchedRow =
+      rows.find(
+        (row) =>
+          getPreparationId(
+            row.preparation
+          ) ===
+          focusedPreparationId
+      );
+
+    if (matchedRow) {
+      setDetailsRow(
+        matchedRow
+      );
+    }
+  }, [
+    focusedPreparationId,
+    rows,
+    detailsRow,
+  ]);
+
+  const openPreparationDetails = (row) => {
+    setDetailsRow(
+      row
+    );
+
+    const preparationId =
+      getPreparationId(
+        row?.preparation
+      );
+
+    if (!preparationId) {
+      return;
+    }
+
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+
+    next.set(
+      "preparationId",
+      preparationId
+    );
+
+    setSearchParams(
+      next,
+      { replace: true }
+    );
+  };
+
+  const closePreparationDetails = () => {
+    setDetailsRow(
+      null
+    );
+
+    const next =
+      new URLSearchParams(
+        searchParams
+      );
+
+    next.delete(
+      "preparationId"
+    );
+
+    setSearchParams(
+      next,
+      { replace: true }
+    );
+  };
 
   const subjects = useMemo(() => {
     const map = new Map();
@@ -780,8 +1022,8 @@ const TeacherPreparations = () => {
         (subjectFilter === "all" || subjectFilter === subjectKey) &&
         (classFilter === "all" || classFilter === classKey) &&
         (statusFilter === "all" ||
-          (statusFilter === "prepared" && prepared) ||
-          (statusFilter === "missing" && !prepared))
+          (statusFilter === "missing" && !prepared) ||
+          (prepared && statusFilter === getPreparationStatus(row.preparation)))
       );
     });
   }, [rows, search, subjectFilter, classFilter, statusFilter]);
@@ -795,6 +1037,19 @@ const TeacherPreparations = () => {
   const completionRate = rows.length
     ? Math.round((preparedCount / rows.length) * 100)
     : 0;
+
+  const reviewUpdates = useMemo(
+    () =>
+      preparations
+        .filter((preparation) =>
+          ["approved", "needs_revision"].includes(
+            getPreparationStatus(preparation)
+          )
+        )
+        .sort((a, b) => getReviewTime(b) - getReviewTime(a))
+        .slice(0, 3),
+    [preparations]
+  );
 
   const nextMissing = rows.find((row) => !row.preparation);
 
@@ -932,13 +1187,14 @@ const TeacherPreparations = () => {
                 )}
               </IconButton>
             </Tooltip>
+            {permissions.add && (
             <Button
               startIcon={<AddRounded />}
               disabled={!nextMissing}
               onClick={() =>
                 nextMissing &&
                 navigate(
-                  `/school/preparation/add?lectureId=${nextMissing.lectureId}`
+                  `/teacher/schedule?mode=prepare&lectureId=${nextMissing.lectureId}`
                 )
               }
               sx={{
@@ -950,6 +1206,7 @@ const TeacherPreparations = () => {
             >
               إضافة تحضير
             </Button>
+            )}
           </Stack>
         </Paper>
 
@@ -996,6 +1253,79 @@ const TeacherPreparations = () => {
             />
           </Grid>
         </Grid>
+
+        {reviewUpdates.length > 0 && (
+          <Paper
+            elevation={0}
+            sx={{
+              ...TEACHER_UI.section,
+              mt: 1.1,
+              border: `1px solid ${COLORS.border}`,
+              bgcolor: "#fff",
+            }}
+          >
+            <Stack direction="row" alignItems="center" gap={0.8} mb={0.9}>
+              <Box
+                sx={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 1.8,
+                  display: "grid",
+                  placeItems: "center",
+                  color: COLORS.navy,
+                  bgcolor: COLORS.navySoft,
+                }}
+              >
+                <NotificationsActiveRounded fontSize="small" />
+              </Box>
+              <Box>
+                <Typography sx={{ color: COLORS.navyDark, fontSize: 14, fontWeight: 900 }}>
+                  مستجدات مراجعة التحضير
+                </Typography>
+                <Typography sx={{ color: COLORS.muted, fontSize: 9.5 }}>
+                  آخر قرارات الإدارة على تحاضيرك
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Stack spacing={0.65}>
+              {reviewUpdates.map((preparation) => {
+                const id = getPreparationId(preparation);
+                const status = getPreparationStatus(preparation);
+                const needsRevision = status === "needs_revision";
+                const note = String(preparation?.reviewNote || "").trim();
+                const lesson = getPreparationLessonTitle(preparation) || "التحضير";
+                return (
+                  <Alert
+                    key={`${id}-${status}-${preparation?.reviewedAt || preparation?.updatedAt || ""}`}
+                    severity={needsRevision ? "warning" : "success"}
+                    action={
+                      <Button
+                        size="small"
+                        onClick={() => navigate(`/teacher/preparations/${id}`)}
+                        sx={{ fontWeight: 900, textTransform: "none" }}
+                      >
+                        فتح
+                      </Button>
+                    }
+                    sx={{ borderRadius: 2, alignItems: "center" }}
+                  >
+                    <Typography sx={{ fontSize: 11.5, fontWeight: 900 }}>
+                      {needsRevision
+                        ? `مطلوب تعديل: ${lesson}`
+                        : `تم اعتماد: ${lesson}`}
+                    </Typography>
+                    {needsRevision && note ? (
+                      <Typography sx={{ mt: 0.2, fontSize: 10.5 }}>
+                        ملاحظة المراجع: {note}
+                      </Typography>
+                    ) : null}
+                  </Alert>
+                );
+              })}
+            </Stack>
+          </Paper>
+        )}
 
         <Paper
           elevation={0}
@@ -1068,7 +1398,10 @@ const TeacherPreparations = () => {
                   sx={{ ...TEACHER_UI.field, fontSize: 11 }}
                 >
                   <MenuItem value="all">كل الحالات</MenuItem>
-                  <MenuItem value="prepared">تم التحضير</MenuItem>
+                  <MenuItem value="draft">مسودة</MenuItem>
+                  <MenuItem value="pending">بانتظار المراجعة</MenuItem>
+                  <MenuItem value="approved">معتمد</MenuItem>
+                  <MenuItem value="needs_revision">يحتاج تعديل</MenuItem>
                   <MenuItem value="missing">تحتاج تحضير</MenuItem>
                 </Select>
               </FormControl>
@@ -1149,6 +1482,13 @@ const TeacherPreparations = () => {
                 const preparationId = getPreparationId(preparation);
                 const prepared = Boolean(preparationId);
                 const filesCount = getPreparationFiles(preparation).length;
+                const preparationStatus = getPreparationStatus(preparation);
+                const statusMeta = prepared
+                  ? PREPARATION_STATUS_META[preparationStatus] || PREPARATION_STATUS_META.draft
+                  : { label: "تحتاج تحضير", color: COLORS.gold, background: COLORS.goldSoft };
+                const lessonTitle = getPreparationLessonTitle(preparation);
+                const assignmentsCount = getAssignmentCount(preparation);
+                const canEditPreparation = ["draft", "needs_revision"].includes(preparationStatus);
 
                 return (
                   <Grid item xs={12} md={6} key={row.lectureId}>
@@ -1157,8 +1497,27 @@ const TeacherPreparations = () => {
                       sx={{
                         ...TEACHER_UI.listCard,
                         minHeight: 92,
-                        border: `1px solid ${prepared ? "#cce9dd" : "#eeddb4"}`,
-                        bgcolor: prepared ? "#fbfffd" : "#fffdf8",
+                        border: `1px solid ${
+                          !prepared
+                            ? "#eeddb4"
+                            : preparationStatus === "needs_revision"
+                              ? "#f0c8c8"
+                              : preparationStatus === "approved"
+                                ? "#cce9dd"
+                                : preparationStatus === "pending"
+                                  ? "#cfdce8"
+                                  : "#eeddb4"
+                        }`,
+                        bgcolor:
+                          !prepared
+                            ? "#fffdf8"
+                            : preparationStatus === "needs_revision"
+                              ? "#fffafa"
+                              : preparationStatus === "approved"
+                                ? "#fbfffd"
+                                : preparationStatus === "pending"
+                                  ? "#fbfdff"
+                                  : "#fffdf8",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
@@ -1188,23 +1547,44 @@ const TeacherPreparations = () => {
                             </Typography>
                             <Chip
                               size="small"
-                              label={prepared ? "تم التحضير" : "تحتاج تحضير"}
+                              label={statusMeta.label}
                               sx={{
                                 height: 26,
                                 fontSize: 11.5,
                                 fontWeight: 900,
-                                color: prepared ? COLORS.green : COLORS.gold,
-                                bgcolor: prepared ? COLORS.greenSoft : COLORS.goldSoft,
+                                color: statusMeta.color,
+                                bgcolor: statusMeta.background,
                               }}
                             />
                           </Stack>
                           <Typography noWrap sx={{ color: COLORS.muted, fontSize: 12.5, mt: 0.3 }}>
                             {row.classData.label} • {getDayLabel(row.lecture)} • {getSlotLabel(row.lecture)}
                           </Typography>
+                          {prepared && lessonTitle ? (
+                            <Typography noWrap sx={{ color: COLORS.navy, fontSize: 11.5, mt: 0.25, fontWeight: 800 }}>
+                              الدرس: {lessonTitle}
+                            </Typography>
+                          ) : null}
+                          {prepared && preparationStatus === "needs_revision" && String(preparation?.reviewNote || "").trim() ? (
+                            <Typography
+                              sx={{
+                                color: COLORS.red,
+                                fontSize: 10.5,
+                                mt: 0.3,
+                                fontWeight: 800,
+                                display: "-webkit-box",
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                              }}
+                            >
+                              ملاحظة المراجع: {preparation.reviewNote}
+                            </Typography>
+                          ) : null}
                           <Typography noWrap sx={{ color: "#a2acb6", fontSize: 11.5, mt: 0.25 }}>
                             {prepared
-                              ? `${filesCount} ملف${getPreparationDate(preparation) ? ` • آخر تحديث ${getPreparationDate(preparation)}` : ""}`
-                              : "لم يتم رفع ملف تحضير لهذه الحصة"}
+                              ? `${assignmentsCount ? `${assignmentsCount} تكليف • ` : ""}${filesCount ? `${filesCount} مرفق • ` : ""}${getPreparationDate(preparation) ? `آخر تحديث ${getPreparationDate(preparation)}` : "محفوظ"}`
+                              : "لم يبدأ تحضير هذه الحصة بعد"}
                           </Typography>
                         </Box>
                       </Stack>
@@ -1214,20 +1594,23 @@ const TeacherPreparations = () => {
                           <>
                             <Tooltip title="عرض التحضير">
                               <IconButton
-                                onClick={() => navigate(`/school/preparation/${preparationId}`)}
+                                onClick={() => navigate(`/teacher/preparations/${preparationId}`)}
                                 sx={{ width: 32, height: 32, color: COLORS.navy, bgcolor: COLORS.navySoft }}
                               >
                                 <VisibilityRounded sx={{ fontSize: 17 }} />
                               </IconButton>
                             </Tooltip>
+                            {permissions.edit && canEditPreparation && (
                             <Tooltip title="تعديل التحضير">
                               <IconButton
-                                onClick={() => navigate(`/school/preparation/edit/${preparationId}`)}
+                                onClick={() => navigate(`/teacher/preparations/edit/${preparationId}`)}
                                 sx={{ width: 32, height: 32, color: COLORS.gold, bgcolor: COLORS.goldSoft }}
                               >
                                 <EditRounded sx={{ fontSize: 17 }} />
                               </IconButton>
                             </Tooltip>
+                            )}
+                            {permissions.delete && (
                             <Tooltip title="حذف التحضير">
                               <span>
                                 <IconButton
@@ -1243,13 +1626,14 @@ const TeacherPreparations = () => {
                                 </IconButton>
                               </span>
                             </Tooltip>
+                            )}
                           </>
-                        ) : (
+                        ) : permissions.add ? (
                           <Button
                             startIcon={<AddRounded />}
                             onClick={() =>
                               navigate(
-                                `/school/preparation/add?lectureId=${row.lectureId}`
+                                `/teacher/schedule?mode=prepare&lectureId=${row.lectureId}`
                               )
                             }
                             sx={{
@@ -1261,7 +1645,7 @@ const TeacherPreparations = () => {
                           >
                             إضافة تحضير
                           </Button>
-                        )}
+                        ) : null}
                       </Stack>
                     </Paper>
                   </Grid>
@@ -1270,6 +1654,313 @@ const TeacherPreparations = () => {
             </Grid>
           )}
         </Paper>
+
+        <Dialog
+          open={Boolean(detailsRow)}
+          onClose={closePreparationDetails}
+          fullWidth
+          maxWidth="sm"
+          PaperProps={{
+            sx: {
+              borderRadius: 3,
+              overflow: "hidden",
+            },
+          }}
+        >
+          <DialogTitle sx={{ p: 0 }}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{
+                px: 1.6,
+                py: 1.3,
+                color: "#fff",
+                background:
+                  "linear-gradient(115deg, #173f65 0%, #285f8d 100%)",
+              }}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    fontWeight: 900,
+                    fontSize: 18,
+                  }}
+                >
+                  تفاصيل التحضير
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.2,
+                    fontSize: 11.5,
+                    color:
+                      "rgba(255,255,255,.72)",
+                  }}
+                >
+                  {detailsRow
+                    ? `${detailsRow.subject.name}${detailsRow.subject.code ? ` - ${detailsRow.subject.code}` : ""}`
+                    : ""}
+                </Typography>
+              </Box>
+
+              <IconButton
+                onClick={
+                  closePreparationDetails
+                }
+                sx={{ color: "#fff" }}
+              >
+                <CloseRounded />
+              </IconButton>
+            </Stack>
+          </DialogTitle>
+
+          <DialogContent
+            dividers
+            sx={{ p: 1.6 }}
+          >
+            {detailsRow ? (
+              <Stack spacing={1.2}>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 1.25,
+                    borderRadius: 2.2,
+                    bgcolor: "#fbfcfd",
+                    borderColor:
+                      COLORS.border,
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={1}
+                  >
+                    <Box
+                      sx={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 2,
+                        display: "grid",
+                        placeItems: "center",
+                        color:
+                          COLORS.gold,
+                        bgcolor:
+                          COLORS.goldSoft,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <MenuBookRounded />
+                    </Box>
+
+                    <Box
+                      sx={{
+                        minWidth: 0,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color:
+                            COLORS.navyDark,
+                          fontWeight: 900,
+                          fontSize: 14,
+                        }}
+                      >
+                        {detailsRow.subject.name}
+                        {detailsRow.subject.code
+                          ? ` - ${detailsRow.subject.code}`
+                          : ""}
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          mt: 0.2,
+                          color:
+                            COLORS.muted,
+                          fontSize: 11.5,
+                        }}
+                      >
+                        {detailsRow.classData.label}
+                        {" • "}
+                        {getDayLabel(
+                          detailsRow.lecture
+                        )}
+                        {" • "}
+                        {getSlotLabel(
+                          detailsRow.lecture
+                        )}
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          mt: 0.2,
+                          color: "#9aa5b2",
+                          fontSize: 10.5,
+                        }}
+                      >
+                        {getPreparationDate(
+                          detailsRow.preparation
+                        )
+                          ? `آخر تحديث ${getPreparationDate(detailsRow.preparation)}`
+                          : ""}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Paper>
+
+                <Box>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    sx={{ mb: 0.8 }}
+                  >
+                    <Typography
+                      sx={{
+                        color:
+                          COLORS.navyDark,
+                        fontWeight: 900,
+                        fontSize: 14,
+                      }}
+                    >
+                      ملفات التحضير
+                    </Typography>
+
+                    <Chip
+                      size="small"
+                      label={`${getPreparationFiles(detailsRow.preparation).length} ملف`}
+                      sx={{
+                        color:
+                          COLORS.gold,
+                        bgcolor:
+                          COLORS.goldSoft,
+                        fontWeight: 900,
+                      }}
+                    />
+                  </Stack>
+
+                  <Stack
+                    divider={
+                      <Divider
+                        flexItem
+                      />
+                    }
+                    sx={{
+                      border:
+                        `1px solid ${COLORS.border}`,
+                      borderRadius: 2.2,
+                      overflow:
+                        "hidden",
+                    }}
+                  >
+                    {getPreparationFiles(
+                      detailsRow.preparation
+                    ).length ? (
+                      getPreparationFiles(
+                        detailsRow.preparation
+                      ).map(
+                        (
+                          file,
+                          index
+                        ) => (
+                          <Stack
+                            key={`${getPreparationFileLabel(file, index)}-${index}`}
+                            direction="row"
+                            alignItems="center"
+                            spacing={1}
+                            sx={{
+                              p: 1.1,
+                              bgcolor:
+                                "#fff",
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 1.7,
+                                display:
+                                  "grid",
+                                placeItems:
+                                  "center",
+                                color:
+                                  COLORS.navy,
+                                bgcolor:
+                                  COLORS.navySoft,
+                                flexShrink: 0,
+                              }}
+                            >
+                              <DescriptionRounded
+                                sx={{
+                                  fontSize: 19,
+                                }}
+                              />
+                            </Box>
+
+                            <Typography
+                              noWrap
+                              sx={{
+                                color:
+                                  COLORS.navyDark,
+                                fontWeight: 800,
+                                fontSize: 12,
+                                minWidth: 0,
+                              }}
+                            >
+                              {getPreparationFileLabel(
+                                file,
+                                index
+                              )}
+                            </Typography>
+                          </Stack>
+                        )
+                      )
+                    ) : (
+                      <Typography
+                        sx={{
+                          p: 1.4,
+                          textAlign:
+                            "center",
+                          color:
+                            COLORS.muted,
+                          fontSize: 12,
+                        }}
+                      >
+                        لا توجد ملفات مرفوعة
+                      </Typography>
+                    )}
+                  </Stack>
+                </Box>
+              </Stack>
+            ) : null}
+          </DialogContent>
+
+          <DialogActions
+            sx={{
+              px: 1.6,
+              py: 1.2,
+            }}
+          >
+            <Button
+              onClick={
+                closePreparationDetails
+              }
+              variant="contained"
+              sx={{
+                borderRadius: 2,
+                fontWeight: 900,
+                bgcolor:
+                  COLORS.navy,
+                "&:hover": {
+                  bgcolor:
+                    COLORS.navyDark,
+                },
+              }}
+            >
+              إغلاق
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Box>
   );

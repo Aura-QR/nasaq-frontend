@@ -65,11 +65,27 @@ export const fetchExams = async (filters = {}) => {
   }
 };
 
-/*
- * Alias للتوافق مع صفحات المعلم القديمة.
- * قائمة اختبارات المعلم تستخدم نفس GET /exams.
+/**
+ * اختبارات المعلم الحالي فقط.
+ *
+ * GET /exams/teacher/me
+ * يدعم نفس فلاتر قائمة الاختبارات التي يقبلها المسار المخصص للمعلم.
  */
-export const fetchTeacherExams = fetchExams;
+export const fetchTeacherExams = async (filters = {}) => {
+  try {
+    const response = await api.get(
+      `${ENDPOINT}/teacher/me`,
+      { params: filters }
+    );
+
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeFailure(
+      error,
+      "تعذر تحميل اختبارات المعلم"
+    );
+  }
+};
 
 export const fetchSingleExam = async (id) => {
   const examId = normalizeId(id);

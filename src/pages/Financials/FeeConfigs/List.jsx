@@ -30,6 +30,7 @@ const HEADERS = [
   "الرسوم السنوية",
   "زيادة غير المحليين",
 ];
+
 const BODY = [
   "academicYear",
   "gradeLevel",
@@ -38,107 +39,211 @@ const BODY = [
 ];
 
 const FeeConfigsListPage = () => {
-  const { feeConfigs = [], loading, setFeeConfigs } = useFeeConfigs();
-  const { getAcademicYearLabel, getGradeLevelLabel } = useFeeConfigOptions();
-  const permissions = usePermissions("financial");
+  const {
+    feeConfigs = [],
+    loading,
+    setFeeConfigs,
+  } = useFeeConfigs();
 
-  const mappedFeeConfigs = feeConfigs.map((item) => ({
-    id: item?._id || item?.id,
-    academicYear: getAcademicYearLabel(
-      item?.academicYearId ?? item?.academicYear,
-    ),
-    gradeLevel: getGradeLevelLabel(item?.gradeLevelId ?? item?.gradeLevel),
-    tuitionFee: formatMoney(item?.tuitionFee),
-    tuitionFeeRaw: Number(item?.tuitionFee || 0),
-    expatriateSurchargePercentage: `${Number(
-      item?.expatriateSurchargePercentage || 0,
-    )}%`,
-  }));
+  const {
+    getAcademicYearLabel,
+    getGradeLevelLabel,
+  } = useFeeConfigOptions();
 
-  const totalFees = mappedFeeConfigs.reduce(
-    (sum, item) => sum + item.tuitionFeeRaw,
-    0,
+  // صلاحيات إعدادات الأسعار والخطط
+  const permissions = usePermissions(
+    "financialSettings"
   );
 
-  const averageFee = mappedFeeConfigs.length
-    ? totalFees / mappedFeeConfigs.length
-    : 0;
+  const mappedFeeConfigs =
+    feeConfigs.map((item) => ({
+      id:
+        item?._id ||
+        item?.id,
 
-  const highestFee = mappedFeeConfigs.reduce(
-    (max, item) => Math.max(max, item.tuitionFeeRaw),
-    0,
-  );
+      academicYear:
+        getAcademicYearLabel(
+          item?.academicYearId ??
+            item?.academicYear
+        ),
 
-  const handleDelete = async (id, setActive) => {
-    const response = await deleteFeeConfig(id);
+      gradeLevel:
+        getGradeLevelLabel(
+          item?.gradeLevelId ??
+            item?.gradeLevel
+        ),
+
+      tuitionFee:
+        formatMoney(
+          item?.tuitionFee
+        ),
+
+      tuitionFeeRaw:
+        Number(
+          item?.tuitionFee || 0
+        ),
+
+      expatriateSurchargePercentage:
+        `${Number(
+          item?.expatriateSurchargePercentage ||
+            0
+        )}%`,
+    }));
+
+  const totalFees =
+    mappedFeeConfigs.reduce(
+      (sum, item) =>
+        sum +
+        item.tuitionFeeRaw,
+      0
+    );
+
+  const averageFee =
+    mappedFeeConfigs.length
+      ? totalFees /
+        mappedFeeConfigs.length
+      : 0;
+
+  const highestFee =
+    mappedFeeConfigs.reduce(
+      (max, item) =>
+        Math.max(
+          max,
+          item.tuitionFeeRaw
+        ),
+      0
+    );
+
+  const handleDelete = async (
+    id,
+    setActive
+  ) => {
+    if (!permissions?.delete) {
+      toast.error(
+        "ليس لديك صلاحية حذف إعداد الرسوم"
+      );
+      return;
+    }
+
+    const response =
+      await deleteFeeConfig(id);
 
     if (response?.status) {
-      toast.success(response?.message || "تم حذف إعداد الرسوم بنجاح");
-      setFeeConfigs((previous) =>
-        previous.filter((item) => (item?._id || item?.id) !== id),
+      toast.success(
+        response?.message ||
+          "تم حذف إعداد الرسوم بنجاح"
       );
-      setActive(false);
+
+      setFeeConfigs(
+        (previous) =>
+          previous.filter(
+            (item) =>
+              (item?._id ||
+                item?.id) !==
+              id
+          )
+      );
+
+      setActive?.(false);
       return;
     }
 
     toast.error(
-      response?.message || response || "حدث خطأ أثناء حذف إعداد الرسوم",
+      response?.message ||
+        response ||
+        "حدث خطأ أثناء حذف إعداد الرسوم"
     );
   };
 
-  const addAction = permissions?.add ? (
-    <Button
-      component={Link}
-      to="add"
-      variant="contained"
-      startIcon={<AddCircleOutlineRounded />}
-      sx={{
-        width: { xs: "100%", sm: 190 },
-        minHeight: 42,
-        borderRadius: "12px",
-        color: "var(--color-white)",
-        background:
-          "linear-gradient(135deg,var(--color-navy-light),var(--color-navy-dark))",
-        boxShadow: "0 9px 20px rgba(18,47,77,.16)",
-        fontSize: 12,
-        fontWeight: 800,
-        textTransform: "none",
-      }}
-    >
-      إضافة إعداد رسوم
-    </Button>
-  ) : null;
+  const addAction =
+    permissions?.add ? (
+      <Button
+        component={Link}
+        to="add"
+        variant="contained"
+        startIcon={
+          <AddCircleOutlineRounded />
+        }
+        sx={{
+          width: {
+            xs: "100%",
+            sm: 190,
+          },
+          minHeight: 42,
+          borderRadius: "12px",
+          color:
+            "var(--color-white)",
+          background:
+            "linear-gradient(135deg,var(--color-navy-light),var(--color-navy-dark))",
+          boxShadow:
+            "0 9px 20px rgba(18,47,77,.16)",
+          fontSize: 12,
+          fontWeight: 800,
+          textTransform: "none",
+        }}
+      >
+        إضافة إعداد رسوم
+      </Button>
+    ) : null;
 
   return (
     <Container>
-      <Box dir="rtl" sx={{ width: "100%", minWidth: 0, pb: 4 }}>
+      <Box
+        dir="rtl"
+        sx={{
+          width: "100%",
+          minWidth: 0,
+          pb: 4,
+        }}
+      >
         <FinancialHeader
           title="إعدادات الرسوم الدراسية"
           description="حدّد الرسوم السنوية ونسبة زيادة غير المحليين لكل سنة وصف دراسي."
-          count={feeConfigs.length}
+          count={
+            feeConfigs.length
+          }
           actions={addAction}
         />
 
         <StatsGrid>
           <StatCard
             label="إجمالي الإعدادات"
-            value={feeConfigs.length}
-            icon={<SettingsRounded />}
+            value={
+              feeConfigs.length
+            }
+            icon={
+              <SettingsRounded />
+            }
           />
+
           <StatCard
             label="إجمالي الرسوم"
-            value={formatMoney(totalFees)}
-            icon={<AccountBalanceWalletRounded />}
+            value={formatMoney(
+              totalFees
+            )}
+            icon={
+              <AccountBalanceWalletRounded />
+            }
           />
+
           <StatCard
             label="متوسط الرسوم"
-            value={formatMoney(averageFee)}
-            icon={<PriceCheckRounded />}
+            value={formatMoney(
+              averageFee
+            )}
+            icon={
+              <PriceCheckRounded />
+            }
           />
+
           <StatCard
             label="أعلى رسوم سنوية"
-            value={formatMoney(highestFee)}
-            icon={<CalendarMonthRounded />}
+            value={formatMoney(
+              highestFee
+            )}
+            icon={
+              <CalendarMonthRounded />
+            }
           />
         </StatsGrid>
 
@@ -146,21 +251,40 @@ const FeeConfigsListPage = () => {
           title="قائمة إعدادات الرسوم"
           description="كل إعداد مرتبط بسنة دراسية وصف محدد، مع نسبة زيادة الطلاب غير المحليين."
         >
-          {!loading && mappedFeeConfigs.length === 0 ? (
+          {!loading &&
+          mappedFeeConfigs.length ===
+            0 ? (
             <EmptyState
-              icon={<AccountBalanceWalletRounded />}
+              icon={
+                <AccountBalanceWalletRounded />
+              }
               title="لا توجد إعدادات رسوم حتى الآن"
               description="أضف إعداد رسوم للسنة والصف قبل إلحاق الطلاب بالفصول."
             />
           ) : (
-            <Box sx={{ p: { xs: 0.7, md: 1 } }}>
+            <Box
+              sx={{
+                p: {
+                  xs: 0.7,
+                  md: 1,
+                },
+              }}
+            >
               <Table
                 headers={HEADERS}
-                data={mappedFeeConfigs}
+                data={
+                  mappedFeeConfigs
+                }
                 loading={loading}
-                edit={permissions?.edit}
+                edit={
+                  permissions?.edit
+                }
                 body={BODY}
-                deleteFn={permissions?.delete ? handleDelete : undefined}
+                deleteFn={
+                  permissions?.delete
+                    ? handleDelete
+                    : undefined
+                }
               />
             </Box>
           )}

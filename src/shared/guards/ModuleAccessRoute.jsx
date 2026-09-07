@@ -18,6 +18,13 @@ const SCHOOL_ADMIN_ROLES = [
   "MANAGER",
 ];
 
+/*
+ * منع الموديولات اللي الدور ممنوع منها
+ * بشكل مطلق فقط.
+ *
+ * MANAGER لا يتم منع financial / expenses
+ * هنا؛ الوصول لهم يتحدد من الـ permissions.
+ */
 const ROLE_BLOCKED_MODULES = {
   SUPERVISOR: [
     "managers",
@@ -25,8 +32,6 @@ const ROLE_BLOCKED_MODULES = {
 
   MANAGER: [
     "managers",
-    "financial",
-    "expenses",
   ],
 };
 
@@ -158,6 +163,38 @@ const hasModulePermission = ({
   return false;
 };
 
+const hasUsablePermissions = (
+  permissions
+) => {
+  if (
+    permissions === "*"
+  ) {
+    return true;
+  }
+
+  if (
+    Array.isArray(permissions)
+  ) {
+    return (
+      permissions.length > 0
+    );
+  }
+
+  if (
+    permissions &&
+    typeof permissions ===
+      "object"
+  ) {
+    return (
+      Object.keys(
+        permissions
+      ).length > 0
+    );
+  }
+
+  return false;
+};
+
 const ModuleAccessRoute = ({
   module,
   redirectTo = "/no-access",
@@ -184,6 +221,9 @@ const ModuleAccessRoute = ({
       )
     );
 
+  /*
+   * لازم يكون من أدوار إدارة المدرسة.
+   */
   if (
     !SCHOOL_ADMIN_ROLES.includes(
       role
@@ -197,6 +237,10 @@ const ModuleAccessRoute = ({
     );
   }
 
+  /*
+   * منع ثابت فقط للموديولات
+   * اللي الدور ممنوع منها بالكامل.
+   */
   const blockedModules =
     ROLE_BLOCKED_MODULES[
       role
@@ -216,9 +260,9 @@ const ModuleAccessRoute = ({
   }
 
   /*
-   * OWNER has every school permission.
-   * SUPERVISOR has every operational
-   * permission except manager management.
+   * OWNER / SUPERVISOR
+   * لديهم صلاحيات إدارية كاملة
+   * عدا القيود السابقة.
    */
   if (
     role === "OWNER" ||
@@ -227,11 +271,27 @@ const ModuleAccessRoute = ({
     return <Outlet />;
   }
 
-  const permissions =
+  /*
+   * MANAGER:
+   * يعتمد على الـ permissions الفعلية.
+   *
+   * لو authState رجّع [] أو {}
+   * نستخدم permissions المخزنة.
+   */
+  const authPermissions =
     authState?.permissions ||
     authState?.user
-      ?.permissions ||
+      ?.permissions;
+
+  const storedPermissions =
     getStoredPermissions();
+
+  const permissions =
+    hasUsablePermissions(
+      authPermissions
+    )
+      ? authPermissions
+      : storedPermissions;
 
   const operation =
     normalizeOperation(
@@ -246,6 +306,22 @@ const ModuleAccessRoute = ({
     });
 
   if (!allowed) {
+    if (
+      import.meta.env.DEV
+    ) {
+      console.warn(
+        "[ModuleAccessRoute] Access denied",
+        {
+          path:
+            location.pathname,
+          role,
+          module,
+          operation,
+          permissions,
+        }
+      );
+    }
+
     return (
       <Navigate
         to={redirectTo}

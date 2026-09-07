@@ -1,31 +1,89 @@
 import { fetchSinglePreparation } from "@/APIs/school/preparation";
-import { useState, useEffect } from "react";
+import {
+  useState,
+  useEffect,
+} from "react";
 import { toast } from "react-toastify";
 
-export const usePreparation = (preparationId) => {
-  const [preparation, setPreparation] = useState(null);
-  const [loading, setLoading] = useState(false);
+export const usePreparation = (
+  preparationId
+) => {
+  const [
+    preparation,
+    setPreparation,
+  ] = useState(null);
+
+  const [loading, setLoading] =
+    useState(false);
 
   useEffect(() => {
+    let active = true;
+
     if (!preparationId) {
       setPreparation(null);
-      return;
+      setLoading(false);
+
+      return () => {
+        active = false;
+      };
     }
 
     const fetchData = async () => {
       setLoading(true);
-      const res = await fetchSinglePreparation(preparationId);
-      if (res.status) {
-        setPreparation(res.data);
-      } else {
-        toast.error(res || "حدث خطأ ما أثناء جلب التحضير ");
+
+      try {
+        const res =
+          await fetchSinglePreparation(
+            preparationId
+          );
+
+        if (!active) {
+          return;
+        }
+
+        if (res?.status) {
+          setPreparation(
+            res?.data || null
+          );
+
+          return;
+        }
+
+        toast.error(
+          res?.message ||
+            "حدث خطأ ما أثناء جلب التحضير"
+        );
+
         setPreparation(null);
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        toast.error(
+          error?.response?.data
+            ?.message ||
+            error?.message ||
+            "حدث خطأ ما أثناء جلب التحضير"
+        );
+
+        setPreparation(null);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
     };
 
     fetchData();
+
+    return () => {
+      active = false;
+    };
   }, [preparationId]);
 
-  return { preparation, loading };
+  return {
+    preparation,
+    loading,
+  };
 };

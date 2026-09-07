@@ -98,14 +98,48 @@ const normalizeSuccess = (
     };
   }
 
+  const payload =
+    envelope?.data ??
+    envelope;
+
+  /*
+   * الترقيم بيوصل بشكلين، ولازم نقرا الاتنين.
+   *
+   * السيرفس بترجّع { data, totalDocs, totalPages }، وبعدين
+   * ResponseInterceptor بيشيل الرقمين من هناك ويحطهم جوه `pagination`:
+   *
+   *   { status, message, data: [...], pagination: { totalDocs, totalPages } }
+   *
+   * كنا بندوّر على `envelope.totalDocs` — المكان الوحيد اللي الاعتراضية
+   * شالته منه — فـ pagination كان بيرجع undefined دايمًا، و totalPages
+   * بيقع على ١، والباجينيشن بيتخفي. يعني الباج كان بيخبّي علاجه بنفسه.
+   */
+  const pageInfo =
+    envelope &&
+    typeof envelope ===
+      "object" &&
+    !Array.isArray(envelope)
+      ? envelope.pagination ??
+        (envelope.totalDocs !==
+          undefined ||
+        envelope.totalPages !==
+          undefined
+          ? {
+              totalDocs:
+                envelope.totalDocs,
+              totalPages:
+                envelope.totalPages,
+            }
+          : undefined)
+      : undefined;
+
   return {
     status: true,
     message:
       envelope?.message ||
       "Success",
-    data:
-      envelope?.data ??
-      envelope,
+    data: payload,
+    pagination: pageInfo,
   };
 };
 
@@ -837,6 +871,41 @@ export const deleteSchoolTeacher =
           "تعذر حذف المعلم"
         ),
         "تعذر حذف المعلم"
+      );
+    }
+  };
+
+export const adminSetTeacherPassword =
+  async (teacherId, payload = {}) => {
+    const normalizedTeacherId =
+      normalizeId(teacherId);
+
+    if (!normalizedTeacherId) {
+      return {
+        status: false,
+        message:
+          "معرّف المعلم غير موجود",
+      };
+    }
+
+    try {
+      const response = await api.patch(
+        `${ENDPOINT}/${normalizedTeacherId}/password`,
+        payload?.password
+          ? { password: payload.password }
+          : {}
+      );
+
+      return normalizeSuccess(
+        response
+      );
+    } catch (error) {
+      return normalizeError(
+        getApiError(
+          error,
+          "تعذر تعيين كلمة المرور"
+        ),
+        "تعذر تعيين كلمة المرور"
       );
     }
   };

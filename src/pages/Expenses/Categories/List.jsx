@@ -37,7 +37,7 @@ const ExpenseCategoriesListPage = () => {
     setCategories,
   } = useExpenseCategories();
 
-  const permissions = usePermissions("financial");
+  const permissions = usePermissions("expenses");
 
   const mappedCategories = categories.map((item) => ({
     id: item?._id || item?.id,

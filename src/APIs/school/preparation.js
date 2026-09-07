@@ -53,6 +53,17 @@ const normalizeSuccess = (
     typeof payload === "object" &&
     !Array.isArray(payload)
   ) {
+    /*
+     * الباك بيرد { data: [...], totalDocs, totalPages } لما يتبعتله page/limit.
+     * الهوك بيدور على `pagination`، فمن غير السطر ده كان بيلاقي null
+     * وأزرار الصفحات مكانتش بتظهر — المستخدم يشوف أول ١٠ وخلاص.
+     */
+    const hasPageInfo =
+      payload.totalDocs !==
+        undefined ||
+      payload.totalPages !==
+        undefined;
+
     return {
       ...payload,
       status:
@@ -61,6 +72,14 @@ const normalizeSuccess = (
       data:
         payload.data ??
         payload,
+      pagination: hasPageInfo
+        ? {
+            totalDocs:
+              payload.totalDocs,
+            totalPages:
+              payload.totalPages,
+          }
+        : payload.pagination,
     };
   }
 
@@ -76,6 +95,10 @@ const normalizeFailure = (
   fallback = "حدث خطأ ما"
 ) => ({
   status: false,
+  statusCode:
+    error?.response?.status ||
+    error?.response?.data?.statusCode ||
+    500,
   message:
     error?.response?.data
       ?.message ||
@@ -492,6 +515,181 @@ export const deletePreparation =
     }
   };
 
+
+
+export const fetchPreparationReferenceLists = async () => {
+  try {
+    const response = await api.get(`${ENDPOINT}/reference-lists`);
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeFailure(
+      error,
+      "تعذر تحميل قوائم إعداد الدرس"
+    );
+  }
+};
+
+export const reviewPreparation = async (id, review = {}) => {
+  const preparationId = normalizeId(id);
+
+  if (!preparationId) {
+    return { status: false, message: "معرّف التحضير غير موجود" };
+  }
+
+  const reviewStatus = String(review?.reviewStatus || "").trim();
+  const reviewNote = String(review?.reviewNote || "").trim();
+
+  if (!["approved", "needs_revision", "pending"].includes(reviewStatus)) {
+    return { status: false, message: "حالة المراجعة غير صحيحة" };
+  }
+
+  try {
+    const response = await api.patch(
+      `${ENDPOINT}/${preparationId}/review`,
+      {
+        reviewStatus,
+        ...(reviewNote ? { reviewNote } : {}),
+      }
+    );
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeFailure(
+      error,
+      reviewStatus === "approved"
+        ? "تعذر اعتماد التحضير"
+        : "تعذر إرسال طلب التعديل"
+    );
+  }
+};
+
+export const submitPreparation = async (id) => {
+  const preparationId = normalizeId(id);
+
+  if (!preparationId) {
+    return {
+      status: false,
+      message: "معرّف التحضير غير موجود",
+    };
+  }
+
+  try {
+    const response = await api.post(
+      `${ENDPOINT}/${preparationId}/submit`
+    );
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeFailure(
+      error,
+      "تعذر إرسال التحضير للمراجعة"
+    );
+  }
+};
+
+export const addPreparationResource = async (
+  preparationIdValue,
+  resource = {}
+) => {
+  const preparationId = normalizeId(
+    preparationIdValue
+  );
+
+  if (!preparationId) {
+    return {
+      status: false,
+      message:
+        "يجب حفظ المسودة أولًا قبل إضافة التكليف",
+    };
+  }
+
+  try {
+    const response = await api.post(
+      `${ENDPOINT}/${preparationId}/resources`,
+      resource
+    );
+
+    return normalizeSuccess(
+      response
+    );
+  } catch (error) {
+    return normalizeFailure(
+      error,
+      "تعذر إضافة التكليف"
+    );
+  }
+};
+
+export const deletePreparationResource =
+  async (
+    preparationIdValue,
+    resourceIdValue
+  ) => {
+    const preparationId =
+      normalizeId(
+        preparationIdValue
+      );
+    const resourceId =
+      normalizeId(
+        resourceIdValue
+      );
+
+    if (
+      !preparationId ||
+      !resourceId
+    ) {
+      return {
+        status: false,
+        message:
+          "بيانات التكليف غير مكتملة",
+      };
+    }
+
+    try {
+      const response =
+        await api.delete(
+          `${ENDPOINT}/${preparationId}/resources/${resourceId}`
+        );
+
+      return normalizeSuccess(
+        response
+      );
+    } catch (error) {
+      return normalizeFailure(
+        error,
+        "تعذر حذف التكليف"
+      );
+    }
+  };
+
+export const fetchPreparationStudentView =
+  async (id) => {
+    const preparationId =
+      normalizeId(id);
+
+    if (!preparationId) {
+      return {
+        status: false,
+        message:
+          "معرّف التحضير غير موجود",
+      };
+    }
+
+    try {
+      const response =
+        await api.get(
+          `${ENDPOINT}/${preparationId}/student-view`
+        );
+
+      return normalizeSuccess(
+        response
+      );
+    } catch (error) {
+      return normalizeFailure(
+        error,
+        "تعذر تحميل محتوى الدرس"
+      );
+    }
+  };
+
 /*
  * Aliases للتوافق مع الملفات القديمة.
  */
@@ -512,6 +710,7 @@ export const removePreparation =
 
 export default {
   fetchPreparations,
+  fetchPreparationReferenceLists,
   fetchSinglePreparation,
   fetchPreparation,
   getPreparation,
@@ -524,4 +723,9 @@ export default {
   addPreparationFiles,
   deletePreparationFile,
   replacePreparationFile,
+  submitPreparation,
+  reviewPreparation,
+  addPreparationResource,
+  deletePreparationResource,
+  fetchPreparationStudentView,
 };

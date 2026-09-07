@@ -13,6 +13,7 @@ import MyAssignments from "@/pages/Student/MyAssignments";
 import Library from "@/pages/Student/Library";
 import Attendance from "@/pages/Student/Attendance";
 import SubjectGrades from "@/pages/Student/SubjectGrades";
+import PreparationView from "@/pages/Student/PreparationView";
 
 // =========================
 // Quiz Pages
@@ -190,6 +191,15 @@ export const studentRoutes = (
         <Route
           path="/student-dashboard/assignments/:examId/quiz/review"
           element={<ReviewPage />}
+        />
+
+        {/* =========================
+            Lesson preparation view
+            The preparation ID is supplied by an authorized flow.
+        ========================= */}
+        <Route
+          path="/student-dashboard/preparations/:id"
+          element={<PreparationView />}
         />
 
         {/* =========================

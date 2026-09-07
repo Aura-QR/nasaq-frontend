@@ -16,16 +16,12 @@ let managersCache = null;
 let managersCacheTime = 0;
 let managersPendingRequest = null;
 
-/**
- * Default MANAGER permissions.
+/*
+ * Default permissions used only when creating/updating a MANAGER
+ * without an explicit permissions array.
  *
- * These are administrative and academic
- * permissions only. Financial, expenses and
- * manager-management permissions are excluded.
- *
- * The permissions use the backend permission
- * catalog: students have CRUD permissions,
- * while the remaining modules use `.manage`.
+ * Per-manager permissions are stored and updated through:
+ * PATCH /managers/:id/permissions
  */
 export const MANAGER_DEFAULT_PERMISSIONS = [
   "school.students.read",
@@ -70,6 +66,19 @@ const normalizeRole = (
     "SUPERVISOR"
     ? "SUPERVISOR"
     : "MANAGER";
+};
+
+const normalizeManagerType = (
+  value
+) => {
+  const type =
+    normalizeText(value)
+      .toLowerCase();
+
+  return type === "admin" ||
+    type === "teacher"
+    ? type
+    : "";
 };
 
 const normalizePermissions = (
@@ -137,6 +146,7 @@ const normalizeCreatePayload = (
       "",
 
     role,
+
     permissions,
   };
 };
@@ -180,7 +190,7 @@ export const fetchManagers =
         .catch((error) =>
           getApiError(
             error,
-            "تعذر تحميل المديرين والمشرفين"
+            "تعذر تحميل المديرين والمساعدين"
           )
         )
         .finally(() => {
@@ -213,11 +223,21 @@ export const createManager =
     }
   };
 
+/**
+ * Update one manager's own permission array.
+ *
+ * Backend endpoint:
+ * PATCH /managers/:id/permissions
+ *
+ * Body:
+ * {
+ *   permissions: string[]
+ * }
+ */
 export const updateManagerPermissions =
   async (
     managerId,
-    permissions =
-      MANAGER_DEFAULT_PERMISSIONS
+    permissions = []
   ) => {
     const normalizedManagerId =
       normalizeText(
@@ -331,11 +351,25 @@ export const demoteTeacherFromManager =
     }
   };
 
+/**
+ * Delete a manager account.
+ *
+ * Backend endpoint:
+ * DELETE /managers/:id?type=admin|teacher
+ */
 export const deleteManager =
-  async (managerId) => {
+  async (
+    managerId,
+    type
+  ) => {
     const normalizedManagerId =
       normalizeText(
         managerId
+      );
+
+    const normalizedType =
+      normalizeManagerType(
+        type
       );
 
     if (!normalizedManagerId) {
@@ -346,10 +380,24 @@ export const deleteManager =
       };
     }
 
+    if (!normalizedType) {
+      return {
+        status: false,
+        message:
+          "نوع الحساب الإداري غير محدد",
+      };
+    }
+
     try {
       const response =
         await api.delete(
-          `${MANAGERS_ENDPOINT}/${normalizedManagerId}`
+          `${MANAGERS_ENDPOINT}/${normalizedManagerId}`,
+          {
+            params: {
+              type:
+                normalizedType,
+            },
+          }
         );
 
       invalidateManagersCache();
@@ -363,10 +411,48 @@ export const deleteManager =
     }
   };
 
+/**
+ * Set or auto-generate a password for an administrative account.
+ *
+ * Backend endpoint:
+ * PATCH /managers/:id/password
+ *
+ * Body:
+ * - {} to auto-generate a password
+ * - { password } to set a specific password
+ */
+export const adminSetManagerPassword =
+  async (managerId, payload = {}) => {
+    const normalizedManagerId =
+      normalizeText(managerId);
+
+    if (!normalizedManagerId) {
+      return {
+        status: false,
+        message:
+          "معرّف الحساب الإداري غير موجود",
+      };
+    }
+
+    try {
+      const response = await api.patch(
+        `${MANAGERS_ENDPOINT}/${normalizedManagerId}/password`,
+        payload?.password
+          ? { password: payload.password }
+          : {}
+      );
+
+      return response.data;
+    } catch (error) {
+      return getApiError(
+        error,
+        "تعذر تعيين كلمة المرور"
+      );
+    }
+  };
+
 /*
  * Backward-compatible aliases.
- * They prevent older school pages from breaking
- * while the route-based List/Add pages are used.
  */
 export const getSchoolManagers =
   fetchManagers;
@@ -390,6 +476,7 @@ export default {
   createManager,
   createSchoolManager,
   updateManagerPermissions,
+  adminSetManagerPassword,
   promoteTeacherToManager,
   demoteTeacherFromManager,
   promoteManager,

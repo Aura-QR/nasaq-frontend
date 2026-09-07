@@ -1,6 +1,7 @@
 import {
   DeleteOutlineRounded,
   EditRounded,
+  KeyRounded,
   MoreHorizRounded,
   PauseCircleOutlineRounded,
   VisibilityRounded,
@@ -10,6 +11,10 @@ import {
   Box,
   Button,
   Chip,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Skeleton,
   Stack,
   Typography,
@@ -26,14 +31,174 @@ import {
   isStudentActive,
 } from "@/utils/school/studentData";
 
+import {
+  useState,
+} from "react";
+
+const StudentMoreActions = ({
+  student,
+  canSetPassword = false,
+  canDelete = false,
+  onSetPassword,
+  onDelete,
+}) => {
+  const [anchorEl, setAnchorEl] =
+    useState(null);
+
+  const open = Boolean(anchorEl);
+
+  if (!canSetPassword && !canDelete) {
+    return null;
+  }
+
+  const closeMenu = () => {
+    setAnchorEl(null);
+  };
+
+  return (
+    <>
+      <Button
+        type="button"
+        aria-label="إجراءات أخرى للطالب"
+        aria-haspopup="true"
+        aria-expanded={
+          open ? "true" : undefined
+        }
+        onClick={(event) =>
+          setAnchorEl(
+            event.currentTarget
+          )
+        }
+        startIcon={
+          <MoreHorizRounded />
+        }
+        sx={{
+          minHeight: 34,
+          minWidth: 38,
+          px: 1,
+          color: "#5f6973",
+          backgroundColor:
+            "rgba(95,105,115,0.08)",
+          fontSize: "8px",
+        }}
+      >
+        المزيد
+      </Button>
+
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={closeMenu}
+        transformOrigin={{
+          horizontal: "left",
+          vertical: "top",
+        }}
+        anchorOrigin={{
+          horizontal: "left",
+          vertical: "bottom",
+        }}
+        slotProps={{
+          paper: {
+            sx: {
+              minWidth: 190,
+              mt: 0.5,
+              borderRadius: "12px",
+              border:
+                "1px solid rgba(36,74,112,0.09)",
+              boxShadow:
+                "0 14px 32px rgba(18,47,77,0.14)",
+              fontFamily:
+                "Tajawal, Arial, sans-serif",
+            },
+          },
+        }}
+      >
+        {canSetPassword && (
+          <MenuItem
+            onClick={() => {
+              closeMenu();
+              onSetPassword?.(student);
+            }}
+            sx={{
+              minHeight: 42,
+              gap: 0.8,
+              color: "#244a70",
+              fontSize: "10px",
+              fontWeight: 800,
+            }}
+          >
+            <ListItemIcon
+              sx={{
+                minWidth:
+                  "28px !important",
+                color: "inherit",
+              }}
+            >
+              <KeyRounded
+                sx={{ fontSize: 18 }}
+              />
+            </ListItemIcon>
+            <ListItemText
+              primary="تعيين كلمة المرور"
+              primaryTypographyProps={{
+                fontFamily: "inherit",
+                fontSize: "10px",
+                fontWeight: 800,
+              }}
+            />
+          </MenuItem>
+        )}
+
+        {canDelete && (
+          <MenuItem
+            onClick={() => {
+              closeMenu();
+              onDelete?.(student);
+            }}
+            sx={{
+              minHeight: 42,
+              gap: 0.8,
+              color: "#c94f4f",
+              fontSize: "10px",
+              fontWeight: 800,
+            }}
+          >
+            <ListItemIcon
+              sx={{
+                minWidth:
+                  "28px !important",
+                color: "inherit",
+              }}
+            >
+              <DeleteOutlineRounded
+                sx={{ fontSize: 18 }}
+              />
+            </ListItemIcon>
+            <ListItemText
+              primary="حذف الطالب"
+              primaryTypographyProps={{
+                fontFamily: "inherit",
+                fontSize: "10px",
+                fontWeight: 800,
+              }}
+            />
+          </MenuItem>
+        )}
+      </Menu>
+    </>
+  );
+};
+
 const StudentsTable = ({
   students = [],
   loading = false,
   canUpdate = false,
   canDelete = false,
+  canSetPassword = false,
   onView,
   onEdit,
   onToggleStatus,
+  onSetPassword,
   onDelete,
 }) => (
   <Box
@@ -411,29 +576,19 @@ const StudentsTable = ({
                           </>
                         )}
 
-                        {canDelete && (
-                          <Button
-                            onClick={() =>
-                              onDelete?.(
-                                student
-                              )
-                            }
-                            startIcon={
-                              <DeleteOutlineRounded />
-                            }
-                            sx={{
-                              minHeight: 34,
-                              color:
-                                "#c94f4f",
-                              backgroundColor:
-                                "rgba(201,79,79,0.08)",
-                              fontSize:
-                                "8px",
-                            }}
-                          >
-                            حذف
-                          </Button>
-                        )}
+                        <StudentMoreActions
+                          student={student}
+                          canSetPassword={
+                            canSetPassword
+                          }
+                          canDelete={
+                            canDelete
+                          }
+                          onSetPassword={
+                            onSetPassword
+                          }
+                          onDelete={onDelete}
+                        />
                       </Stack>
                     </Box>
                   </Box>

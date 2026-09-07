@@ -26,6 +26,9 @@ import TeacherAttendance from "@/pages/TeacherAttendance/TeacherAttendance";
 import TeacherSchedule from "@/pages/TeacherSchedule/TeacherSchedule";
 import TeacherClasses from "@/pages/TeacherClasses/TeacherClasses";
 import TeacherPreparations from "@/pages/TeacherPreparations/TeacherPreparations";
+import PreparationAdd from "@/pages/School/Preparation/Add";
+import PreparationEdit from "@/pages/School/Preparation/Edit";
+import PreparationProfile from "@/pages/School/Preparation/Profile";
 import TeacherLibrary from "@/pages/TeacherLibrary/TeacherLibrary";
 import TeacherProfile from "@/pages/TeacherProfile/TeacherProfile";
 import TeacherProjects from "@/pages/TeacherProjects/TeacherProjects";
@@ -35,18 +38,20 @@ import TeacherCheckIn from "@/pages/TeacherCheckIn/TeacherCheckIn";
 // School Pages
 // =========================
 import TeacherAttendanceAdmin from "@/pages/School/TeacherAttendance/TeacherAttendanceAdmin";
-
-import PreparationAdd from "@/pages/School/Preparation/Add";
-import PreparationProfile from "@/pages/School/Preparation/Profile";
-import PreparationEdit from "@/pages/School/Preparation/Edit";
+import CoverageBoard from "@/pages/School/Duty/CoverageBoard";
+import LeaveRequests from "@/pages/School/Duty/LeaveRequests";
+import CoverReport from "@/pages/School/Duty/CoverReport";
+import TeacherDuty from "@/pages/TeacherDuty/TeacherDuty";
 
 import SchoolManagersList from "@/pages/SchoolManagers/List";
 import SchoolManagerAdd from "@/pages/SchoolManagers/Add";
+import SchoolPermissions from "@/pages/SchoolPermissions/SchoolPermissions";
 
 import SubjectOfferings from "@/pages/SubjectOfferings/SubjectOfferings";
 import SchoolSettings from "@/pages/SchoolSettings/SchoolSettings";
 import SchoolDashboard from "@/pages/SchoolDashboard/SchoolDashboard";
 import Terms from "@/pages/School/Terms/Terms";
+import CurriculumManagement from "@/pages/School/Curriculum/CurriculumManagement";
 
 // =========================
 // Platform Pages
@@ -62,7 +67,6 @@ import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
 // =========================
 import AuthenticatedRoute from "@/shared/guards/AuthenticatedRoute";
 import GuestRoute from "@/shared/guards/GuestRoute";
-import OwnerOnlyRoute from "@/shared/guards/OwnerOnlyRoute";
 import RoleRoute from "@/shared/guards/RoleRoute";
 
 // =========================
@@ -192,18 +196,65 @@ const AppRouter = () => {
         </Route>
 
         {/* =====================================================
-            OWNER ONLY
+            OWNER / SUPERVISOR — MANAGER ADMIN
         ===================================================== */}
 
-        <Route element={<OwnerOnlyRoute />}>
+        <Route
+          element={
+            <RoleRoute
+              allowedRoles={[
+                ROLES.OWNER,
+                ROLES.SUPERVISOR,
+                ROLES.SUPER_ADMIN,
+              ]}
+            />
+          }
+        >
           <Route
             path="/school/managers"
             element={<SchoolManagersList />}
           />
+        </Route>
 
+        <Route
+          element={
+            <RoleRoute
+              allowedRoles={[
+                ROLES.OWNER,
+                ROLES.SUPERVISOR,
+              ]}
+            />
+          }
+        >
           <Route
             path="/school/managers/add"
             element={<SchoolManagerAdd />}
+          />
+
+          <Route
+            path="/school/permissions"
+            element={<SchoolPermissions />}
+          />
+        </Route>
+
+        {/* =====================================================
+            CURRICULUM ADMINISTRATION
+            OWNER / MANAGER ONLY
+        ===================================================== */}
+
+        <Route
+          element={
+            <RoleRoute
+              allowedRoles={[
+                ROLES.OWNER,
+                ROLES.MANAGER,
+              ]}
+            />
+          }
+        >
+          <Route
+            path="/school/curriculum"
+            element={<CurriculumManagement />}
           />
         </Route>
 
@@ -244,6 +295,21 @@ const AppRouter = () => {
           <Route
             path="/school/teacher-attendance"
             element={<TeacherAttendanceAdmin />}
+          />
+
+          <Route
+            path="/school/duty"
+            element={<CoverageBoard />}
+          />
+
+          <Route
+            path="/school/leave-requests"
+            element={<LeaveRequests />}
+          />
+
+          <Route
+            path="/school/cover-report"
+            element={<CoverReport />}
           />
         </Route>
 
@@ -291,6 +357,11 @@ const AppRouter = () => {
           />
 
           <Route
+            path="/teacher/duty"
+            element={<TeacherDuty />}
+          />
+
+          <Route
             path="/teacher/check-in"
             element={<TeacherCheckIn />}
           />
@@ -306,6 +377,11 @@ const AppRouter = () => {
 
           <Route
             path="/teacher/exams/add"
+            element={<TeacherExamAdd />}
+          />
+
+          <Route
+            path="/teacher/exams/edit/:id"
             element={<TeacherExamAdd />}
           />
 
@@ -342,15 +418,9 @@ const AppRouter = () => {
             element={<PreparationAdd />}
           />
 
-          {/* old route support */}
           <Route
             path="/teacher/preparation/add"
-            element={
-              <Navigate
-                to="/teacher/preparations/add"
-                replace
-              />
-            }
+            element={<PreparationAdd />}
           />
 
           <Route

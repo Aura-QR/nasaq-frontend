@@ -39,6 +39,7 @@ import {
 } from "react-toastify";
 
 import {
+  adminSetTeacherPassword,
   createSchoolTeacher,
   deleteSchoolTeacher,
   getSchoolTeachers,
@@ -51,6 +52,7 @@ import {
   promoteTeacherToManager,
 } from "@/APIs/school/managers";
 
+import AdminSetPasswordDialog from "@/components/school/AdminSetPasswordDialog";
 import TeacherDeleteDialog from "@/components/school/teachers/TeacherDeleteDialog";
 import TeacherFormDialog from "@/components/school/teachers/TeacherFormDialog";
 import TeacherManagerRoleDialog from "@/components/school/teachers/TeacherManagerRoleDialog";
@@ -81,7 +83,9 @@ import {
   getSchoolSessionInfo,
 } from "@/utils/school/schoolSession";
 
-const PAGE_LIMIT = 10;
+// Ten meant five pages for a school with forty-three teachers, and the pager
+// that would have let you reach them was itself hidden by the bug above.
+const PAGE_LIMIT = 25;
 
 const StatCard = ({
   title,
@@ -212,6 +216,12 @@ const SchoolTeachers = () => {
   const canManageRole =
     fullAccess;
 
+  const canSetPassword =
+    [
+      ROLES.OWNER,
+      ROLES.MANAGER,
+    ].includes(role);
+
   const [teachers, setTeachers] =
     useState([]);
 
@@ -271,6 +281,11 @@ const SchoolTeachers = () => {
   ] = useState(false);
 
   const [
+    passwordOpen,
+    setPasswordOpen,
+  ] = useState(false);
+
+  const [
     deleteOpen,
     setDeleteOpen,
   ] = useState(false);
@@ -311,9 +326,14 @@ const SchoolTeachers = () => {
           response?.data
         );
 
+      /*
+       * `response`, not `response.data`. The pagination sits *beside* data in
+       * the envelope, so handing over the inner array threw away the only copy
+       * of it — and the pager, which renders on totalPages > 1, stayed hidden.
+       */
       const nextPagination =
         extractTeachersPagination(
-          response?.data,
+          response,
           {
             page:
               pagination.page,
@@ -949,6 +969,9 @@ const SchoolTeachers = () => {
             canManageRole={
               canManageRole
             }
+            canSetPassword={
+              canSetPassword
+            }
             onView={(
               teacher
             ) =>
@@ -978,6 +1001,16 @@ const SchoolTeachers = () => {
                 teacher
               );
               setManagerRoleOpen(
+                true
+              );
+            }}
+            onSetPassword={(
+              teacher
+            ) => {
+              setSelectedTeacher(
+                teacher
+              );
+              setPasswordOpen(
                 true
               );
             }}
@@ -1092,6 +1125,34 @@ const SchoolTeachers = () => {
         }}
         onConfirm={
           handleToggleManagerRole
+        }
+      />
+
+      <AdminSetPasswordDialog
+        open={passwordOpen}
+        name={
+          getTeacherName(
+            selectedTeacher
+          )
+        }
+        subjectId={
+          getTeacherId(
+            selectedTeacher
+          )
+        }
+        onClose={() => {
+          setPasswordOpen(false);
+          setSelectedTeacher(
+            null
+          );
+        }}
+        onSubmit={(payload) =>
+          adminSetTeacherPassword(
+            getTeacherId(
+              selectedTeacher
+            ),
+            payload
+          )
         }
       />
 

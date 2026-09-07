@@ -2,15 +2,26 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
   Paper,
   Stack,
+  TextField,
+  MenuItem,
+  Tooltip,
   Typography,
 } from "@mui/material";
 
 import {
   AddCircleOutlineOutlined,
   AutoStoriesRounded,
+  CheckCircleRounded,
+  EditNoteRounded,
   FileDownloadOutlined,
+  FilterAltRounded,
   MenuBookRounded,
   PersonRounded,
   RestartAltRounded,
@@ -39,7 +50,10 @@ import { usePreparations } from "@/utils/hooks/apis/usePreparations";
 import useDebounce from "@/utils/hooks/useDebounce";
 
 import { api } from "@/APIs/Axios";
-import { deletePreparation } from "@/APIs/school/preparation";
+import {
+  deletePreparation,
+  reviewPreparation,
+} from "@/APIs/school/preparation";
 
 import Days from "@/utils/constants/Days";
 import Slots from "@/utils/constants/Slots";
@@ -54,6 +68,33 @@ const SCHOOL_ADMIN_ROLES = [
   "MANAGER",
   "ADMIN",
 ];
+
+const REVIEW_STATUS_OPTIONS = [
+  {
+    id: "draft",
+    name: "مسودة",
+  },
+  {
+    id: "pending",
+    name: "بانتظار المراجعة",
+  },
+  {
+    id: "approved",
+    name: "معتمد",
+  },
+  {
+    id: "needs_revision",
+    name: "يحتاج تعديل",
+  },
+];
+
+const EMPTY_FILTER_OPTIONS = {
+  teachers: [],
+  classes: [],
+  terms: [],
+  subjects: [],
+  lectures: [],
+};
 
 const getAuthUserData = (
   authUser
@@ -102,12 +143,40 @@ const getResponseList = (
     return payload;
   }
 
-  return (
-    payload?.docs ||
-    payload?.items ||
-    payload?.results ||
-    []
-  );
+  const knownLists = [
+    payload?.docs,
+    payload?.items,
+    payload?.results,
+    payload?.teachers,
+    payload?.classes,
+    payload?.terms,
+    payload?.lectures,
+    payload?.subjectOfferings,
+    payload?.offerings,
+  ];
+
+  const knownList =
+    knownLists.find(Array.isArray);
+
+  if (knownList) {
+    return knownList;
+  }
+
+  if (
+    payload &&
+    typeof payload === "object"
+  ) {
+    const firstArray =
+      Object.values(payload).find(
+        Array.isArray
+      );
+
+    if (firstArray) {
+      return firstArray;
+    }
+  }
+
+  return [];
 };
 
 const getResponseId = (
@@ -520,6 +589,37 @@ const getSubjectOfferingData = (
     : {};
 };
 
+/**
+ * `subject` on a preparation is a SubjectOffering — grade, term and periods
+ * per week. It has no name; the name is one level down on `subjectId`.
+ *
+ * This used to take `item.subject` and stop, so it returned the offering and
+ * read a `name` that does not exist on it. Unwrap one more level whenever the
+ * candidate turns out to be an offering.
+ */
+const unwrapSubject = (
+  candidate
+) => {
+  if (
+    !candidate ||
+    typeof candidate !== "object"
+  ) {
+    return null;
+  }
+
+  const nested =
+    candidate?.subjectId;
+
+  if (
+    nested &&
+    typeof nested === "object"
+  ) {
+    return nested;
+  }
+
+  return candidate;
+};
+
 const getSubjectData = (
   item
 ) => {
@@ -530,12 +630,12 @@ const getSubjectData = (
     getSubjectOfferingData(item);
 
   const subjectData =
-    item?.subject ||
-    item?.subjectId ||
-    lecture?.subject ||
-    lecture?.subjectId ||
-    offering?.subjectId ||
-    offering?.subject;
+    unwrapSubject(item?.subject) ||
+    unwrapSubject(item?.subjectId) ||
+    unwrapSubject(lecture?.subject) ||
+    unwrapSubject(lecture?.subjectId) ||
+    unwrapSubject(offering?.subjectId) ||
+    unwrapSubject(offering?.subject);
 
   return subjectData &&
     typeof subjectData === "object"
@@ -543,6 +643,14 @@ const getSubjectData = (
     : {};
 };
 
+/**
+ * A preparation names its teacher two ways, and this read neither of them.
+ *
+ * The API populates `submittedBy`, and stores the teacher's name on `name` at
+ * write time so the row survives the teacher being deleted. What this looked
+ * for instead — `teacher`, `teacherId`, `createdBy` — are not fields on a
+ * preparation at all, so the column was always a dash, whatever the data said.
+ */
 const getTeacherData = (
   item
 ) => {
@@ -550,6 +658,7 @@ const getTeacherData = (
     getLectureData(item);
 
   const teacher =
+    item?.submittedBy ||
     item?.teacher ||
     item?.teacherId ||
     lecture?.teacher ||
@@ -571,6 +680,9 @@ const getTeacherName = (
   return (
     teacher?.name ||
     teacher?.username ||
+    // Written on the row itself, and the only name left once the teacher
+    // record is gone.
+    item?.name ||
     item?.teacherName ||
     item?.createdBy?.name ||
     "—"
@@ -583,19 +695,30 @@ const getClassLabel = (
   const classData =
     getClassData(item);
 
-  const academicYear =
-    getNestedName(
-      classData?.academicYearId ||
-      classData?.academicYear ||
-      item?.academicYearId ||
-      item?.academicYear
-    );
+  /*
+   * Only a populated year has a name. Unpopulated it is a 24-character id,
+   * and getNestedName hands a plain string straight back — which would print
+   * the raw ObjectId into the label. Take the name only when there is one.
+   */
+  const yearSource =
+    classData?.academicYearId ||
+    classData?.academicYear ||
+    item?.academicYearId ||
+    item?.academicYear;
 
+  const academicYear =
+    yearSource &&
+    typeof yearSource === "object"
+      ? getNestedName(yearSource)
+      : "";
+
+  // The class's own name is what identifies it on every other screen; the
+  // room number is where it happens to sit.
   const roomNumber =
-    classData?.roomNumber ||
     classData?.name ||
-    item?.roomNumber ||
+    classData?.roomNumber ||
     item?.className ||
+    item?.roomNumber ||
     "";
 
   const gender =
@@ -742,6 +865,105 @@ const mapLectureOptions = (
     }
   );
 
+const getTeacherOptionLabel = (
+  teacher
+) =>
+  teacher?.name ||
+  teacher?.user?.name ||
+  teacher?.username ||
+  teacher?.email ||
+  "معلم";
+
+const getClassOptionLabel = (
+  classItem
+) => {
+  const academicYear =
+    getNestedName(
+      classItem?.academicYearId ||
+        classItem?.academicYear
+    );
+
+  const roomNumber =
+    classItem?.roomNumber ||
+    classItem?.name ||
+    classItem?.title ||
+    "";
+
+  const gender =
+    classItem?.gender
+      ? translateGender(
+          classItem.gender,
+          "class"
+        )
+      : "";
+
+  return (
+    [
+      academicYear,
+      roomNumber,
+      gender,
+    ]
+      .filter(Boolean)
+      .join(" - ") ||
+    "فصل"
+  );
+};
+
+const getTermOptionLabel = (
+  term
+) =>
+  term?.name ||
+  term?.title ||
+  term?.termName ||
+  `ترم ${term?.number || ""}`.trim() ||
+  "ترم";
+
+const getSubjectOptionLabel = (
+  offering
+) => {
+  const subject =
+    offering?.subjectId ||
+    offering?.subject ||
+    offering;
+
+  const subjectName =
+    subject?.subjectName ||
+    subject?.name ||
+    offering?.subjectName ||
+    offering?.name ||
+    "مادة";
+
+  const code =
+    subject?.subjectCode ||
+    subject?.code ||
+    offering?.subjectCode ||
+    offering?.code ||
+    "";
+
+  return code
+    ? `${subjectName} - ${code}`
+    : subjectName;
+};
+
+const fetchFilterList = async (
+  endpoint
+) => {
+  try {
+    const response = await api.get(
+      endpoint,
+      {
+        params: {
+          limit: 500,
+        },
+      }
+    );
+
+    return getResponseList(response);
+  } catch {
+    return [];
+  }
+};
+
 const validatePdf = (
   file
 ) => {
@@ -843,53 +1065,128 @@ const getFileSize = (
 };
 
 
+const PREPARATION_STATUS_META = {
+  draft: { label: "مسودة", color: "warning" },
+  pending: { label: "بانتظار المراجعة", color: "info" },
+  approved: { label: "معتمد", color: "success" },
+  needs_revision: { label: "يحتاج تعديل", color: "error" },
+};
+
+const normalizePreparationStatus = (item) => {
+  const value = String(item?.status || item?.reviewStatus || "draft")
+    .trim()
+    .toLowerCase();
+
+  if (value === "pending_review" || value === "submitted") {
+    return "pending";
+  }
+
+  return PREPARATION_STATUS_META[value] ? value : "draft";
+};
+
+const getPreparationLessonTitle = (item) =>
+  String(
+    item?.lesson?.name ||
+      item?.lesson?.title ||
+      item?.lessonTitle ||
+      ""
+  ).trim() || "—";
+
+const getAssignmentCounts = (item) => {
+  const resources = getArray(item?.resources);
+
+  if (resources.length) {
+    const labels = {
+      enrichment: "إثراء",
+      homework: "واجب",
+      quiz: "اختبار",
+      activity: "نشاط",
+    };
+    const counts = resources.reduce((result, resource) => {
+      const type = String(resource?.type || "").trim().toLowerCase();
+      if (labels[type]) {
+        result[type] = (result[type] || 0) + 1;
+      }
+      return result;
+    }, {});
+
+    return Object.entries(labels)
+      .map(([type, label]) => [label, counts[type] || 0])
+      .filter(([, count]) => count > 0);
+  }
+
+  const groups = [
+    ["إثراء", item?.enrichments],
+    ["واجب", item?.homeworks || item?.assignments],
+    ["اختبار", item?.exams],
+    ["نشاط", item?.activities],
+  ];
+
+  const legacyCounts = groups
+    .map(([label, value]) => [label, getArray(value).length])
+    .filter(([, count]) => count > 0);
+
+  if (legacyCounts.length) return legacyCounts;
+
+  const total = Number(item?.resourcesCount || 0);
+  return total > 0 ? [["تكليف", total]] : [];
+};
+
+const toArabicNumber = (value) =>
+  new Intl.NumberFormat("ar-EG").format(Number(value) || 0);
+
 const TABLE_HEADERS = [
   "الفصل",
   "المعلم",
   "المادة",
+  "الدرس",
+  "الحالة",
+  "التكليفات",
   "اليوم",
   "الحصة",
-  "تاريخ الإنشاء",
+  "تاريخ الدرس",
 ];
 
 const TABLE_BODY = [
   "className",
   "teacherName",
   "subjectName",
+  "lessonTitleDisplay",
+  "statusDisplay",
+  "assignmentsDisplay",
   "dayOfWeek",
   "slot",
-  "createdAt",
+  "lessonDate",
 ];
 
-const mapPreparations = (
-  data
-) =>
-  getArray(data).map(
-    (item) => ({
+const mapPreparations = (data) =>
+  getArray(data).map((item) => {
+    const preparationStatus = normalizePreparationStatus(item);
+    const assignmentCounts = getAssignmentCounts(item);
+
+    return {
       ...item,
-      id:
-        item?._id ||
-        item?.id,
-      className:
-        getClassLabel(item),
-      teacherName:
-        getTeacherName(item),
-      subjectName:
-        getSubjectLabel(item),
-      dayOfWeek:
-        getDayLabel(item),
-      slot:
-        getSlotLabel(item),
-      createdAt:
-        formatDate(
-          item?.createdAt
-        ),
-      filesCount:
-        getArray(
-          item?.files
-        ).length,
-    })
-  );
+      id: item?._id || item?.id,
+      className: getClassLabel(item),
+      teacherName: getTeacherName(item),
+      subjectName: getSubjectLabel(item),
+      lessonTitleDisplay: getPreparationLessonTitle(item),
+      preparationStatus,
+      statusDisplay: PREPARATION_STATUS_META[preparationStatus].label,
+      assignmentCounts,
+      assignmentsDisplay: assignmentCounts.length
+        ? assignmentCounts
+            .map(([label, count]) => `${label} ${toArabicNumber(count)}`)
+            .join(" · ")
+        : "—",
+      dayOfWeek: getDayLabel(item),
+      slot: getSlotLabel(item),
+      lessonDate: `${item?.isWeekEstimated ? "~" : ""}${formatDate(
+        item?.lessonDate
+      )}`,
+      filesCount: getArray(item?.files).length,
+    };
+  });
 
 const List = () => {
   const authUser =
@@ -918,11 +1215,16 @@ const List = () => {
   const [items, setItems] =
     useState([]);
 
+  const [reviewDialog, setReviewDialog] = useState({
+    open: false,
+    action: "",
+    item: null,
+  });
+  const [reviewNote, setReviewNote] = useState("");
+  const [reviewing, setReviewing] = useState(false);
+
   const [page, setPage] =
     useState(1);
-
-  const [teacher, setTeacher] =
-    useState("");
 
   const [limit, setLimit] =
     useState(10);
@@ -932,20 +1234,154 @@ const List = () => {
     setLocalPagination,
   ] = useState(null);
 
-  const debouncedSearch =
+  const [
+    filterOptions,
+    setFilterOptions,
+  ] = useState(
+    EMPTY_FILTER_OPTIONS
+  );
+
+  const [
+    filtersLoading,
+    setFiltersLoading,
+  ] = useState(false);
+
+  const [teacherName, setTeacherName] =
+    useState("");
+
+  const [teacherId, setTeacherId] =
+    useState("");
+
+  const [classId, setClassId] =
+    useState("");
+
+  const [termId, setTermId] =
+    useState("");
+
+  const [subjectId, setSubjectId] =
+    useState("");
+
+  const [lectureId, setLectureId] =
+    useState("");
+
+  const [weekOf, setWeekOf] =
+    useState("");
+
+  const [weekFrom, setWeekFrom] =
+    useState("");
+
+  const [weekTo, setWeekTo] =
+    useState("");
+
+  const [
+    lessonTitle,
+    setLessonTitle,
+  ] = useState("");
+
+  const [
+    reviewStatus,
+    setReviewStatus,
+  ] = useState("");
+
+  const debouncedTeacherName =
     useDebounce(
-      teacher,
+      teacherName,
+      700
+    );
+
+  const debouncedLessonTitle =
+    useDebounce(
+      lessonTitle,
       700
     );
 
   const filters = useMemo(
-    () => ({
-      page,
-      limit,
-    }),
+    () => {
+      const params = {
+        page,
+        limit,
+      };
+
+      if (
+        canSearchTeachers &&
+        teacherId
+      ) {
+        params.teacherId =
+          teacherId;
+      }
+
+      if (
+        canSearchTeachers &&
+        debouncedTeacherName.trim()
+      ) {
+        params.name =
+          debouncedTeacherName.trim();
+      }
+
+      if (classId) {
+        params.classId =
+          classId;
+      }
+
+      if (termId) {
+        params.termId =
+          termId;
+      }
+
+      if (subjectId) {
+        params.subject =
+          subjectId;
+      }
+
+      if (lectureId) {
+        params.lectureId =
+          lectureId;
+      }
+
+      if (weekOf) {
+        params.weekOf =
+          weekOf;
+      } else {
+        if (weekFrom) {
+          params.weekFrom =
+            weekFrom;
+        }
+
+        if (weekTo) {
+          params.weekTo =
+            weekTo;
+        }
+      }
+
+      if (
+        debouncedLessonTitle.trim()
+      ) {
+        params.lessonTitle =
+          debouncedLessonTitle.trim();
+      }
+
+      if (reviewStatus) {
+        params.reviewStatus =
+          reviewStatus;
+      }
+
+      return params;
+    },
     [
       page,
       limit,
+      canSearchTeachers,
+      teacherId,
+      debouncedTeacherName,
+      classId,
+      termId,
+      subjectId,
+      lectureId,
+      weekOf,
+      weekFrom,
+      weekTo,
+      debouncedLessonTitle,
+      reviewStatus,
     ]
   );
 
@@ -957,6 +1393,9 @@ const List = () => {
 
   const permissions =
     usePermissions("preparation");
+
+  const canReviewPreparations =
+    usePermissions("preparation", "review");
 
   useEffect(() => {
     let active = true;
@@ -990,32 +1429,18 @@ const List = () => {
           return;
         }
 
-        const mapped =
-          mapPreparations(
-            hydrated
+        const mapped = mapPreparations(hydrated);
+
+        if (currentRole === "TEACHER") {
+          const priority = { draft: 0, needs_revision: 1, pending: 2, approved: 3 };
+          mapped.sort(
+            (a, b) =>
+              (priority[a.preparationStatus] ?? 9) -
+              (priority[b.preparationStatus] ?? 9)
           );
+        }
 
-        const query =
-          String(
-            debouncedSearch || ""
-          )
-            .trim()
-            .toLowerCase();
-
-        setItems(
-          canSearchTeachers &&
-          query
-            ? mapped.filter(
-                (item) =>
-                  String(
-                    item.teacherName ||
-                    ""
-                  )
-                    .toLowerCase()
-                    .includes(query)
-              )
-            : mapped
-        );
+        setItems(mapped);
       };
 
     hydratePreparations();
@@ -1025,9 +1450,123 @@ const List = () => {
     };
   }, [
     preparations,
-    debouncedSearch,
-    canSearchTeachers,
+    currentRole,
   ]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadFilterOptions =
+      async () => {
+        setFiltersLoading(true);
+
+        try {
+          /*
+           * الترمات مرتبطة بالسنة الدراسية، لذلك لا نطلب:
+           * GET /terms?limit=500
+           *
+           * نحمل السنة الدراسية النشطة أولًا ثم نطلب:
+           * GET /terms/by-year/:academicYearId
+           */
+          const [
+            teachers,
+            classes,
+            activeAcademicYearResponse,
+            subjects,
+            lectures,
+          ] = await Promise.all([
+            canSearchTeachers
+              ? fetchFilterList(
+                  "/teachers"
+                )
+              : Promise.resolve([]),
+            fetchFilterList(
+              "/classes"
+            ),
+            api
+              .get(
+                "/academic-years/active"
+              )
+              .catch(() => null),
+            fetchFilterList(
+              "/subject-offerings"
+            ),
+            fetchFilterList(
+              "/lectures"
+            ),
+          ]);
+
+          const activeAcademicYear =
+            getResponseData(
+              activeAcademicYearResponse
+            );
+
+          const activeAcademicYearId =
+            getEntityId(
+              activeAcademicYear
+            );
+
+          let terms = [];
+
+          if (
+            activeAcademicYearId
+          ) {
+            try {
+              const termsResponse =
+                await api.get(
+                  `/terms/by-year/${activeAcademicYearId}`
+                );
+
+              terms =
+                getResponseList(
+                  termsResponse
+                );
+            } catch (error) {
+              console.error(
+                "Failed to load terms for active academic year:",
+                error
+              );
+              terms = [];
+            }
+          }
+
+          if (!active) {
+            return;
+          }
+
+          setFilterOptions({
+            teachers,
+            classes,
+            terms,
+            subjects,
+            lectures,
+          });
+        } catch (error) {
+          if (!active) {
+            return;
+          }
+
+          console.error(
+            "Failed to load preparation filters:",
+            error
+          );
+
+          setFilterOptions(
+            EMPTY_FILTER_OPTIONS
+          );
+        } finally {
+          if (active) {
+            setFiltersLoading(false);
+          }
+        }
+      };
+
+    loadFilterOptions();
+
+    return () => {
+      active = false;
+    };
+  }, [canSearchTeachers]);
 
   useEffect(() => {
     if (pagination) {
@@ -1041,18 +1580,40 @@ const List = () => {
     setPage(1);
   }, [
     limit,
-    debouncedSearch,
+    teacherId,
+    debouncedTeacherName,
+    classId,
+    termId,
+    subjectId,
+    lectureId,
+    weekOf,
+    weekFrom,
+    weekTo,
+    debouncedLessonTitle,
+    reviewStatus,
   ]);
 
   const currentPagination =
     localPagination ||
     pagination;
 
-  const activeFiltersCount =
-    canSearchTeachers &&
-    teacher
-      ? 1
-      : 0;
+  const activeFiltersCount = [
+    canSearchTeachers
+      ? teacherId
+      : "",
+    canSearchTeachers
+      ? teacherName
+      : "",
+    classId,
+    termId,
+    subjectId,
+    lectureId,
+    weekOf,
+    weekFrom,
+    weekTo,
+    lessonTitle,
+    reviewStatus,
+  ].filter(Boolean).length;
 
   const stats = useMemo(
     () => ({
@@ -1106,16 +1667,49 @@ const List = () => {
             item.dayOfWeek,
           الحصة:
             item.slot,
-          "تاريخ الإنشاء":
-            item.createdAt,
+          الدرس: item.lessonTitleDisplay,
+          الحالة: item.statusDisplay,
+          التكليفات: item.assignmentsDisplay,
+          "تاريخ الدرس": item.lessonDate,
         })
       ),
     [items]
   );
 
   const resetFilters = () => {
-    setTeacher("");
+    setTeacherName("");
+    setTeacherId("");
+    setClassId("");
+    setTermId("");
+    setSubjectId("");
+    setLectureId("");
+    setWeekOf("");
+    setWeekFrom("");
+    setWeekTo("");
+    setLessonTitle("");
+    setReviewStatus("");
     setPage(1);
+  };
+
+  const handleWeekOfChange = (
+    value
+  ) => {
+    setWeekOf(value);
+
+    if (value) {
+      setWeekFrom("");
+      setWeekTo("");
+    }
+  };
+
+  const handleWeekRangeChange = (
+    setter
+  ) => (event) => {
+    setter(event.target.value);
+
+    if (event.target.value) {
+      setWeekOf("");
+    }
   };
 
   const handleDelete = async (
@@ -1174,6 +1768,72 @@ const List = () => {
           ?.message ||
           "حدث خطأ أثناء حذف التحضير"
       );
+    }
+  };
+
+  const openReviewDialog = (item, action) => {
+    setReviewNote("");
+    setReviewDialog({ open: true, action, item });
+  };
+
+  const closeReviewDialog = () => {
+    if (reviewing) return;
+    setReviewDialog({ open: false, action: "", item: null });
+    setReviewNote("");
+  };
+
+  const handleReview = async () => {
+    const item = reviewDialog.item;
+    const action = reviewDialog.action;
+
+    if (!item?.id || !["approved", "needs_revision"].includes(action)) {
+      return;
+    }
+
+    setReviewing(true);
+    try {
+      const response = await reviewPreparation(item.id, {
+        reviewStatus: action,
+        reviewNote: action === "needs_revision" ? reviewNote : "",
+      });
+
+      if (!response?.status) {
+        toast.error(
+          getErrorMessage(
+            response,
+            action === "approved"
+              ? "تعذر اعتماد التحضير"
+              : "تعذر طلب التعديل"
+          )
+        );
+        return;
+      }
+
+      setItems((previousItems) =>
+        previousItems.map((current) =>
+          current.id === item.id
+            ? {
+                ...current,
+                preparationStatus: action,
+                statusDisplay:
+                  PREPARATION_STATUS_META[action]?.label || action,
+                reviewStatus: action,
+                reviewNote:
+                  action === "needs_revision" ? reviewNote.trim() : "",
+              }
+            : current
+        )
+      );
+
+      toast.success(
+        action === "approved"
+          ? "تم اعتماد التحضير"
+          : "تم إرسال التحضير للمعلم للتعديل"
+      );
+      setReviewDialog({ open: false, action: "", item: null });
+      setReviewNote("");
+    } finally {
+      setReviewing(false);
     }
   };
 
@@ -1520,118 +2180,459 @@ const List = () => {
           ))}
         </Box>
 
-        {canSearchTeachers && (
-          <Paper
-            elevation={0}
-            sx={{
-              mb: 1.25,
-              px: {
-                xs: 1.5,
-                md: 1.9,
-              },
-              py: 1.45,
-              border:
-                "1px solid rgba(36,74,112,0.08)",
-              borderRadius: "18px",
-              backgroundColor:
-                "var(--color-cream)",
-              boxShadow:
-                "0 9px 22px rgba(18,47,77,0.05)",
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 1.25,
+            px: {
+              xs: 1.5,
+              md: 1.9,
+            },
+            py: 1.45,
+            border:
+              "1px solid rgba(36,74,112,0.08)",
+            borderRadius: "18px",
+            backgroundColor:
+              "var(--color-cream)",
+            boxShadow:
+              "0 9px 22px rgba(18,47,77,0.05)",
 
-              "& .MuiInputBase-root, & .MuiOutlinedInput-root":
-                {
-                  minHeight: 50,
-                  height: 50,
-                  backgroundColor:
-                    "var(--color-white)",
-                  borderRadius: "12px",
-                },
+            "& .MuiInputBase-root, & .MuiOutlinedInput-root":
+              {
+                minHeight: 48,
+                backgroundColor:
+                  "var(--color-white)",
+                borderRadius: "12px",
+                fontSize: "12px",
+              },
+
+            "& .MuiInputLabel-root":
+              {
+                fontSize: "12px",
+              },
+          }}
+        >
+          <Stack
+            direction={{
+              xs: "column",
+              sm: "row",
             }}
+            alignItems={{
+              xs: "stretch",
+              sm: "center",
+            }}
+            justifyContent="space-between"
+            gap={1}
+            sx={{ mb: 1.25 }}
           >
             <Stack
-              direction={{
-                xs: "column",
-                sm: "row",
-              }}
-              alignItems={{
-                xs: "stretch",
-                sm: "center",
-              }}
-              justifyContent="space-between"
-              gap={1.5}
+              direction="row"
+              alignItems="center"
+              spacing={0.7}
             >
-              <Box
+              <FilterAltRounded
                 sx={{
-                  width: {
-                    xs: "100%",
-                    sm: 410,
-                  },
-                  maxWidth: "100%",
+                  color:
+                    "var(--color-gold-dark)",
+                  fontSize: 21,
+                }}
+              />
+
+              <Typography
+                sx={{
+                  color:
+                    "var(--color-navy-deep)",
+                  fontSize: "15px",
+                  fontWeight: 800,
                 }}
               >
-                <Typography
+                فلترة التحاضير
+              </Typography>
+
+              {activeFiltersCount >
+                0 && (
+                <Chip
+                  size="small"
+                  label={
+                    activeFiltersCount
+                  }
                   sx={{
-                    mb: 0.75,
+                    height: 24,
                     color:
-                      "var(--color-navy-deep)",
-                    fontSize: "15px",
+                      "var(--color-gold-dark)",
+                    backgroundColor:
+                      "var(--color-gold-soft)",
+                    fontSize: "10px",
                     fontWeight: 800,
                   }}
-                >
-                  البحث عن تحضير
-                </Typography>
+                />
+              )}
+            </Stack>
 
+            <Button
+              type="button"
+              disabled={
+                activeFiltersCount === 0
+              }
+              onClick={resetFilters}
+              variant="text"
+              startIcon={
+                <RestartAltRounded />
+              }
+              sx={{
+                minHeight: 36,
+                px: 1.25,
+                color:
+                  "var(--color-navy)",
+                backgroundColor:
+                  "rgba(36,74,112,0.055)",
+                border:
+                  "1px solid rgba(36,74,112,0.075)",
+                borderRadius: "11px",
+                fontSize: "10px",
+                fontWeight: 800,
+                textTransform: "none",
+
+                "& .MuiButton-startIcon":
+                  {
+                    marginLeft: "5px",
+                    marginRight: 0,
+                  },
+              }}
+            >
+              مسح الفلاتر
+            </Button>
+          </Stack>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs:
+                  "minmax(0, 1fr)",
+                sm:
+                  "repeat(2, minmax(0, 1fr))",
+                lg:
+                  "repeat(4, minmax(0, 1fr))",
+              },
+              gap: 1,
+            }}
+          >
+            {canSearchTeachers && (
+              <TextField
+                select
+                label="المعلم"
+                value={teacherId}
+                onChange={(event) =>
+                  setTeacherId(
+                    event.target.value
+                  )
+                }
+                disabled={
+                  filtersLoading
+                }
+                fullWidth
+              >
+                <MenuItem value="">
+                  كل المعلمين
+                </MenuItem>
+
+                {filterOptions.teachers.map(
+                  (teacherItem) => {
+                    const id =
+                      getEntityId(
+                        teacherItem
+                      );
+
+                    if (!id) {
+                      return null;
+                    }
+
+                    return (
+                      <MenuItem
+                        key={id}
+                        value={id}
+                      >
+                        {getTeacherOptionLabel(
+                          teacherItem
+                        )}
+                      </MenuItem>
+                    );
+                  }
+                )}
+              </TextField>
+            )}
+
+            {canSearchTeachers && (
+              <Box>
                 <SearchFilter
-                  value={teacher}
+                  value={teacherName}
                   onChange={
-                    setTeacher
+                    setTeacherName
                   }
                   placeholder="ابحث باسم المعلم..."
                 />
               </Box>
+            )}
 
-              <Button
-                type="button"
-                disabled={
-                  activeFiltersCount ===
-                  0
-                }
-                onClick={resetFilters}
-                variant="text"
-                startIcon={
-                  <RestartAltRounded />
-                }
-                sx={{
-                  alignSelf: {
-                    xs: "stretch",
-                    sm: "flex-end",
-                  },
-                  minHeight: 38,
-                  px: 1.25,
-                  color:
-                    "var(--color-navy)",
-                  backgroundColor:
-                    "rgba(36,74,112,0.055)",
-                  border:
-                    "1px solid rgba(36,74,112,0.075)",
-                  borderRadius: "11px",
-                  fontSize: "10px",
-                  fontWeight: 800,
-                  textTransform: "none",
+            <TextField
+              select
+              label="الفصل"
+              value={classId}
+              onChange={(event) =>
+                setClassId(
+                  event.target.value
+                )
+              }
+              disabled={filtersLoading}
+              fullWidth
+            >
+              <MenuItem value="">
+                كل الفصول
+              </MenuItem>
 
-                  "& .MuiButton-startIcon":
-                    {
-                      marginLeft:
-                        "5px",
-                      marginRight: 0,
-                    },
-                }}
-              >
-                مسح البحث
-              </Button>
-            </Stack>
-          </Paper>
-        )}
+              {filterOptions.classes.map(
+                (classItem) => {
+                  const id =
+                    getEntityId(
+                      classItem
+                    );
+
+                  if (!id) {
+                    return null;
+                  }
+
+                  return (
+                    <MenuItem
+                      key={id}
+                      value={id}
+                    >
+                      {getClassOptionLabel(
+                        classItem
+                      )}
+                    </MenuItem>
+                  );
+                }
+              )}
+            </TextField>
+
+            <TextField
+              select
+              label="الفصل الدراسي"
+              value={termId}
+              onChange={(event) =>
+                setTermId(
+                  event.target.value
+                )
+              }
+              disabled={filtersLoading}
+              fullWidth
+            >
+              <MenuItem value="">
+                كل الفصول الدراسية
+              </MenuItem>
+
+              {filterOptions.terms.map(
+                (term) => {
+                  const id =
+                    getEntityId(term);
+
+                  if (!id) {
+                    return null;
+                  }
+
+                  return (
+                    <MenuItem
+                      key={id}
+                      value={id}
+                    >
+                      {getTermOptionLabel(
+                        term
+                      )}
+                    </MenuItem>
+                  );
+                }
+              )}
+            </TextField>
+
+            <TextField
+              select
+              label="المادة"
+              value={subjectId}
+              onChange={(event) =>
+                setSubjectId(
+                  event.target.value
+                )
+              }
+              disabled={filtersLoading}
+              fullWidth
+            >
+              <MenuItem value="">
+                كل المواد
+              </MenuItem>
+
+              {filterOptions.subjects.map(
+                (offering) => {
+                  const id =
+                    getEntityId(
+                      offering
+                    );
+
+                  if (!id) {
+                    return null;
+                  }
+
+                  return (
+                    <MenuItem
+                      key={id}
+                      value={id}
+                    >
+                      {getSubjectOptionLabel(
+                        offering
+                      )}
+                    </MenuItem>
+                  );
+                }
+              )}
+            </TextField>
+
+            <TextField
+              select
+              label="الحصة"
+              value={lectureId}
+              onChange={(event) =>
+                setLectureId(
+                  event.target.value
+                )
+              }
+              disabled={filtersLoading}
+              fullWidth
+            >
+              <MenuItem value="">
+                كل الحصص
+              </MenuItem>
+
+              {mapLectureOptions(
+                filterOptions.lectures
+              ).map((lecture) => (
+                <MenuItem
+                  key={lecture.id}
+                  value={lecture.id}
+                >
+                  {lecture.name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              label="عنوان الدرس"
+              value={lessonTitle}
+              onChange={(event) =>
+                setLessonTitle(
+                  event.target.value
+                )
+              }
+              placeholder="مثال: حل المعادلات"
+              fullWidth
+            />
+
+            <TextField
+              select
+              label="حالة المراجعة"
+              value={reviewStatus}
+              onChange={(event) =>
+                setReviewStatus(
+                  event.target.value
+                )
+              }
+              fullWidth
+            >
+              <MenuItem value="">
+                كل الحالات
+              </MenuItem>
+
+              {REVIEW_STATUS_OPTIONS.map(
+                (option) => (
+                  <MenuItem
+                    key={option.id}
+                    value={option.id}
+                  >
+                    {option.name}
+                  </MenuItem>
+                )
+              )}
+            </TextField>
+
+            <TextField
+              type="date"
+              label="أسبوع محدد"
+              value={weekOf}
+              onChange={(event) =>
+                handleWeekOfChange(
+                  event.target.value
+                )
+              }
+              InputLabelProps={{
+                shrink: true,
+              }}
+              inputProps={{
+                max: weekTo || undefined,
+              }}
+              fullWidth
+            />
+
+            <TextField
+              type="date"
+              label="من أسبوع"
+              value={weekFrom}
+              onChange={handleWeekRangeChange(
+                setWeekFrom
+              )}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              inputProps={{
+                max:
+                  weekTo ||
+                  undefined,
+              }}
+              fullWidth
+            />
+
+            <TextField
+              type="date"
+              label="إلى أسبوع"
+              value={weekTo}
+              onChange={handleWeekRangeChange(
+                setWeekTo
+              )}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              inputProps={{
+                min:
+                  weekFrom ||
+                  undefined,
+              }}
+              fullWidth
+            />
+          </Box>
+
+          <Typography
+            sx={{
+              mt: 1,
+              color:
+                "var(--color-muted)",
+              fontSize: "9.5px",
+              lineHeight: 1.6,
+            }}
+          >
+            يمكنك اختيار أسبوع واحد أو
+            استخدام نطاق من/إلى. عند
+            اختيار أسبوع محدد يتم إلغاء
+            النطاق تلقائيًا.
+          </Typography>
+        </Paper>
 
         <Paper
           elevation={0}
@@ -1735,7 +2736,7 @@ const List = () => {
                   }}
                 >
                   {hasFilters
-                    ? "لا توجد تحاضير مطابقة للبحث"
+                    ? "لا توجد تحاضير مطابقة للفلاتر"
                     : "لا توجد تحاضير حتى الآن"}
                 </Typography>
 
@@ -1749,7 +2750,7 @@ const List = () => {
                   }}
                 >
                   {hasFilters
-                    ? "غيّر اسم المعلم أو امسح البحث لعرض نتائج أخرى."
+                    ? "غيّر الفلاتر أو امسحها لعرض نتائج أخرى."
                     : "أضف أول تحضير مرتبط بإحدى الحصص الدراسية."}
                 </Typography>
 
@@ -1778,7 +2779,7 @@ const List = () => {
                         "none",
                     }}
                   >
-                    مسح البحث
+                    مسح الفلاتر
                   </Button>
                 ) : (
                   permissions.add && (
@@ -1838,6 +2839,98 @@ const List = () => {
                     ? handleDelete
                     : undefined
                 }
+                renderActions={(item) => {
+                  if (
+                    !canReviewPreparations ||
+                    item.preparationStatus !== "pending"
+                  ) {
+                    return null;
+                  }
+
+                  return (
+                    <>
+                      <Tooltip title="اعتماد التحضير" arrow>
+                        <IconButton
+                          type="button"
+                          onClick={() => openReviewDialog(item, "approved")}
+                          aria-label="اعتماد التحضير"
+                          sx={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: "10px",
+                            color: "#238f55",
+                            bgcolor: "rgba(35,143,85,.09)",
+                            border: "1px solid rgba(35,143,85,.14)",
+                          }}
+                        >
+                          <CheckCircleRounded sx={{ fontSize: 19 }} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="طلب تعديل" arrow>
+                        <IconButton
+                          type="button"
+                          onClick={() => openReviewDialog(item, "needs_revision")}
+                          aria-label="طلب تعديل"
+                          sx={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: "10px",
+                            color: "var(--color-gold-dark)",
+                            bgcolor: "rgba(211,164,79,.10)",
+                            border: "1px solid rgba(211,164,79,.16)",
+                          }}
+                        >
+                          <EditNoteRounded sx={{ fontSize: 19 }} />
+                        </IconButton>
+                      </Tooltip>
+                    </>
+                  );
+                }}
+                renderCell={({ item, keyName }) => {
+                  if (keyName === "statusDisplay") {
+                    const meta =
+                      PREPARATION_STATUS_META[item.preparationStatus] ||
+                      PREPARATION_STATUS_META.draft;
+                    return (
+                      <Chip
+                        size="small"
+                        label={meta.label}
+                        color={meta.color}
+                        variant="outlined"
+                        sx={{ fontSize: 9.5, fontWeight: 900 }}
+                      />
+                    );
+                  }
+
+                  if (keyName === "assignmentsDisplay") {
+                    if (!item.assignmentCounts?.length) return null;
+                    return (
+                      <Stack
+                        direction="row"
+                        gap={0.35}
+                        justifyContent="center"
+                        flexWrap="wrap"
+                      >
+                        {item.assignmentCounts.map(([label, count]) => (
+                          <Chip
+                            key={label}
+                            size="small"
+                            label={`${label} ${toArabicNumber(count)}`}
+                            sx={{
+                              height: 23,
+                              bgcolor: "var(--color-gold-soft)",
+                              color: "var(--color-gold-dark)",
+                              fontSize: 9,
+                              fontWeight: 900,
+                            }}
+                          />
+                        ))}
+                      </Stack>
+                    );
+                  }
+
+                  return undefined;
+                }}
               />
 
               {currentPagination &&
@@ -1861,6 +2954,65 @@ const List = () => {
           )}
         </Paper>
       </Box>
+
+      <Dialog
+        open={reviewDialog.open}
+        onClose={closeReviewDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle sx={{ fontWeight: 900 }}>
+          {reviewDialog.action === "approved"
+            ? "اعتماد التحضير"
+            : "طلب تعديل التحضير"}
+        </DialogTitle>
+        <DialogContent dividers>
+          {reviewDialog.action === "approved" ? (
+            <Typography sx={{ lineHeight: 1.8 }}>
+              هل تريد اعتماد هذا التحضير؟
+            </Typography>
+          ) : (
+            <TextField
+              autoFocus
+              fullWidth
+              multiline
+              minRows={4}
+              label="ملاحظة للمعلم"
+              placeholder="مثال: يرجى توضيح الأهداف وإضافة نشاط مناسب للدرس"
+              value={reviewNote}
+              onChange={(event) => setReviewNote(event.target.value)}
+              inputProps={{ maxLength: 1000 }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.3 }}>
+          <Button
+            onClick={closeReviewDialog}
+            disabled={reviewing}
+            sx={{ fontWeight: 800 }}
+          >
+            إلغاء
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleReview}
+            disabled={reviewing}
+            sx={{
+              fontWeight: 900,
+              bgcolor:
+                reviewDialog.action === "approved"
+                  ? "#238f55"
+                  : "var(--color-gold-dark)",
+            }}
+          >
+            {reviewing
+              ? "جاري الحفظ..."
+              : reviewDialog.action === "approved"
+                ? "اعتماد"
+                : "إرسال طلب التعديل"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

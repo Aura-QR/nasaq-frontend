@@ -243,6 +243,28 @@ export const fetchProjectSubmissions = async (
   }
 };
 
+/**
+ * مع responseType: "blob" يرجع axios جسم الخطأ نفسه كـ Blob، فلا يستطيع
+ * getErrorMessage قراءة رسالة الخادم ويظهر للمعلّم "Request failed with
+ * status code 404" بدل السبب الحقيقي. نفكّ الـ Blob أولاً.
+ */
+const decodeBlobError = async (error) => {
+  const data = error?.response?.data;
+
+  if (!(data instanceof Blob)) return error;
+
+  try {
+    const parsed = JSON.parse(await data.text());
+
+    return {
+      ...error,
+      response: { ...error.response, data: parsed },
+    };
+  } catch {
+    return error;
+  }
+};
+
 export const downloadProjectSubmission = async (
   projectId,
   studentId
@@ -256,7 +278,7 @@ export const downloadProjectSubmission = async (
     return response.data;
   } catch (error) {
     return normalizeFailure(
-      error,
+      await decodeBlobError(error),
       "تعذر تحميل ملفات التسليم"
     );
   }

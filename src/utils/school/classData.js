@@ -6,15 +6,25 @@ export const unwrapApiData = (response) =>
 
 export const extractApiList = (response, keys = []) => {
   const payload = unwrapApiData(response);
+
   if (Array.isArray(payload)) return payload;
+
   return (
-    [...keys.map((key) => payload?.[key]), payload?.classes, payload?.items, payload?.docs, payload?.results, payload?.records, payload?.data]
-      .find(Array.isArray) || []
+    [
+      ...keys.map((key) => payload?.[key]),
+      payload?.classes,
+      payload?.items,
+      payload?.docs,
+      payload?.results,
+      payload?.records,
+      payload?.data,
+    ].find(Array.isArray) || []
   );
 };
 
 export const extractClass = (response) => {
   const payload = unwrapApiData(response);
+
   return payload?.class || payload?.classroom || payload;
 };
 
@@ -25,100 +35,373 @@ const populated = (primary, fallback) =>
       ? fallback
       : null;
 
+/* =========================================================
+   Basic class data
+========================================================= */
+
 export const getClassId = (item) => getEntityId(item);
-export const getClassName = (item) => String(item?.name || item?.className || "").trim();
-export const getClassRoomNumber = (item) => String(item?.roomNumber || item?.room || "—").trim();
+
+export const getClassName = (item) =>
+  String(item?.name || item?.className || "").trim();
+
+export const getClassRoomNumber = (item) =>
+  String(item?.roomNumber || item?.room || "—").trim();
+
+/* =========================================================
+   Academic year
+========================================================= */
 
 export const getClassAcademicYearObject = (item) =>
   populated(item?.academicYearId, item?.academicYear);
+
 export const getClassAcademicYearId = (item) =>
-  getEntityId(getClassAcademicYearObject(item) || item?.academicYearId);
+  getEntityId(
+    getClassAcademicYearObject(item) ||
+      item?.academicYearId
+  );
+
 export const getClassAcademicYear = (item) => {
   const obj = getClassAcademicYearObject(item);
+
   return String(
-    obj?.name || item?.academicYearName || (typeof item?.academicYear === "string" ? item.academicYear : "") || "—"
+    obj?.name ||
+      item?.academicYearName ||
+      (typeof item?.academicYear === "string"
+        ? item.academicYear
+        : "") ||
+      "—"
   ).trim();
 };
 
+/* =========================================================
+   Grade level
+========================================================= */
+
 export const getClassGradeLevelObject = (item) =>
   populated(item?.gradeLevelId, item?.gradeLevel);
+
 export const getClassGradeLevelId = (item) =>
-  getEntityId(getClassGradeLevelObject(item) || item?.gradeLevelId);
+  getEntityId(
+    getClassGradeLevelObject(item) ||
+      item?.gradeLevelId
+  );
+
 export const getClassGradeLevelName = (item) => {
   const obj = getClassGradeLevelObject(item);
-  return String(obj?.name || item?.gradeLevelName || item?.gradeName || "—").trim();
+
+  return String(
+    obj?.name ||
+      item?.gradeLevelName ||
+      item?.gradeName ||
+      "—"
+  ).trim();
 };
+
+/* =========================================================
+   Stage
+========================================================= */
 
 export const getClassStageObject = (item) => {
   const grade = getClassGradeLevelObject(item);
-  return populated(grade?.stageId, grade?.stage) || populated(item?.stageId, item?.stage);
+
+  return (
+    populated(grade?.stageId, grade?.stage) ||
+    populated(item?.stageId, item?.stage)
+  );
 };
+
 export const getClassStageName = (item) =>
-  String(getClassStageObject(item)?.name || item?.stageName || "—").trim();
+  String(
+    getClassStageObject(item)?.name ||
+      item?.stageName ||
+      "—"
+  ).trim();
+
+/* =========================================================
+   Display name
+========================================================= */
 
 export const getClassDisplayName = (item) =>
   getClassName(item) ||
-  [getClassGradeLevelName(item) !== "—" ? getClassGradeLevelName(item) : "", getClassRoomNumber(item) !== "—" ? getClassRoomNumber(item) : ""]
+  [
+    getClassGradeLevelName(item) !== "—"
+      ? getClassGradeLevelName(item)
+      : "",
+    getClassRoomNumber(item) !== "—"
+      ? getClassRoomNumber(item)
+      : "",
+  ]
     .filter(Boolean)
     .join(" - ") ||
   "فصل بدون اسم";
 
+/* =========================================================
+   Gender
+========================================================= */
+
 export const getClassGender = (item) => {
-  const value = String(item?.gender || "").trim().toLowerCase();
+  const value = String(
+    item?.gender || ""
+  )
+    .trim()
+    .toLowerCase();
+
   return value === "mixed" ? "both" : value;
 };
+
 export const getClassGenderLabel = (item) =>
-  ({ male: "بنين", female: "بنات", both: "مختلط" }[getClassGender(item)] || "—");
+  ({
+    male: "بنين",
+    female: "بنات",
+    both: "مختلط",
+  })[getClassGender(item)] || "—";
+
+/* =========================================================
+   Teacher
+========================================================= */
 
 export const getClassTeacherObject = (item) =>
-  populated(item?.teacherInChargeId, item?.teacherInCharge);
+  populated(
+    item?.teacherInChargeId,
+    item?.teacherInCharge
+  );
+
 export const getClassTeacherId = (item) =>
-  getEntityId(getClassTeacherObject(item) || item?.teacherInChargeId);
+  getEntityId(
+    getClassTeacherObject(item) ||
+      item?.teacherInChargeId
+  );
+
 export const getClassTeacherName = (item) => {
   const teacher = getClassTeacherObject(item);
-  return String(teacher?.name || teacher?.fullName || item?.teacherInChargeName || "بدون معلم مسؤول").trim();
+
+  return String(
+    teacher?.name ||
+      teacher?.fullName ||
+      item?.teacherInChargeName ||
+      "بدون معلم مسؤول"
+  ).trim();
 };
+
+/* =========================================================
+   Capacity
+========================================================= */
 
 export const getClassCapacity = (item) => {
-  const value = Number(item?.maxCapacity ?? item?.capacity ?? 0);
-  return Number.isFinite(value) ? value : 0;
+  const value = Number(
+    item?.maxCapacity ??
+      item?.capacity ??
+      0
+  );
+
+  return Number.isFinite(value)
+    ? value
+    : 0;
 };
-export const getClassStudents = (item) =>
-  Array.isArray(item?.students)
-    ? item.students
-    : Array.isArray(item?.enrollments)
-      ? item.enrollments.map((row) => row?.studentId || row?.student || row)
-      : [];
+
+/* =========================================================
+   Students / Enrollments
+========================================================= */
+
+export const getClassStudents = (item) => {
+  /*
+   * الحالة الأولى:
+   * الـ backend بيرجع students مباشرة.
+   */
+  if (Array.isArray(item?.students)) {
+    return item.students;
+  }
+
+  /*
+   * الحالة الثانية:
+   * الـ backend بيرجع enrollments،
+   * وكل enrollment بداخله studentId أو student.
+   */
+  if (Array.isArray(item?.enrollments)) {
+    return item.enrollments
+      .map(
+        (row) =>
+          row?.studentId ||
+          row?.student ||
+          row
+      )
+      .filter(Boolean);
+  }
+
+  /*
+   * دعم أسماء إضافية محتملة من الـ API.
+   */
+  if (Array.isArray(item?.studentEnrollments)) {
+    return item.studentEnrollments
+      .map(
+        (row) =>
+          row?.studentId ||
+          row?.student ||
+          row
+      )
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
+/*
+ * مهم:
+ * الأولوية هنا للطلاب / enrollments الفعليين.
+ *
+ * لأن الـ backend ممكن يرجع:
+ *
+ * studentsCount: 0
+ *
+ * رغم وجود enrollments داخل الفصل.
+ */
 export const getClassStudentCount = (item) => {
-  const explicit = Number(item?.studentsCount ?? item?.studentCount ?? item?.enrollmentsCount ?? item?.enrollmentCount);
-  return Number.isFinite(explicit) ? explicit : getClassStudents(item).length;
+  const students = getClassStudents(item);
+
+  /*
+   * لو عندنا الطلاب فعليًا،
+   * نستخدم العدد الحقيقي.
+   */
+  if (students.length > 0) {
+    return students.length;
+  }
+
+  /*
+   * لو مفيش arrays للطلاب،
+   * نحاول نقرأ العدد اللي رجعه الـ backend.
+   */
+  const rawCount =
+    item?.studentsCount ??
+    item?.studentCount ??
+    item?.enrollmentsCount ??
+    item?.enrollmentCount;
+
+  /*
+   * مهم:
+   * ما نعملش Number(undefined/null)
+   * بطريقة تخلي قيمة مش موجودة تتحول بشكل خاطئ.
+   */
+  if (
+    rawCount !== undefined &&
+    rawCount !== null &&
+    rawCount !== ""
+  ) {
+    const explicit = Number(rawCount);
+
+    if (Number.isFinite(explicit)) {
+      return explicit;
+    }
+  }
+
+  return 0;
 };
+
+/* =========================================================
+   Available seats
+========================================================= */
+
 export const getClassAvailableSeats = (item) =>
-  Math.max(0, getClassCapacity(item) - getClassStudentCount(item));
+  Math.max(
+    0,
+    getClassCapacity(item) -
+      getClassStudentCount(item)
+  );
+
+/* =========================================================
+   Occupancy
+========================================================= */
+
 export const getClassOccupancy = (item) => {
   const capacity = getClassCapacity(item);
-  return capacity ? Math.min(100, Math.round((getClassStudentCount(item) / capacity) * 100)) : 0;
-};
-export const isClassActive = (item) => item?.isActive !== false && item?.status !== "inactive";
+  const studentCount =
+    getClassStudentCount(item);
 
-export const buildClassPayload = (form = {}) => ({
-  name: String(form?.name || "").trim(),
-  academicYearId: getEntityId(form?.academicYearId),
-  gradeLevelId: getEntityId(form?.gradeLevelId),
-  gender: String(form?.gender || "") === "mixed" ? "both" : String(form?.gender || ""),
-  teacherInChargeId: getEntityId(form?.teacherInChargeId),
-  roomNumber: String(form?.roomNumber || "").trim(),
-  maxCapacity: Number(form?.maxCapacity),
-  isActive: form?.isActive !== false,
+  if (!capacity) return 0;
+
+  return Math.min(
+    100,
+    Math.round(
+      (studentCount / capacity) * 100
+    )
+  );
+};
+
+/* =========================================================
+   Status
+========================================================= */
+
+export const isClassActive = (item) =>
+  item?.isActive !== false &&
+  item?.status !== "inactive";
+
+/* =========================================================
+   Payload
+========================================================= */
+
+export const buildClassPayload = (
+  form = {}
+) => ({
+  name: String(
+    form?.name || ""
+  ).trim(),
+
+  academicYearId: getEntityId(
+    form?.academicYearId
+  ),
+
+  gradeLevelId: getEntityId(
+    form?.gradeLevelId
+  ),
+
+  gender:
+    String(form?.gender || "") === "mixed"
+      ? "both"
+      : String(form?.gender || ""),
+
+  teacherInChargeId: getEntityId(
+    form?.teacherInChargeId
+  ),
+
+  roomNumber: String(
+    form?.roomNumber || ""
+  ).trim(),
+
+  maxCapacity: Number(
+    form?.maxCapacity
+  ),
+
+  isActive:
+    form?.isActive !== false,
 });
 
-export const getClassFormValues = (item) => ({
+/* =========================================================
+   Form values
+========================================================= */
+
+export const getClassFormValues = (
+  item
+) => ({
   name: getClassName(item),
-  academicYearId: getClassAcademicYearId(item),
-  gradeLevelId: getClassGradeLevelId(item),
+
+  academicYearId:
+    getClassAcademicYearId(item),
+
+  gradeLevelId:
+    getClassGradeLevelId(item),
+
   gender: getClassGender(item),
-  teacherInChargeId: getClassTeacherId(item),
-  roomNumber: getClassRoomNumber(item) === "—" ? "" : getClassRoomNumber(item),
-  maxCapacity: getClassCapacity(item) || 30,
-  isActive: isClassActive(item),
+
+  teacherInChargeId:
+    getClassTeacherId(item),
+
+  roomNumber:
+    getClassRoomNumber(item) === "—"
+      ? ""
+      : getClassRoomNumber(item),
+
+  maxCapacity:
+    getClassCapacity(item) || 30,
+
+  isActive:
+    isClassActive(item),
 });

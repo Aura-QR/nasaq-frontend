@@ -10,6 +10,7 @@ import {
 
 import {
   AddCircleOutlineOutlined,
+  AssignmentIndRounded,
   CheckCircleRounded,
   FileDownloadOutlined,
   Groups2Rounded,
@@ -31,16 +32,20 @@ import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
 import Table from "@/components/Table/Table";
+import AdminSetPasswordDialog from "@/components/school/AdminSetPasswordDialog";
 import SearchFilter from "@/components/Filters/SearchFilter";
 import SelectFilter from "@/components/Filters/SelectFilter";
 import PaginationControls from "@/components/Pagination";
 
 import { deleteTeacher } from "@/APIs/users/teachers";
+import { adminSetTeacherPassword } from "@/APIs/school/teachers";
 import { useTeachers } from "@/utils/hooks/apis/useTeachers";
 import useDebounce from "@/utils/hooks/useDebounce";
 import usePermissions from "@/utils/hooks/usePermissions";
 
 import Status from "@/utils/constants/Status";
+import { getStoredRole } from "@/shared/auth/session";
+import { ROLES } from "@/shared/auth/roles";
 
 const TABLE_HEADERS = [
   "اسم المعلم",
@@ -164,6 +169,14 @@ const List = () => {
 
   const [limit, setLimit] = useState(10);
   const [page, setPage] = useState(1);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordTeacher, setPasswordTeacher] = useState(null);
+
+  const canSetPassword = [
+    ROLES.OWNER,
+    ROLES.MANAGER,
+    ROLES.SUPER_ADMIN,
+  ].includes(getStoredRole());
 
   const [
     localPagination,
@@ -336,6 +349,24 @@ const List = () => {
       );
     }
   };
+
+  const openPasswordDialog = (teacher) => {
+    if (!canSetPassword) return;
+
+    setPasswordTeacher(teacher);
+    setPasswordDialogOpen(true);
+  };
+
+  const closePasswordDialog = () => {
+    setPasswordDialogOpen(false);
+    setPasswordTeacher(null);
+  };
+
+  const handleSetPassword = (payload) =>
+    adminSetTeacherPassword(
+      passwordTeacher?.id,
+      payload
+    );
 
   return (
     <Container>
@@ -586,6 +617,73 @@ const List = () => {
                   تصدير
                 </Button>
               </Box>
+
+              {permissions.edit && (
+                <Button
+                  component={Link}
+                  to="/users/teachers/assignments"
+                  variant="outlined"
+                  startIcon={
+                    <AssignmentIndRounded />
+                  }
+                  sx={{
+                    width: {
+                      xs: "100%",
+                      sm: 168,
+                    },
+                    minHeight: 42,
+                    px: 1.8,
+
+                    borderRadius:
+                      "12px",
+
+                    color:
+                      "var(--color-navy)",
+                    backgroundColor:
+                      "rgba(255, 252, 247, 0.84)",
+                    borderColor:
+                      "rgba(36, 74, 112, 0.16)",
+
+                    boxShadow: "none",
+
+                    transition:
+                      "transform 180ms ease, box-shadow 180ms ease, color 180ms ease, background-color 180ms ease, border-color 180ms ease",
+
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    whiteSpace:
+                      "nowrap",
+                    textTransform:
+                      "none",
+
+                    "& .MuiButton-startIcon":
+                      {
+                        marginLeft:
+                          "7px",
+                        marginRight: 0,
+                      },
+
+                    "& svg": {
+                      fontSize: "19px",
+                    },
+
+                    "&:hover": {
+                      color:
+                        "var(--color-gold-dark)",
+                      backgroundColor:
+                        "var(--color-gold-soft)",
+                      borderColor:
+                        "rgba(211, 164, 79, 0.42)",
+                      boxShadow:
+                        "0 7px 16px rgba(18, 47, 77, 0.08)",
+                      transform:
+                        "translateY(-1px)",
+                    },
+                  }}
+                >
+                  إسنادات المعلمين
+                </Button>
+              )}
 
               {permissions.add && (
                 <Button
@@ -1178,6 +1276,11 @@ const List = () => {
               schedule={
                 lecturePermissions.read
               }
+              setPasswordFn={
+                canSetPassword
+                  ? openPasswordDialog
+                  : undefined
+              }
             />
 
             {currentPagination && (
@@ -1194,6 +1297,14 @@ const List = () => {
             )}
           </Box>
         </Paper>
+
+        <AdminSetPasswordDialog
+          open={passwordDialogOpen}
+          name={passwordTeacher?.name || ""}
+          subjectId={passwordTeacher?.id || ""}
+          onClose={closePasswordDialog}
+          onSubmit={handleSetPassword}
+        />
       </Box>
     </Container>
   );

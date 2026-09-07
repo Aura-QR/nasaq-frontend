@@ -44,6 +44,7 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import usePermissions from "@/utils/hooks/usePermissions";
 
 import { api } from "@/APIs/Axios";
 import nasaqLogo from "@/images/wadq-logo.png";
@@ -329,6 +330,7 @@ const LoadingView = () => (
 
 const TeacherLibrary = () => {
   const navigate = useNavigate();
+  const permissions = usePermissions("library");
 
   const [items, setItems] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -1105,6 +1107,7 @@ const TeacherLibrary = () => {
                 )}
               </IconButton>
             </Tooltip>
+            {permissions.add && (
             <Button
               startIcon={<AddRounded />}
               onClick={() => setDialogOpen(true)}
@@ -1117,6 +1120,7 @@ const TeacherLibrary = () => {
             >
               مشاركة مصدر
             </Button>
+            )}
           </Stack>
         </Paper>
 
@@ -1321,6 +1325,7 @@ const TeacherLibrary = () => {
               <Typography sx={{ color: COLORS.muted, fontSize: 9.5 }}>
                 غيّر البحث أو الفلاتر، أو شارك مصدرًا جديدًا
               </Typography>
+              {permissions.add && (
               <Button
                 startIcon={<AddRounded />}
                 onClick={() => setDialogOpen(true)}
@@ -1332,6 +1337,7 @@ const TeacherLibrary = () => {
               >
                 مشاركة مصدر
               </Button>
+              )}
             </Stack>
           ) : (
             <Grid container spacing={1}>
@@ -1628,6 +1634,7 @@ const TeacherLibrary = () => {
           <Button onClick={closeDialog} disabled={saving} color="inherit">
             إلغاء
           </Button>
+          {permissions.add && (
           <Button
             variant="contained"
             startIcon={
@@ -1642,6 +1649,7 @@ const TeacherLibrary = () => {
           >
             {saving ? "جاري الحفظ..." : "مشاركة المصدر"}
           </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

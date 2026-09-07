@@ -1,6 +1,8 @@
 import {
   Box,
   IconButton,
+  Menu,
+  MenuItem,
   Skeleton,
   Stack,
   Tooltip,
@@ -12,6 +14,8 @@ import {
   DeleteOutline,
   Edit,
   EventAvailable,
+  LockResetRounded,
+  MoreHorizRounded,
 } from "@mui/icons-material";
 
 import { Link } from "react-router-dom";
@@ -66,6 +70,9 @@ const Table = ({
   cellRenderers,
   emptyTitle = "لا توجد بيانات لعرضها",
   emptyMessage = "غيّر الفلاتر أو أضف بيانات جديدة.",
+  setPasswordFn,
+  renderCell,
+  renderActions,
 }) => {
   const [activeDelete, setActiveDelete] =
     useState(false);
@@ -79,7 +86,9 @@ const Table = ({
       deleteFn ||
       schedule ||
       addFn ||
-      editBtn
+      editBtn ||
+      setPasswordFn ||
+      renderActions
   );
 
   if (loading) {
@@ -180,8 +189,8 @@ const Table = ({
           spacing={1}
           sx={{
             minWidth: {
-              xs: 920,
-              md: 840,
+              xs: Math.max(920, (headers?.length || 0) * 128 + (hasActions ? 190 : 90)),
+              md: Math.max(840, (headers?.length || 0) * 118 + (hasActions ? 170 : 80)),
             },
             width: "100%",
           }}
@@ -207,6 +216,9 @@ const Table = ({
               schedule={schedule}
               addFn={addFn}
               editBtn={editBtn}
+              setPasswordFn={setPasswordFn}
+              renderCell={renderCell}
+              renderActions={renderActions}
               hasActions={hasActions}
               cellRenderers={cellRenderers}
             />
@@ -319,9 +331,27 @@ const TableItem = ({
   schedule,
   addFn,
   editBtn,
+  setPasswordFn,
+  renderCell,
+  renderActions,
   hasActions,
   cellRenderers,
 }) => {
+  const [actionsAnchor, setActionsAnchor] = useState(null);
+
+  const openMoreActions = (event) => {
+    setActionsAnchor(event.currentTarget);
+  };
+
+  const closeMoreActions = () => {
+    setActionsAnchor(null);
+  };
+
+  const handleSetPassword = () => {
+    closeMoreActions();
+    setPasswordFn?.(item);
+  };
+
   const openDeletePopup = () => {
     setDeleteId(item.id);
     setActiveDelete(true);
@@ -376,10 +406,11 @@ const TableItem = ({
       </Typography>
 
       {body?.map((key) => {
+        const rawValue = item?.[key];
         const value =
-          item?.[key] === null ||
-          item?.[key] === undefined ||
-          item?.[key] === ""
+          rawValue === null ||
+          rawValue === undefined ||
+          rawValue === ""
             ? "—"
             : String(item[key]);
         const renderedValue =
@@ -387,6 +418,32 @@ const TableItem = ({
             item,
             value
           );
+            : String(rawValue);
+        const customCell = renderCell?.({
+          item,
+          keyName: key,
+          value: rawValue,
+          displayValue: value,
+          index,
+        });
+
+        if (customCell !== undefined && customCell !== null) {
+          return (
+            <Box
+              key={key}
+              sx={{
+                flex: 2,
+                minWidth: 0,
+                px: 0.4,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {customCell}
+            </Box>
+          );
+        }
 
         return (
           <Tooltip
@@ -416,7 +473,7 @@ const TableItem = ({
         <Box
           sx={{
             flex: 1.45,
-            minWidth: 148,
+            minWidth: setPasswordFn || renderActions ? 190 : 148,
 
             display: "flex",
             alignItems: "center",
@@ -520,6 +577,18 @@ const TableItem = ({
               </Tooltip>
             ))}
 
+          {renderActions && (
+            <Box
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.6,
+              }}
+            >
+              {renderActions(item)}
+            </Box>
+          )}
+
           {profile && (
             <Tooltip
               title="عرض التفاصيل"
@@ -550,6 +619,93 @@ const TableItem = ({
                 <Person4Icon />
               </IconButton>
             </Tooltip>
+          )}
+
+          {setPasswordFn && (
+            <>
+              <Tooltip
+                title="إجراءات أخرى"
+                arrow
+              >
+                <IconButton
+                  type="button"
+                  onClick={openMoreActions}
+                  aria-label="إجراءات أخرى"
+                  aria-haspopup="menu"
+                  aria-expanded={
+                    Boolean(actionsAnchor)
+                      ? "true"
+                      : undefined
+                  }
+                  sx={{
+                    ...actionButtonSx,
+                    color: "var(--color-gold-dark)",
+                    backgroundColor:
+                      "rgba(211, 164, 79, 0.10)",
+
+                    "&:hover": {
+                      ...actionButtonSx[
+                        "&:hover"
+                      ],
+                      backgroundColor:
+                        "rgba(211, 164, 79, 0.20)",
+                      borderColor:
+                        "rgba(211, 164, 79, 0.30)",
+                    },
+                  }}
+                >
+                  <MoreHorizRounded />
+                </IconButton>
+              </Tooltip>
+
+              <Menu
+                anchorEl={actionsAnchor}
+                open={Boolean(actionsAnchor)}
+                onClose={closeMoreActions}
+                anchorOrigin={{
+                  vertical: "bottom",
+                  horizontal: "right",
+                }}
+                transformOrigin={{
+                  vertical: "top",
+                  horizontal: "right",
+                }}
+                slotProps={{
+                  paper: {
+                    sx: {
+                      mt: 0.6,
+                      minWidth: 190,
+                      borderRadius: "12px",
+                      border:
+                        "1px solid rgba(36,74,112,0.10)",
+                      boxShadow:
+                        "0 12px 30px rgba(18,47,77,0.14)",
+                    },
+                  },
+                }}
+              >
+                <MenuItem
+                  onClick={handleSetPassword}
+                  sx={{
+                    gap: 1,
+                    minHeight: 42,
+                    color:
+                      "var(--color-navy-deep)",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                  }}
+                >
+                  <LockResetRounded
+                    sx={{
+                      color:
+                        "var(--color-gold-dark)",
+                      fontSize: 20,
+                    }}
+                  />
+                  تعيين كلمة المرور
+                </MenuItem>
+              </Menu>
+            </>
           )}
 
           {hasDelete && (

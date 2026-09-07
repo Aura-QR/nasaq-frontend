@@ -3,8 +3,11 @@ import {
   CalendarMonthRounded,
   ContentCopyRounded,
   DeleteOutlineRounded,
+  FactCheckRounded,
   MenuBookRounded,
+  UploadFileRounded,
   RefreshRounded,
+  SaveRounded,
   SchoolRounded,
   SearchOffRounded,
   SearchRounded,
@@ -25,6 +28,7 @@ import {
   IconButton,
   InputAdornment,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Paper,
   Select,
@@ -40,10 +44,11 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
+import usePermissions from "@/utils/hooks/usePermissions";
 
 import { api } from "@/APIs/Axios";
 import {
@@ -51,6 +56,7 @@ import {
   copySubjectOfferingsFromYear,
   deleteSubjectOffering,
   fetchSubjectOfferings,
+  saveTeachingPlan,
 } from "@/APIs/school/subjectOfferings";
 
 const COLORS = {
@@ -58,11 +64,12 @@ const COLORS = {
   navy2: "#244a70",
   gold: "#b78430",
   goldSoft: "#fbf0d8",
-  page: "#ffffff",
-  border: "#e1e6eb",
-  muted: "#778491",
+  page: "#fff",
+  border: "#ded8cd",
+  muted: "#7e8791",
   green: "#16865f",
   red: "#d14343",
+  amber: "#b7791f",
 };
 
 const idOf = (value) =>
@@ -205,26 +212,26 @@ const StatCard = ({ icon, label, value, helper, tone = "blue" }) => {
     <Paper
       elevation={0}
       sx={{
-        minHeight: 78,
-        px: 1.6,
-        py: 1.25,
-        border: `1px solid ${COLORS.border}`,
-        borderRadius: "16px",
+        minHeight: 82,
+        p: 1.25,
         display: "flex",
         alignItems: "center",
-        gap: 1.2,
-        bgcolor: "#fff",
+        gap: 0.9,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: "15px",
+        backgroundColor: "#fff",
+        boxShadow: "0 7px 20px rgba(36,74,112,.035)",
       }}
     >
       <Box
         sx={{
-          width: 42,
-          height: 42,
-          borderRadius: "12px",
+          width: 40,
+          height: 40,
           display: "grid",
           placeItems: "center",
           color: selected.color,
-          bgcolor: selected.bg,
+          backgroundColor: selected.bg,
+          borderRadius: "11px",
           flexShrink: 0,
         }}
       >
@@ -232,32 +239,13 @@ const StatCard = ({ icon, label, value, helper, tone = "blue" }) => {
       </Box>
 
       <Box sx={{ minWidth: 0 }}>
-        <Typography
-          sx={{
-            color: COLORS.muted,
-            fontWeight: 700,
-            fontSize: 11,
-          }}
-        >
+        <Typography sx={{ color: COLORS.muted, fontSize: "8px", fontWeight: 700 }}>
           {label}
         </Typography>
-        <Typography
-          sx={{
-            color: COLORS.navy,
-            fontWeight: 900,
-            fontSize: 23,
-            lineHeight: 1.15,
-          }}
-        >
+        <Typography sx={{ color: COLORS.navy, fontSize: "19px", fontWeight: 800, lineHeight: 1.2 }}>
           {value}
         </Typography>
-        <Typography
-          sx={{
-            color: "#9ba5af",
-            fontSize: 9.5,
-            mt: 0.15,
-          }}
-        >
+        <Typography sx={{ color: "#9ba5af", fontSize: "7.5px", mt: 0.15 }}>
           {helper}
         </Typography>
       </Box>
@@ -450,14 +438,709 @@ const SubjectOfferingDialog = ({
   );
 };
 
+
+const TeachingPlanImportDialog = ({
+  open,
+  termId,
+  initialGradeId,
+  gradeLevels,
+  onClose,
+  onImported,
+}) => {
+  const [gradeLevelId, setGradeLevelId] =
+    useState("");
+  const [text, setText] = useState("");
+  const [preview, setPreview] =
+    useState(null);
+  const [loading, setLoading] =
+    useState(false);
+  const [committing, setCommitting] =
+    useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+
+    setGradeLevelId(
+      initialGradeId || ""
+    );
+    setText("");
+    setPreview(null);
+  }, [open, initialGradeId]);
+
+  const runImport = async (
+    dryRun
+  ) => {
+    if (!termId) {
+      toast.error(
+        "اختر الترم أولًا"
+      );
+      return null;
+    }
+
+    if (!gradeLevelId) {
+      toast.error(
+        "اختر الصف الدراسي أولًا"
+      );
+      return null;
+    }
+
+    if (!text.trim()) {
+      toast.error(
+        "الصق خطة المواد أولًا"
+      );
+      return null;
+    }
+
+    const setter = dryRun
+      ? setLoading
+      : setCommitting;
+
+    setter(true);
+
+    try {
+      const response = await api.post(
+        "/subject-offerings/import-plan",
+        {
+          termId,
+          gradeLevelId,
+          text: text.trim(),
+          dryRun,
+          createMissingOfferings: true,
+        }
+      );
+
+      const payload =
+        unwrap(response?.data) || {};
+
+      if (dryRun) {
+        setPreview(payload);
+
+        if (
+          Number(payload?.errors || 0) >
+          0
+        ) {
+          toast.warning(
+            "تمت المعاينة ويوجد سطور تحتاج مراجعة"
+          );
+        } else {
+          toast.success(
+            "المعاينة جاهزة — راجع النتائج ثم أكّد الحفظ"
+          );
+        }
+      }
+
+      return payload;
+    } catch (error) {
+      toast.error(
+        getMessage(
+          error,
+          dryRun
+            ? "تعذر معاينة خطة المواد"
+            : "تعذر استيراد خطة المواد"
+        )
+      );
+
+      return null;
+    } finally {
+      setter(false);
+    }
+  };
+
+  const handlePreview =
+    async () => {
+      await runImport(true);
+    };
+
+  const handleCommit =
+    async () => {
+      if (!preview) {
+        toast.info(
+          "اعمل معاينة للخطة أولًا"
+        );
+        return;
+      }
+
+      if (
+        Number(preview?.errors || 0) >
+        0
+      ) {
+        toast.error(
+          "صحّح السطور التي بها أخطاء ثم أعد المعاينة قبل الحفظ"
+        );
+        return;
+      }
+
+      const result =
+        await runImport(false);
+
+      if (!result) return;
+
+      toast.success(
+        `تم استيراد خطة المواد${
+          Number(result?.written || 0)
+            ? ` — ${result.written} سطر محفوظ`
+            : ""
+        }`
+      );
+
+      await onImported?.({
+        gradeLevelId,
+        result,
+      });
+
+      onClose();
+    };
+
+  const rows = Array.isArray(
+    preview?.results
+  )
+    ? preview.results
+    : [];
+
+  const previewHasErrors =
+    Number(preview?.errors || 0) >
+    0;
+
+  const statusMeta = (
+    status
+  ) => {
+    switch (status) {
+      case "created":
+        return {
+          label: "سيتم إنشاء عرض",
+          bgcolor:
+            "rgba(22,134,95,0.10)",
+          color: COLORS.green,
+        };
+
+      case "updated":
+        return {
+          label: "سيتم التحديث",
+          bgcolor:
+            "rgba(36,74,112,0.09)",
+          color: COLORS.navy2,
+        };
+
+      case "error":
+        return {
+          label: "خطأ",
+          bgcolor:
+            "rgba(209,67,67,0.10)",
+          color: COLORS.red,
+        };
+
+      default:
+        return {
+          label:
+            status || "نتيجة",
+          bgcolor: "#f2f4f6",
+          color: COLORS.muted,
+        };
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={
+        loading || committing
+          ? undefined
+          : onClose
+      }
+      fullWidth
+      maxWidth="md"
+      dir="rtl"
+      PaperProps={{
+        sx: {
+          borderRadius: "18px",
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          pb: 0.7,
+          color: COLORS.navy,
+          fontWeight: 900,
+          fontSize: 21,
+        }}
+      >
+        استيراد خطة المواد
+      </DialogTitle>
+
+      <DialogContent>
+        <Typography
+          sx={{
+            color: COLORS.muted,
+            fontSize: 11,
+            lineHeight: 1.8,
+            mb: 1.4,
+          }}
+        >
+          الصق اسم المادة وعدد حصصها
+          الأسبوعية. يقبل النظام
+          Tab أو | أو , أو ; وكذلك
+          كتابة الرقم في نهاية السطر.
+          المعاينة لا تحفظ أي شيء.
+        </Typography>
+
+        <Stack
+          direction={{
+            xs: "column",
+            sm: "row",
+          }}
+          gap={1}
+          mb={1.2}
+        >
+          <FormControl
+            fullWidth
+            size="small"
+          >
+            <InputLabel>
+              الصف الدراسي
+            </InputLabel>
+
+            <Select
+              label="الصف الدراسي"
+              value={gradeLevelId}
+              onChange={(event) => {
+                setGradeLevelId(
+                  event.target.value
+                );
+                setPreview(null);
+              }}
+              sx={{
+                borderRadius: "11px",
+              }}
+            >
+              {gradeLevels.map(
+                (grade) => (
+                  <MenuItem
+                    key={grade._id}
+                    value={grade._id}
+                  >
+                    {grade.label}
+                  </MenuItem>
+                )
+              )}
+            </Select>
+          </FormControl>
+
+          <Paper
+            elevation={0}
+            sx={{
+              px: 1.2,
+              py: 0.75,
+              minWidth: {
+                xs: "100%",
+                sm: 190,
+              },
+              border:
+                "1px solid rgba(36,74,112,0.08)",
+              borderRadius: "11px",
+              bgcolor:
+                "rgba(36,74,112,0.035)",
+            }}
+          >
+            <Typography
+              sx={{
+                color: COLORS.muted,
+                fontSize: 9,
+              }}
+            >
+              الترم المختار
+            </Typography>
+
+            <Typography
+              sx={{
+                color: COLORS.navy,
+                fontSize: 11,
+                fontWeight: 900,
+              }}
+            >
+              {termId
+                ? "سيتم الاستيراد للترم الحالي"
+                : "اختر الترم أولًا"}
+            </Typography>
+          </Paper>
+        </Stack>
+
+        <TextField
+          fullWidth
+          multiline
+          minRows={6}
+          maxRows={10}
+          label="الصق خطة المواد"
+          placeholder={
+            "اللغة العربية\t20\nالرياضيات\t18\nالعلوم\t4"
+          }
+          value={text}
+          onChange={(event) => {
+            setText(
+              event.target.value
+            );
+            setPreview(null);
+          }}
+          sx={{
+            "& .MuiOutlinedInput-root":
+              {
+                borderRadius: "13px",
+                alignItems:
+                  "flex-start",
+              },
+            "& textarea": {
+              fontFamily:
+                "inherit",
+              fontSize: 13,
+              lineHeight: 1.8,
+            },
+          }}
+        />
+
+        {preview ? (
+          <Box mt={1.5}>
+            <Stack
+              direction="row"
+              gap={0.7}
+              flexWrap="wrap"
+              mb={1}
+            >
+              <Chip
+                size="small"
+                label={`السطور: ${
+                  preview?.totalLines ??
+                  rows.length
+                }`}
+              />
+              <Chip
+                size="small"
+                label={`إجمالي الحصص: ${
+                  preview?.totalPeriods ??
+                  0
+                }`}
+              />
+              <Chip
+                size="small"
+                label={`تحديث: ${
+                  preview?.updated ?? 0
+                }`}
+                sx={{
+                  bgcolor:
+                    "rgba(36,74,112,0.08)",
+                  color:
+                    COLORS.navy2,
+                }}
+              />
+              <Chip
+                size="small"
+                label={`إنشاء: ${
+                  preview?.created ?? 0
+                }`}
+                sx={{
+                  bgcolor:
+                    "rgba(22,134,95,0.09)",
+                  color:
+                    COLORS.green,
+                }}
+              />
+              <Chip
+                size="small"
+                label={`أخطاء: ${
+                  preview?.errors ?? 0
+                }`}
+                sx={{
+                  bgcolor:
+                    previewHasErrors
+                      ? "rgba(209,67,67,0.10)"
+                      : "rgba(22,134,95,0.08)",
+                  color:
+                    previewHasErrors
+                      ? COLORS.red
+                      : COLORS.green,
+                }}
+              />
+            </Stack>
+
+            {previewHasErrors ? (
+              <Alert
+                severity="warning"
+                sx={{
+                  mb: 1,
+                  borderRadius: "11px",
+                }}
+              >
+                يوجد سطر أو أكثر غير
+                صالح. صحّحه ثم أعد
+                المعاينة قبل الحفظ.
+              </Alert>
+            ) : (
+              <Alert
+                severity="success"
+                sx={{
+                  mb: 1,
+                  borderRadius: "11px",
+                }}
+              >
+                المعاينة سليمة. لم يتم
+                حفظ أي تغيير بعد.
+              </Alert>
+            )}
+
+            <Paper
+              elevation={0}
+              sx={{
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "12px",
+                overflow: "hidden",
+                maxHeight: 310,
+                overflowY: "auto",
+              }}
+            >
+              {rows.length ? (
+                rows.map(
+                  (row, index) => {
+                    const meta =
+                      statusMeta(
+                        row?.status
+                      );
+
+                    return (
+                      <Stack
+                        key={`import-plan-${
+                          row?.line ??
+                          index
+                        }`}
+                        direction={{
+                          xs: "column",
+                          sm: "row",
+                        }}
+                        alignItems={{
+                          xs: "stretch",
+                          sm: "center",
+                        }}
+                        gap={1}
+                        sx={{
+                          px: 1.2,
+                          py: 0.9,
+                          borderBottom:
+                            index <
+                            rows.length -
+                              1
+                              ? `1px solid ${COLORS.border}`
+                              : "none",
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            minWidth: 38,
+                            color:
+                              COLORS.muted,
+                            fontSize: 10,
+                            fontWeight: 800,
+                          }}
+                        >
+                          #{row?.line ??
+                            index + 1}
+                        </Typography>
+
+                        <Box
+                          sx={{
+                            flex: 1,
+                            minWidth: 0,
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              color:
+                                COLORS.navy,
+                              fontSize: 12,
+                              fontWeight: 900,
+                            }}
+                          >
+                            {row?.subjectName ||
+                              row?.raw ||
+                              "—"}
+                          </Typography>
+
+                          {row?.reason ? (
+                            <Typography
+                              sx={{
+                                mt: 0.2,
+                                color:
+                                  COLORS.red,
+                                fontSize: 9.5,
+                                lineHeight: 1.5,
+                              }}
+                            >
+                              {row.reason}
+                            </Typography>
+                          ) : (
+                            <Typography
+                              sx={{
+                                mt: 0.2,
+                                color:
+                                  COLORS.muted,
+                                fontSize: 9.5,
+                              }}
+                            >
+                              {row?.from !==
+                                undefined &&
+                              row?.status ===
+                                "updated"
+                                ? `${row.from} ← ${row.periodsPerWeek} حصة`
+                                : `${row?.periodsPerWeek ?? 0} حصة أسبوعيًا`}
+                            </Typography>
+                          )}
+                        </Box>
+
+                        <Chip
+                          size="small"
+                          label={
+                            meta.label
+                          }
+                          sx={{
+                            bgcolor:
+                              meta.bgcolor,
+                            color:
+                              meta.color,
+                            fontWeight: 800,
+                            fontSize: 9,
+                          }}
+                        />
+                      </Stack>
+                    );
+                  }
+                )
+              ) : (
+                <Typography
+                  sx={{
+                    p: 2,
+                    textAlign:
+                      "center",
+                    color:
+                      COLORS.muted,
+                    fontSize: 11,
+                  }}
+                >
+                  لا توجد نتائج لعرضها
+                </Typography>
+              )}
+            </Paper>
+          </Box>
+        ) : null}
+      </DialogContent>
+
+      <DialogActions
+        sx={{
+          px: 3,
+          pb: 2.2,
+          gap: 0.8,
+        }}
+      >
+        <Button
+          variant="contained"
+          onClick={handlePreview}
+          disabled={
+            loading ||
+            committing ||
+            !termId ||
+            !gradeLevelId ||
+            !text.trim()
+          }
+          sx={{
+            minHeight: 44,
+            borderRadius: "11px",
+            bgcolor: COLORS.navy,
+            fontWeight: 900,
+            boxShadow: "none",
+            "&:hover": {
+              bgcolor:
+                COLORS.navy2,
+              boxShadow: "none",
+            },
+          }}
+        >
+          {loading ? (
+            <CircularProgress
+              size={19}
+              color="inherit"
+            />
+          ) : (
+            "معاينة الخطة"
+          )}
+        </Button>
+
+        <Button
+          variant="contained"
+          onClick={handleCommit}
+          disabled={
+            committing ||
+            loading ||
+            !preview ||
+            previewHasErrors
+          }
+          sx={{
+            minHeight: 44,
+            borderRadius: "11px",
+            bgcolor: COLORS.green,
+            fontWeight: 900,
+            boxShadow: "none",
+            "&:hover": {
+              bgcolor:
+                "#127250",
+              boxShadow: "none",
+            },
+          }}
+        >
+          {committing ? (
+            <CircularProgress
+              size={19}
+              color="inherit"
+            />
+          ) : (
+            "تأكيد وحفظ"
+          )}
+        </Button>
+
+        <Button
+          variant="outlined"
+          onClick={onClose}
+          disabled={
+            loading || committing
+          }
+          sx={{
+            minHeight: 44,
+            borderRadius: "11px",
+            borderColor:
+              "#d7dde3",
+            color: COLORS.navy,
+            fontWeight: 800,
+          }}
+        >
+          إلغاء
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 const SubjectOfferings = () => {
+  const permissions = usePermissions("subjects");
+
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedGradeId = String(searchParams.get("gradeLevelId") || "").trim();
+  const requestedTermId = String(searchParams.get("termId") || "").trim();
 
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [loadingOfferings, setLoadingOfferings] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
   const [deletingId, setDeletingId] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [
+    importPlanOpen,
+    setImportPlanOpen,
+  ] = useState(false);
   const [error, setError] = useState("");
 
   const [academicYears, setAcademicYears] = useState([]);
@@ -466,10 +1149,12 @@ const SubjectOfferings = () => {
   const [subjects, setSubjects] = useState([]);
   const [gradeLevels, setGradeLevels] = useState([]);
   const [offerings, setOfferings] = useState([]);
+  const [planDraft, setPlanDraft] = useState({});
+  const [slotsPerWeek, setSlotsPerWeek] = useState(null);
 
   const [selectedYearId, setSelectedYearId] = useState("");
   const [selectedTermId, setSelectedTermId] = useState("");
-  const [selectedGradeId, setSelectedGradeId] = useState("");
+  const [selectedGradeId, setSelectedGradeId] = useState(requestedGradeId);
   const [search, setSearch] = useState("");
 
   const subjectMap = useMemo(
@@ -515,14 +1200,20 @@ const SubjectOfferings = () => {
       normalized[0] ||
       null;
 
-    setSelectedTermId((current) =>
-      normalized.some((item) => item._id === current)
-        ? current
-        : activeTerm?._id || ""
-    );
+    setSelectedTermId((current) => {
+      if (normalized.some((item) => item._id === current)) {
+        return current;
+      }
+
+      if (requestedTermId && normalized.some((item) => item._id === requestedTermId)) {
+        return requestedTermId;
+      }
+
+      return activeTerm?._id || "";
+    });
 
     return normalized;
-  }, [fetchTermsForYear]);
+  }, [fetchTermsForYear, requestedTermId]);
 
   const loadInitial = useCallback(async () => {
     setLoadingInitial(true);
@@ -569,6 +1260,15 @@ const SubjectOfferings = () => {
       setActiveYear(active);
       setSubjects(loadedSubjects);
       setGradeLevels(loadedGrades);
+      setSelectedGradeId((current) => {
+        if (loadedGrades.some((item) => item._id === current)) {
+          return current;
+        }
+
+        return loadedGrades.some((item) => item._id === requestedGradeId)
+          ? requestedGradeId
+          : "";
+      });
       setSelectedYearId(active?._id || "");
 
       if (active?._id) {
@@ -581,11 +1281,12 @@ const SubjectOfferings = () => {
     } finally {
       setLoadingInitial(false);
     }
-  }, [loadTerms]);
+  }, [loadTerms, requestedGradeId]);
 
   const loadOfferings = useCallback(async () => {
     if (!selectedTermId) {
       setOfferings([]);
+      setPlanDraft({});
       return;
     }
 
@@ -604,9 +1305,45 @@ const SubjectOfferings = () => {
       return;
     }
 
-    setOfferings(extractList(result?.data));
+    const loadedOfferings = extractList(result?.data);
+
+    setOfferings(loadedOfferings);
+    setPlanDraft(
+      Object.fromEntries(
+        loadedOfferings
+          .map((item) => {
+            const offeringId = idOf(item);
+            const rawValue = Number(item?.periodsPerWeek ?? 0);
+            const periodsPerWeek = Number.isFinite(rawValue) ? rawValue : 0;
+
+            return offeringId ? [offeringId, periodsPerWeek] : null;
+          })
+          .filter(Boolean)
+      )
+    );
     setLoadingOfferings(false);
   }, [selectedGradeId, selectedTermId]);
+
+  const loadPlanCapacity = useCallback(async () => {
+    if (!selectedTermId) {
+      setSlotsPerWeek(null);
+      return;
+    }
+
+    try {
+      const response = await api.get("/lectures/feasibility", {
+        params: { termId: selectedTermId },
+      });
+
+      const payload = unwrap(response?.data);
+      const capacity = Number(payload?.slotsPerWeek);
+
+      setSlotsPerWeek(Number.isFinite(capacity) ? capacity : null);
+    } catch {
+      // السعة مساعدة لعرض الخطة فقط، وفشلها لا يمنع إدارة عروض المواد.
+      setSlotsPerWeek(null);
+    }
+  }, [selectedTermId]);
 
   useEffect(() => {
     loadInitial();
@@ -616,6 +1353,11 @@ const SubjectOfferings = () => {
     if (loadingInitial) return;
     loadOfferings();
   }, [loadingInitial, loadOfferings]);
+
+  useEffect(() => {
+    if (loadingInitial) return;
+    loadPlanCapacity();
+  }, [loadingInitial, loadPlanCapacity]);
 
   const normalizedOfferings = useMemo(
     () =>
@@ -653,6 +1395,9 @@ const SubjectOfferings = () => {
               subject?.subjectCode || subject?.code || item?.subjectCode || "",
             gradeLabel: labelOfGrade(grade || {}),
             termLabel: labelOfTerm(term || {}),
+            periodsPerWeek: Number.isFinite(Number(item?.periodsPerWeek))
+              ? Number(item?.periodsPerWeek)
+              : 0,
           };
         })
         .filter((item) => item.id),
@@ -684,6 +1429,136 @@ const SubjectOfferings = () => {
     });
   }, [normalizedOfferings, search, selectedGradeId]);
 
+  const changedPlanEntries = useMemo(
+    () =>
+      normalizedOfferings
+        .filter((item) => {
+          const draftValue = planDraft[item.id];
+
+          if (draftValue === "" || draftValue === undefined) {
+            return false;
+          }
+
+          return Number(draftValue) !== Number(item.periodsPerWeek || 0);
+        })
+        .map((item) => ({
+          subjectOfferingId: item.id,
+          periodsPerWeek: Number(planDraft[item.id]),
+        })),
+    [normalizedOfferings, planDraft]
+  );
+
+  const hasInvalidPlanValue = useMemo(
+    () =>
+      normalizedOfferings.some((item) => {
+        const value = planDraft[item.id];
+
+        if (value === "" || value === undefined) return true;
+
+        const numericValue = Number(value);
+
+        return (
+          !Number.isFinite(numericValue) ||
+          numericValue < 0 ||
+          numericValue > 20
+        );
+      }),
+    [normalizedOfferings, planDraft]
+  );
+
+  const gradePlanTotals = useMemo(() => {
+    const totals = new Map();
+
+    normalizedOfferings.forEach((item) => {
+      if (!item.gradeLevelId) return;
+
+      const value = Number(
+        planDraft[item.id] === "" || planDraft[item.id] === undefined
+          ? 0
+          : planDraft[item.id]
+      );
+
+      const current = totals.get(item.gradeLevelId) || {
+        gradeLevelId: item.gradeLevelId,
+        gradeLabel: item.gradeLabel,
+        total: 0,
+      };
+
+      current.total += Number.isFinite(value) ? value : 0;
+      totals.set(item.gradeLevelId, current);
+    });
+
+    return Array.from(totals.values());
+  }, [normalizedOfferings, planDraft]);
+
+  const updatePlanValue = (offeringId, value) => {
+    if (value === "") {
+      setPlanDraft((current) => ({
+        ...current,
+        [offeringId]: "",
+      }));
+      return;
+    }
+
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) return;
+
+    setPlanDraft((current) => ({
+      ...current,
+      [offeringId]: Math.max(0, Math.min(20, numericValue)),
+    }));
+  };
+
+  const savePlan = async () => {
+    if (!changedPlanEntries.length) {
+      toast.info("لا توجد تغييرات في خطة التدريس لحفظها");
+      return;
+    }
+
+    if (hasInvalidPlanValue) {
+      toast.error("تأكد أن عدد الحصص الأسبوعية لكل مادة من 0 إلى 20");
+      return;
+    }
+
+    setSavingPlan(true);
+
+    try {
+      const result = await saveTeachingPlan(changedPlanEntries);
+
+      if (result?.status === false) {
+        toast.error(result?.message || "تعذر حفظ خطة التدريس");
+        return;
+      }
+
+      const changedMap = new Map(
+        changedPlanEntries.map((entry) => [
+          entry.subjectOfferingId,
+          entry.periodsPerWeek,
+        ])
+      );
+
+      setOfferings((current) =>
+        current.map((offering) => {
+          const offeringId = idOf(offering);
+
+          if (!changedMap.has(offeringId)) return offering;
+
+          return {
+            ...offering,
+            periodsPerWeek: changedMap.get(offeringId),
+          };
+        })
+      );
+
+      toast.success(result?.message || "تم حفظ خطة التدريس بنجاح");
+    } catch (requestError) {
+      toast.error(getMessage(requestError, "تعذر حفظ خطة التدريس"));
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
   const statistics = useMemo(
     () => ({
       total: normalizedOfferings.length,
@@ -703,6 +1578,8 @@ const SubjectOfferings = () => {
     setActiveYear(selected);
     setSelectedGradeId("");
     setOfferings([]);
+    setPlanDraft({});
+    setSlotsPerWeek(null);
 
     try {
       await loadTerms(yearId);
@@ -821,6 +1698,11 @@ const SubjectOfferings = () => {
     setOfferings((current) =>
       current.filter((offering) => idOf(offering) !== item.id)
     );
+    setPlanDraft((current) => {
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
   };
 
   const copyFromPreviousYear = async () => {
@@ -945,44 +1827,35 @@ const SubjectOfferings = () => {
 
   return (
     <Container>
-      <Box
-        dir="rtl"
-        sx={{
-          width: "100%",
-          minHeight: "100%",
-          bgcolor: COLORS.page,
-          py: { xs: 1.5, md: 2.5 },
-          px: { xs: 1.2, md: 2.2 },
-        }}
-      >
-      <Box sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}>
+      <Box dir="rtl" sx={{ pb: 4 }}>
         <Paper
           elevation={0}
           sx={{
-            border: `1px solid ${COLORS.border}`,
-            borderRadius: "20px",
-            px: { xs: 1.8, md: 2.5 },
-            py: { xs: 1.6, md: 2 },
-            mb: 1.6,
-            bgcolor: "#fff",
+            p: { xs: 1.7, md: 2.1 },
+            border: "1px solid rgba(36,74,112,.08)",
+            borderRadius: "18px",
+            background:
+              "linear-gradient(135deg,rgba(255,252,247,.98),rgba(251,240,216,.44))",
+            boxShadow: "0 10px 24px rgba(18,47,77,.06)",
           }}
         >
           <Stack
             direction={{ xs: "column", md: "row" }}
             alignItems={{ xs: "stretch", md: "center" }}
             justifyContent="space-between"
-            gap={1.5}
+            gap={1.2}
           >
-            <Stack direction="row" alignItems="center" gap={1.2}>
+            <Stack direction="row" alignItems="center" gap={1}>
               <Box
                 sx={{
                   width: 46,
                   height: 46,
-                  borderRadius: "13px",
                   display: "grid",
                   placeItems: "center",
-                  bgcolor: COLORS.goldSoft,
                   color: COLORS.gold,
+                  backgroundColor: COLORS.goldSoft,
+                  borderRadius: "12px",
+                  flexShrink: 0,
                 }}
               >
                 <MenuBookRounded />
@@ -990,62 +1863,95 @@ const SubjectOfferings = () => {
 
               <Box>
                 <Typography
-                  variant="h4"
+                  component="h1"
                   sx={{
                     color: COLORS.navy,
-                    fontWeight: 900,
-                    fontSize: { xs: 22, md: 27 },
+                    fontSize: { xs: "21px", md: "25px" },
+                    fontWeight: 800,
+                    lineHeight: 1.2,
                   }}
                 >
                   عروض المواد
                 </Typography>
-                <Typography sx={{ color: COLORS.muted, fontSize: 12 }}>
+                <Typography sx={{ mt: 0.35, color: COLORS.muted, fontSize: "10px" }}>
                   اربط مواد المدرسة بالصفوف الدراسية والترم المناسب
                 </Typography>
               </Box>
             </Stack>
 
-            <Stack direction="row" gap={1} flexWrap="wrap">
-              <Button
-                variant="outlined"
-                startIcon={<ContentCopyRounded />}
-                onClick={copyFromPreviousYear}
-                disabled={saving || academicYears.length < 2}
-                sx={{
-                  borderRadius: "11px",
-                  borderColor: "#d7dde3",
-                  color: COLORS.navy,
-                  fontWeight: 800,
-                }}
-              >
-                نسخ من سنة سابقة
-              </Button>
-
-              <Button
-                variant="contained"
-                startIcon={<AddRounded />}
-                onClick={() => setDialogOpen(true)}
-                disabled={!terms.length || !subjects.length || !gradeLevels.length}
-                sx={{
-                  borderRadius: "11px",
-                  bgcolor: COLORS.navy,
-                  fontWeight: 800,
-                  boxShadow: "none",
-                  "&:hover": { bgcolor: COLORS.navy2, boxShadow: "none" },
-                }}
-              >
-                إضافة عرض مادة
-              </Button>
-
-              <Tooltip title="رجوع">
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              gap={0.8}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              flexWrap="wrap"
+            >
+              {permissions.add && (
                 <Button
-                  variant="text"
-                  onClick={() => navigate(-1)}
-                  sx={{ color: COLORS.muted, minWidth: 44 }}
+                  variant="outlined"
+                  startIcon={<UploadFileRounded />}
+                  onClick={() => setImportPlanOpen(true)}
+                  disabled={!selectedTermId || !gradeLevels.length}
+                  sx={{
+                    minHeight: 40,
+                    borderRadius: "11px",
+                    borderColor: "rgba(183,132,48,.42)",
+                    color: COLORS.gold,
+                    fontWeight: 800,
+                    bgcolor: "rgba(251,240,216,.34)",
+                    whiteSpace: "nowrap",
+                    "&:hover": { borderColor: COLORS.gold, bgcolor: COLORS.goldSoft },
+                  }}
                 >
-                  رجوع
+                  استيراد خطة المواد
                 </Button>
-              </Tooltip>
+              )}
+
+              {permissions.add && (
+                <Button
+                  variant="outlined"
+                  startIcon={<ContentCopyRounded />}
+                  onClick={copyFromPreviousYear}
+                  disabled={saving || academicYears.length < 2}
+                  sx={{
+                    minHeight: 40,
+                    borderRadius: "11px",
+                    borderColor: "#d7dde3",
+                    color: COLORS.navy,
+                    fontWeight: 800,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  نسخ من سنة سابقة
+                </Button>
+              )}
+
+              {permissions.add && (
+                <Button
+                  variant="contained"
+                  startIcon={<AddRounded />}
+                  onClick={() => setDialogOpen(true)}
+                  disabled={!terms.length || !subjects.length || !gradeLevels.length}
+                  sx={{
+                    minHeight: 40,
+                    borderRadius: "11px",
+                    bgcolor: COLORS.navy,
+                    fontWeight: 800,
+                    boxShadow: "none",
+                    whiteSpace: "nowrap",
+                    "&:hover": { bgcolor: COLORS.navy2, boxShadow: "none" },
+                  }}
+                >
+                  إضافة عرض مادة
+                </Button>
+              )}
+
+              <Button
+                variant="text"
+                onClick={() => navigate(-1)}
+                sx={{ color: COLORS.muted, minWidth: 54, fontWeight: 800 }}
+              >
+                رجوع
+              </Button>
             </Stack>
           </Stack>
         </Paper>
@@ -1058,170 +1964,170 @@ const SubjectOfferings = () => {
                 إعادة المحاولة
               </Button>
             }
-            sx={{ borderRadius: "13px", mb: 1.5 }}
+            sx={{ mt: 1.25, borderRadius: "14px" }}
           >
             {error}
           </Alert>
         ) : null}
 
-        <Grid container spacing={1.2} sx={{ mb: 1.5 }}>
-          <Grid item xs={12} md={4}>
-            <StatCard
-              icon={<MenuBookRounded />}
-              label="إجمالي العروض"
-              value={statistics.total}
-              helper="العروض المسجلة في الترم المحدد"
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <StatCard
-              icon={<SchoolRounded />}
-              label="الصفوف المرتبطة"
-              value={statistics.grades}
-              helper="صفوف لديها مواد مفعلة"
-              tone="green"
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <StatCard
-              icon={<CalendarMonthRounded />}
-              label="المواد المفعلة"
-              value={statistics.subjects}
-              helper={activeYear?.label || "السنة الدراسية الحالية"}
-              tone="gold"
-            />
-          </Grid>
-        </Grid>
+        <Box
+          sx={{
+            mt: 1.25,
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "repeat(3,minmax(0,1fr))" },
+            gap: 1,
+          }}
+        >
+          <StatCard
+            icon={<MenuBookRounded />}
+            label="إجمالي العروض"
+            value={statistics.total}
+            helper="العروض المسجلة في الترم المحدد"
+          />
+          <StatCard
+            icon={<SchoolRounded />}
+            label="الصفوف المرتبطة"
+            value={statistics.grades}
+            helper="صفوف لديها مواد مفعلة"
+            tone="green"
+          />
+          <StatCard
+            icon={<CalendarMonthRounded />}
+            label="المواد المفعلة"
+            value={statistics.subjects}
+            helper={activeYear?.label || "السنة الدراسية الحالية"}
+            tone="gold"
+          />
+        </Box>
 
         <Paper
           elevation={0}
           sx={{
-            p: 1.25,
+            mt: 1.25,
+            p: 1.2,
             border: `1px solid ${COLORS.border}`,
             borderRadius: "16px",
-            mb: 1.5,
+            backgroundColor: "#fff",
           }}
         >
-          <Grid container spacing={1} alignItems="center">
-            <Grid item xs={12} md={4.5}>
-              <TextField
-                fullWidth
-                size="small"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="ابحث باسم المادة أو الصف"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchRounded sx={{ color: "#8b98a4" }} />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{
-                  "& .MuiOutlinedInput-root": { borderRadius: "11px" },
-                }}
-              />
-            </Grid>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "minmax(260px,2fr) repeat(3,minmax(155px,1fr)) 42px",
+              },
+              gap: 0.8,
+              alignItems: "center",
+            }}
+          >
+            <TextField
+              fullWidth
+              size="small"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="ابحث باسم المادة أو الصف"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchRounded sx={{ color: "#8b98a4" }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ "& .MuiOutlinedInput-root": { borderRadius: "11px", bgcolor: "#fff" } }}
+            />
 
-            <Grid item xs={12} sm={4} md={2.5}>
-              <FormControl fullWidth size="small">
-                <InputLabel>السنة الدراسية</InputLabel>
-                <Select
-                  value={selectedYearId}
-                  label="السنة الدراسية"
-                  onChange={(event) => changeYear(event.target.value)}
-                  sx={{ borderRadius: "11px" }}
-                >
-                  {academicYears.map((year) => (
-                    <MenuItem key={year._id} value={year._id}>
-                      {year.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
+            <FormControl fullWidth size="small">
+              <InputLabel>السنة الدراسية</InputLabel>
+              <Select
+                value={selectedYearId}
+                label="السنة الدراسية"
+                onChange={(event) => changeYear(event.target.value)}
+                sx={{ borderRadius: "11px", bgcolor: "#fff" }}
+              >
+                {academicYears.map((year) => (
+                  <MenuItem key={year._id} value={year._id}>
+                    {year.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
-            <Grid item xs={12} sm={4} md={2.2}>
-              <FormControl fullWidth size="small">
-                <InputLabel>الترم</InputLabel>
-                <Select
-                  value={selectedTermId}
-                  label="الترم"
-                  onChange={(event) => {
-                    setSelectedTermId(event.target.value);
-                    setSelectedGradeId("");
+            <FormControl fullWidth size="small">
+              <InputLabel>الترم</InputLabel>
+              <Select
+                value={selectedTermId}
+                label="الترم"
+                onChange={(event) => {
+                  setSelectedTermId(event.target.value);
+                  setSelectedGradeId("");
+                }}
+                sx={{ borderRadius: "11px", bgcolor: "#fff" }}
+              >
+                {terms.map((term) => (
+                  <MenuItem key={term._id} value={term._id}>
+                    {term.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth size="small">
+              <InputLabel>الصف الدراسي</InputLabel>
+              <Select
+                value={selectedGradeId}
+                label="الصف الدراسي"
+                onChange={(event) => setSelectedGradeId(event.target.value)}
+                sx={{ borderRadius: "11px", bgcolor: "#fff" }}
+              >
+                <MenuItem value="">كل الصفوف</MenuItem>
+                {gradeLevels.map((grade) => (
+                  <MenuItem key={grade._id} value={grade._id}>
+                    {grade.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Tooltip title="تحديث البيانات">
+              <span>
+                <IconButton
+                  onClick={loadOfferings}
+                  disabled={loadingOfferings || !selectedTermId}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: "11px",
+                    bgcolor: "#fff",
                   }}
-                  sx={{ borderRadius: "11px" }}
                 >
-                  {terms.map((term) => (
-                    <MenuItem key={term._id} value={term._id}>
-                      {term.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} sm={4} md={2.2}>
-              <FormControl fullWidth size="small">
-                <InputLabel>الصف الدراسي</InputLabel>
-                <Select
-                  value={selectedGradeId}
-                  label="الصف الدراسي"
-                  onChange={(event) => setSelectedGradeId(event.target.value)}
-                  sx={{ borderRadius: "11px" }}
-                >
-                  <MenuItem value="">كل الصفوف</MenuItem>
-                  {gradeLevels.map((grade) => (
-                    <MenuItem key={grade._id} value={grade._id}>
-                      {grade.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={0.6}>
-              <Tooltip title="تحديث البيانات">
-                <span>
-                  <IconButton
-                    onClick={loadOfferings}
-                    disabled={loadingOfferings || !selectedTermId}
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      border: `1px solid ${COLORS.border}`,
-                      borderRadius: "11px",
-                    }}
-                  >
-                    <RefreshRounded />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </Grid>
-          </Grid>
+                  <RefreshRounded />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
         </Paper>
 
         <Paper
           elevation={0}
           sx={{
+            mt: 1.25,
             border: `1px solid ${COLORS.border}`,
             borderRadius: "18px",
             overflow: "hidden",
             bgcolor: "#fff",
           }}
         >
-          <Box sx={{ px: 2, py: 1.6 }}>
+          <Box sx={{ px: 2, py: 1.35 }}>
             <Stack
-              direction="row"
-              alignItems="center"
+              direction={{ xs: "column", md: "row" }}
+              alignItems={{ xs: "stretch", md: "center" }}
               justifyContent="space-between"
               gap={1}
             >
               <Box>
-                <Typography
-                  sx={{ color: COLORS.navy, fontWeight: 900, fontSize: 17 }}
-                >
+                <Typography sx={{ color: COLORS.navy, fontWeight: 900, fontSize: 17 }}>
                   العروض المسجلة
                 </Typography>
                 <Typography sx={{ color: COLORS.muted, fontSize: 10.5 }}>
@@ -1229,28 +2135,191 @@ const SubjectOfferings = () => {
                 </Typography>
               </Box>
 
-              <Chip
-                label={`${visibleOfferings.length} عرض`}
-                size="small"
-                sx={{ fontWeight: 800, bgcolor: "#eef3f7", color: COLORS.navy }}
-              />
+              <Stack direction="row" alignItems="center" gap={0.8} flexWrap="wrap">
+                <Chip
+                  label={`${visibleOfferings.length} عرض`}
+                  size="small"
+                  sx={{ fontWeight: 800, bgcolor: "#eef3f7", color: COLORS.navy }}
+                />
+
+                {changedPlanEntries.length ? (
+                  <Chip
+                    label={`${changedPlanEntries.length} تعديل غير محفوظ`}
+                    size="small"
+                    sx={{ fontWeight: 800, bgcolor: COLORS.goldSoft, color: COLORS.gold }}
+                  />
+                ) : null}
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<FactCheckRounded />}
+                  onClick={() => navigate("/school/lectures")}
+                  disabled={!selectedTermId}
+                  sx={{
+                    minHeight: 34,
+                    borderRadius: "10px",
+                    color: COLORS.navy,
+                    borderColor: "rgba(36,74,112,.16)",
+                    fontWeight: 800,
+                  }}
+                >
+                  فحص قابلية الجدول
+                </Button>
+
+                {permissions.edit && (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={
+                      savingPlan ? <CircularProgress size={16} color="inherit" /> : <SaveRounded />
+                    }
+                    onClick={savePlan}
+                    disabled={
+                      savingPlan ||
+                      loadingOfferings ||
+                      !changedPlanEntries.length ||
+                      hasInvalidPlanValue
+                    }
+                    sx={{
+                      minHeight: 34,
+                      borderRadius: "10px",
+                      bgcolor: COLORS.navy,
+                      fontWeight: 800,
+                      boxShadow: "none",
+                      "&:hover": { bgcolor: COLORS.navy2, boxShadow: "none" },
+                    }}
+                  >
+                    حفظ الخطة
+                  </Button>
+                )}
+              </Stack>
             </Stack>
           </Box>
 
           <Divider />
 
+          {!loadingInitial &&
+          !loadingOfferings &&
+          selectedTermId &&
+          gradePlanTotals.length ? (
+            <Box
+              sx={{
+                px: 2,
+                py: 1.05,
+                bgcolor: "#f8fafc",
+                borderBottom: `1px solid ${COLORS.border}`,
+              }}
+            >
+              <Stack direction="row" alignItems="center" gap={0.8} flexWrap="wrap">
+                <Typography
+                  sx={{ color: COLORS.muted, fontSize: 10.5, fontWeight: 800, ml: 0.5 }}
+                >
+                  إجمالي الخطة:
+                </Typography>
+
+                {gradePlanTotals.map((grade) => {
+                  const capacityKnown =
+                    Number.isFinite(slotsPerWeek) && slotsPerWeek > 0;
+                  const missing = capacityKnown
+                    ? Math.max(0, slotsPerWeek - grade.total)
+                    : 0;
+                  const excess = capacityKnown
+                    ? Math.max(0, grade.total - slotsPerWeek)
+                    : 0;
+                  const complete = capacityKnown && missing === 0 && excess === 0;
+                  const statusColor = excess
+                    ? COLORS.red
+                    : complete
+                    ? COLORS.green
+                    : capacityKnown
+                    ? COLORS.amber
+                    : COLORS.navy;
+                  const statusBackground = excess
+                    ? "#fff0f0"
+                    : complete
+                    ? "#edf8f3"
+                    : capacityKnown
+                    ? "#fff8e8"
+                    : "#eef3f7";
+                  const progressValue = capacityKnown
+                    ? Math.min(100, Math.max(0, (grade.total / slotsPerWeek) * 100))
+                    : 0;
+                  const statusText = !capacityKnown
+                    ? `${grade.total} حصة أسبوعيًا`
+                    : excess
+                    ? `تجاوزت السعة بـ ${excess} حصة`
+                    : complete
+                    ? `الخطة مكتملة (${grade.total} / ${slotsPerWeek})`
+                    : `متبقي توزيع ${missing} حصة (${grade.total} / ${slotsPerWeek})`;
+
+                  return (
+                    <Box
+                      key={grade.gradeLevelId}
+                      sx={{
+                        minWidth: { xs: "100%", sm: 280 },
+                        flex: "1 1 300px",
+                        px: 1.15,
+                        py: 0.85,
+                        borderRadius: "11px",
+                        bgcolor: statusBackground,
+                        border: `1px solid ${statusColor}22`,
+                      }}
+                    >
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        gap={1}
+                      >
+                        <Typography
+                          sx={{ color: COLORS.navy, fontSize: 10, fontWeight: 900 }}
+                        >
+                          {grade.gradeLabel}
+                        </Typography>
+                        <Typography
+                          sx={{ color: statusColor, fontSize: 9.5, fontWeight: 900 }}
+                        >
+                          {statusText}
+                        </Typography>
+                      </Stack>
+
+                      {capacityKnown ? (
+                        <LinearProgress
+                          variant="determinate"
+                          value={progressValue}
+                          sx={{
+                            mt: 0.65,
+                            height: 6,
+                            borderRadius: 99,
+                            bgcolor: "rgba(18,47,77,.08)",
+                            "& .MuiLinearProgress-bar": {
+                              borderRadius: 99,
+                              bgcolor: statusColor,
+                            },
+                          }}
+                        />
+                      ) : null}
+                    </Box>
+                  );
+                })}
+              </Stack>
+            </Box>
+          ) : null}
+
           {loadingInitial || loadingOfferings ? (
-            <Grid container spacing={1.2} sx={{ p: 1.6 }}>
+            <Box
+              sx={{
+                p: 1.4,
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))" },
+                gap: 1.1,
+              }}
+            >
               {[1, 2, 3, 4, 5, 6].map((item) => (
-                <Grid item xs={12} md={6} key={item}>
-                  <Skeleton
-                    variant="rounded"
-                    height={88}
-                    sx={{ borderRadius: "14px" }}
-                  />
-                </Grid>
+                <Skeleton key={item} variant="rounded" height={88} sx={{ borderRadius: "14px" }} />
               ))}
-            </Grid>
+            </Box>
           ) : !selectedTermId ? (
             <Box sx={{ py: 8, px: 2, textAlign: "center" }}>
               <CalendarMonthRounded sx={{ fontSize: 44, color: "#c2cad1" }} />
@@ -1279,15 +2348,9 @@ const SubjectOfferings = () => {
                   color: COLORS.gold,
                 }}
               >
-                {search || selectedGradeId ? (
-                  <SearchOffRounded />
-                ) : (
-                  <MenuBookRounded />
-                )}
+                {search || selectedGradeId ? <SearchOffRounded /> : <MenuBookRounded />}
               </Box>
-              <Typography
-                sx={{ color: COLORS.navy, fontWeight: 900, mt: 1.2, fontSize: 16 }}
-              >
+              <Typography sx={{ color: COLORS.navy, fontWeight: 900, mt: 1.2, fontSize: 16 }}>
                 {search || selectedGradeId
                   ? "لا توجد عروض مطابقة"
                   : "لم تتم إضافة عروض مواد لهذا الترم"}
@@ -1295,7 +2358,7 @@ const SubjectOfferings = () => {
               <Typography sx={{ color: COLORS.muted, fontSize: 11, mt: 0.4 }}>
                 أضف المادة وحدد الصف الدراسي والترم لبدء استخدامها في الإسناد والجدول
               </Typography>
-              {!search && !selectedGradeId ? (
+              {!search && !selectedGradeId && permissions.add ? (
                 <Button
                   variant="contained"
                   startIcon={<AddRounded />}
@@ -1313,82 +2376,122 @@ const SubjectOfferings = () => {
               ) : null}
             </Box>
           ) : (
-            <Grid container spacing={1.2} sx={{ p: 1.6 }}>
+            <Box
+              sx={{
+                p: 1.4,
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))" },
+                gap: 1.1,
+              }}
+            >
               {visibleOfferings.map((item) => (
-                <Grid item xs={12} md={6} key={item.id}>
-                  <Paper
-                    elevation={0}
+                <Paper
+                  key={item.id}
+                  elevation={0}
+                  sx={{
+                    minHeight: 88,
+                    p: 1.2,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: "14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    bgcolor: "#fff",
+                    transition: "border-color .18s ease, box-shadow .18s ease",
+                    "&:hover": {
+                      borderColor: "#c9c1b6",
+                      boxShadow: "0 7px 18px rgba(18,47,77,.045)",
+                    },
+                  }}
+                >
+                  <Box
                     sx={{
-                      minHeight: 88,
-                      p: 1.4,
-                      border: `1px solid ${COLORS.border}`,
-                      borderRadius: "14px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1.2,
-                      transition: "0.18s ease",
-                      "&:hover": {
-                        borderColor: "#b9c7d3",
-                        boxShadow: "0 8px 22px rgba(18,47,77,.055)",
-                      },
+                      width: 44,
+                      height: 44,
+                      borderRadius: "12px",
+                      display: "grid",
+                      placeItems: "center",
+                      bgcolor: COLORS.goldSoft,
+                      color: COLORS.gold,
+                      flexShrink: 0,
                     }}
                   >
-                    <Box
-                      sx={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: "12px",
-                        display: "grid",
-                        placeItems: "center",
-                        bgcolor: COLORS.goldSoft,
-                        color: COLORS.gold,
-                        flexShrink: 0,
-                      }}
+                    <MenuBookRounded />
+                  </Box>
+
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                      noWrap
+                      sx={{ color: COLORS.navy, fontWeight: 900, fontSize: 13.5 }}
                     >
-                      <MenuBookRounded />
-                    </Box>
+                      {item.subjectLabel}
+                    </Typography>
 
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography
-                        noWrap
+                    <Stack direction="row" gap={0.6} mt={0.55} flexWrap="wrap">
+                      <Chip
+                        size="small"
+                        label={item.gradeLabel}
                         sx={{
+                          height: 21,
+                          fontSize: 8.5,
+                          fontWeight: 700,
+                          bgcolor: "#eef3f7",
                           color: COLORS.navy,
-                          fontWeight: 900,
-                          fontSize: 14,
                         }}
-                      >
-                        {item.subjectLabel}
-                      </Typography>
+                      />
+                      <Chip
+                        size="small"
+                        label={item.termLabel}
+                        sx={{
+                          height: 21,
+                          fontSize: 8.5,
+                          fontWeight: 700,
+                          bgcolor: "#edf6f2",
+                          color: COLORS.green,
+                        }}
+                      />
+                    </Stack>
+                  </Box>
 
-                      <Stack direction="row" gap={0.7} mt={0.65} flexWrap="wrap">
-                        <Chip
-                          size="small"
-                          label={item.gradeLabel}
-                          sx={{ height: 22, fontSize: 9, fontWeight: 700 }}
-                        />
-                        <Chip
-                          size="small"
-                          label={item.termLabel}
-                          sx={{
-                            height: 22,
-                            fontSize: 9,
-                            fontWeight: 700,
-                            bgcolor: "#edf6f2",
-                            color: COLORS.green,
-                          }}
-                        />
-                      </Stack>
-                    </Box>
+                  <TextField
+                    type="number"
+                    size="small"
+                    label="الحصص / الأسبوع"
+                    value={planDraft[item.id] ?? item.periodsPerWeek ?? 0}
+                    onChange={(event) => updatePlanValue(item.id, event.target.value)}
+                    inputProps={{ min: 0, max: 20, step: 1, inputMode: "numeric" }}
+                    error={
+                      planDraft[item.id] === "" ||
+                      Number(planDraft[item.id]) < 0 ||
+                      Number(planDraft[item.id]) > 20
+                    }
+                    sx={{
+                      width: { xs: 110, sm: 125 },
+                      flexShrink: 0,
+                      "& .MuiOutlinedInput-root": { borderRadius: "10px", bgcolor: "#fff" },
+                      "& input": {
+                        textAlign: "center",
+                        fontWeight: 900,
+                        color: COLORS.navy,
+                        py: 1,
+                      },
+                      "& .MuiInputLabel-root": { fontSize: 11 },
+                    }}
+                  />
 
+                  {permissions.delete && (
                     <Tooltip title="حذف العرض">
                       <span>
                         <IconButton
                           onClick={() => removeOffering(item)}
                           disabled={deletingId === item.id}
                           sx={{
+                            width: 42,
+                            height: 42,
                             color: COLORS.red,
                             bgcolor: "#fff2f2",
                             borderRadius: "10px",
+                            flexShrink: 0,
                             "&:hover": { bgcolor: "#ffe7e7" },
                           }}
                         >
@@ -1400,24 +2503,37 @@ const SubjectOfferings = () => {
                         </IconButton>
                       </span>
                     </Tooltip>
-                  </Paper>
-                </Grid>
+                  )}
+                </Paper>
               ))}
-            </Grid>
+            </Box>
           )}
         </Paper>
-      </Box>
 
-      <SubjectOfferingDialog
-        open={dialogOpen}
-        loading={saving}
-        subjects={subjects}
-        gradeLevels={gradeLevels}
-        terms={terms}
-        initialValues={dialogDefaults}
-        onClose={() => setDialogOpen(false)}
-        onSubmit={createOffering}
-      />
+        <TeachingPlanImportDialog
+          open={importPlanOpen}
+          termId={selectedTermId}
+          initialGradeId={selectedGradeId}
+          gradeLevels={gradeLevels}
+          onClose={() => setImportPlanOpen(false)}
+          onImported={async ({ gradeLevelId }) => {
+            setSelectedGradeId(gradeLevelId);
+            setSearch("");
+            setPlanDraft({});
+            await loadOfferings();
+          }}
+        />
+
+        <SubjectOfferingDialog
+          open={dialogOpen}
+          loading={saving}
+          subjects={subjects}
+          gradeLevels={gradeLevels}
+          terms={terms}
+          initialValues={dialogDefaults}
+          onClose={() => setDialogOpen(false)}
+          onSubmit={createOffering}
+        />
       </Box>
     </Container>
   );

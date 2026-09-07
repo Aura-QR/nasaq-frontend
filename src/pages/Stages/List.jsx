@@ -47,6 +47,7 @@ import {
 import Container from "@/components/Container/Container";
 import StageFormDialog from "@/components/Stages/StageFormDialog";
 import StageDeleteDialog from "@/components/Stages/StageDeleteDialog";
+import usePermissions from "@/utils/hooks/usePermissions";
 
 import {
   createStage,
@@ -215,6 +216,8 @@ const StatCard = ({
 );
 
 const StagesList = () => {
+  const permissions = usePermissions("classes");
+
   const [
     stages,
     setStages,
@@ -682,54 +685,56 @@ const StagesList = () => {
                 تحديث
               </Button>
 
-              <Button
-                type="button"
-                onClick={() =>
-                  setFormDialog({
-                    open: true,
-                    stage: null,
-                  })
-                }
-                startIcon={
-                  <AddRounded />
-                }
-                variant="contained"
-                sx={{
-                  minHeight: 42,
+              {permissions.add && (
+                <Button
+                  type="button"
+                  onClick={() =>
+                    setFormDialog({
+                      open: true,
+                      stage: null,
+                    })
+                  }
+                  startIcon={
+                    <AddRounded />
+                  }
+                  variant="contained"
+                  sx={{
+                    minHeight: 42,
 
-                  px: 2,
+                    px: 2,
 
-                  borderRadius:
-                    "12px",
+                    borderRadius:
+                      "12px",
 
-                  color:
-                    "#ffffff",
+                    color:
+                      "#ffffff",
 
-                  backgroundColor:
-                    "#244a70",
-
-                  boxShadow:
-                    "none",
-
-                  fontWeight: 800,
-
-                  "&:hover": {
                     backgroundColor:
-                      "#1b3d61",
+                      "#244a70",
 
                     boxShadow:
                       "none",
-                  },
 
-                  "& .MuiButton-startIcon":
-                    {
-                      ml: 0.65,
-                      mr: 0,
+                    fontWeight: 800,
+
+                    "&:hover": {
+                      backgroundColor:
+                        "#1b3d61",
+
+                      boxShadow:
+                        "none",
                     },
-                }}
-              >
-                إضافة مرحلة جديدة
-              </Button>
+
+                    "& .MuiButton-startIcon":
+                      {
+                        ml: 0.65,
+                        mr: 0,
+                      },
+                  }}
+                >
+                  إضافة مرحلة جديدة
+                </Button>
+              )}
             </Stack>
           </Stack>
         </Paper>
@@ -1051,7 +1056,8 @@ const StagesList = () => {
                     : "ابدأ بإضافة المرحلة الابتدائية ثم المتوسطة والثانوية."}
                 </Typography>
 
-                {!stages.length && (
+                {!stages.length &&
+                  permissions.add && (
                   <Button
                     type="button"
                     variant="contained"
@@ -1308,6 +1314,7 @@ const StagesList = () => {
                                   justifyContent="center"
                                   gap={0.45}
                                 >
+                                  {permissions.edit && (
                                   <Tooltip title="تعديل المرحلة">
                                     <IconButton
                                       type="button"
@@ -1335,7 +1342,9 @@ const StagesList = () => {
                                       />
                                     </IconButton>
                                   </Tooltip>
+                                  )}
 
+                                  {permissions.delete && (
                                   <Tooltip title="حذف المرحلة">
                                     <IconButton
                                       type="button"
@@ -1362,6 +1371,7 @@ const StagesList = () => {
                                       />
                                     </IconButton>
                                   </Tooltip>
+                                  )}
                                 </Stack>
                               </TableCell>
                             </TableRow>
@@ -1486,6 +1496,7 @@ const StagesList = () => {
                                 "1px solid rgba(36,74,112,0.07)",
                             }}
                           >
+                            {permissions.edit && (
                             <Button
                               type="button"
                               size="small"
@@ -1507,7 +1518,9 @@ const StagesList = () => {
                             >
                               تعديل
                             </Button>
+                            )}
 
+                            {permissions.delete && (
                             <Button
                               type="button"
                               size="small"
@@ -1526,6 +1539,7 @@ const StagesList = () => {
                             >
                               حذف
                             </Button>
+                            )}
                           </Stack>
                         </Paper>
                       )

@@ -63,9 +63,24 @@ const extractTeachersPagination = (
 ) => {
   const data = unwrapTeacherPayload(payload);
 
+  /**
+   * The response interceptor puts pagination *beside* data, not inside it:
+   *
+   *   { status, message, data: [...], pagination: { totalDocs, totalPages } }
+   *
+   * unwrapTeacherPayload drills down to `data`, so looking only there found
+   * nothing, totalPages fell back to 1, and the pager stayed hidden — the
+   * page showed the first ten teachers of forty-three with no way to reach
+   * the rest. Look at the envelope as well as its contents.
+   */
+  const envelope = payload?.data ?? payload ?? {};
+
   const pagination =
     data?.pagination ||
+    envelope?.pagination ||
+    payload?.pagination ||
     data?.meta ||
+    envelope?.meta ||
     data?.pageInfo ||
     {};
 
@@ -89,7 +104,10 @@ const extractTeachersPagination = (
 
   const total =
     Number(
-      pagination?.total ??
+      // The server's name for it. Without this the count fell back to the
+      // number of rows on the page — a school of thirty reporting twenty-five.
+      pagination?.totalDocs ??
+        pagination?.total ??
         pagination?.totalItems ??
         pagination?.count ??
         data?.total ??

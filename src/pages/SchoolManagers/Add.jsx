@@ -42,8 +42,16 @@ import Container from "@/components/Container/Container";
 
 import {
   createManager,
-  MANAGER_DEFAULT_PERMISSIONS,
 } from "@/APIs/school/managers";
+
+import {
+  useAuthUser,
+} from "react-auth-kit";
+
+import {
+  ROLES,
+  normalizeRole,
+} from "@/shared/auth/roles";
 
 const EMAIL_PATTERN =
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -119,6 +127,16 @@ const fieldSx = {
 
 const SchoolManagerAdd = () => {
   const navigate = useNavigate();
+  const getAuthUser = useAuthUser();
+  const authState =
+    getAuthUser?.() || {};
+  const currentRole =
+    normalizeRole(
+      authState?.user?.role ||
+        authState?.role
+    );
+  const canCreateSupervisor =
+    currentRole === ROLES.OWNER;
 
   const [loading, setLoading] =
     useState(false);
@@ -158,10 +176,15 @@ const SchoolManagerAdd = () => {
         .trim()
         .toUpperCase();
 
-    const permissions =
-      role === "SUPERVISOR"
-        ? ["*"]
-        : MANAGER_DEFAULT_PERMISSIONS;
+    if (
+      role === ROLES.SUPERVISOR &&
+      !canCreateSupervisor
+    ) {
+      toast.error(
+        "إنشاء مدير مدرسة جديد متاح لمالك المدرسة فقط"
+      );
+      return;
+    }
 
     const payload = {
       username:
@@ -176,8 +199,6 @@ const SchoolManagerAdd = () => {
         values.password,
 
       role,
-
-      permissions,
     };
 
     setLoading(true);
@@ -205,8 +226,8 @@ const SchoolManagerAdd = () => {
 
     toast.success(
       role === "SUPERVISOR"
-        ? "تم إنشاء حساب المشرف بنجاح"
-        : "تم إنشاء حساب المدير بنجاح"
+        ? "تم إنشاء حساب مدير المدرسة بنجاح"
+        : "تم إنشاء حساب مساعد إداري بنجاح"
     );
 
     navigate(
@@ -397,21 +418,23 @@ const SchoolManagerAdd = () => {
                           },
                       }}
                     >
-                      <ToggleButton
-                        value="SUPERVISOR"
-                        aria-label="مشرف"
-                      >
-                        <SupervisorAccountRounded
-                          sx={{
-                            fontSize: 18,
-                          }}
-                        />
-                        مشرف
-                      </ToggleButton>
+                      {canCreateSupervisor && (
+                        <ToggleButton
+                          value="SUPERVISOR"
+                          aria-label="مدير المدرسة"
+                        >
+                          <SupervisorAccountRounded
+                            sx={{
+                              fontSize: 18,
+                            }}
+                          />
+                          مدير المدرسة
+                        </ToggleButton>
+                      )}
 
                       <ToggleButton
                         value="MANAGER"
-                        aria-label="مدير"
+                        aria-label="مساعد إداري"
                       >
                         <AdminPanelSettingsRounded
                           sx={{
@@ -501,8 +524,8 @@ const SchoolManagerAdd = () => {
                     أنشئ بيانات دخول جديدة لحساب{" "}
                     {selectedRole ===
                     "SUPERVISOR"
-                      ? "مشرف"
-                      : "مدير"}
+                      ? "مدير المدرسة"
+                      : "مساعد إداري"}
                     .
                   </Typography>
                 </Box>
@@ -551,8 +574,8 @@ const SchoolManagerAdd = () => {
                 >
                   {selectedRole ===
                   "SUPERVISOR"
-                    ? "سيُنشأ الحساب بصلاحيات تشغيلية كاملة، دون صلاحية رؤية أو إدارة الحسابات الإدارية."
-                    : `سيتم تطبيق ${MANAGER_DEFAULT_PERMISSIONS.length} صلاحية إدارية وأكاديمية لدور المدير، دون المالية والمصروفات.`}
+                    ? "سيُنشأ الحساب بصلاحيات كاملة داخل المدرسة، ويستطيع إنشاء حسابات المساعدين الإداريين وإدارتها. لا يستطيع إنشاء مدير آخر."
+                    : "سيُنشأ الحساب بصلاحيات المساعد الإداري المعرّفة على مستوى المدرسة: يستطيع تحصيل المدفوعات، ولا يستطيع تعديل الرسوم أو خطط التقسيط."}
                 </Typography>
               </Box>
 
@@ -850,9 +873,9 @@ const SchoolManagerAdd = () => {
                     />
                   ) : selectedRole ===
                     "SUPERVISOR" ? (
-                    "إنشاء حساب مشرف"
+                    "إنشاء حساب مدير المدرسة"
                   ) : (
-                    "إنشاء حساب مدير"
+                    "إنشاء حساب مساعد إداري"
                   )}
                 </Button>
               </Stack>

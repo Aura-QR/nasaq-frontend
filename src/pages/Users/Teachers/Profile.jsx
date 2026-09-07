@@ -19,7 +19,6 @@ import {
   EmailOutlined,
   HomeOutlined,
   LocalPhoneOutlined,
-  MenuBookRounded,
   PersonOutlineRounded,
   SchoolOutlined,
   ToggleOnRounded,
@@ -34,7 +33,6 @@ import {
 
 import {
   useEffect,
-  useMemo,
   useState,
 } from "react";
 
@@ -42,45 +40,15 @@ import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
 import Popup from "@/components/Popup/Popup";
-import SubjectCheckBoxes from "@/components/Selector/SubjectCheckBoxes";
 
 import {
   deleteTeacher,
-  editTeacher,
   toggleActiveTeacher,
 } from "@/APIs/users/teachers";
 
 import { formatDate } from "@/utils/helpers/dateUtils";
 import { useTeacher } from "@/utils/hooks/apis/useTeacher";
 import usePermissions from "@/utils/hooks/usePermissions";
-
-const getSubjects = (teacher) => {
-  const subjects = Array.isArray(
-    teacher?.subjects
-  )
-    ? teacher.subjects
-    : Array.isArray(teacher?.subject)
-    ? teacher.subject
-    : [];
-
-  if (subjects.length > 0) {
-    return subjects;
-  }
-
-  const offerings = Array.isArray(
-    teacher?.subjectOfferings
-  )
-    ? teacher.subjectOfferings
-    : [];
-
-  return offerings
-    .map(
-      (offering) =>
-        offering?.subjectId ||
-        offering?.subject
-    )
-    .filter(Boolean);
-};
 
 const infoCardSx = {
   p: 1.4,
@@ -203,17 +171,8 @@ const Profile = () => {
   const teacherPermissions =
     usePermissions("teachers");
 
-  const subjectPermissions =
-    usePermissions("subjects");
-
   const lecturePermissions =
     usePermissions("lectures");
-
-  // Backend rule:
-  // PATCH /teachers/:id is controlled by teachers.update only.
-  // usePermissions("teachers").edit maps to that update permission.
-  const canEditTeacherSubjects =
-    teacherPermissions.edit;
 
   const handleDelete = async () => {
     if (!teacherPermissions.delete) {
@@ -389,13 +348,6 @@ const Profile = () => {
           teacher={item}
         />
 
-        <TeacherSubjects
-          teacher={item}
-          setTeacher={setItem}
-          canEdit={
-            canEditTeacherSubjects
-          }
-        />
       </Stack>
 
       <Popup
@@ -417,9 +369,6 @@ const TeacherHeader = ({
   onToggleStatus,
   onDelete,
 }) => {
-  const subjects =
-    getSubjects(teacher);
-
   return (
     <Paper
       elevation={0}
@@ -545,8 +494,6 @@ const TeacherHeader = ({
           >
             {teacher.specialization ||
               "بدون تخصص"}
-            {" • "}
-            {subjects.length} مادة
           </Typography>
         </Box>
       </Stack>
@@ -711,9 +658,6 @@ const TeacherHeader = ({
 const TeacherDetails = ({
   teacher,
 }) => {
-  const subjects =
-    getSubjects(teacher);
-
   const data = [
     {
       label: "رقم الهاتف",
@@ -769,20 +713,6 @@ const TeacherDetails = ({
         teacher.address ||
         "لا يوجد",
       icon: <HomeOutlined />,
-    },
-    {
-      label: "المواد الدراسية",
-      value:
-        subjects
-          .map(
-            (subject) =>
-              subject?.subjectName ||
-              subject?.name
-          )
-          .filter(Boolean)
-          .join(" - ") ||
-        "لا يوجد",
-      icon: <MenuBookRounded />,
     },
   ];
 
@@ -847,264 +777,6 @@ const TeacherDetails = ({
           </Grid>
         ))}
       </Grid>
-    </Paper>
-  );
-};
-
-const TeacherSubjects = ({
-  teacher,
-  setTeacher,
-  canEdit,
-}) => {
-  const { id } = useParams();
-
-  const originalIds = useMemo(() => {
-    const offerings = Array.isArray(
-      teacher?.subjectOfferings
-    )
-      ? teacher.subjectOfferings
-      : [];
-
-    return offerings
-      .map(
-        (offering) =>
-          offering?._id ||
-          offering?.id ||
-          offering
-      )
-      .filter(Boolean)
-      .map(String);
-  }, [teacher]);
-
-  const [
-    selectedSubjects,
-    setSelectedSubjects,
-  ] = useState(originalIds);
-
-  const [loading, setLoading] =
-    useState(false);
-
-  useEffect(() => {
-    setSelectedSubjects(originalIds);
-  }, [originalIds]);
-
-  const handleSaveChanges =
-    async () => {
-      if (!canEdit) {
-        toast.error(
-          "ليس لديك صلاحية تعديل مواد المعلم"
-        );
-        return;
-      }
-
-      if (
-        selectedSubjects.length === 0
-      ) {
-        toast.error(
-          "يرجى اختيار مادة دراسية واحدة على الأقل"
-        );
-        return;
-      }
-
-      const normalizedCurrent = [
-        ...selectedSubjects,
-      ].sort();
-
-      const normalizedOriginal = [
-        ...originalIds,
-      ].sort();
-
-      if (
-        JSON.stringify(
-          normalizedCurrent
-        ) ===
-        JSON.stringify(
-          normalizedOriginal
-        )
-      ) {
-        toast.info(
-          "لا توجد تغييرات لحفظها"
-        );
-        return;
-      }
-
-      try {
-        setLoading(true);
-
-        const response =
-          await editTeacher(
-            {
-              subjectOfferingIds:
-                selectedSubjects,
-            },
-            id
-          );
-
-        if (!response?.status) {
-          toast.error(
-            response?.message ||
-              response ||
-              "حدث خطأ أثناء تعديل مواد المعلم"
-          );
-          return;
-        }
-
-        const updatedTeacher =
-          response?.data?.teacher;
-
-        setTeacher((previous) => ({
-          ...previous,
-          ...(updatedTeacher || {}),
-          subjects:
-            updatedTeacher?.subjects ??
-            updatedTeacher?.subject ??
-            previous?.subjects ??
-            [],
-          subjectIds:
-            updatedTeacher?.subjectIds ??
-            previous?.subjectIds ??
-            [],
-          subjectOfferings:
-            updatedTeacher?.subjectOfferings ??
-            previous?.subjectOfferings ??
-            [],
-        }));
-
-        toast.success(
-          "تم تعديل مواد المعلم بنجاح"
-        );
-      } catch (error) {
-        toast.error(
-          error?.response?.data
-            ?.message ||
-            "حدث خطأ أثناء تعديل مواد المعلم"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        p: {
-          xs: 1.5,
-          md: 1.9,
-        },
-
-        border:
-          "1px solid rgba(36, 74, 112, 0.08)",
-        borderRadius: "20px",
-
-        backgroundColor:
-          "var(--color-cream)",
-
-        boxShadow:
-          "0 10px 24px rgba(18, 47, 77, 0.055)",
-      }}
-    >
-      <Stack
-        direction={{
-          xs: "column",
-          sm: "row",
-        }}
-        alignItems={{
-          xs: "stretch",
-          sm: "center",
-        }}
-        justifyContent="space-between"
-        gap={1}
-        sx={{ mb: 1.2 }}
-      >
-        <Box>
-          <Typography
-            component="h2"
-            sx={{
-              color:
-                "var(--color-navy-deep)",
-              fontSize: "16px",
-              fontWeight: 800,
-            }}
-          >
-            المواد الدراسية
-          </Typography>
-
-          <Typography
-            sx={{
-              mt: 0.25,
-              color:
-                "var(--color-muted)",
-              fontSize: "9.5px",
-            }}
-          >
-            المواد التي يستطيع المعلم
-            تدريسها داخل المنصة.
-          </Typography>
-        </Box>
-
-        {canEdit && (
-          <Button
-            type="button"
-            disabled={loading}
-            onClick={
-              handleSaveChanges
-            }
-            variant="contained"
-            sx={{
-              minHeight: 40,
-              px: 1.8,
-
-              borderRadius: "12px",
-
-              color:
-                "var(--color-white)",
-              background:
-                "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-
-              fontSize: "11px",
-              fontWeight: 800,
-              textTransform: "none",
-            }}
-          >
-            {loading
-              ? "جاري الحفظ..."
-              : "حفظ المواد"}
-          </Button>
-        )}
-      </Stack>
-
-      <Box
-        sx={{
-          p: 1.1,
-
-          border:
-            "1px solid rgba(36, 74, 112, 0.08)",
-          borderRadius: "14px",
-
-          backgroundColor:
-            "var(--color-white)",
-
-          pointerEvents:
-            canEdit
-              ? "auto"
-              : "none",
-
-          opacity:
-            canEdit
-              ? 1
-              : 0.72,
-        }}
-      >
-        <SubjectCheckBoxes
-          selectedSubjects={
-            selectedSubjects
-          }
-          setSelectedSubjects={
-            setSelectedSubjects
-          }
-        />
-      </Box>
     </Paper>
   );
 };

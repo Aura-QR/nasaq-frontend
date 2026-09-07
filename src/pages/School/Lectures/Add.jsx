@@ -592,11 +592,14 @@ const Add = () => {
           gradeLevelId,
           termId: selectedTermId,
         }),
-        fetchTeacherAssignments(
-          queryTeacherId
+        fetchTeacherAssignments({
+          ...(queryTeacherId
             ? { teacherId: queryTeacherId }
-            : {}
-        ),
+            : {}),
+          ...(selectedClassId
+            ? { classId: selectedClassId }
+            : {}),
+        }),
       ]);
 
       if (!mounted) {
@@ -687,6 +690,7 @@ const Add = () => {
   }, [
     classDetails,
     selectedTermId,
+    selectedClassId,
     queryTeacherId,
     teacherSubjectIds,
     setValue,
@@ -712,6 +716,9 @@ const Add = () => {
         await fetchTeacherAssignments({
           subjectOfferingId:
             selectedOfferingId,
+          ...(selectedClassId
+            ? { classId: selectedClassId }
+            : {}),
         });
 
       if (!mounted) {
@@ -760,6 +767,7 @@ const Add = () => {
   }, [
     queryTeacherId,
     selectedOfferingId,
+    selectedClassId,
     setValue,
   ]);
 

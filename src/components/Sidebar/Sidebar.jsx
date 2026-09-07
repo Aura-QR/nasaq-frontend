@@ -17,6 +17,9 @@ import {
   DashboardRounded,
   GroupsRounded,
   HowToRegRounded,
+  ShieldRounded,
+  EventBusyRounded,
+  InsightsRounded,
   FactCheckRounded,
   AssignmentTurnedInRounded,
   AccountCircleRounded,
@@ -123,8 +126,8 @@ const getDisplayName = (user) => {
 
 const ROLE_LABELS = {
   OWNER: "مالك المدرسة",
-  SUPERVISOR: "مشرف المدرسة",
-  MANAGER: "مدير المدرسة",
+  SUPERVISOR: "مدير المدرسة",
+  MANAGER: "مساعد إداري",
   TEACHER: "معلم",
   STUDENT: "طالب",
   SUPER_ADMIN: "مدير المنصة",
@@ -198,12 +201,6 @@ const Sidebar = ({ active, setActive }) => {
   const roleLabel =
     ROLE_LABELS[role] || "مستخدم";
 
-  const userId =
-    user?._id ||
-    user?.id ||
-    user?.userId ||
-    "";
-
   const isTeacher = role === "TEACHER";
 
   const canManageAcademicYears =
@@ -245,11 +242,13 @@ const Sidebar = ({ active, setActive }) => {
             show: teachersPermissions.read,
           },
           {
-            name: "المديرون والمشرفون",
+            name: "المديرون والمساعدون",
             Icon: ManageAccountsRounded,
             iconType: "mui",
             to: "/school/managers",
-            show: role === "OWNER",
+            show:
+              role === "OWNER" ||
+              role === "SUPERVISOR",
           },
         ],
       },
@@ -305,6 +304,15 @@ const Sidebar = ({ active, setActive }) => {
             show:
               subjectOfferingsPermissions.read ||
               subjectsPermissions.read,
+          },
+          {
+            name: "المناهج والدروس",
+            Icon: AutoStoriesRounded,
+            iconType: "mui",
+            to: "/school/curriculum",
+            show:
+              role === "OWNER" ||
+              role === "MANAGER",
           },
           {
             name: "إدارة الفصول",
@@ -369,6 +377,27 @@ const Sidebar = ({ active, setActive }) => {
             Icon: HowToRegRounded,
             iconType: "mui",
             to: "/school/teacher-attendance",
+            show: canManageSchoolSettings,
+          },
+          {
+            name: "الاحتياطي والمناوبة",
+            Icon: ShieldRounded,
+            iconType: "mui",
+            to: "/school/duty",
+            show: canManageSchoolSettings,
+          },
+          {
+            name: "طلبات الاستئذان",
+            Icon: EventBusyRounded,
+            iconType: "mui",
+            to: "/school/leave-requests",
+            show: canManageSchoolSettings,
+          },
+          {
+            name: "تقرير الاحتياطي",
+            Icon: InsightsRounded,
+            iconType: "mui",
+            to: "/school/cover-report",
             show: canManageSchoolSettings,
           },
           {
@@ -613,6 +642,13 @@ const Sidebar = ({ active, setActive }) => {
               show: true,
             },
             {
+              name: "الاستئذان والاحتياطي",
+              Icon: EventBusyRounded,
+              iconType: "mui",
+              to: "/teacher/duty",
+              show: true,
+            },
+            {
               name: "تحضيراتي",
               icon: preparationIcon,
               to: "/teacher/preparations",
@@ -662,6 +698,7 @@ const Sidebar = ({ active, setActive }) => {
 
     return baseCategories;
   }, [
+    role,
     isTeacher,
     canManageAcademicYears,
     canManageSchoolSettings,

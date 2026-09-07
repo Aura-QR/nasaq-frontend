@@ -48,3 +48,71 @@ export const syncFinancialPermissions =
       );
     }
   };
+
+
+const normalizePermissionsRole = (role) =>
+  String(role || "")
+    .trim()
+    .toUpperCase();
+
+/**
+ * Replaces the complete school-level permissions object for one configurable role.
+ * Valid backend roles: MANAGER, TEACHER, STUDENT.
+ */
+export const updateSchoolRolePermissions =
+  async (
+    role,
+    permissions = {}
+  ) => {
+    const normalizedRole =
+      normalizePermissionsRole(
+        role
+      );
+
+    if (
+      ![
+        "MANAGER",
+        "TEACHER",
+        "STUDENT",
+      ].includes(
+        normalizedRole
+      )
+    ) {
+      return {
+        status: false,
+        message:
+          "الدور المطلوب لا يدعم تعديل الصلاحيات",
+      };
+    }
+
+    if (
+      !permissions ||
+      typeof permissions !==
+        "object" ||
+      Array.isArray(permissions)
+    ) {
+      return {
+        status: false,
+        message:
+          "بيانات الصلاحيات غير صحيحة",
+      };
+    }
+
+    try {
+      const response =
+        await api.patch(
+          `${ENDPOINT}/${normalizedRole}`,
+          { permissions }
+        );
+
+      return {
+        status: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return getApiError(
+        error,
+        "تعذر تحديث صلاحيات الدور"
+      );
+    }
+  };

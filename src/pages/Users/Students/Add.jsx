@@ -12,7 +12,7 @@ import {
 } from "@mui/icons-material";
 
 import { useForm } from "react-hook-form";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Link,
   useNavigate,
@@ -28,6 +28,10 @@ import {
   addStudent,
   getStudentResponseId,
 } from "@/APIs/school/students";
+
+import {
+  fetchBusPlans,
+} from "@/APIs/financials/busPlans";
 
 import {
   generateStudentEmail,
@@ -49,6 +53,35 @@ const getReferenceId = (value) => {
   return String(value).trim();
 };
 
+
+const asArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.docs)) return value.docs;
+  if (Array.isArray(value?.items)) return value.items;
+  return [];
+};
+
+const serviceTypeLabel = (value) =>
+  ({
+    pickup: "ذهاب فقط",
+    dropoff: "عودة فقط",
+    both: "ذهاب وعودة",
+  }[value] || "خدمة باص");
+
+const getBusEnrollmentWarning = (
+  response
+) =>
+  response?.data?.busEnrollmentWarning ||
+  response?.data?.student
+    ?.busEnrollmentWarning ||
+  response?.data?.data
+    ?.busEnrollmentWarning ||
+  response?.student
+    ?.busEnrollmentWarning ||
+  response?.busEnrollmentWarning ||
+  "";
+
 const Add = () => {
   const {
     register,
@@ -61,11 +94,90 @@ const Add = () => {
         .toISOString()
         .split("T")[0],
       isActive: 1,
+      busPlanId: "",
     },
   });
 
   const [loading, setLoading] =
     useState(false);
+
+  const [
+    busPlans,
+    setBusPlans,
+  ] = useState([]);
+
+  const [
+    busPlansLoading,
+    setBusPlansLoading,
+  ] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadBusPlans = async () => {
+      setBusPlansLoading(true);
+
+      try {
+        const response =
+          await fetchBusPlans();
+
+        if (!mounted) return;
+
+        if (
+          response?.status === false
+        ) {
+          setBusPlans([]);
+          return;
+        }
+
+        const plans = asArray(
+          response?.data ?? response
+        );
+
+        setBusPlans(
+          plans.filter(
+            (plan) =>
+              plan?.isActive !==
+              false
+          )
+        );
+      } finally {
+        if (mounted) {
+          setBusPlansLoading(false);
+        }
+      }
+    };
+
+    loadBusPlans();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const busPlanOptions =
+    useMemo(
+      () =>
+        busPlans
+          .map((plan) => ({
+            id:
+              plan?._id ||
+              plan?.id,
+            label:
+              `${plan?.name || "خطة باص"} — ${serviceTypeLabel(
+                plan?.serviceType
+              )} — ${Number(
+                plan?.fee || 0
+              ).toLocaleString(
+                "ar-SA"
+              )} ريال`,
+          }))
+          .filter(
+            (plan) =>
+              plan.id
+          ),
+      [busPlans]
+    );
 
   const [
     createdCredentials,
@@ -108,6 +220,11 @@ const Add = () => {
           formData?.classId
         );
 
+      const selectedBusPlanId =
+        getReferenceId(
+          formData?.busPlanId
+        );
+
       // البريد وكلمة المرور يتم توليدهما تلقائيًا كما كان في الـ flow الأصلي.
       const generatedEmail =
         generateStudentEmail();
@@ -131,6 +248,13 @@ const Add = () => {
           selectedClassId;
       } else {
         delete studentPayload.classId;
+      }
+
+      if (selectedBusPlanId) {
+        studentPayload.busPlanId =
+          selectedBusPlanId;
+      } else {
+        delete studentPayload.busPlanId;
       }
 
       // حقول واجهة قديمة/مساعدة وليست ضمن CreateStudentDto.
@@ -183,11 +307,22 @@ const Add = () => {
           generatedPassword,
       });
 
+      const busWarning =
+        getBusEnrollmentWarning(
+          response
+        );
+
       toast.success(
         selectedClassId
           ? "تمت إضافة الطالب وربطه بالفصل وإنشاء بيانات الدخول"
           : "تمت إضافة الطالب وإنشاء بيانات الدخول"
       );
+
+      if (busWarning) {
+        toast.warning(
+          busWarning
+        );
+      }
     } catch (error) {
       toast.error(
         error?.response?.data
@@ -359,6 +494,8 @@ const Add = () => {
             register={register}
             errors={errors}
             setValue={setValue}
+            busPlanOptions={busPlanOptions}
+            busPlansLoading={busPlansLoading}
           />
 
           <StudentFormActions

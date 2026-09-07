@@ -14,6 +14,10 @@ const OPERATION_MAP = {
   delete: "delete",
 
   manage: "manage",
+
+  // Review uses the backend preparation update ability, but is
+  // kept separate from content editing in the frontend.
+  review: "update",
 };
 
 const LEGACY_OPERATION_MAP = {
@@ -88,6 +92,15 @@ const normalizeOperation = (
   OPERATION_MAP[
     operation
   ] || operation;
+
+const isReviewOperation = (operation) =>
+  String(operation || "")
+    .trim()
+    .toLowerCase() === "review";
+
+const canRoleReviewPreparation = (role, module) =>
+  module === "preparation" &&
+  !["TEACHER", "STUDENT", "SUPER_ADMIN"].includes(role);
 
 /*
  * استخرج المستخدم الحالي
@@ -422,17 +435,31 @@ const usePermissions = (
           ?.permissions
     );
 
+  const storedPermissions =
+    normalizePermissionsValue(
+      getLocalStoragePermissions()
+    );
+
   let permissions =
     authPermissions;
 
   /*
    * LocalStorage مجرد fallback.
+   *
+   * مهم للـ MANAGER:
+   * أحيانًا react-auth-kit يحتفظ بـ permissions: []
+   * رغم إن localStorage يحتوي الصلاحيات الصحيحة القادمة
+   * من تسجيل الدخول. في الحالة دي لا نعتبر [] قيمة نهائية،
+   * ونستخدم الصلاحيات المخزنة محليًا بدلًا منها.
    */
-  if (
-    permissions === null
-  ) {
+  const authPermissionsAreEmpty =
+    permissions === null ||
+    (Array.isArray(permissions) &&
+      permissions.length === 0);
+
+  if (authPermissionsAreEmpty) {
     permissions =
-      getLocalStoragePermissions();
+      storedPermissions;
   }
 
   /*
@@ -461,6 +488,10 @@ const usePermissions = (
     )
   ) {
     if (operation) {
+      if (isReviewOperation(operation)) {
+        return canRoleReviewPreparation(role, module);
+      }
+
       if (
         isTeacherAuthoredOperationBlocked(
           role,
@@ -512,6 +543,10 @@ const usePermissions = (
     )
   ) {
     if (operation) {
+      if (isReviewOperation(operation)) {
+        return canRoleReviewPreparation(role, module);
+      }
+
       if (
         isTeacherAuthoredOperationBlocked(
           role,
@@ -569,6 +604,13 @@ const usePermissions = (
       );
 
     if (operation) {
+      if (isReviewOperation(operation)) {
+        return (
+          canRoleReviewPreparation(role, module) &&
+          hasOperation("update")
+        );
+      }
+
       if (
         isTeacherAuthoredOperationBlocked(
           role,
@@ -639,6 +681,13 @@ const usePermissions = (
       );
 
     if (operation) {
+      if (isReviewOperation(operation)) {
+        return (
+          canRoleReviewPreparation(role, module) &&
+          hasOperation("update")
+        );
+      }
+
       if (
         isTeacherAuthoredOperationBlocked(
           role,

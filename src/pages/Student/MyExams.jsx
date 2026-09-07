@@ -443,8 +443,12 @@ const MyExams = () => {
   // EXAMS PAGE ITEMS
   //
   // GET /exams/student/me مرة واحدة فقط.
-  // صفحة "اختباراتي" تعرض quiz + final فقط.
-  // assignment له صفحة الواجبات.
+  // صفحة "اختباراتي" تعرض:
+  // - quiz
+  // - final
+  // - activity
+  //
+  // assignment له صفحة الواجبات المنفصلة.
   // ===================================================
 
   const exams = useMemo(() => {
@@ -464,7 +468,8 @@ const MyExams = () => {
 
       return (
         examType === "quiz" ||
-        examType === "final"
+        examType === "final" ||
+        examType === "activity"
       );
     });
   }, [allExamsRaw]);
@@ -550,7 +555,9 @@ const MyExams = () => {
             title:
               examType === "final"
                 ? `الاختبار النهائي - ${subjectName}`
-                : `اختبار قصير - ${subjectName}`,
+                : examType === "activity"
+                  ? `نشاط - ${subjectName}`
+                  : `اختبار قصير - ${subjectName}`,
 
             subject:
               subjectName,
@@ -714,7 +721,14 @@ const MyExams = () => {
       [studentExams]
     );
 
-  const hasClass =
+  /*
+   * /students/me في النسخة الحالية قد لا يرجع classId/class
+   * رغم أن /exams/student/me يرجع اختبارات مرتبطة بفصل الطالب.
+   *
+   * لذلك لا نعتمد على studentProfile وحده لتحديد هل الطالب
+   * مسجل في فصل. وجود Exam مرتبط بفصل دليل كافٍ داخل هذه الصفحة.
+   */
+  const hasClassFromProfile =
     Boolean(
       studentProfile?.classId ||
         studentProfile?.class ||
@@ -725,6 +739,20 @@ const MyExams = () => {
           ?.currentEnrollment
           ?.class
     );
+
+  const hasClassFromExams =
+    Array.isArray(allExamsRaw) &&
+    allExamsRaw.some(
+      (exam) =>
+        (Array.isArray(exam?.classIds) &&
+          exam.classIds.length > 0) ||
+        (Array.isArray(exam?.classes) &&
+          exam.classes.length > 0)
+    );
+
+  const hasClass =
+    hasClassFromProfile ||
+    hasClassFromExams;
 
   const className =
     getClassName(
@@ -1717,10 +1745,11 @@ const ExamCard = ({
           fontWeight: 700,
         }}
       >
-        {exam.examType ===
-        "final"
+        {exam.examType === "final"
           ? "اختبار نهائي"
-          : "اختبار قصير"}
+          : exam.examType === "activity"
+            ? "نشاط"
+            : "اختبار قصير"}
       </Typography>
 
       <Stack
@@ -1809,10 +1838,11 @@ const ExamCard = ({
             : exam.status ===
                 "upcoming"
               ? "لم يبدأ الاختبار"
-              : exam.examType ===
-                  "final"
+              : exam.examType === "final"
                 ? "ابدأ الاختبار"
-                : "ابدأ الكويز"}
+                : exam.examType === "activity"
+                  ? "ابدأ النشاط"
+                  : "ابدأ الاختبار القصير"}
       </Button>
     </Paper>
   );

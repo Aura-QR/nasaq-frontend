@@ -140,6 +140,29 @@ export const fetchLecturesList = async (
     }
   );
 
+/**
+ * GET /lectures/teacher/me/classes
+ * يرجع الفصول المرتبطة بالمعلم الحالي من التوكن مباشرة.
+ *
+ * مهم:
+ * - لا نرسل teacherId من الفرونت.
+ * - مناسب لصفحات بوابة المعلم مثل الحضور والمشروعات.
+ * - نستخدم force افتراضيًا حتى لا تظهر بيانات قديمة بعد تعديل الجدول.
+ */
+export const fetchTeacherMyClasses = async (
+  filters = {},
+  options = {}
+) =>
+  getCached(
+    `${ENDPOINT}/teacher/me/classes`,
+    filters,
+    "تعذر تحميل فصول المعلم",
+    {
+      ...options,
+      force: options.force ?? true,
+    }
+  );
+
 export const fetchSingleLecture = async (
   id,
   options = {}
@@ -207,16 +230,189 @@ export const fetchSubjectOfferings = async (
   );
 };
 
+
+/**
+ * GET /lectures/feasibility
+ *
+ * Params:
+ * - termId: required
+ * - classIds: optional, comma-separated
+ *
+ * If classIds is omitted the backend checks all active classes in the term.
+ */
+export const fetchLectureFeasibility = async (
+  { termId, classIds = [] } = {},
+  options = {}
+) => {
+  const normalizedTermId =
+    normalizeId(termId);
+
+  if (!normalizedTermId) {
+    return {
+      status: false,
+      message: "اختر الترم أولًا",
+    };
+  }
+
+  const normalizedClassIds = Array.from(
+    new Set(
+      (
+        Array.isArray(classIds)
+          ? classIds
+          : String(classIds || "").split(",")
+      )
+        .map(normalizeId)
+        .filter(Boolean)
+    )
+  );
+
+  return getCached(
+    `${ENDPOINT}/feasibility`,
+    {
+      termId: normalizedTermId,
+      ...(normalizedClassIds.length
+        ? {
+            classIds:
+              normalizedClassIds.join(","),
+          }
+        : {}),
+    },
+    "تعذر فحص قابلية الجدول",
+    {
+      ...options,
+      // نتيجة الفحص تشغيلية وتتغير مع الخطة والإسنادات والحصص.
+      force: options.force ?? true,
+    }
+  );
+};
+
+/**
+ * POST /lectures/generate
+ *
+ * mode="preview" does not write anything.
+ * mode="commit" writes the generated lectures.
+ */
+export const generateTimetable = async (
+  {
+    termId,
+    classIds = [],
+    mode = "preview",
+    onExisting = "skip",
+    maxSamePerDay = 1,
+    includeUnstaffed = true,
+  } = {}
+) => {
+  const normalizedTermId =
+    normalizeId(termId);
+
+  if (!normalizedTermId) {
+    return {
+      status: false,
+      message: "اختر الترم أولًا",
+    };
+  }
+
+  const normalizedClassIds = Array.from(
+    new Set(
+      (
+        Array.isArray(classIds)
+          ? classIds
+          : String(classIds || "").split(",")
+      )
+        .map(normalizeId)
+        .filter(Boolean)
+    )
+  );
+
+  const normalizedMode =
+    mode === "commit"
+      ? "commit"
+      : "preview";
+
+  const normalizedOnExisting =
+    onExisting === "replace"
+      ? "replace"
+      : "skip";
+
+  const normalizedMaxSamePerDay =
+    Number.isFinite(Number(maxSamePerDay)) &&
+    Number(maxSamePerDay) > 0
+      ? Math.max(
+          1,
+          Math.floor(Number(maxSamePerDay))
+        )
+      : 1;
+
+  try {
+    const response = await api.post(
+      `${ENDPOINT}/generate`,
+      {
+        termId: normalizedTermId,
+        ...(normalizedClassIds.length
+          ? { classIds: normalizedClassIds }
+          : {}),
+        mode: normalizedMode,
+        onExisting:
+          normalizedOnExisting,
+        maxSamePerDay:
+          normalizedMaxSamePerDay,
+        includeUnstaffed:
+          Boolean(includeUnstaffed),
+      }
+    );
+
+    if (normalizedMode === "commit") {
+      invalidateLecturesCache();
+    }
+
+    return normalizeSuccess(response);
+  } catch (error) {
+    const fallback =
+      normalizedMode === "commit"
+        ? "تعذر اعتماد الجدول الدراسي"
+        : "تعذر إنشاء معاينة الجدول الدراسي";
+    const failure = normalizeFailure(
+      getApiError(error, fallback),
+      fallback
+    );
+    const responsePayload = error?.response?.data;
+
+    return {
+      ...failure,
+      statusCode: error?.response?.status,
+      data:
+        responsePayload?.data ??
+        (responsePayload && typeof responsePayload === "object"
+          ? responsePayload
+          : undefined),
+    };
+  }
+};
+
 export const fetchTeacherAssignments = async (
   filters = {},
   options = {}
-) =>
-  getCached(
+) => {
+  const {
+    classId: rawClassId,
+    class: rawClass,
+    ...restFilters
+  } = filters;
+
+  const classId = normalizeId(
+    rawClassId || rawClass
+  );
+
+  return getCached(
     "/teacher-assignments",
-    filters,
+    {
+      ...restFilters,
+      ...(classId ? { classId } : {}),
+    },
     "تعذر تحميل إسنادات المعلمين",
     options
   );
+};
 
 export const addTeacherAssignment = async (
   data = {}
@@ -228,6 +424,10 @@ export const addTeacherAssignment = async (
   const subjectOfferingId = normalizeId(
     data?.subjectOfferingId ||
       data?.subjectOffering
+  );
+
+  const classId = normalizeId(
+    data?.classId || data?.class
   );
 
   if (!teacherId || !subjectOfferingId) {
@@ -244,6 +444,7 @@ export const addTeacherAssignment = async (
       {
         teacherId,
         subjectOfferingId,
+        ...(classId ? { classId } : {}),
       }
     );
 

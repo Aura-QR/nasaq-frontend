@@ -26,12 +26,14 @@ import { format } from "date-fns";
 
 import Container from "@/components/Container/Container";
 import Table from "@/components/Table/Table";
+import AdminSetPasswordDialog from "@/components/school/AdminSetPasswordDialog";
 import SearchFilter from "@/components/Filters/SearchFilter";
 import SelectFilter from "@/components/Filters/SelectFilter";
 import ClassFilter from "@/components/Filters/ClassFilter";
 import PaginationControls from "@/components/Pagination";
 
 import { deleteStudent } from "@/APIs/users/students";
+import { adminSetStudentPassword } from "@/APIs/school/students";
 import { fetchStudentEnrollments } from "@/APIs/school/enrollments";
 import { useStudents } from "@/utils/hooks/apis/useStudents";
 import useDebounce from "@/utils/hooks/useDebounce";
@@ -39,6 +41,8 @@ import usePermissions from "@/utils/hooks/usePermissions";
 
 import Status from "@/utils/constants/Status";
 import { useAcademicYears } from "@/utils/hooks/apis/useAcademicYears";
+import { getStoredRole } from "@/shared/auth/session";
+import { ROLES } from "@/shared/auth/roles";
 
 const getReferenceId = (value) => {
   if (!value) return "";
@@ -253,6 +257,7 @@ const safeFormatDate = (value) => {
 const mapStudents = (data = []) =>
   data.map((item) => ({
     id: item._id || item.id,
+    isUnplaced: item?.isUnplaced === true,
     birthdate: safeFormatDate(
       item.birthDate
     ),
@@ -350,8 +355,60 @@ const List = () => {
     }
     setAcademicYearReady(true);
   }, [activeAcademicYearId, loadingAcademicYears]);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordStudent, setPasswordStudent] = useState(null);
+  const didInitializeAcademicYear = useRef(false);
+
+  const canSetPassword = [
+    ROLES.OWNER,
+    ROLES.MANAGER,
+    ROLES.SUPER_ADMIN,
+  ].includes(getStoredRole());
 
   const debouncedSearch = useDebounce(search, 700);
+
+  const {
+    academicYears = [],
+    activeAcademicYear,
+    loadingAcademicYears,
+  } = useAcademicYears();
+
+  const resolvedActiveAcademicYear = useMemo(() => {
+    if (getReferenceId(activeAcademicYear)) {
+      return activeAcademicYear;
+    }
+
+    return (
+      academicYears.find(
+        (year) => year.status === "active"
+      ) || null
+    );
+  }, [activeAcademicYear, academicYears]);
+
+  const activeAcademicYearId = useMemo(
+    () => getReferenceId(resolvedActiveAcademicYear),
+    [resolvedActiveAcademicYear]
+  );
+
+  useEffect(() => {
+    if (
+      didInitializeAcademicYear.current ||
+      loadingAcademicYears
+    ) {
+      return;
+    }
+
+    didInitializeAcademicYear.current = true;
+
+    if (activeAcademicYearId) {
+      setAcademicYear(activeAcademicYearId);
+    }
+  }, [activeAcademicYearId, loadingAcademicYears]);
+
+  const requestedAcademicYearId =
+    didInitializeAcademicYear.current
+      ? academicYear
+      : activeAcademicYearId;
 
   const filters = useMemo(
     () => ({
@@ -362,6 +419,8 @@ const List = () => {
         status !== ""
           ? Boolean(Number(status))
           : undefined,
+      academicYearId:
+        requestedAcademicYearId || undefined,
       classId: studentClass || undefined,
       academicYearId: academicYear || undefined,
     }),
@@ -370,7 +429,7 @@ const List = () => {
       limit,
       debouncedSearch,
       status,
-      academicYear,
+      requestedAcademicYearId,
       studentClass,
     ]
   );
@@ -384,6 +443,9 @@ const List = () => {
     enabled:
       !loadingAcademicYears &&
       academicYearReady,
+  });
+  } = useStudents(filters, {
+    enabled: !loadingAcademicYears,
   });
 
   const permissions = usePermissions("students");
@@ -453,6 +515,40 @@ const List = () => {
     }),
     []
   );
+
+  const selectedAcademicYearLabel = useMemo(() => {
+    if (!academicYear) {
+      return "جميع السنوات";
+    }
+
+    const selectedYear = academicYears.find(
+      (year) => year.id === academicYear
+    );
+
+    if (selectedYear?.name) {
+      return `السنة ${selectedYear.name}`;
+    }
+
+    if (academicYear === activeAcademicYearId) {
+      const activeName =
+        resolvedActiveAcademicYear?.name ||
+        resolvedActiveAcademicYear?.label ||
+        resolvedActiveAcademicYear?.title ||
+        resolvedActiveAcademicYear?.year ||
+        "";
+
+      if (activeName) {
+        return `السنة ${activeName}`;
+      }
+    }
+
+    return "السنة المحددة";
+  }, [
+    academicYear,
+    academicYears,
+    resolvedActiveAcademicYear,
+    activeAcademicYearId,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -657,6 +753,91 @@ const List = () => {
       );
     }
   };
+
+  const openPasswordDialog = (student) => {
+    if (!canSetPassword) return;
+
+    setPasswordStudent(student);
+    setPasswordDialogOpen(true);
+  };
+
+  const closePasswordDialog = () => {
+    setPasswordDialogOpen(false);
+    setPasswordStudent(null);
+  };
+
+  const handleSetPassword = (payload) =>
+    adminSetStudentPassword(
+      passwordStudent?.id,
+      payload
+    );
+
+  const renderStudentCell = ({
+    item,
+    keyName,
+    displayValue,
+  }) => {
+    if (keyName !== "name") {
+      return null;
+    }
+
+    return (
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="center"
+        spacing={0.7}
+        sx={{ minWidth: 0, width: "100%" }}
+      >
+        <Typography
+          title={displayValue}
+          sx={{
+            minWidth: 0,
+            overflow: "hidden",
+            color: "var(--color-muted)",
+            fontSize: "12px",
+            fontWeight: 600,
+            lineHeight: 1.5,
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {displayValue}
+        </Typography>
+
+        {item?.isUnplaced && (
+          <Chip
+            label="غير مسجّل"
+            size="small"
+            sx={{
+              height: 22,
+              flexShrink: 0,
+              color: "var(--color-gold-dark)",
+              backgroundColor: "rgba(211,164,79,0.10)",
+              border: "1px solid rgba(211,164,79,0.22)",
+              fontSize: "9px",
+              fontWeight: 800,
+              "& .MuiChip-label": {
+                px: 0.8,
+              },
+            }}
+          />
+        )}
+      </Stack>
+    );
+  };
+
+  const showActiveYearEmptyState = Boolean(
+    !loading &&
+      !enrollmentsLoading &&
+      !loadingAcademicYears &&
+      items.length === 0 &&
+      activeAcademicYearId &&
+      academicYear === activeAcademicYearId &&
+      !search &&
+      status === "" &&
+      !studentClass
+  );
 
   return (
     <Container>
@@ -1012,6 +1193,20 @@ const List = () => {
                       : "جميع السنوات"}
                   </Typography>
                 )}
+
+                {(card.key === "total" ||
+                  card.key === "active") && (
+                  <Typography
+                    sx={{
+                      mt: 0.25,
+                      color: "var(--color-muted)",
+                      fontSize: "9px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {selectedAcademicYearLabel}
+                  </Typography>
+                )}
               </Box>
 
               <Box
@@ -1345,6 +1540,54 @@ const List = () => {
                   : undefined
               }
             />
+            {showActiveYearEmptyState ? (
+              <Box
+                sx={{
+                  minHeight: 180,
+                  display: "grid",
+                  placeItems: "center",
+                  px: 2,
+                  py: 4,
+                }}
+              >
+                <Typography
+                  sx={{
+                    maxWidth: 520,
+                    color: "var(--color-navy-deep)",
+                    fontSize: "14px",
+                    fontWeight: 800,
+                    lineHeight: 1.8,
+                    textAlign: "center",
+                  }}
+                >
+                  لا يوجد طلاب مسجّلون في السنة الحالية — جرّبي تغيير السنة من الفلتر
+                </Typography>
+              </Box>
+            ) : (
+              <Table
+                headers={TABLE_HEADERS}
+                data={items}
+                loading={
+                  loading ||
+                  enrollmentsLoading ||
+                  loadingAcademicYears
+                }
+                edit={permissions.edit}
+                profile
+                body={TABLE_BODY}
+                renderCell={renderStudentCell}
+                deleteFn={
+                  permissions.delete
+                    ? handleDelete
+                    : undefined
+                }
+                setPasswordFn={
+                  canSetPassword
+                    ? openPasswordDialog
+                    : undefined
+                }
+              />
+            )}
           </Box>
 
           {pagination && (
@@ -1367,6 +1610,14 @@ const List = () => {
             </Box>
           )}
         </Paper>
+
+        <AdminSetPasswordDialog
+          open={passwordDialogOpen}
+          name={passwordStudent?.name || ""}
+          subjectId={passwordStudent?.id || ""}
+          onClose={closePasswordDialog}
+          onSubmit={handleSetPassword}
+        />
       </Box>
     </Container>
   );

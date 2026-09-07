@@ -176,6 +176,14 @@ export const useStudents = (
       };
     }
 
+    if (!enabled) {
+      setLoading(true);
+
+      return () => {
+        active = false;
+      };
+    }
+
     const fetchData =
       async () => {
         setLoading(true);
@@ -219,6 +227,7 @@ export const useStudents = (
     return () => {
       active = false;
     };
+  }, [cacheKey, enabled]);
   }, [cacheKey, enabled]);
 
   return {

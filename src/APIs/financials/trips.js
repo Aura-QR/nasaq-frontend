@@ -28,6 +28,14 @@ export const createTripTemplate = async (data) => {
   }
 };
 
+export const updateTripTemplate = async (id, data) => {
+  try {
+    return (await api.patch(`${E}/${id}`, data)).data;
+  } catch (e) {
+    return apiError(e, "تعذر تعديل الرحلة");
+  }
+};
+
 export const fetchTripTemplateStudents = async (id, filters = {}) => {
   try {
     return (await api.get(`${E}/${id}/students`, { params: filters })).data;
@@ -122,6 +130,7 @@ export default {
   fetchTripTemplates,
   fetchTripTemplate,
   createTripTemplate,
+  updateTripTemplate,
   fetchTripTemplateStudents,
   fetchTripTemplateCandidates,
   enrollStudentInTripTemplate,

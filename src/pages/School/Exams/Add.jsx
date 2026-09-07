@@ -3,2812 +3,1905 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   CircularProgress,
-  Grid,
-  ListItemText,
+  Divider,
+  FormControl,
+  FormControlLabel,
+  FormHelperText,
+  IconButton,
   MenuItem,
   Paper,
+  Radio,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 
 import {
-  AddCircleOutlineRounded,
-  CloseRounded,
-  EventNoteRounded,
-  GradeRounded,
-  InfoOutlined,
+  AddRounded,
+  ArrowBackRounded,
+  CalendarMonthRounded,
+  CheckCircleRounded,
+  ContentCopyRounded,
+  DeleteOutlineRounded,
+  FactCheckRounded,
+  MenuBookRounded,
+  QuizRounded,
+  RadioButtonCheckedRounded,
   SaveRounded,
+  SchoolRounded,
+  WarningAmberRounded,
 } from "@mui/icons-material";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
 
-import {
-  useFieldArray,
-  useForm,
-} from "react-hook-form";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
-import Container from "@/components/Container/Container";
-import Back from "@/components/Back/Back";
-import Select from "@/components/Select/Select";
-import Input from "@/components/Input/Input";
-import Questions from "@/pages/School/Exams/Components/Questions";
+import { api } from "@/APIs/Axios";
+import {
+  addExam,
+  editExam,
+  fetchSingleExam,
+} from "@/APIs/school/exams";
+import {
+  fetchTeacherAssignments,
+} from "@/APIs/school/lectures";
 
-import { addExam } from "@/APIs/school/exams";
-import { fetchGradesCriteria } from "@/APIs/school/gradesCriteria";
-import { fetchAcademicYears } from "@/APIs/school/academicYears";
-import { fetchTermsByAcademicYear } from "@/APIs/school/lectures";
-import { fetchSubjectOfferings } from "@/APIs/school/subjectOfferings";
-import { fetchSubjects } from "@/APIs/school/subjects";
-import { fetchGradeLevels } from "@/APIs/school/gradeLevels";
-import { getSchoolClasses } from "@/APIs/school/classes";
+import nasaqLogo from "../../../images/wadq-logo.png";
 
-import MCQExams from "@/utils/constants/MCQExams";
-import usePermissions from "@/utils/hooks/usePermissions";
+const EXAM_TYPES = [
+  { value: "quiz", label: "اختبار قصير" },
+  { value: "assignment", label: "واجب" },
+  { value: "activity", label: "نشاط" },
+  { value: "final", label: "اختبار نهائي" },
+];
 
-const getResponseData = (response) =>
-  response?.data?.data ||
-  response?.data ||
-  response;
-
-const getResponseId = (response) => {
-  const payload =
-    getResponseData(response);
-
-  return (
-    payload?._id ||
-    payload?.id ||
-    payload?.exam?._id ||
-    payload?.exam?.id ||
-    ""
-  );
-};
-
-const getResponseList = (response) => {
-  const payload =
-    getResponseData(response);
-
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-
-  return (
-    payload?.docs ||
-    payload?.items ||
-    payload?.results ||
-    []
-  );
-};
+const createQuestion = (source = {}) => ({
+  localId:
+    globalThis.crypto?.randomUUID?.() ||
+    `${Date.now()}-${Math.random()}`,
+  question: source.question || "",
+  options: Array.isArray(source.options)
+    ? [...source.options.slice(0, 4), "", "", "", ""].slice(0, 4)
+    : ["", "", "", ""],
+  correctAnswer: source.correctAnswer || "",
+});
 
 const normalizeId = (value) => {
-  const resolved =
-    value?.target?.value ??
-    value;
-
-  if (
-    resolved &&
-    typeof resolved === "object"
-  ) {
-    return String(
-      resolved?._id ||
-      resolved?.id ||
-      resolved?.value ||
-      ""
-    ).trim();
+  if (value && typeof value === "object") {
+    return String(value._id || value.id || "").trim();
   }
 
-  return String(
-    resolved || ""
-  ).trim();
+  return String(value || "").trim();
 };
 
-const getArray = (value) => {
-  if (Array.isArray(value)) {
-    return value;
-  }
+const unwrapResponse = (response) => {
+  let payload = response?.data ?? response;
 
-  if (
-    value === undefined ||
-    value === null ||
-    value === ""
-  ) {
-    return [];
-  }
-
-  return [value];
-};
-
-const extractList = (value) => {
-  let current = value;
-
-  for (
-    let index = 0;
-    index < 6;
-    index += 1
-  ) {
+  for (let index = 0; index < 5; index += 1) {
     if (
-      !current ||
-      Array.isArray(current) ||
-      typeof current !== "object" ||
-      !("data" in current)
+      payload &&
+      typeof payload === "object" &&
+      !Array.isArray(payload) &&
+      payload.data !== undefined
     ) {
-      break;
+      payload = payload.data;
+      continue;
     }
 
-    current = current.data;
+    break;
   }
 
-  if (Array.isArray(current)) {
-    return current;
-  }
-
-  if (
-    !current ||
-    typeof current !== "object"
-  ) {
-    return [];
-  }
-
-  for (const key of [
-    "docs",
-    "items",
-    "results",
-    "rows",
-    "records",
-    "academicYears",
-    "years",
-    "terms",
-    "gradeLevels",
-    "grades",
-    "classes",
-    "subjects",
-    "offerings",
-    "subjectOfferings",
-  ]) {
-    if (
-      Array.isArray(current?.[key])
-    ) {
-      return current[key];
-    }
-  }
-
-  return [];
+  return payload;
 };
 
-const mapAcademicYear = (item) => ({
-  id: normalizeId(item),
-  name:
-    item?.name ||
-    item?.label ||
-    item?.title ||
-    "سنة دراسية",
-});
+const extractCollection = (response, keys = []) => {
+  const payload = unwrapResponse(response);
 
-const mapTerm = (item) => ({
-  id: normalizeId(item),
-  name:
-    item?.name ||
-    item?.label ||
-    item?.title ||
-    `الترم ${item?.order || ""}`.trim(),
-  order: Number(item?.order || 0),
-});
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
 
-const getOfferingSubject = (offering) =>
+  const candidates = [
+    payload.docs,
+    payload.items,
+    payload.results,
+    payload.records,
+    payload.assignments,
+    payload.teacherAssignments,
+    payload.subjects,
+    payload.classes,
+    payload.data,
+    ...keys.map((key) => payload?.[key]),
+  ];
+
+  return candidates.find(Array.isArray) || [];
+};
+
+const extractEntity = (response) => {
+  const payload = unwrapResponse(response);
+
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  return payload.teacher || payload.profile || payload;
+};
+
+const extractExamEntity = (response) => {
+  const payload = unwrapResponse(response);
+
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  return payload.exam || payload;
+};
+
+const getExamOffering = (exam) => {
+  const candidates = [
+    exam?.subjectOffering,
+    typeof exam?.subjectOfferingId === "object"
+      ? exam.subjectOfferingId
+      : null,
+    typeof exam?.gradesCriteria?.subjectOfferingId === "object"
+      ? exam.gradesCriteria.subjectOfferingId
+      : null,
+    exam?.gradesCriteria?.subjectOffering,
+  ];
+
+  return candidates.find(
+    (value) => value && typeof value === "object"
+  ) || null;
+};
+
+const getErrorMessage = (error, fallback) =>
+  error?.response?.data?.message ||
+  error?.message ||
+  fallback;
+
+const isFailedResponse = (response) =>
+  typeof response === "string" ||
+  response?.status === false ||
+  Number(response?.statusCode) >= 400;
+
+const getCriteriaWeightForType = (
+  criteria,
+  type
+) => {
+  if (!criteria) return 0;
+
+  const fieldMap = {
+    final: "final",
+    assignment: "assignments",
+    activity: "activities",
+    quiz: "quizzes",
+  };
+
+  const field = fieldMap[type];
+
+  return Number(
+    field ? criteria?.[field] : 0
+  ) || 0;
+};
+
+const getSubjectEntity = (offering) =>
   offering?.subjectId ||
   offering?.subject ||
-  null;
+  offering?.subjectEntity ||
+  {};
 
-const getOfferingGradeLevelId = (
-  offering
-) =>
-  normalizeId(
-    offering?.gradeLevelId ||
-    offering?.gradeLevel
-  );
-
-const getOfferingTermId = (offering) =>
-  normalizeId(
-    offering?.termId ||
-    offering?.term
-  );
-
-const offeringMatchesAcademicSelection = (
-  offering,
-  termId,
-  gradeLevelId
-) => {
-  const offeringTermId =
-    getOfferingTermId(offering);
-
-  const offeringGradeLevelId =
-    getOfferingGradeLevelId(offering);
-
-  return (
-    offeringTermId === termId &&
-    offeringGradeLevelId === gradeLevelId
-  );
-};
-
-const mapSubjectFromOffering = (
-  offering
-) => {
-  const subject =
-    getOfferingSubject(offering);
-
-  const id =
-    normalizeId(subject);
-
-  const name =
+const getOfferingLabel = (offering, index) => {
+  const subject = getSubjectEntity(offering);
+  const subjectName =
     subject?.subjectName ||
     subject?.name ||
     offering?.subjectName ||
-    "مادة";
-
-  const code =
+    `مادة ${index + 1}`;
+  const subjectCode =
     subject?.subjectCode ||
     subject?.code ||
     offering?.subjectCode ||
     "";
-
-  return {
-    id,
-    name: code
-      ? `${name} - ${code}`
-      : name,
-  };
-};
-
-const mapGradeLevel = (item) => ({
-  id: normalizeId(item),
-  name:
-    item?.name ||
-    item?.label ||
-    item?.title ||
-    item?.gradeName ||
-    "صف دراسي",
-  order: Number(item?.order || 0),
-});
-
-const mapCatalogSubject = (item) => {
-  const id = normalizeId(item);
-
-  const name =
-    item?.subjectName ||
-    item?.name ||
-    item?.label ||
-    "مادة";
-
-  const code =
-    item?.subjectCode ||
-    item?.code ||
-    "";
-
-  return {
-    id,
-    name: code
-      ? `${name} - ${code}`
-      : name,
-  };
-};
-
-const localizeFieldError = (message) => {
-  if (!message) {
-    return "";
-  }
-
-  const normalized =
-    String(message).trim();
-
-  if (
-    normalized ===
-      "This Field Is Required" ||
-    normalized.toLowerCase() ===
-      "this field is required"
-  ) {
-    return "هذا الحقل مطلوب";
-  }
-
-  return normalized;
-};
-
-const mapClass = (item) => {
-  const id = normalizeId(item);
-
   const grade =
-    item?.gradeLevelId ||
-    item?.gradeLevel ||
-    null;
-
-  const gradeName =
-    grade?.name ||
-    item?.gradeLevelName ||
+    offering?.gradeLevelId?.name ||
+    offering?.gradeLevel?.name ||
+    offering?.gradeName ||
+    "";
+  const term =
+    offering?.termId?.name ||
+    offering?.term?.name ||
     "";
 
-  const room =
-    item?.roomNumber ||
-    item?.name ||
-    "";
-
-  const label = [
-    gradeName,
-    room,
+  return [
+    [subjectName, subjectCode].filter(Boolean).join(" - "),
+    grade,
+    term,
   ]
     .filter(Boolean)
-    .join(" - ");
-
-  return {
-    id,
-    name:
-      label ||
-      `فصل ${id.slice(-4)}`,
-    gradeLevelId:
-      normalizeId(grade),
-  };
+    .join(" • ");
 };
 
-const criteriaMatchesSelection = (
-  criteria,
-  {
-    subjectId,
-    academicYearId,
-    termId,
-    gradeLevelId,
-    yearTermIds,
-  }
-) => {
-  const offering =
-    criteria?.subjectOffering ||
-    (
-      criteria?.subjectOfferingId &&
-      typeof criteria.subjectOfferingId === "object"
-        ? criteria.subjectOfferingId
-        : null
-    );
+const getClassLabel = (classEntity, index) => {
+  const name =
+    classEntity?.name ||
+    classEntity?.className ||
+    classEntity?.roomNumber ||
+    `فصل ${index + 1}`;
+  const grade =
+    classEntity?.gradeLevelId?.name ||
+    classEntity?.gradeLevel?.name ||
+    classEntity?.academicYear ||
+    "";
 
-  const criteriaSubjectId =
-    normalizeId(
-      criteria?.subjectId ||
-      criteria?.subject ||
-      offering?.subjectId ||
-      offering?.subject
-    );
-
-  if (
-    !criteriaSubjectId ||
-    criteriaSubjectId !== subjectId
-  ) {
-    return false;
-  }
-
-  const criteriaYearId =
-    normalizeId(
-      criteria?.academicYearId ||
-      (
-        criteria?.academicYear &&
-        typeof criteria.academicYear === "object"
-          ? criteria.academicYear
-          : ""
-      ) ||
-      offering?.academicYearId
-    );
-
-  const criteriaTermId =
-    normalizeId(
-      criteria?.termId ||
-      criteria?.term ||
-      offering?.termId ||
-      offering?.term
-    );
-
-  const criteriaGradeLevelId =
-    normalizeId(
-      criteria?.gradeLevelId ||
-      criteria?.gradeLevel ||
-      offering?.gradeLevelId ||
-      offering?.gradeLevel
-    );
-
-  /*
-   * الشكل الجديد:
-   * Grades Criteria محفوظ بـ subjectId + academicYearId.
-   * هنا لا نشترط Subject Offering أو termId.
-   */
-  if (
-    criteriaYearId &&
-    academicYearId
-  ) {
-    return (
-      criteriaYearId === academicYearId
-    );
-  }
-
-  /*
-   * الشكل القديم:
-   * Grades Criteria محفوظ بـ subjectOfferingId فقط.
-   * الـSubject Offering يحمل الصف والترم، فنطابقهم مع
-   * اختيارات صفحة الاختبار.
-   */
-  if (offering) {
-    if (
-      gradeLevelId &&
-      criteriaGradeLevelId &&
-      criteriaGradeLevelId !== gradeLevelId
-    ) {
-      return false;
-    }
-
-    if (
-      termId &&
-      criteriaTermId &&
-      criteriaTermId !== termId
-    ) {
-      return false;
-    }
-
-    if (
-      termId &&
-      criteriaTermId === termId
-    ) {
-      return true;
-    }
-
-    if (
-      criteriaTermId &&
-      yearTermIds.has(
-        criteriaTermId
-      )
-    ) {
-      return true;
-    }
-
-    /*
-     * بعض الـresponses القديمة لا تعمل populate للترم
-     * ولكن تعمل populate للصف والمادة فقط.
-     */
-    if (
-      gradeLevelId &&
-      criteriaGradeLevelId === gradeLevelId
-    ) {
-      return true;
-    }
-  }
-
-  return false;
+  return [name, grade].filter(Boolean).join(" — ");
 };
 
-const getErrorMessage = (
-  response,
-  fallback
-) =>
-  response?.message ||
-  response?.data?.message ||
-  (typeof response === "string"
-    ? response
-    : fallback);
+const getClassOfferingIds = (classEntity) => {
+  const sources = [
+    classEntity?.subjectOfferingId,
+    classEntity?.subjectOffering,
+    classEntity?.subjectOfferingIds,
+    classEntity?.subjectOfferings,
+    classEntity?.offerings,
+  ];
 
-const createQuestion = () => ({
-  question: "",
-  options: ["", "", "", ""],
-  correctAnswer: "",
-});
+  const subjectSources = Array.isArray(classEntity?.subjects)
+    ? classEntity.subjects.flatMap((subject) => [
+        subject?.subjectOfferingId,
+        subject?.subjectOffering,
+        subject?.offeringId,
+        subject?.offering,
+      ])
+    : [];
 
-const normalizeQuestion = (
-  question = {}
-) => ({
-  question:
-    question?.question || "",
-  options: [
-    ...(Array.isArray(
-      question?.options
-    )
-      ? question.options
-      : []),
-    "",
-    "",
-    "",
-    "",
-  ].slice(0, 4),
-  correctAnswer:
-    question?.correctAnswer ||
-    "",
-});
+  return [...sources, ...subjectSources]
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .map(normalizeId)
+    .filter(Boolean);
+};
 
-const validateExamDates = (
-  startDate,
-  endDate
-) => {
-  if (!startDate || !endDate) {
-    return true;
-  }
-
-  return (
-    new Date(endDate) >=
-    new Date(startDate)
+const getOfferingGradeId = (offering) =>
+  normalizeId(
+    offering?.gradeLevelId ||
+      offering?.gradeLevel ||
+      offering?.classLevelId
   );
+
+const getClassGradeId = (classEntity) =>
+  normalizeId(
+    classEntity?.gradeLevelId ||
+      classEntity?.gradeLevel ||
+      classEntity?.classLevelId
+  );
+
+const collectOfferingCandidates = (items) => {
+  const candidates = [];
+
+  items.forEach((item) => {
+    if (!item || typeof item !== "object") return;
+
+    const direct = [
+      item.subjectOfferingId,
+      item.subjectOffering,
+      item.offeringId,
+      item.offering,
+    ];
+
+    direct.forEach((candidate) => {
+      if (candidate) candidates.push(candidate);
+    });
+
+    [item.subjectOfferings, item.offerings, item.subjects].forEach((list) => {
+      if (!Array.isArray(list)) return;
+
+      list.forEach((entry) => {
+        const nested =
+          entry?.subjectOfferingId ||
+          entry?.subjectOffering ||
+          entry?.offeringId ||
+          entry?.offering;
+
+        if (nested) candidates.push(nested);
+      });
+    });
+  });
+
+  return candidates;
 };
 
-const FORM_CARD_SX = {
-  p: {
-    xs: 1.5,
-    md: 2,
-  },
-  mt: 1.25,
-  overflow: "visible",
-  border:
-    "1px solid rgba(36,74,112,0.08)",
-  borderRadius: "18px",
-  backgroundColor:
-    "var(--color-cream)",
-  boxShadow:
-    "0 12px 28px rgba(18,47,77,0.06)",
-
-  "& .MuiFormControl-root": {
-    width: "100%",
-    margin: 0,
-  },
-
-  "& .MuiInputBase-root, & .MuiOutlinedInput-root":
-    {
-      minHeight: 48,
-      backgroundColor:
-        "var(--color-white)",
-      borderRadius: "12px",
-    },
-
-  "& .MuiOutlinedInput-notchedOutline":
-    {
-      borderColor:
-        "rgba(36,74,112,0.16)",
-    },
-
-  "& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline":
-    {
-      borderColor:
-        "rgba(36,74,112,0.28)",
-    },
-
-  "& .MuiOutlinedInput-root.Mui-focused":
-    {
-      boxShadow:
-        "0 0 0 3px rgba(211,164,79,0.10)",
-    },
-
-  "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
-    {
-      borderColor:
-        "var(--color-gold)",
-      borderWidth: "1px",
-    },
-
-  "& .MuiInputLabel-root": {
-    px: 0.65,
-    color:
-      "var(--color-muted)",
-    backgroundColor:
-      "var(--color-cream)",
-    fontSize: "10.5px",
-    fontWeight: 700,
-  },
-};
-
-const SectionHeading = ({
-  icon,
-  title,
-  description,
-}) => (
+const SectionTitle = ({ icon, title, description, endContent }) => (
   <Stack
-    direction="row"
-    alignItems="center"
-    spacing={1}
-    sx={{
-      pb: 1.25,
-      mb: 1.5,
-      borderBottom:
-        "1px solid rgba(36,74,112,0.07)",
-    }}
+    direction={{ xs: "column", sm: "row" }}
+    alignItems={{ xs: "stretch", sm: "center" }}
+    justifyContent="space-between"
+    gap={1}
   >
-    <Box
-      sx={{
-        width: 40,
-        height: 40,
-        display: "grid",
-        placeItems: "center",
-        flexShrink: 0,
-        color:
-          "var(--color-gold-dark)",
-        backgroundColor:
-          "var(--color-gold-soft)",
-        border:
-          "1px solid rgba(211,164,79,0.22)",
-        borderRadius: "12px",
-
-        "& svg": {
-          fontSize: 21,
-        },
-      }}
-    >
-      {icon}
-    </Box>
-
-    <Box sx={{ minWidth: 0 }}>
-      <Typography
+    <Stack direction="row" alignItems="center" spacing={1}>
+      <Box
         sx={{
-          color:
-            "var(--color-navy-deep)",
-          fontSize: "16px",
-          fontWeight: 800,
+          width: 40,
+          height: 40,
+          display: "grid",
+          placeItems: "center",
+          flexShrink: 0,
+          color: "var(--color-gold-dark, #B78430)",
+          backgroundColor: "var(--color-gold-soft, #FBF0D8)",
+          borderRadius: "12px",
+          "& svg": { fontSize: 21 },
         }}
       >
-        {title}
-      </Typography>
+        {icon}
+      </Box>
 
-      <Typography
-        sx={{
-          mt: 0.2,
-          color:
-            "var(--color-muted)",
-          fontSize: "10px",
-          lineHeight: 1.6,
-        }}
-      >
-        {description}
-      </Typography>
-    </Box>
+      <Box>
+        <Typography
+          sx={{
+            color: "var(--color-navy-deep, #122F4D)",
+            fontSize: "14px",
+            fontWeight: 900,
+          }}
+        >
+          {title}
+        </Typography>
+        <Typography
+          sx={{
+            mt: 0.15,
+            color: "var(--color-muted, #708198)",
+            fontSize: "9.5px",
+          }}
+        >
+          {description}
+        </Typography>
+      </Box>
+    </Stack>
+
+    {endContent}
   </Stack>
 );
 
-const GradesCriteriaStatus = ({
-  loading,
-  hasGradesCriteria,
-  subjectId,
-  academicYearId,
-  termId,
-  canAddCriteria,
-  navigate,
-}) => {
-  if (
-    !subjectId ||
-    !academicYearId
-  ) {
-    return (
-      <Paper
-        elevation={0}
-        sx={{
-          mt: 1.25,
-          minHeight: 150,
-          p: 2,
-          display: "grid",
-          placeItems: "center",
-          textAlign: "center",
-          border:
-            "1px solid rgba(36,74,112,0.08)",
-          borderRadius: "18px",
-          backgroundColor:
-            "var(--color-cream)",
-        }}
-      >
-        <Stack
-          alignItems="center"
-          spacing={0.7}
-        >
-          <InfoOutlined
-            sx={{
-              color:
-                "var(--color-gold-dark)",
-            }}
-          />
-
-          <Typography
-            sx={{
-              color:
-                "var(--color-navy-deep)",
-              fontSize: "13px",
-              fontWeight: 800,
-            }}
-          >
-            اختر المادة والسنة الدراسية
-          </Typography>
-
-          <Typography
-            sx={{
-              color:
-                "var(--color-muted)",
-              fontSize: "10px",
-            }}
-          >
-            بعد الاختيار سنتحقق من وجود توزيع درجات للمادة.
-          </Typography>
-        </Stack>
-      </Paper>
-    );
-  }
-
-  if (loading) {
-    return (
-      <Paper
-        elevation={0}
-        sx={{
-          mt: 1.25,
-          minHeight: 150,
-          display: "grid",
-          placeItems: "center",
-          border:
-            "1px solid rgba(36,74,112,0.08)",
-          borderRadius: "18px",
-          backgroundColor:
-            "var(--color-cream)",
-        }}
-      >
-        <Stack
-          alignItems="center"
-          spacing={1}
-        >
-          <CircularProgress
-            size={25}
-            sx={{
-              color:
-                "var(--color-gold-dark)",
-            }}
-          />
-
-          <Typography
-            sx={{
-              color:
-                "var(--color-muted)",
-              fontSize: "10px",
-            }}
-          >
-            جاري التحقق من توزيع الدرجات...
-          </Typography>
-        </Stack>
-      </Paper>
-    );
-  }
-
-  if (hasGradesCriteria) {
-    return null;
-  }
-
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        mt: 1.25,
-        minHeight: 190,
-        p: 2,
-        display: "grid",
-        placeItems: "center",
-        textAlign: "center",
-        border:
-          "1px solid rgba(211,164,79,0.20)",
-        borderRadius: "18px",
-        background:
-          "linear-gradient(135deg, rgba(255,252,247,0.98), rgba(251,240,216,0.50))",
-      }}
-    >
-      <Stack
-        alignItems="center"
-        spacing={0.9}
-      >
-        <Box
-          sx={{
-            width: 52,
-            height: 52,
-            display: "grid",
-            placeItems: "center",
-            color:
-              "var(--color-gold-dark)",
-            backgroundColor:
-              "var(--color-gold-soft)",
-            borderRadius: "15px",
-          }}
-        >
-          <GradeRounded />
-        </Box>
-
-        <Typography
-          sx={{
-            color:
-              "var(--color-navy-deep)",
-            fontSize: "14px",
-            fontWeight: 800,
-          }}
-        >
-          لا يوجد توزيع درجات مطابق لهذه المادة
-        </Typography>
-
-        <Typography
-          sx={{
-            maxWidth: 430,
-            color:
-              "var(--color-muted)",
-            fontSize: "10px",
-            lineHeight: 1.7,
-          }}
-        >
-          يجب إضافة توزيع درجات للمادة في السنة المحددة قبل إنشاء الاختبار.
-        </Typography>
-
-        {canAddCriteria ? (
-          <Button
-            type="button"
-            onClick={() => {
-              const params =
-                new URLSearchParams();
-
-              params.set(
-                "subjectId",
-                subjectId
-              );
-
-              params.set(
-                "academicYearId",
-                academicYearId
-              );
-
-              if (termId) {
-                params.set(
-                  "termId",
-                  termId
-                );
-              }
-
-              navigate(
-                `/school/gradesCriteria/add?${params.toString()}`
-              );
-            }}
-            variant="contained"
-            startIcon={
-              <AddCircleOutlineRounded />
-            }
-            sx={{
-              mt: 0.4,
-              minHeight: 42,
-              px: 2,
-              borderRadius: "12px",
-              color:
-                "var(--color-white)",
-              background:
-                "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-              fontSize: "11px",
-              fontWeight: 800,
-              textTransform: "none",
-
-              "& .MuiButton-startIcon":
-                {
-                  marginLeft: "7px",
-                  marginRight: 0,
-                },
-            }}
-          >
-            إضافة توزيع درجات
-          </Button>
-        ) : (
-          <Typography
-            sx={{
-              color:
-                "var(--color-danger)",
-              fontSize: "10px",
-              fontWeight: 700,
-            }}
-          >
-            لا تملك صلاحية إضافة توزيع درجات؛ تواصل مع المسؤول.
-          </Typography>
-        )}
-      </Stack>
-    </Paper>
-  );
+const fieldSx = {
+  "& .MuiOutlinedInput-root": {
+    minHeight: 46,
+    borderRadius: "12px",
+    backgroundColor: "#fff",
+  },
+  "& .MuiInputLabel-root": {
+    fontSize: "12px",
+  },
+  "& .MuiInputBase-input": {
+    fontSize: "12px",
+  },
 };
 
+const TeacherExamAdd = () => {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const isEdit = Boolean(id);
 
-const Add = () => {
-  const {
-    register,
-    handleSubmit,
-    control,
-    formState: { errors },
-    setValue,
-    watch,
-  } = useForm({
-    defaultValues: {
-      academicYearId: "",
-      termId: "",
-      gradeLevelId: "",
-      subjectId: "",
-      subjectOfferingId: "",
-      examType: "",
-      startDate: "",
-      endDate: "",
-      duration: "",
-      questions: [
-        createQuestion(),
-      ],
-      classIds: [],
-    },
-  });
+  const [loadingOptions, setLoadingOptions] = useState(true);
+  const [loadingExam, setLoadingExam] = useState(Boolean(id));
+  const [loadedExamId, setLoadedExamId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [optionsError, setOptionsError] = useState("");
+  const [offerings, setOfferings] = useState([]);
+  const [classes, setClasses] = useState([]);
 
-  const {
-    fields,
-    append,
-    remove,
-  } = useFieldArray({
-    control,
-    name: "questions",
-  });
-
-  const [loading, setLoading] =
-    useState(false);
+  const [subjectOfferingId, setSubjectOfferingId] = useState("");
+  const [classIds, setClassIds] = useState([]);
+  const [examType, setExamType] = useState("quiz");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [duration, setDuration] = useState(30);
+  const [questions, setQuestions] = useState([createQuestion()]);
+  const [validationErrors, setValidationErrors] = useState({});
 
   const [
-    gradesCriteriaLoading,
-    setGradesCriteriaLoading,
+    criteriaLoading,
+    setCriteriaLoading,
   ] = useState(false);
 
   const [
-    gradesCriteria,
-    setGradesCriteria,
-  ] = useState([]);
+    selectedCriteria,
+    setSelectedCriteria,
+  ] = useState(null);
 
   const [
-    yearTermIds,
-    setYearTermIds,
-  ] = useState(new Set());
+    criteriaChecked,
+    setCriteriaChecked,
+  ] = useState(false);
 
-  const subjectId =
-    normalizeId(
-      watch("subjectId")
-    );
+  const [
+    criteriaError,
+    setCriteriaError,
+  ] = useState("");
 
-  const academicYearId =
-    normalizeId(
-      watch("academicYearId")
-    );
+  const loadOptions = useCallback(async () => {
+    setLoadingOptions(true);
+    setOptionsError("");
 
-  const termId =
-    normalizeId(
-      watch("termId")
-    );
+    try {
+      const [profileResult, classesResult, subjectsResult] =
+        await Promise.allSettled([
+          api.get("/teachers/me"),
+          api.get("/classes/teacher/me"),
+          api.get("/subjects/teacher/me"),
+        ]);
 
-  const gradeLevelId =
-    normalizeId(
-      watch("gradeLevelId")
-    );
+      const profile =
+        profileResult.status === "fulfilled"
+          ? extractEntity(profileResult.value)
+          : null;
+      const teacherId = normalizeId(profile);
 
-  const navigate =
-    useNavigate();
+      const myClasses =
+        classesResult.status === "fulfilled"
+          ? extractCollection(classesResult.value, ["myClasses"])
+          : [];
+      const mySubjects =
+        subjectsResult.status === "fulfilled"
+          ? extractCollection(subjectsResult.value, ["teacherSubjects"])
+          : [];
 
-  const criteriaPermissions =
-    usePermissions(
-      "gradesCriteria"
-    );
+      let assignments = [];
+
+      try {
+        const assignmentResponse =
+          await fetchTeacherAssignments(
+            {
+              ...(teacherId
+                ? { teacherId }
+                : {}),
+              page: 1,
+              limit: 500,
+            },
+            { force: true }
+          );
+
+        if (isFailedResponse(assignmentResponse)) {
+          assignments = [];
+        } else {
+          assignments = extractCollection(
+            assignmentResponse,
+            [
+              "assignments",
+              "teacherAssignments",
+            ]
+          );
+        }
+
+        if (teacherId) {
+          assignments = assignments.filter((assignment) => {
+            const assignedTeacherId = normalizeId(
+              assignment?.teacherId || assignment?.teacher
+            );
+
+            return !assignedTeacherId || assignedTeacherId === teacherId;
+          });
+        }
+      } catch {
+        assignments = [];
+      }
+
+      const rawCandidates = collectOfferingCandidates([
+        ...assignments,
+        ...myClasses,
+        ...mySubjects,
+      ]);
+
+      const hydrated = [];
+      const pendingIds = [];
+
+      rawCandidates.forEach((candidate) => {
+        if (candidate && typeof candidate === "object") {
+          const id = normalizeId(candidate);
+          if (id) hydrated.push(candidate);
+          return;
+        }
+
+        const id = normalizeId(candidate);
+        if (id) pendingIds.push(id);
+      });
+
+      const uniquePendingIds = [...new Set(pendingIds)].filter(
+        (id) => !hydrated.some((item) => normalizeId(item) === id)
+      );
+
+      if (uniquePendingIds.length) {
+        const responses = await Promise.allSettled(
+          uniquePendingIds.map((id) => api.get(`/subject-offerings/${id}`))
+        );
+
+        responses.forEach((result) => {
+          if (result.status !== "fulfilled") return;
+          const entity = extractEntity(result.value);
+          if (entity && normalizeId(entity)) hydrated.push(entity);
+        });
+      }
+
+      const uniqueOfferings = Array.from(
+        new Map(
+          hydrated
+            .map((item) => [normalizeId(item), item])
+            .filter(([id]) => Boolean(id))
+        ).values()
+      );
+
+      setClasses(myClasses);
+      setOfferings(uniqueOfferings);
+
+      if (!uniqueOfferings.length) {
+        setOptionsError(
+          "لا توجد مادة دراسية مرتبطة بحسابك كـ Subject Offering. راجع تعيينات المعلم من الإدارة."
+        );
+      }
+    } catch (error) {
+      setClasses([]);
+      setOfferings([]);
+      setOptionsError(
+        getErrorMessage(error, "تعذر تحميل مواد وفصول المعلم")
+      );
+    } finally {
+      setLoadingOptions(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!academicYearId) {
-      setYearTermIds(
-        new Set()
-      );
+    loadOptions();
+  }, [loadOptions]);
+
+  useEffect(() => {
+    if (!isEdit || !id || loadingOptions || loadedExamId === id) {
+      if (!isEdit) {
+        setLoadingExam(false);
+      }
       return;
     }
 
     let active = true;
 
-    const loadYearTerms =
-      async () => {
-        const response =
-          await fetchTermsByAcademicYear(
-            academicYearId
-          );
+    const loadCurrentExam = async () => {
+      setLoadingExam(true);
 
-        if (!active) {
-          return;
+      try {
+        const response = await fetchSingleExam(id);
+
+        if (isFailedResponse(response)) {
+          throw new Error(
+            typeof response === "string"
+              ? response
+              : response?.message || "تعذر تحميل بيانات الاختبار"
+          );
         }
 
-        setYearTermIds(
-          new Set(
-            extractList(response)
-              .map(normalizeId)
-              .filter(Boolean)
-          )
-        );
-      };
+        const exam = extractExamEntity(response);
 
-    loadYearTerms();
+        if (!exam) {
+          throw new Error("لم يتم العثور على بيانات الاختبار");
+        }
+
+        let offering = getExamOffering(exam);
+        const offeringId = normalizeId(
+          exam?.subjectOfferingId ||
+            offering ||
+            exam?.gradesCriteria?.subjectOfferingId
+        );
+
+        if (!offering && offeringId) {
+          try {
+            const offeringResponse = await api.get(
+              `/subject-offerings/${offeringId}`
+            );
+            offering = extractEntity(offeringResponse);
+          } catch {
+            offering = null;
+          }
+        }
+
+        if (!active) return;
+
+        if (offering && offeringId) {
+          setOptionsError("");
+          setOfferings((previous) => {
+            const next = [...previous];
+            const index = next.findIndex(
+              (item) => normalizeId(item) === offeringId
+            );
+
+            if (index >= 0) {
+              next[index] = { ...next[index], ...offering };
+            } else {
+              next.push(offering);
+            }
+
+            return next;
+          });
+        }
+
+        const examClasses = Array.isArray(exam?.classes)
+          ? exam.classes.filter(
+              (item) => item && typeof item === "object"
+            )
+          : [];
+
+        if (examClasses.length) {
+          setClasses((previous) => {
+            const map = new Map(
+              previous
+                .map((item) => [normalizeId(item), item])
+                .filter(([key]) => Boolean(key))
+            );
+
+            examClasses.forEach((item) => {
+              const classId = normalizeId(item);
+              if (classId) {
+                map.set(classId, {
+                  ...(map.get(classId) || {}),
+                  ...item,
+                });
+              }
+            });
+
+            return Array.from(map.values());
+          });
+        }
+
+        const nextClassIds = (
+          Array.isArray(exam?.classIds) && exam.classIds.length
+            ? exam.classIds
+            : examClasses
+        )
+          .map(normalizeId)
+          .filter(Boolean);
+
+        setSubjectOfferingId(offeringId);
+        setClassIds(nextClassIds);
+        setExamType(exam?.examType || "quiz");
+        setStartDate(
+          exam?.startDate
+            ? String(exam.startDate).slice(0, 10)
+            : ""
+        );
+        setEndDate(
+          exam?.endDate
+            ? String(exam.endDate).slice(0, 10)
+            : ""
+        );
+        setDuration(Number(exam?.duration || 30));
+
+        const nextQuestions = Array.isArray(exam?.questions)
+          ? exam.questions.map((question) => createQuestion(question))
+          : [];
+
+        setQuestions(
+          nextQuestions.length
+            ? nextQuestions
+            : [createQuestion()]
+        );
+        setValidationErrors({});
+        setLoadedExamId(id);
+      } catch (error) {
+        if (!active) return;
+        toast.error(
+          getErrorMessage(error, "تعذر تحميل بيانات الاختبار")
+        );
+      } finally {
+        if (active) {
+          setLoadingExam(false);
+        }
+      }
+    };
+
+    loadCurrentExam();
 
     return () => {
       active = false;
     };
-  }, [academicYearId]);
+  }, [
+    id,
+    isEdit,
+    loadingOptions,
+    loadedExamId,
+  ]);
+
+  const selectedOffering = useMemo(
+    () =>
+      offerings.find(
+        (offering) => normalizeId(offering) === subjectOfferingId
+      ) || null,
+    [offerings, subjectOfferingId]
+  );
 
   useEffect(() => {
-    if (
-      !subjectId ||
-      !academicYearId
-    ) {
-      setGradesCriteria([]);
-      setGradesCriteriaLoading(
-        false
-      );
-      return;
-    }
-
     let active = true;
 
-    const loadCriteria =
-      async () => {
-        setGradesCriteriaLoading(
-          true
+    const loadCriteria = async () => {
+      setSelectedCriteria(null);
+      setCriteriaError("");
+      setCriteriaChecked(false);
+
+      if (!subjectOfferingId) {
+        setCriteriaLoading(false);
+        return;
+      }
+
+      setCriteriaLoading(true);
+
+      try {
+        const response =
+          await api.get(
+            "/gradesCriteria",
+            {
+              params: {
+                subjectOfferingId,
+                page: 1,
+                limit: 100,
+              },
+            }
+          );
+
+        if (!active) return;
+
+        const rows =
+          extractCollection(
+            response,
+            [
+              "gradesCriteria",
+              "criteria",
+            ]
+          );
+
+        setSelectedCriteria(
+          rows[0] || null
         );
 
-        try {
-          /*
-           * أول محاولة للشكل الجديد:
-           * subjectId + academicYearId.
-           */
-          let response =
-            await fetchGradesCriteria({
-              subjectId,
-              academicYearId,
-              page: 1,
-              limit: 1000,
-            });
+        setCriteriaChecked(true);
+      } catch (error) {
+        if (!active) return;
 
-          if (!active) {
-            return;
-          }
-
-          if (
-            response?.status === false
-          ) {
-            setGradesCriteria([]);
-
-            toast.error(
-              getErrorMessage(
-                response,
-                "حدث خطأ أثناء جلب توزيع الدرجات"
-              )
-            );
-            return;
-          }
-
-          let list =
-            extractList(response);
-
-          let matched =
-            list.filter((criteria) =>
-              criteriaMatchesSelection(
-                criteria,
-                {
-                  subjectId,
-                  academicYearId,
-                  termId,
-                  gradeLevelId,
-                  yearTermIds,
-                }
-              )
-            );
-
-          /*
-           * لو البحث المفلتر لم يجد شيئًا، نجلب القائمة
-           * بدون subjectId/academicYearId حتى ندعم السجلات
-           * القديمة المحفوظة بـ subjectOfferingId فقط.
-           */
-          if (matched.length === 0) {
-            const fallbackResponse =
-              await fetchGradesCriteria({
-                page: 1,
-                limit: 1000,
-              });
-
-            if (!active) {
-              return;
-            }
-
-            if (
-              fallbackResponse?.status !==
-              false
-            ) {
-              list =
-                extractList(
-                  fallbackResponse
-                );
-
-              matched =
-                list.filter(
-                  (criteria) =>
-                    criteriaMatchesSelection(
-                      criteria,
-                      {
-                        subjectId,
-                        academicYearId,
-                        termId,
-                        gradeLevelId,
-                        yearTermIds,
-                      }
-                    )
-                );
-            }
-          }
-
-          setGradesCriteria(
-            matched
-          );
-        } catch (error) {
-          if (active) {
-            setGradesCriteria([]);
-
-            toast.error(
-              error?.response?.data
-                ?.message ||
-                "حدث خطأ أثناء جلب توزيع الدرجات"
-            );
-          }
-        } finally {
-          if (active) {
-            setGradesCriteriaLoading(
-              false
-            );
-          }
+        setSelectedCriteria(null);
+        setCriteriaChecked(false);
+        setCriteriaError(
+          getErrorMessage(
+            error,
+            "تعذر التحقق من توزيع درجات المادة"
+          )
+        );
+      } finally {
+        if (active) {
+          setCriteriaLoading(false);
         }
-      };
+      }
+    };
 
     loadCriteria();
 
     return () => {
       active = false;
     };
-  }, [
-    subjectId,
-    academicYearId,
-    termId,
-    gradeLevelId,
-    yearTermIds,
-  ]);
+  }, [subjectOfferingId]);
 
   const hasGradesCriteria =
-    useMemo(() => {
-      if (
-        !subjectId ||
-        !academicYearId ||
-        gradesCriteriaLoading
-      ) {
-        return null;
+    Boolean(selectedCriteria);
+
+  const enabledExamTypes =
+    useMemo(
+      () =>
+        new Set(
+          EXAM_TYPES
+            .filter(
+              (type) =>
+                getCriteriaWeightForType(
+                  selectedCriteria,
+                  type.value
+                ) > 0
+            )
+            .map(
+              (type) => type.value
+            )
+        ),
+      [selectedCriteria]
+    );
+
+  const availableClasses = useMemo(() => {
+    if (!subjectOfferingId) return classes;
+
+    const offeringGradeId = getOfferingGradeId(selectedOffering);
+
+    const matched = classes.filter((classEntity) => {
+      const linkedOfferingIds = getClassOfferingIds(classEntity);
+      if (linkedOfferingIds.length) {
+        return linkedOfferingIds.includes(subjectOfferingId);
       }
 
-      return (
-        gradesCriteria.length > 0
-      );
-    }, [
-      subjectId,
-      academicYearId,
-      gradesCriteria,
-      gradesCriteriaLoading,
-    ]);
+      const classGradeId = getClassGradeId(classEntity);
+      if (offeringGradeId && classGradeId) {
+        return offeringGradeId === classGradeId;
+      }
 
-  const addQuestion = () => {
-    append(
-      createQuestion()
+      return true;
+    });
+
+    return matched.length ? matched : classes;
+  }, [classes, selectedOffering, subjectOfferingId]);
+
+  useEffect(() => {
+    const allowedIds = new Set(availableClasses.map(normalizeId));
+    setClassIds((previous) => previous.filter((id) => allowedIds.has(id)));
+  }, [availableClasses]);
+
+  useEffect(() => {
+    if (
+      !criteriaChecked ||
+      !selectedCriteria ||
+      !examType
+    ) {
+      return;
+    }
+
+    if (!enabledExamTypes.has(examType)) {
+      setExamType("");
+    }
+  }, [
+    criteriaChecked,
+    selectedCriteria,
+    enabledExamTypes,
+    examType,
+  ]);
+
+  const updateQuestion = (questionIndex, patch) => {
+    setQuestions((previous) =>
+      previous.map((question, index) =>
+        index === questionIndex ? { ...question, ...patch } : question
+      )
     );
   };
 
-  const onSubmit = async (
-    formData
-  ) => {
-    if (
-      hasGradesCriteria !== true
-    ) {
-      toast.error(
-        "يجب إضافة توزيع درجات للمادة قبل حفظ الاختبار"
-      );
+  const updateOption = (questionIndex, optionIndex, value) => {
+    setQuestions((previous) =>
+      previous.map((question, index) => {
+        if (index !== questionIndex) return question;
+
+        const oldValue = question.options[optionIndex];
+        const nextOptions = question.options.map((option, currentIndex) =>
+          currentIndex === optionIndex ? value : option
+        );
+
+        return {
+          ...question,
+          options: nextOptions,
+          correctAnswer:
+            question.correctAnswer === oldValue
+              ? value
+              : question.correctAnswer,
+        };
+      })
+    );
+  };
+
+  const addQuestionCard = () => {
+    setQuestions((previous) => [...previous, createQuestion()]);
+  };
+
+  const duplicateQuestion = (questionIndex) => {
+    setQuestions((previous) => {
+      const source = previous[questionIndex];
+      const copy = createQuestion(source);
+      const next = [...previous];
+      next.splice(questionIndex + 1, 0, copy);
+      return next;
+    });
+  };
+
+  const removeQuestion = (questionIndex) => {
+    if (questions.length === 1) {
+      toast.info("يجب أن يحتوي الاختبار على سؤال واحد على الأقل");
       return;
     }
 
-    if (
-      !validateExamDates(
-        formData.startDate,
-        formData.endDate
-      )
+    setQuestions((previous) =>
+      previous.filter((_, index) => index !== questionIndex)
+    );
+  };
+
+  const toggleClass = (classId) => {
+    setClassIds((previous) =>
+      previous.includes(classId)
+        ? previous.filter((id) => id !== classId)
+        : [...previous, classId]
+    );
+  };
+
+  const validate = () => {
+    const errors = {};
+
+    if (!subjectOfferingId) {
+      errors.subjectOfferingId = "اختر المادة الدراسية";
+    } else if (
+      criteriaChecked &&
+      !hasGradesCriteria
     ) {
-      toast.error(
-        "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء"
-      );
-      return;
-    }
-
-    const normalizedSubjectId =
-      normalizeId(
-        formData.subjectId
-      );
-
-    const normalizedSubjectOfferingId =
-      normalizeId(
-        formData.subjectOfferingId
-      );
-
-    const normalizedGradeLevelId =
-      normalizeId(
-        formData.gradeLevelId
-      );
-
-    const normalizedYearId =
-      normalizeId(
-        formData.academicYearId
-      );
-
-    const normalizedTermId =
-      normalizeId(
-        formData.termId
-      );
-
-    const normalizedClassIds =
-      getArray(
-        formData.classIds
-      )
-        .map(normalizeId)
-        .filter(Boolean);
-
-    const duration =
-      Number(
-        formData.duration
-      );
-
-    if (
-      !normalizedYearId ||
-      !normalizedTermId ||
-      !normalizedGradeLevelId ||
-      !normalizedSubjectId
-    ) {
-      toast.error(
-        "اختر السنة والترم والصف والمادة"
-      );
-      return;
-    }
-
-    if (!normalizedSubjectOfferingId) {
-      toast.error(
-        "المادة المحددة ليس لها عرض مادة مرتبط بنفس الصف والترم"
-      );
-      return;
+      errors.subjectOfferingId =
+        "لا يوجد توزيع درجات لهذه المادة";
     }
 
     if (
-      normalizedClassIds.length === 0
+      criteriaChecked &&
+      hasGradesCriteria &&
+      examType &&
+      !enabledExamTypes.has(examType)
     ) {
-      toast.error(
-        "اختر فصلًا واحدًا على الأقل"
-      );
+      errors.examType =
+        "نوع الاختبار غير مفعّل في توزيع درجات المادة";
+    }
+
+    if (!classIds.length) {
+      errors.classIds = "اختر فصلًا واحدًا على الأقل";
+    }
+
+    if (!examType) {
+      errors.examType = "اختر نوع الاختبار";
+    }
+
+    if (!startDate) errors.startDate = "حدد تاريخ البداية";
+    if (!endDate) errors.endDate = "حدد تاريخ النهاية";
+
+    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+      errors.endDate = "تاريخ النهاية يجب ألا يسبق تاريخ البداية";
+    }
+
+    const numericDuration = Number(duration);
+    if (!Number.isFinite(numericDuration) || numericDuration < 1) {
+      errors.duration = "مدة الاختبار يجب أن تكون دقيقة واحدة على الأقل";
+    }
+
+    const questionErrors = questions.map((question) => {
+      const item = {};
+      const cleanOptions = question.options.map((option) => option.trim());
+
+      if (!question.question.trim()) {
+        item.question = "اكتب نص السؤال";
+      }
+
+      if (cleanOptions.some((option) => !option)) {
+        item.options = "أكمل الاختيارات الأربعة";
+      } else if (new Set(cleanOptions).size !== cleanOptions.length) {
+        item.options = "لا يمكن تكرار نفس الاختيار";
+      }
+
+      if (!question.correctAnswer.trim()) {
+        item.correctAnswer = "حدد الإجابة الصحيحة";
+      } else if (!cleanOptions.includes(question.correctAnswer.trim())) {
+        item.correctAnswer = "الإجابة الصحيحة يجب أن تكون أحد الاختيارات";
+      }
+
+      return item;
+    });
+
+    if (questionErrors.some((item) => Object.keys(item).length)) {
+      errors.questions = questionErrors;
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!validate()) {
+      toast.error("راجع البيانات المطلوبة قبل الحفظ");
       return;
     }
 
     if (
-      !Number.isFinite(duration) ||
-      duration < 1
+      criteriaChecked &&
+      !hasGradesCriteria
     ) {
       toast.error(
-        "مدة الاختبار يجب أن تكون دقيقة واحدة على الأقل"
+        "لا يوجد توزيع درجات لهذه المادة. يجب على إدارة المدرسة تحديد توزيع الدرجات قبل إنشاء الامتحانات."
       );
       return;
     }
 
-    setLoading(true);
+    const payload = {
+      subjectOfferingId,
+      classIds,
+      examType,
+      startDate,
+      endDate,
+      duration: Number(duration),
+      questions: questions.map((question) => ({
+        question: question.question.trim(),
+        options: question.options.map((option) => option.trim()),
+        correctAnswer: question.correctAnswer.trim(),
+      })),
+    };
+
+    setSaving(true);
 
     try {
-      /*
-       * الباك الحالي لـ CreateExamDto لا يقبل subjectId / academicYearId / termId.
-       * الربط الأكاديمي يتم بالكامل من خلال SubjectOffering.
-       */
-      const payload = {
-        subjectOfferingId:
-          normalizedSubjectOfferingId,
-        classIds:
-          normalizedClassIds,
-        examType:
-          formData.examType,
-        startDate:
-          formData.startDate,
-        endDate:
-          formData.endDate,
-        duration,
-        questions:
-          getArray(
-            formData.questions
-          ).map(
-            normalizeQuestion
-          ),
-      };
+      const response = isEdit
+        ? await editExam(payload, id)
+        : await addExam(payload);
 
-      const response =
-        await addExam(payload);
-
-      if (!response?.status) {
+      if (isFailedResponse(response)) {
         toast.error(
-          getErrorMessage(
-            response,
-            "حدث خطأ أثناء إضافة الاختبار"
-          )
+          typeof response === "string"
+            ? response
+            : response?.message ||
+                (isEdit
+                  ? "تعذر تعديل الاختبار"
+                  : "تعذر إنشاء الاختبار")
         );
         return;
       }
 
       toast.success(
-        "تم إضافة الاختبار بنجاح"
+        isEdit
+          ? "تم تعديل الاختبار بنجاح"
+          : "تم إنشاء الاختبار بنجاح"
       );
-
-      const createdId =
-        getResponseId(
-          response
-        );
-
-      navigate(
-        createdId
-          ? `/school/exams/${createdId}`
-          : "/school/exams"
-      );
+      navigate("/teacher/exams", { replace: true });
     } catch (error) {
       toast.error(
-        error?.response?.data
-          ?.message ||
-          "حدث خطأ أثناء إضافة الاختبار"
+        getErrorMessage(
+          error,
+          isEdit
+            ? "حدث خطأ أثناء تعديل الاختبار"
+            : "حدث خطأ أثناء إنشاء الاختبار"
+        )
       );
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
+  const completedQuestions = useMemo(
+    () =>
+      questions.filter(
+        (question) =>
+          question.question.trim() &&
+          question.options.every((option) => option.trim()) &&
+          question.correctAnswer.trim()
+      ).length,
+    [questions]
+  );
+
   return (
-    <Container>
+    <Box
+      component="form"
+      onSubmit={handleSubmit}
+      dir="rtl"
+      sx={{
+        minHeight: "100vh",
+        backgroundColor: "#fff",
+        color: "var(--color-navy-deep, #122F4D)",
+        py: { xs: 2, sm: 2.5, md: 3.5 },
+      }}
+    >
       <Box
-        component="form"
-        onSubmit={handleSubmit(
-          onSubmit
-        )}
-        noValidate
-        dir="rtl"
         sx={{
           width: "100%",
-          maxWidth: "100%",
-          minWidth: 0,
-          pb: 3,
-          color:
-            "var(--color-text)",
+          maxWidth: "1680px",
+          mx: "auto",
+          px: { xs: 2, sm: 3, md: 4, lg: 5 },
         }}
       >
         <Paper
           elevation={0}
           sx={{
-            px: {
-              xs: 1.25,
-              md: 1.6,
+            position: "relative",
+            overflow: "hidden",
+            p: { xs: 2.2, md: 3 },
+            borderRadius: "24px",
+            color: "white",
+            background:
+              "linear-gradient(120deg, #173B5E 0%, #244F78 55%, #2C5C87 100%)",
+            boxShadow: "0 18px 45px rgba(18,47,77,.18)",
+            "&::after": {
+              content: '""',
+              position: "absolute",
+              width: 320,
+              height: 320,
+              left: -80,
+              top: -120,
+              border: "1px solid rgba(255,255,255,.08)",
+              borderRadius: "50%",
             },
-            py: 1.05,
-            border:
-              "1px solid rgba(36,74,112,0.08)",
-            borderRadius: "16px",
-            backgroundColor:
-              "rgba(255,252,247,0.9)",
-            boxShadow:
-              "0 8px 20px rgba(18,47,77,0.04)",
           }}
         >
           <Stack
-            direction={{
-              xs: "column",
-              sm: "row",
-            }}
-            alignItems={{
-              xs: "stretch",
-              sm: "center",
-            }}
+            direction={{ xs: "column", md: "row" }}
+            alignItems={{ xs: "stretch", md: "center" }}
             justifyContent="space-between"
-            gap={1}
+            gap={1.5}
+            sx={{ position: "relative", zIndex: 1 }}
           >
-            <Back title="إضافة اختبار جديد" />
+            <Stack direction="row" alignItems="center" spacing={1.6}>
+              <Box
+                sx={{
+                  width: { xs: 52, md: 60 },
+                  height: { xs: 52, md: 60 },
+                  p: 0.8,
+                  flexShrink: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  backgroundColor: "#fff",
+                  borderRadius: "16px",
+                  boxShadow: "0 8px 20px rgba(0,0,0,.12)",
+                }}
+              >
+                <Box
+                  component="img"
+                  src={nasaqLogo}
+                  alt="نسق"
+                  sx={{ width: "100%", height: "100%", objectFit: "contain" }}
+                />
+              </Box>
 
-            <Typography
-              sx={{
-                color:
-                  "var(--color-muted)",
-                fontSize: "10px",
-              }}
-            >
-              أدخل بيانات الاختبار ثم
-              أضف الأسئلة وحدّد
-              الإجابات الصحيحة.
-            </Typography>
+              <Box>
+                <Chip
+                  icon={<QuizRounded />}
+                  label="بوابة المعلم"
+                  size="small"
+                  sx={{
+                    mb: 0.8,
+                    height: 27,
+                    color: "#F2D792",
+                    backgroundColor: "rgba(242,215,146,.12)",
+                    border: "1px solid rgba(242,215,146,.22)",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    "& .MuiChip-icon": { color: "inherit", fontSize: 16 },
+                  }}
+                />
+                <Typography
+                  sx={{
+                    fontSize: { xs: "24px", md: "32px" },
+                    fontWeight: 900,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {isEdit ? "تعديل الاختبار" : "إنشاء اختبار جديد"}
+                </Typography>
+                <Typography
+                  sx={{
+                    mt: 0.5,
+                    color: "rgba(255,255,255,.80)",
+                    fontSize: { xs: "12.5px", md: "14px" },
+                  }}
+                >
+                  {isEdit
+                    ? "عدّل بيانات الاختبار والفصول والأسئلة ثم احفظ التغييرات."
+                    : "حدد المادة والفصول ثم أضف الأسئلة والإجابات الصحيحة."}
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Stack direction={{ xs: "column", sm: "row" }} gap={1}>
+              <Button
+                type="button"
+                onClick={() => navigate("/teacher/exams")}
+                variant="outlined"
+                startIcon={<ArrowBackRounded />}
+                sx={{
+                  minHeight: 44,
+                  px: 2,
+                  borderColor: "rgba(255,255,255,.28)",
+                  color: "white",
+                  borderRadius: "12px",
+                  fontSize: "10px",
+                  fontWeight: 800,
+                  textTransform: "none",
+                  "&:hover": {
+                    borderColor: "rgba(255,255,255,.5)",
+                    backgroundColor: "rgba(255,255,255,.08)",
+                  },
+                  "& .MuiButton-startIcon": {
+                    marginLeft: "6px",
+                    marginRight: 0,
+                  },
+                }}
+              >
+                اختباراتي
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={
+                  saving ||
+                  loadingOptions ||
+                  loadingExam ||
+                  criteriaLoading ||
+                  !offerings.length ||
+                  (criteriaChecked &&
+                    !hasGradesCriteria)
+                }
+                variant="contained"
+                startIcon={
+                  saving ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : (
+                    <SaveRounded />
+                  )
+                }
+                sx={{
+                  minHeight: 42,
+                  px: 2.1,
+                  borderRadius: "12px",
+                  color: "var(--color-navy-deep, #122F4D)",
+                  backgroundColor: "#F2D792",
+                  boxShadow: "none",
+                  fontSize: "10px",
+                  fontWeight: 900,
+                  textTransform: "none",
+                  "&:hover": { backgroundColor: "#E8C96F", boxShadow: "none" },
+                  "& .MuiButton-startIcon": {
+                    marginLeft: "6px",
+                    marginRight: 0,
+                  },
+                }}
+              >
+                {saving
+                  ? isEdit
+                    ? "جارٍ حفظ التعديلات"
+                    : "جارٍ إنشاء الاختبار"
+                  : isEdit
+                  ? "حفظ التعديلات"
+                  : "حفظ الاختبار"}
+              </Button>
+            </Stack>
           </Stack>
         </Paper>
 
-        <Paper
-          elevation={0}
-          sx={FORM_CARD_SX}
-        >
-          <SectionHeading
-            icon={
-              <EventNoteRounded />
+        {optionsError && (
+          <Alert
+            severity="warning"
+            action={
+              <Button type="button" size="small" onClick={loadOptions}>
+                إعادة المحاولة
+              </Button>
             }
-            title="تفاصيل الاختبار"
-            description="حدّد المادة والنوع والمواعيد والمدة والفصول المستهدفة."
-          />
-
-          <DataInputs
-            register={register}
-            errors={errors}
-            setValue={setValue}
-            watch={watch}
-          />
-        </Paper>
-
-        <GradesCriteriaStatus
-          loading={
-            gradesCriteriaLoading
-          }
-          hasGradesCriteria={
-            hasGradesCriteria
-          }
-          subjectId={subjectId}
-          academicYearId={
-            academicYearId
-          }
-          termId={termId}
-          canAddCriteria={
-            criteriaPermissions.add
-          }
-          navigate={navigate}
-        />
-
-        {hasGradesCriteria ===
-          true && (
-          <Questions
-            fields={fields}
-            register={register}
-            errors={errors}
-            watch={watch}
-            remove={remove}
-            addQuestion={
-              addQuestion
-            }
-          />
+            sx={{ mt: 1.4, borderRadius: "14px" }}
+          >
+            {optionsError}
+          </Alert>
         )}
+
+        {isEdit && loadingExam && (
+          <Alert severity="info" sx={{ mt: 1.4, borderRadius: "14px" }}>
+            جاري تحميل بيانات الاختبار...
+          </Alert>
+        )}
+
+        <Box
+          sx={{
+            mt: 1.4,
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1.05fr) minmax(0, 1.65fr)" },
+            gap: 1.3,
+            alignItems: "start",
+          }}
+        >
+          <Stack spacing={1.3} sx={{ position: { lg: "sticky" }, top: 16 }}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: { xs: 1.5, md: 1.8 },
+                border: "1px solid rgba(36,74,112,.09)",
+                borderRadius: "18px",
+                boxShadow: "0 12px 28px rgba(18,47,77,.05)",
+              }}
+            >
+              <SectionTitle
+                icon={<FactCheckRounded />}
+                title="بيانات الاختبار"
+                description="البيانات الأساسية وموعد إتاحة الاختبار."
+              />
+
+              <Divider sx={{ my: 1.5, borderColor: "rgba(36,74,112,.07)" }} />
+
+              {loadingOptions ? (
+                <Box sx={{ minHeight: 210, display: "grid", placeItems: "center" }}>
+                  <Stack alignItems="center" spacing={1}>
+                    <CircularProgress size={26} sx={{ color: "#B78430" }} />
+                    <Typography sx={{ color: "#708198", fontSize: "10px" }}>
+                      جارٍ تحميل المواد والفصول...
+                    </Typography>
+                  </Stack>
+                </Box>
+              ) : (
+                <Stack spacing={1.2}>
+                  <TextField
+                    select
+                    label="المادة الدراسية"
+                    value={subjectOfferingId}
+                    onChange={(event) => {
+                      setSubjectOfferingId(event.target.value);
+                      setValidationErrors((previous) => ({
+                        ...previous,
+                        subjectOfferingId: undefined,
+                      }));
+                    }}
+                    error={Boolean(validationErrors.subjectOfferingId)}
+                    helperText={validationErrors.subjectOfferingId}
+                    sx={fieldSx}
+                  >
+                    <MenuItem value="" disabled>
+                      اختر المادة
+                    </MenuItem>
+                    {offerings.map((offering, index) => (
+                      <MenuItem key={normalizeId(offering)} value={normalizeId(offering)}>
+                        {getOfferingLabel(offering, index)}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+
+                  {subjectOfferingId &&
+                    criteriaLoading && (
+                    <Alert
+                      severity="info"
+                      sx={{
+                        borderRadius: "12px",
+                        fontSize: "9.5px",
+                      }}
+                    >
+                      جارٍ التحقق من توزيع درجات المادة...
+                    </Alert>
+                  )}
+
+                  {subjectOfferingId &&
+                    !criteriaLoading &&
+                    criteriaChecked &&
+                    !hasGradesCriteria && (
+                    <Alert
+                      severity="warning"
+                      sx={{
+                        borderRadius: "12px",
+                        fontSize: "9.5px",
+                      }}
+                    >
+                      لا يوجد توزيع درجات لهذه المادة. يجب على إدارة المدرسة تحديد توزيع الدرجات قبل إنشاء الامتحانات.
+                    </Alert>
+                  )}
+
+                  {subjectOfferingId &&
+                    !criteriaLoading &&
+                    criteriaError && (
+                    <Alert
+                      severity="warning"
+                      sx={{
+                        borderRadius: "12px",
+                        fontSize: "9.5px",
+                      }}
+                    >
+                      {criteriaError}
+                    </Alert>
+                  )}
+
+                  <TextField
+                    select
+                    label="نوع الاختبار"
+                    value={examType}
+                    onChange={(event) => setExamType(event.target.value)}
+                    error={Boolean(validationErrors.examType)}
+                    helperText={validationErrors.examType}
+                    sx={fieldSx}
+                  >
+                    {EXAM_TYPES.map((type) => {
+                      const disabled =
+                        criteriaChecked &&
+                        hasGradesCriteria &&
+                        !enabledExamTypes.has(
+                          type.value
+                        );
+
+                      return (
+                        <MenuItem
+                          key={type.value}
+                          value={type.value}
+                          disabled={disabled}
+                        >
+                          {type.label}
+                          {disabled
+                            ? " — غير مفعّل"
+                            : ""}
+                        </MenuItem>
+                      );
+                    })}
+                  </TextField>
+
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                      gap: 1,
+                    }}
+                  >
+                    <TextField
+                      type="date"
+                      label="تاريخ البداية"
+                      value={startDate}
+                      onChange={(event) => setStartDate(event.target.value)}
+                      error={Boolean(validationErrors.startDate)}
+                      helperText={validationErrors.startDate}
+                      InputLabelProps={{ shrink: true }}
+                      sx={fieldSx}
+                    />
+
+                    <TextField
+                      type="date"
+                      label="تاريخ النهاية"
+                      value={endDate}
+                      onChange={(event) => setEndDate(event.target.value)}
+                      error={Boolean(validationErrors.endDate)}
+                      helperText={validationErrors.endDate}
+                      InputLabelProps={{ shrink: true }}
+                      sx={fieldSx}
+                    />
+                  </Box>
+
+                  <TextField
+                    type="number"
+                    label="مدة الاختبار بالدقائق"
+                    value={duration}
+                    onChange={(event) => setDuration(event.target.value)}
+                    error={Boolean(validationErrors.duration)}
+                    helperText={validationErrors.duration}
+                    inputProps={{ min: 1, step: 1 }}
+                    sx={fieldSx}
+                  />
+                </Stack>
+              )}
+            </Paper>
+
+            <Paper
+              elevation={0}
+              sx={{
+                p: { xs: 1.5, md: 1.8 },
+                border: "1px solid rgba(36,74,112,.09)",
+                borderRadius: "18px",
+                boxShadow: "0 12px 28px rgba(18,47,77,.05)",
+              }}
+            >
+              <SectionTitle
+                icon={<SchoolRounded />}
+                title="الفصول المستهدفة"
+                description="حدد الفصول التي سيظهر لها الاختبار."
+                endContent={
+                  <Chip
+                    label={`${classIds.length} محدد`}
+                    size="small"
+                    sx={{ fontSize: "9px", fontWeight: 800 }}
+                  />
+                }
+              />
+
+              <Divider sx={{ my: 1.4, borderColor: "rgba(36,74,112,.07)" }} />
+
+              {!subjectOfferingId ? (
+                <Typography
+                  sx={{ py: 2, color: "#708198", fontSize: "10px", textAlign: "center" }}
+                >
+                  اختر المادة أولًا لعرض الفصول المتاحة.
+                </Typography>
+              ) : !availableClasses.length ? (
+                <Alert severity="info" sx={{ borderRadius: "12px" }}>
+                  لا توجد فصول مرتبطة بهذه المادة.
+                </Alert>
+              ) : (
+                <FormControl error={Boolean(validationErrors.classIds)} fullWidth>
+                  <Stack spacing={0.7}>
+                    {availableClasses.map((classEntity, index) => {
+                      const classId = normalizeId(classEntity);
+                      const checked = classIds.includes(classId);
+
+                      return (
+                        <Paper
+                          key={classId || index}
+                          elevation={0}
+                          onClick={() => toggleClass(classId)}
+                          sx={{
+                            px: 1.1,
+                            py: 0.65,
+                            cursor: "pointer",
+                            border: checked
+                              ? "1px solid rgba(183,132,48,.4)"
+                              : "1px solid rgba(36,74,112,.08)",
+                            borderRadius: "12px",
+                            backgroundColor: checked ? "#FBF0D8" : "#fff",
+                          }}
+                        >
+                          <FormControlLabel
+                            onClick={(event) => event.stopPropagation()}
+                            control={
+                              <Checkbox
+                                checked={checked}
+                                onChange={() => toggleClass(classId)}
+                                sx={{
+                                  color: "#B78430",
+                                  "&.Mui-checked": { color: "#B78430" },
+                                }}
+                              />
+                            }
+                            label={
+                              <Box>
+                                <Typography sx={{ fontSize: "11px", fontWeight: 800 }}>
+                                  {getClassLabel(classEntity, index)}
+                                </Typography>
+                                <Typography sx={{ color: "#708198", fontSize: "9px" }}>
+                                  {classEntity?.studentsCount ??
+                                    classEntity?.studentCount ??
+                                    classEntity?.students?.length ??
+                                    0}{" "}
+                                  طالب
+                                </Typography>
+                              </Box>
+                            }
+                            sx={{ m: 0, width: "100%" }}
+                          />
+                        </Paper>
+                      );
+                    })}
+                  </Stack>
+                  {validationErrors.classIds && (
+                    <FormHelperText>{validationErrors.classIds}</FormHelperText>
+                  )}
+                </FormControl>
+              )}
+            </Paper>
+
+            <Paper
+              elevation={0}
+              sx={{
+                p: 1.5,
+                color: "white",
+                borderRadius: "18px",
+                background: "linear-gradient(135deg, #173B5E, #2C5C87)",
+              }}
+            >
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Box>
+                  <Typography sx={{ color: "#F2D792", fontSize: "10px", fontWeight: 900 }}>
+                    ملخص الاختبار
+                  </Typography>
+                  <Typography sx={{ mt: 0.4, fontSize: "23px", fontWeight: 900 }}>
+                    {completedQuestions} / {questions.length}
+                  </Typography>
+                  <Typography sx={{ color: "rgba(255,255,255,.68)", fontSize: "9px" }}>
+                    أسئلة مكتملة من إجمالي الأسئلة
+                  </Typography>
+                </Box>
+                <CheckCircleRounded sx={{ color: "#F2D792", fontSize: 36 }} />
+              </Stack>
+            </Paper>
+          </Stack>
+
+          <Paper
+            elevation={0}
+            sx={{
+              p: { xs: 1.5, md: 1.8 },
+              border: "1px solid rgba(36,74,112,.09)",
+              borderRadius: "18px",
+              boxShadow: "0 12px 28px rgba(18,47,77,.05)",
+            }}
+          >
+            <SectionTitle
+              icon={<MenuBookRounded />}
+              title="أسئلة الاختبار"
+              description="أضف السؤال والاختيارات وحدد الإجابة الصحيحة."
+              endContent={
+                <Button
+                  type="button"
+                  onClick={addQuestionCard}
+                  variant="outlined"
+                  startIcon={<AddRounded />}
+                  sx={{
+                    minHeight: 38,
+                    borderRadius: "10px",
+                    color: "#244A70",
+                    borderColor: "rgba(36,74,112,.25)",
+                    fontSize: "10px",
+                    fontWeight: 800,
+                    textTransform: "none",
+                    "& .MuiButton-startIcon": { marginLeft: "5px", marginRight: 0 },
+                  }}
+                >
+                  إضافة سؤال
+                </Button>
+              }
+            />
+
+            <Divider sx={{ my: 1.5, borderColor: "rgba(36,74,112,.07)" }} />
+
+            {validationErrors.questions && (
+              <Alert severity="error" sx={{ mb: 1.2, borderRadius: "12px" }}>
+                بعض الأسئلة غير مكتملة. راجع نص السؤال والاختيارات والإجابة الصحيحة.
+              </Alert>
+            )}
+
+            <Stack spacing={1.2}>
+              {questions.map((question, questionIndex) => {
+                const questionError = validationErrors.questions?.[questionIndex] || {};
+
+                return (
+                  <Paper
+                    key={question.localId}
+                    elevation={0}
+                    sx={{
+                      overflow: "hidden",
+                      border: Object.keys(questionError).length
+                        ? "1px solid rgba(211,47,47,.32)"
+                        : "1px solid rgba(36,74,112,.09)",
+                      borderRadius: "16px",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        height: 4,
+                        backgroundColor: Object.keys(questionError).length
+                          ? "#D32F2F"
+                          : "#244A70",
+                      }}
+                    />
+
+                    <Box sx={{ p: { xs: 1.2, md: 1.5 } }}>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        gap={1}
+                      >
+                        <Stack direction="row" alignItems="center" spacing={0.8}>
+                          <Box
+                            sx={{
+                              width: 34,
+                              height: 34,
+                              display: "grid",
+                              placeItems: "center",
+                              color: "#fff",
+                              backgroundColor: "#244A70",
+                              borderRadius: "10px",
+                              fontSize: "11px",
+                              fontWeight: 900,
+                            }}
+                          >
+                            {questionIndex + 1}
+                          </Box>
+                          <Box>
+                            <Typography sx={{ fontSize: "12px", fontWeight: 900 }}>
+                              السؤال {questionIndex + 1}
+                            </Typography>
+                            <Typography sx={{ color: "#708198", fontSize: "9px" }}>
+                              اختر الإجابة الصحيحة من الدائرة بجوار الاختيار.
+                            </Typography>
+                          </Box>
+                        </Stack>
+
+                        <Stack direction="row" spacing={0.3}>
+                          <Tooltip title="نسخ السؤال">
+                            <IconButton
+                              type="button"
+                              onClick={() => duplicateQuestion(questionIndex)}
+                              size="small"
+                              sx={{ color: "#244A70" }}
+                            >
+                              <ContentCopyRounded fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="حذف السؤال">
+                            <IconButton
+                              type="button"
+                              onClick={() => removeQuestion(questionIndex)}
+                              size="small"
+                              sx={{ color: "#C94848" }}
+                            >
+                              <DeleteOutlineRounded fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </Stack>
+
+                      <TextField
+                        multiline
+                        minRows={2}
+                        fullWidth
+                        label="نص السؤال"
+                        value={question.question}
+                        onChange={(event) =>
+                          updateQuestion(questionIndex, { question: event.target.value })
+                        }
+                        error={Boolean(questionError.question)}
+                        helperText={questionError.question}
+                        sx={{ ...fieldSx, mt: 1.2 }}
+                      />
+
+                      <Box
+                        sx={{
+                          mt: 1.1,
+                          display: "grid",
+                          gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                          gap: 0.9,
+                        }}
+                      >
+                        {question.options.map((option, optionIndex) => {
+                          const checked =
+                            Boolean(option.trim()) &&
+                            question.correctAnswer === option;
+
+                          return (
+                            <Stack
+                              key={`${question.localId}-option-${optionIndex}`}
+                              direction="row"
+                              alignItems="center"
+                              spacing={0.2}
+                            >
+                              <Radio
+                                checked={checked}
+                                disabled={!option.trim()}
+                                onChange={() =>
+                                  updateQuestion(questionIndex, {
+                                    correctAnswer: option,
+                                  })
+                                }
+                                sx={{
+                                  color: "#B78430",
+                                  "&.Mui-checked": { color: "#B78430" },
+                                }}
+                              />
+                              <TextField
+                                fullWidth
+                                label={`الاختيار ${optionIndex + 1}`}
+                                value={option}
+                                onChange={(event) =>
+                                  updateOption(questionIndex, optionIndex, event.target.value)
+                                }
+                                sx={fieldSx}
+                              />
+                            </Stack>
+                          );
+                        })}
+                      </Box>
+
+                      {(questionError.options || questionError.correctAnswer) && (
+                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.8 }}>
+                          <WarningAmberRounded sx={{ color: "#D32F2F", fontSize: 16 }} />
+                          <Typography sx={{ color: "#D32F2F", fontSize: "9.5px" }}>
+                            {questionError.options || questionError.correctAnswer}
+                          </Typography>
+                        </Stack>
+                      )}
+
+                      {question.correctAnswer && !questionError.correctAnswer && (
+                        <Chip
+                          icon={<RadioButtonCheckedRounded />}
+                          label={`الإجابة الصحيحة: ${question.correctAnswer}`}
+                          size="small"
+                          sx={{
+                            mt: 1,
+                            color: "#237449",
+                            backgroundColor: "rgba(116,201,154,.14)",
+                            fontSize: "9px",
+                            fontWeight: 800,
+                            "& .MuiChip-icon": { color: "inherit", fontSize: 15 },
+                          }}
+                        />
+                      )}
+                    </Box>
+                  </Paper>
+                );
+              })}
+            </Stack>
+
+            <Button
+              type="button"
+              onClick={addQuestionCard}
+              fullWidth
+              variant="outlined"
+              startIcon={<AddRounded />}
+              sx={{
+                mt: 1.3,
+                minHeight: 46,
+                borderStyle: "dashed",
+                borderRadius: "12px",
+                color: "#B78430",
+                borderColor: "rgba(183,132,48,.38)",
+                backgroundColor: "rgba(251,240,216,.28)",
+                fontSize: "10px",
+                fontWeight: 900,
+                textTransform: "none",
+                "& .MuiButton-startIcon": { marginLeft: "5px", marginRight: 0 },
+              }}
+            >
+              إضافة سؤال آخر
+            </Button>
+          </Paper>
+        </Box>
 
         <Paper
           elevation={0}
           sx={{
-            mt: 1.25,
-            px: {
-              xs: 1.25,
-              md: 1.6,
-            },
-            py: 1.15,
-            border:
-              "1px solid rgba(36,74,112,0.08)",
+            mt: 1.3,
+            p: 1.2,
+            display: "flex",
+            flexDirection: { xs: "column", sm: "row" },
+            alignItems: { xs: "stretch", sm: "center" },
+            justifyContent: "space-between",
+            gap: 1,
+            border: "1px solid rgba(36,74,112,.09)",
             borderRadius: "16px",
-            backgroundColor:
-              "var(--color-cream)",
-            boxShadow:
-              "0 10px 24px rgba(18,47,77,0.05)",
+            boxShadow: "0 10px 24px rgba(18,47,77,.04)",
           }}
         >
-          <Stack
-            direction={{
-              xs: "column-reverse",
-              sm: "row",
-            }}
-            gap={1}
-          >
+          <Stack direction="row" alignItems="center" spacing={0.8}>
+            <CalendarMonthRounded sx={{ color: "#B78430" }} />
+            <Box>
+              <Typography sx={{ fontSize: "11px", fontWeight: 900 }}>
+                راجع بيانات الاختبار قبل الحفظ
+              </Typography>
+              <Typography sx={{ color: "#708198", fontSize: "9px" }}>
+                سيظهر الاختبار للفصول المحددة وفق تاريخ البداية والنهاية.
+              </Typography>
+            </Box>
+          </Stack>
+
+          <Stack direction={{ xs: "column", sm: "row" }} gap={0.7}>
+            <Button
+              type="button"
+              onClick={() => navigate("/teacher/exams")}
+              variant="text"
+              sx={{ color: "#708198", fontSize: "10px", fontWeight: 800 }}
+            >
+              إلغاء
+            </Button>
             <Button
               type="submit"
               disabled={
-                loading ||
-                gradesCriteriaLoading ||
-                hasGradesCriteria !==
-                  true
-              }
+                  saving ||
+                  loadingOptions ||
+                  loadingExam ||
+                  criteriaLoading ||
+                  !offerings.length ||
+                  (criteriaChecked &&
+                    !hasGradesCriteria)
+                }
               variant="contained"
               startIcon={
-                loading ? (
-                  <CircularProgress
-                    size={16}
-                    color="inherit"
-                  />
-                ) : (
-                  <SaveRounded />
-                )
+                saving ? <CircularProgress size={15} color="inherit" /> : <SaveRounded />
               }
               sx={{
-                width: {
-                  xs: "100%",
-                  sm: 180,
-                },
-                minHeight: 44,
-                borderRadius: "12px",
-                color:
-                  "var(--color-white)",
-                background:
-                  "linear-gradient(135deg, var(--color-navy-light), var(--color-navy-dark))",
-                fontSize: "12px",
-                fontWeight: 800,
+                minHeight: 42,
+                px: 2.3,
+                color: "#122F4D",
+                backgroundColor: "#F2D792",
+                borderRadius: "11px",
+                boxShadow: "none",
+                fontSize: "10px",
+                fontWeight: 900,
                 textTransform: "none",
-
-                "& .MuiButton-startIcon":
-                  {
-                    marginLeft:
-                      "7px",
-                    marginRight: 0,
-                  },
+                "&:hover": { backgroundColor: "#E8C96F", boxShadow: "none" },
+                "& .MuiButton-startIcon": { marginLeft: "5px", marginRight: 0 },
               }}
             >
-              {loading
-                ? "جاري الحفظ..."
-                : "حفظ الاختبار"}
-            </Button>
-
-            <Button
-              type="button"
-              onClick={() =>
-                navigate(-1)
-              }
-              variant="outlined"
-              startIcon={
-                <CloseRounded />
-              }
-              sx={{
-                width: {
-                  xs: "100%",
-                  sm: 145,
-                },
-                minHeight: 44,
-                borderRadius: "12px",
-                color:
-                  "var(--color-navy)",
-                borderColor:
-                  "rgba(36,74,112,0.18)",
-                fontSize: "12px",
-                fontWeight: 800,
-                textTransform: "none",
-
-                "& .MuiButton-startIcon":
-                  {
-                    marginLeft:
-                      "7px",
-                    marginRight: 0,
-                  },
-              }}
-            >
-              إلغاء
+              {saving
+                ? "جارٍ الحفظ"
+                : isEdit
+                ? "حفظ التعديلات"
+                : "إنشاء الاختبار"}
             </Button>
           </Stack>
         </Paper>
       </Box>
-    </Container>
+    </Box>
   );
 };
 
-const DataInputs = ({
-  register,
-  errors,
-  setValue,
-  watch,
-}) => {
-  const [
-    academicYears,
-    setAcademicYears,
-  ] = useState([]);
-
-  const [terms, setTerms] =
-    useState([]);
-
-  const [
-    gradeLevels,
-    setGradeLevels,
-  ] = useState([]);
-
-  const [
-    offerings,
-    setOfferings,
-  ] = useState([]);
-
-  const [
-    catalogSubjects,
-    setCatalogSubjects,
-  ] = useState([]);
-
-  const [
-    schoolClasses,
-    setSchoolClasses,
-  ] = useState([]);
-
-  const [
-    loadingYears,
-    setLoadingYears,
-  ] = useState(true);
-
-  const [
-    loadingTerms,
-    setLoadingTerms,
-  ] = useState(false);
-
-  const [
-    loadingGradeLevels,
-    setLoadingGradeLevels,
-  ] = useState(false);
-
-  const [
-    loadingOfferings,
-    setLoadingOfferings,
-  ] = useState(false);
-
-  const [
-    loadingCatalogSubjects,
-    setLoadingCatalogSubjects,
-  ] = useState(false);
-
-  const [
-    loadingClasses,
-    setLoadingClasses,
-  ] = useState(false);
-
-  const [
-    setupError,
-    setSetupError,
-  ] = useState("");
-
-  const academicYearId =
-    normalizeId(
-      watch("academicYearId")
-    );
-
-  const termId =
-    normalizeId(
-      watch("termId")
-    );
-
-  const gradeLevelId =
-    normalizeId(
-      watch("gradeLevelId")
-    );
-
-  const subjectId =
-    normalizeId(
-      watch("subjectId")
-    );
-
-  const subjectOfferingId =
-    normalizeId(
-      watch("subjectOfferingId")
-    );
-
-  const selectedClassIds =
-    getArray(
-      watch("classIds")
-    )
-      .map(normalizeId)
-      .filter(Boolean);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadYears =
-      async () => {
-        setLoadingYears(true);
-        setSetupError("");
-
-        try {
-          const response =
-            await fetchAcademicYears();
-
-          if (!active) {
-            return;
-          }
-
-          if (
-            response?.status === false
-          ) {
-            setAcademicYears([]);
-            setSetupError(
-              response?.message ||
-                "تعذر تحميل السنوات الدراسية"
-            );
-            return;
-          }
-
-          setAcademicYears(
-            extractList(response)
-              .map(mapAcademicYear)
-              .filter(
-                (item) =>
-                  item.id &&
-                  item.name
-              )
-          );
-        } catch (error) {
-          if (active) {
-            setAcademicYears([]);
-            setSetupError(
-              error?.response?.data
-                ?.message ||
-                "تعذر تحميل السنوات الدراسية"
-            );
-          }
-        } finally {
-          if (active) {
-            setLoadingYears(false);
-          }
-        }
-      };
-
-    loadYears();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadGradeLevels =
-      async () => {
-        setLoadingGradeLevels(
-          true
-        );
-
-        try {
-          const response =
-            await fetchGradeLevels();
-
-          if (!active) {
-            return;
-          }
-
-          if (
-            response?.status === false
-          ) {
-            setGradeLevels([]);
-            setSetupError(
-              response?.message ||
-                "تعذر تحميل الصفوف الدراسية"
-            );
-            return;
-          }
-
-          setGradeLevels(
-            extractList(response)
-              .map(mapGradeLevel)
-              .filter(
-                (item) =>
-                  item.id &&
-                  item.name
-              )
-              .sort(
-                (a, b) =>
-                  a.order - b.order
-              )
-          );
-        } catch (error) {
-          if (active) {
-            setGradeLevels([]);
-            setSetupError(
-              error?.response?.data
-                ?.message ||
-                "تعذر تحميل الصفوف الدراسية"
-            );
-          }
-        } finally {
-          if (active) {
-            setLoadingGradeLevels(
-              false
-            );
-          }
-        }
-      };
-
-    loadGradeLevels();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadCatalogSubjects =
-      async () => {
-        setLoadingCatalogSubjects(
-          true
-        );
-
-        try {
-          const response =
-            await fetchSubjects({
-              page: 1,
-              limit: 1000,
-            });
-
-          if (!active) {
-            return;
-          }
-
-          if (
-            response?.status === false
-          ) {
-            setCatalogSubjects([]);
-            return;
-          }
-
-          const normalized =
-            extractList(response)
-              .map(mapCatalogSubject)
-              .filter(
-                (item) =>
-                  item.id &&
-                  item.name
-              );
-
-          setCatalogSubjects(
-            normalized
-          );
-        } catch {
-          if (active) {
-            setCatalogSubjects([]);
-          }
-        } finally {
-          if (active) {
-            setLoadingCatalogSubjects(
-              false
-            );
-          }
-        }
-      };
-
-    loadCatalogSubjects();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadTerms =
-      async () => {
-        setTerms([]);
-        setOfferings([]);
-        setValue("subjectOfferingId", "");
-
-        if (!academicYearId) {
-          return;
-        }
-
-        setLoadingTerms(true);
-        setSetupError("");
-
-        try {
-          const response =
-            await fetchTermsByAcademicYear(
-              academicYearId
-            );
-
-          if (!active) {
-            return;
-          }
-
-          if (
-            response?.status === false
-          ) {
-            setTerms([]);
-            setSetupError(
-              response?.message ||
-                "تعذر تحميل الترمات"
-            );
-            return;
-          }
-
-          setTerms(
-            extractList(response)
-              .map(mapTerm)
-              .filter(
-                (item) =>
-                  item.id
-              )
-              .sort(
-                (a, b) =>
-                  a.order - b.order
-              )
-          );
-        } catch (error) {
-          if (active) {
-            setTerms([]);
-            setSetupError(
-              error?.response?.data
-                ?.message ||
-                "تعذر تحميل الترمات"
-            );
-          }
-        } finally {
-          if (active) {
-            setLoadingTerms(false);
-          }
-        }
-      };
-
-    loadTerms();
-
-    return () => {
-      active = false;
-    };
-  }, [academicYearId]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadOfferings =
-      async () => {
-        setOfferings([]);
-        setValue("subjectOfferingId", "");
-
-        if (
-          !termId ||
-          !gradeLevelId
-        ) {
-          return;
-        }
-
-        setLoadingOfferings(true);
-        setSetupError("");
-
-        try {
-          let response =
-            await fetchSubjectOfferings({
-              termId,
-              gradeLevelId,
-            });
-
-          if (!active) {
-            return;
-          }
-
-          if (
-            response?.status === false
-          ) {
-            setOfferings([]);
-            setSetupError(
-              response?.message ||
-                "تعذر تحميل المواد المفعلة"
-            );
-            return;
-          }
-
-          let list =
-            extractList(response);
-
-          /*
-           * بعض نسخ الباك القديمة ترجع قائمة فارغة من
-           * /subject-offerings/by-term/:termId
-           * رغم وجود البيانات في list endpoint.
-           * نجرب المسار الاحتياطي قبل اعتبار الترم بلا مواد.
-           */
-          if (list.length === 0) {
-            const fallbackResponse =
-              await fetchSubjectOfferings(
-                {
-                  termId,
-                  gradeLevelId,
-                },
-                {
-                  forceListEndpoint:
-                    true,
-                }
-              );
-
-            if (!active) {
-              return;
-            }
-
-            if (
-              fallbackResponse?.status !==
-              false
-            ) {
-              const fallbackList =
-                extractList(
-                  fallbackResponse
-                );
-
-              if (
-                fallbackList.length > 0
-              ) {
-                response =
-                  fallbackResponse;
-                list =
-                  fallbackList;
-              }
-            }
-          }
-
-          const filteredOfferings =
-            list.filter((offering) =>
-              offeringMatchesAcademicSelection(
-                offering,
-                termId,
-                gradeLevelId
-              )
-            );
-
-          setOfferings(
-            filteredOfferings
-          );
-        } catch (error) {
-          if (active) {
-            setOfferings([]);
-            setSetupError(
-              error?.response?.data
-                ?.message ||
-                "تعذر تحميل المواد المفعلة"
-            );
-          }
-        } finally {
-          if (active) {
-            setLoadingOfferings(false);
-          }
-        }
-      };
-
-    loadOfferings();
-
-    return () => {
-      active = false;
-    };
-  }, [
-    termId,
-    gradeLevelId,
-  ]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadClasses =
-      async () => {
-        setSchoolClasses([]);
-
-        if (
-          !academicYearId ||
-          !gradeLevelId
-        ) {
-          return;
-        }
-
-        setLoadingClasses(true);
-
-        try {
-          const response =
-            await getSchoolClasses({
-              page: 1,
-              limit: 1000,
-              academicYearId,
-              gradeLevelId,
-            });
-
-          if (!active) {
-            return;
-          }
-
-          if (
-            response?.status === false
-          ) {
-            setSchoolClasses([]);
-            return;
-          }
-
-          setSchoolClasses(
-            extractList(response)
-          );
-        } catch {
-          if (active) {
-            setSchoolClasses([]);
-          }
-        } finally {
-          if (active) {
-            setLoadingClasses(false);
-          }
-        }
-      };
-
-    loadClasses();
-
-    return () => {
-      active = false;
-    };
-  }, [
-    academicYearId,
-    gradeLevelId,
-  ]);
-
-  const subjectOptions =
-    useMemo(() => {
-      const map = new Map();
-
-      offerings
-        .filter((offering) =>
-          offeringMatchesAcademicSelection(
-            offering,
-            termId,
-            gradeLevelId
-          )
-        )
-        .forEach(
-          (offering) => {
-            const subject =
-              mapSubjectFromOffering(
-                offering
-              );
-
-            if (
-              subject.id &&
-              !map.has(subject.id)
-            ) {
-              map.set(
-                subject.id,
-                subject
-              );
-            }
-          }
-        );
-
-      return Array.from(
-        map.values()
-      );
-    }, [
-      offerings,
-      termId,
-      gradeLevelId,
-    ]);
-
-  const usingCatalogFallback = false;
-
-  /*
-   * الـSelect ما زال يعرض subjectId للمستخدم، لكن CreateExamDto الحالي
-   * يحتاج subjectOfferingId. لذلك نربط الاختيار بالعرض المطابق
-   * لنفس المادة + الصف + الترم ونخزنه في hidden field.
-   */
-  useEffect(() => {
-    if (
-      !subjectId ||
-      !termId ||
-      !gradeLevelId
-    ) {
-      if (subjectOfferingId) {
-        setValue(
-          "subjectOfferingId",
-          "",
-          {
-            shouldDirty: true,
-            shouldValidate: true,
-          }
-        );
-      }
-      return;
-    }
-
-    const matchingOffering =
-      offerings.find(
-        (offering) => {
-          const offeringSubjectId =
-            mapSubjectFromOffering(
-              offering
-            ).id;
-
-          const offeringGradeLevelId =
-            getOfferingGradeLevelId(
-              offering
-            );
-
-          const offeringTermId =
-            normalizeId(
-              offering?.termId ||
-              offering?.term
-            );
-
-          return (
-            offeringSubjectId ===
-              subjectId &&
-            (!offeringGradeLevelId ||
-              offeringGradeLevelId ===
-                gradeLevelId) &&
-            (!offeringTermId ||
-              offeringTermId ===
-                termId)
-          );
-        }
-      );
-
-    const nextOfferingId =
-      normalizeId(
-        matchingOffering
-      );
-
-    if (
-      nextOfferingId !==
-      subjectOfferingId
-    ) {
-      setValue(
-        "subjectOfferingId",
-        nextOfferingId,
-        {
-          shouldDirty: true,
-          shouldValidate: true,
-        }
-      );
-    }
-  }, [
-    offerings,
-    subjectId,
-    termId,
-    gradeLevelId,
-    subjectOfferingId,
-    setValue,
-  ]);
-
-  const classOptions =
-    useMemo(
-      () =>
-        schoolClasses
-          .map(mapClass)
-          .filter(
-            (item) =>
-              item.id &&
-              (
-                !gradeLevelId ||
-                !item.gradeLevelId ||
-                item.gradeLevelId ===
-                  gradeLevelId
-              )
-          ),
-      [
-        schoolClasses,
-        gradeLevelId,
-      ]
-    );
-
-  useEffect(() => {
-    if (
-      selectedClassIds.length ===
-        0 ||
-      classOptions.length === 0
-    ) {
-      return;
-    }
-
-    const allowedIds =
-      new Set(
-        classOptions.map(
-          (item) => item.id
-        )
-      );
-
-    const validIds =
-      selectedClassIds.filter(
-        (id) =>
-          allowedIds.has(id)
-      );
-
-    if (
-      validIds.length !==
-      selectedClassIds.length
-    ) {
-      setValue(
-        "classIds",
-        validIds,
-        {
-          shouldDirty: true,
-          shouldValidate: true,
-        }
-      );
-    }
-  }, [
-    classOptions,
-    selectedClassIds,
-    setValue,
-  ]);
-
-  const updateValue = (
-    field,
-    value
-  ) => {
-    setValue(
-      field,
-      value,
-      {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      }
-    );
-  };
-
-  return (
-    <>
-      <input
-        type="hidden"
-        {...register("subjectOfferingId")}
-      />
-
-      {setupError && (
-        <Alert
-          severity="warning"
-          sx={{
-            mb: 1.4,
-            borderRadius: "12px",
-            fontSize: "10px",
-          }}
-        >
-          {setupError}
-        </Alert>
-      )}
-
-      <Grid
-        container
-        spacing={{
-          xs: 1.5,
-          md: 2,
-        }}
-        alignItems="flex-start"
-      >
-        <Grid
-          item
-          xs={12}
-          sm={6}
-          lg={3}
-        >
-          <Select
-            key={`year-${academicYearId}-${academicYears.length}`}
-            register={register}
-            registerName="academicYearId"
-            data={academicYears}
-            name="name"
-            error={localizeFieldError(
-              errors
-                .academicYearId
-                ?.message
-            )}
-            label="السنة الدراسية"
-            required
-            disabled={loadingYears}
-            defaultValue={
-              academicYearId
-            }
-            onChange={(value) => {
-              const nextValue =
-                normalizeId(value);
-
-              updateValue(
-                "academicYearId",
-                nextValue
-              );
-              updateValue(
-                "termId",
-                ""
-              );
-              updateValue(
-                "gradeLevelId",
-                ""
-              );
-              updateValue(
-                "subjectId",
-                ""
-              );
-              updateValue(
-                "subjectOfferingId",
-                ""
-              );
-              updateValue(
-                "classIds",
-                []
-              );
-            }}
-          />
-        </Grid>
-
-        <Grid
-          item
-          xs={12}
-          sm={6}
-          lg={3}
-        >
-          <Select
-            key={`term-${academicYearId}-${termId}-${terms.length}`}
-            register={register}
-            registerName="termId"
-            data={terms}
-            name="name"
-            error={localizeFieldError(
-              errors.termId
-                ?.message
-            )}
-            label="الترم"
-            required
-            disabled={
-              loadingTerms ||
-              !academicYearId ||
-              terms.length === 0
-            }
-            defaultValue={termId}
-            onChange={(value) => {
-              const nextValue =
-                normalizeId(value);
-
-              updateValue(
-                "termId",
-                nextValue
-              );
-              updateValue(
-                "subjectId",
-                ""
-              );
-              updateValue(
-                "subjectOfferingId",
-                ""
-              );
-              updateValue(
-                "classIds",
-                []
-              );
-            }}
-          />
-        </Grid>
-
-        <Grid
-          item
-          xs={12}
-          sm={6}
-          lg={3}
-        >
-          <Select
-            key={`grade-${academicYearId}-${gradeLevelId}-${gradeLevels.length}`}
-            register={register}
-            registerName="gradeLevelId"
-            data={gradeLevels}
-            name="name"
-            error={localizeFieldError(
-              errors
-                .gradeLevelId
-                ?.message
-            )}
-            label="الصف الدراسي"
-            required
-            disabled={
-              loadingGradeLevels ||
-              !academicYearId ||
-              gradeLevels.length === 0
-            }
-            defaultValue={
-              gradeLevelId
-            }
-            onChange={(value) => {
-              const nextValue =
-                normalizeId(value);
-
-              updateValue(
-                "gradeLevelId",
-                nextValue
-              );
-              updateValue(
-                "subjectId",
-                ""
-              );
-              updateValue(
-                "subjectOfferingId",
-                ""
-              );
-              updateValue(
-                "classIds",
-                []
-              );
-            }}
-          />
-        </Grid>
-
-        <Grid
-          item
-          xs={12}
-          sm={6}
-          lg={3}
-        >
-          <Select
-            key={`subject-${termId}-${gradeLevelId}-${subjectId}-${subjectOptions.length}`}
-            register={register}
-            registerName="subjectId"
-            data={subjectOptions}
-            name="name"
-            error={localizeFieldError(
-              errors.subjectId
-                ?.message
-            )}
-            label="المادة"
-            required
-            disabled={
-              loadingOfferings ||
-              !termId ||
-              !gradeLevelId ||
-              subjectOptions.length === 0
-            }
-            defaultValue={
-              subjectId
-            }
-            onChange={(value) => {
-              const nextValue =
-                normalizeId(value);
-
-              const matchingOffering =
-                offerings.find(
-                  (offering) =>
-                    mapSubjectFromOffering(
-                      offering
-                    ).id ===
-                      nextValue &&
-                    offeringMatchesAcademicSelection(
-                      offering,
-                      termId,
-                      gradeLevelId
-                    )
-                );
-
-              updateValue(
-                "subjectId",
-                nextValue
-              );
-              updateValue(
-                "subjectOfferingId",
-                normalizeId(
-                  matchingOffering
-                )
-              );
-              updateValue(
-                "classIds",
-                []
-              );
-            }}
-          />
-
-          <Typography
-            sx={{
-              mt: 0.55,
-              px: 0.35,
-              minHeight: 16,
-              color:
-                subjectOptions.length === 0 &&
-                termId &&
-                gradeLevelId &&
-                !loadingOfferings
-                  ? "#a06a13"
-                  : "var(--color-muted)",
-              fontSize: "9.5px",
-              fontWeight:
-                usingCatalogFallback
-                  ? 700
-                  : 500,
-            }}
-          >
-            {loadingOfferings ||
-            loadingCatalogSubjects
-              ? "جاري تحميل المواد..."
-              : !termId
-              ? "اختر الترم أولًا"
-              : !gradeLevelId
-              ? "اختر الصف الدراسي أولًا"
-              : subjectOptions.length ===
-                0
-              ? "لا توجد مواد متاحة حاليًا"
-              : usingCatalogFallback
-              ? "لا توجد عروض مواد لهذا الصف والترم؛ تم عرض مواد المدرسة المتاحة."
-              : `${subjectOptions.length} مادة مفعّلة لهذا الصف والترم`}
-          </Typography>
-        </Grid>
-
-        <Grid
-          item
-          xs={12}
-          sm={6}
-          lg={3}
-        >
-          <Select
-            register={register}
-            registerName="examType"
-            data={MCQExams}
-            name="value"
-            error={localizeFieldError(
-              errors.examType
-                ?.message
-            )}
-            label="نوع الاختبار"
-            required
-          />
-        </Grid>
-
-        <Grid
-          item
-          xs={12}
-          sm={6}
-          lg={3}
-        >
-          <Input
-            register={register}
-            registerName="startDate"
-            error={localizeFieldError(
-              errors.startDate
-                ?.message
-            )}
-            label="تاريخ البدء"
-            required
-            type="date"
-          />
-        </Grid>
-
-        <Grid
-          item
-          xs={12}
-          sm={6}
-          lg={3}
-        >
-          <Input
-            register={register}
-            registerName="endDate"
-            error={localizeFieldError(
-              errors.endDate
-                ?.message
-            )}
-            label="تاريخ الانتهاء"
-            required
-            type="date"
-          />
-        </Grid>
-
-        <Grid
-          item
-          xs={12}
-          sm={6}
-          lg={3}
-        >
-          <Input
-            register={register}
-            registerName="duration"
-            error={localizeFieldError(
-              errors.duration
-                ?.message
-            )}
-            label="المدة بالدقائق"
-            required
-            valueAsNumber
-            type="number"
-            inputProps={{
-              min: 1,
-              step: 1,
-            }}
-          />
-        </Grid>
-
-        <Grid
-          item
-          xs={12}
-          sm={12}
-          lg={12}
-          sx={{
-            "& .MuiFormHelperText-root": {
-              mx: 0.35,
-              mt: 0.55,
-              fontSize: "9.5px",
-            },
-          }}
-        >
-          <TextField
-            select
-            fullWidth
-            label="الفصول"
-            value={
-              selectedClassIds
-            }
-            onChange={(event) => {
-              const value =
-                event.target.value;
-
-              updateValue(
-                "classIds",
-                typeof value ===
-                  "string"
-                  ? value.split(",")
-                  : value
-              );
-            }}
-            disabled={
-              loadingClasses ||
-              !academicYearId ||
-              !gradeLevelId ||
-              !subjectId ||
-              classOptions.length === 0
-            }
-            error={
-              Boolean(
-                errors.classIds
-              )
-            }
-            helperText={
-              errors.classIds
-                ?.message ||
-              (!academicYearId
-                ? "اختر السنة الدراسية أولًا"
-                : !gradeLevelId
-                ? "اختر الصف الدراسي أولًا"
-                : !subjectId
-                ? "اختر المادة أولًا"
-                : classOptions.length ===
-                  0
-                ? "لا توجد فصول متاحة لهذا الصف في السنة المختارة"
-                : `${classOptions.length} فصل متاح`)
-            }
-            SelectProps={{
-              multiple: true,
-              renderValue: (
-                selected
-              ) =>
-                classOptions
-                  .filter(
-                    (item) =>
-                      selected.includes(
-                        item.id
-                      )
-                  )
-                  .map(
-                    (item) =>
-                      item.name
-                  )
-                  .join("، "),
-              MenuProps: {
-                PaperProps: {
-                  sx: {
-                    maxHeight: 320,
-                    borderRadius:
-                      "12px",
-                    direction: "rtl",
-                    mt: 0.5,
-                  },
-                },
-              },
-            }}
-          >
-            {classOptions.map(
-              (item) => (
-                <MenuItem
-                  key={item.id}
-                  value={item.id}
-                >
-                  <Checkbox
-                    size="small"
-                    checked={
-                      selectedClassIds.includes(
-                        item.id
-                      )
-                    }
-                  />
-                  <ListItemText
-                    primary={
-                      item.name
-                    }
-                  />
-                </MenuItem>
-              )
-            )}
-          </TextField>
-        </Grid>
-      </Grid>
-    </>
-  );
-};
-
-export default Add;
+export default TeacherExamAdd;

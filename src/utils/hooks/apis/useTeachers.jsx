@@ -204,7 +204,8 @@ const useTeachers = (
 
       setPagination(
         extractPagination(
-          response?.data,
+          response?.pagination ??
+            response?.data,
           normalizedFilters
         )
       );
@@ -251,7 +252,8 @@ const useTeachers = (
 
       setPagination(
         extractPagination(
-          result?.data,
+          result?.pagination ??
+            result?.data,
           normalizedFilters
         )
       );

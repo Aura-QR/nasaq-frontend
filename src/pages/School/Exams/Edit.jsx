@@ -32,7 +32,11 @@ import {
   useFieldArray,
   useForm,
 } from "react-hook-form";
-import { useNavigate, useParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
@@ -1062,6 +1066,14 @@ const Edit = () => {
   const navigate =
     useNavigate();
 
+  const location =
+    useLocation();
+
+  const isTeacherMode =
+    location.pathname.startsWith(
+      "/teacher/"
+    );
+
   const { id } = useParams();
 
   const {
@@ -1553,11 +1565,18 @@ const Edit = () => {
           response
         );
 
-      navigate(
-        updatedId
-          ? `/school/exams/${updatedId}`
-          : `/school/exams/${id}`
-      );
+      if (isTeacherMode) {
+        navigate(
+          "/teacher/exams",
+          { replace: true }
+        );
+      } else {
+        navigate(
+          updatedId
+            ? `/school/exams/${updatedId}`
+            : `/school/exams/${id}`
+        );
+      }
     } catch (error) {
       toast.error(
         error?.response?.data

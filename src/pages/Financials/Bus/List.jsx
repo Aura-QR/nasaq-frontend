@@ -3,6 +3,7 @@ import {
   Button,
   Dialog,
   DialogContent,
+  Stack,
 } from "@mui/material";
 
 import {
@@ -12,6 +13,7 @@ import {
   PaymentsRounded,
   SchoolRounded,
   SearchOffRounded,
+  SettingsRounded,
   VisibilityRounded,
 } from "@mui/icons-material";
 
@@ -29,10 +31,13 @@ import {
   unenrollBus,
 } from "@/APIs/financials/bus";
 
+import {
+  fetchBusPlans,
+} from "@/APIs/financials/busPlans";
+
 import ClassFilter from "@/components/Filters/ClassFilter";
 import SelectFilter from "@/components/Filters/SelectFilter";
 import Container from "@/components/Container/Container";
-import Input from "@/components/Input/Input";
 import PaginationControls from "@/components/Pagination";
 import Select from "@/components/Select/Select";
 import Table from "@/components/Table/Table";
@@ -58,7 +63,6 @@ import {
   mapFeeStatus,
 } from "@/utils/financial/financialUtils";
 
-import { useInstallmentPlans } from "@/utils/hooks/apis/financials/useInstallmentPlans";
 import {
   useBusCandidates,
   useBusList,
@@ -70,6 +74,7 @@ const headers = [
   "اسم الطالب",
   "السنة الدراسية",
   "الفصل",
+  "خطة الباص",
   "نوع الخدمة",
   "حالة الباص",
   "إجمالي الرسوم",
@@ -81,6 +86,7 @@ const body = [
   "studentName",
   "academicYear",
   "className",
+  "planName",
   "serviceType",
   "status",
   "fee",
@@ -91,10 +97,31 @@ const body = [
 const arr = (value) =>
   Array.isArray(value) ? value : [];
 
-const getAcademicYearLabel = (value) => {
+const normalizeEntityId = (value) => {
+  if (!value) return "";
+
+  if (
+    typeof value === "object"
+  ) {
+    return String(
+      value?._id ||
+        value?.id ||
+        ""
+    ).trim();
+  }
+
+  return String(value).trim();
+};
+
+const getAcademicYearLabel = (
+  value,
+  academicYears = []
+) => {
   if (!value) return "—";
 
-  if (typeof value === "object") {
+  if (
+    typeof value === "object"
+  ) {
     return (
       value?.name ||
       value?.label ||
@@ -103,10 +130,43 @@ const getAcademicYearLabel = (value) => {
     );
   }
 
-  return String(value);
+  const rawValue =
+    String(value).trim();
+
+  if (!rawValue) {
+    return "—";
+  }
+
+  const matchedYear =
+    academicYears.find(
+      (year) =>
+        normalizeEntityId(year) ===
+        rawValue
+    );
+
+  if (matchedYear) {
+    return (
+      matchedYear?.name ||
+      matchedYear?.label ||
+      matchedYear?.title ||
+      "—"
+    );
+  }
+
+  const looksLikeMongoId =
+    /^[a-f\d]{24}$/i.test(
+      rawValue
+    );
+
+  return looksLikeMongoId
+    ? "—"
+    : rawValue;
 };
 
-const mapRow = (item) => {
+const mapRow = (
+  item,
+  academicYears = []
+) => {
   const student =
     item?.student || {};
 
@@ -151,8 +211,16 @@ const mapRow = (item) => {
     academicYear:
       getAcademicYearLabel(
         item?.academicYear ||
+          item?.academicYearId ||
           cls?.academicYear ||
-          cls?.academicYearId
+          cls?.academicYearId ||
+          student?.academicYear ||
+          student?.academicYearId ||
+          student?.class?.academicYear ||
+          student?.class?.academicYearId ||
+          student?.classId?.academicYear ||
+          student?.classId?.academicYearId,
+        academicYears
       ),
 
     className:
@@ -166,6 +234,15 @@ const mapRow = (item) => {
             "class"
           )}`
         : "—",
+
+    planName:
+      bus?.planName ||
+      bus?.busPlanId?.name ||
+      (
+        bus?.busPlanId
+          ? "خطة باص"
+          : "غير مرتبطة بخطة"
+      ),
 
     serviceType:
       mapBusServiceType(
@@ -233,21 +310,101 @@ const BusListPage = () => {
       "financial"
     );
 
-  const {
-    installmentPlans = [],
-  } = useInstallmentPlans();
+  const [
+    busPlans,
+    setBusPlans,
+  ] = useState([]);
+
+  const [
+    loadingBusPlans,
+    setLoadingBusPlans,
+  ] = useState(true);
 
   const {
     academicYears = [],
     loadingAcademicYears,
   } = useAcademicYears();
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadBusPlans = async () => {
+      setLoadingBusPlans(true);
+
+      try {
+        const response =
+          await fetchBusPlans();
+
+        if (!mounted) {
+          return;
+        }
+
+        if (
+          response?.status === false
+        ) {
+          setBusPlans([]);
+
+          toast.error(
+            getErrorMessage(
+              response,
+              "تعذر تحميل خطط الباص"
+            ),
+            {
+              toastId:
+                "bus-plans-load",
+            }
+          );
+
+          return;
+        }
+
+        const payload =
+          response?.data ??
+          response;
+
+        const list =
+          Array.isArray(payload)
+            ? payload
+            : Array.isArray(
+                payload?.data
+              )
+            ? payload.data
+            : [];
+
+        setBusPlans(
+          list.filter(
+            (plan) =>
+              plan?.isActive !==
+              false
+          )
+        );
+      } finally {
+        if (mounted) {
+          setLoadingBusPlans(
+            false
+          );
+        }
+      }
+    };
+
+    loadBusPlans();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const selectedYearName =
     useMemo(
       () =>
         academicYears.find(
           (year) =>
-            year.id === yearId
+            normalizeEntityId(
+              year
+            ) ===
+            normalizeEntityId(
+              yearId
+            )
         )?.name || "",
       [
         academicYears,
@@ -260,7 +417,10 @@ const BusListPage = () => {
       () =>
         academicYears.map(
           (year) => ({
-            value: year.id,
+            value:
+              normalizeEntityId(
+                year
+              ),
             label:
               year.status ===
               "active"
@@ -348,9 +508,16 @@ const BusListPage = () => {
     useMemo(
       () =>
         arr(busRecords).map(
-          mapRow
+          (item) =>
+            mapRow(
+              item,
+              academicYears
+            )
         ),
-      [busRecords]
+      [
+        busRecords,
+        academicYears,
+      ]
     );
 
   const remaining =
@@ -367,76 +534,140 @@ const BusListPage = () => {
         item.remainingRaw === 0
     ).length;
 
-  const plans =
+  const busPlanOptions =
     useMemo(
       () =>
         arr(
-          installmentPlans
-        ).map(
-          (plan) => ({
-            ...plan,
+          busPlans
+        )
+          .filter(
+            (plan) =>
+              plan?.isActive !==
+              false
+          )
+          .map((plan) => {
+            const id =
+              plan?._id ||
+              plan?.id;
 
-            displayName:
-              `${plan.name} (${plan.numberOfInstallments} قسط)` +
-              `${
-                plan.isDefault
-                  ? " - افتراضية"
-                  : ""
-              }`,
+            const serviceLabel =
+              mapBusServiceType(
+                plan?.serviceType
+              );
+
+            const installmentLabel =
+              plan?.installmentPlanId
+                ? (
+                    typeof plan
+                      .installmentPlanId ===
+                    "object"
+                      ? plan
+                          .installmentPlanId
+                          ?.name ||
+                        "تقسيط"
+                      : "تقسيط"
+                  )
+                : "دفعة واحدة";
+
+            return {
+              ...plan,
+              _id: id,
+              displayName:
+                `${plan?.name || "خطة باص"} — ${serviceLabel} — ${formatMoney(
+                  plan?.fee
+                )} — ${installmentLabel}`,
+            };
           })
-        ),
-      [installmentPlans]
+          .filter(
+            (plan) =>
+              plan?._id
+          ),
+      [busPlans]
     );
 
   const candidateOptions =
     useMemo(
       () =>
-        arr(
-          candidates
-        )
+        arr(candidates)
           .map((item) => {
-            const student =
+            /*
+             * ندعم أكثر من شكل لاستجابة الـ API:
+             * 1) { student: {...}, class: {...} }
+             * 2) { studentId: {...}, class: {...} }
+             * 3) الطالب نفسه مباشرة.
+             */
+            const studentCandidate =
               item?.student ||
+              item?.studentId ||
+              item;
+
+            const student =
+              studentCandidate &&
+              typeof studentCandidate === "object"
+                ? studentCandidate
+                : {};
+
+            const classCandidate =
+              item?.class ||
+              item?.classId ||
+              student?.class ||
+              student?.classId ||
               {};
 
             const cls =
-              item?.class ||
-              {};
+              classCandidate &&
+              typeof classCandidate === "object"
+                ? classCandidate
+                : {};
+
+            const studentId =
+              student?._id ||
+              student?.id ||
+              item?.studentId ||
+              item?._id ||
+              item?.id;
+
+            const studentName =
+              student?.name ||
+              student?.fullName ||
+              item?.studentName ||
+              item?.name ||
+              [
+                student?.firstName,
+                student?.fatherName,
+                student?.familyName,
+              ]
+                .filter(Boolean)
+                .join(" ") ||
+              "طالب";
 
             const className =
               cls?.roomNumber ||
-              cls?.name;
+              cls?.name ||
+              item?.className;
 
             const classLabel =
               className
-                ? `${className} - ${translateGender(
-                    cls?.gender,
-                    "class"
-                  )}`
+                ? `${className}${
+                    cls?.gender
+                      ? ` - ${translateGender(
+                          cls.gender,
+                          "class"
+                        )}`
+                      : ""
+                  }`
                 : "بدون فصل";
 
             return {
-              _id:
-                student?._id ||
-                student?.id,
-
+              _id: normalizeEntityId(
+                studentId
+              ),
               displayName:
-                `${
-                  student?.name ||
-                  [
-                    student?.firstName,
-                    student?.fatherName,
-                    student?.familyName,
-                  ]
-                    .filter(Boolean)
-                    .join(" ") ||
-                  "طالب"
-                } (${classLabel})`,
+                `${studentName} (${classLabel})`,
             };
           })
-          .filter(
-            (item) =>
-              item._id
+          .filter((item) =>
+            Boolean(item._id)
           ),
       [candidates]
     );
@@ -487,20 +718,25 @@ const BusListPage = () => {
     setActionLoading(true);
 
     try {
+      /*
+       * "بدون باص" = لا يوجد تسجيل ولا API call.
+       */
+      if (!data?.busPlanId) {
+        setOpen(false);
+
+        toast.info(
+          "تم الإبقاء على الطالب بدون خدمة باص"
+        );
+
+        return;
+      }
+
       const response =
         await enrollBus(
           data.studentId,
           {
-            fee: Number(
-              data.fee
-            ),
-
-            serviceType:
-              data.serviceType,
-
-            installmentPlanId:
-              data.installmentPlanId ||
-              undefined,
+            busPlanId:
+              data.busPlanId,
           }
         );
 
@@ -538,28 +774,70 @@ const BusListPage = () => {
       classId
     );
 
-  const action =
-    permissions?.edit ? (
-      <Button
-        onClick={() =>
-          setOpen(true)
-        }
-        variant="contained"
-        startIcon={
-          <AddCircleOutlineRounded />
-        }
-        sx={{
-          minHeight: 42,
-          borderRadius:
-            "12px",
-          background:
-            "linear-gradient(135deg,var(--color-navy-light),var(--color-navy-dark))",
-          fontWeight: 800,
-        }}
-      >
-        إضافة طالب لخدمة الباص
-      </Button>
-    ) : null;
+  const action = (
+    <Stack
+      direction={{
+        xs: "column",
+        sm: "row",
+      }}
+      gap={1}
+      sx={{
+        width: {
+          xs: "100%",
+          sm: "auto",
+        },
+      }}
+    >
+      {permissions?.read && (
+        <Button
+          type="button"
+          href="/financial/bus-plans"
+          variant="outlined"
+          startIcon={
+            <SettingsRounded />
+          }
+          sx={{
+            minHeight: 42,
+            borderRadius:
+              "12px",
+            color:
+              "var(--color-navy)",
+            borderColor:
+              "rgba(36,74,112,.18)",
+            fontWeight: 800,
+            textTransform:
+              "none",
+          }}
+        >
+          خطط الباص
+        </Button>
+      )}
+
+      {permissions?.add && (
+        <Button
+          onClick={() =>
+            setOpen(true)
+          }
+          variant="contained"
+          startIcon={
+            <AddCircleOutlineRounded />
+          }
+          sx={{
+            minHeight: 42,
+            borderRadius:
+              "12px",
+            background:
+              "linear-gradient(135deg,var(--color-navy-light),var(--color-navy-dark))",
+            fontWeight: 800,
+            textTransform:
+              "none",
+          }}
+        >
+          تحديد خطة باص لطالب
+        </Button>
+      )}
+    </Stack>
+  );
 
   return (
     <Container>
@@ -717,7 +995,7 @@ const BusListPage = () => {
                   permissions?.read
                 }
                 deleteFn={
-                  permissions?.edit
+                  permissions?.delete
                     ? unenroll
                     : undefined
                 }
@@ -764,7 +1042,12 @@ const BusListPage = () => {
           candidates={
             candidateOptions
           }
-          plans={plans}
+          busPlans={
+            busPlanOptions
+          }
+          loadingBusPlans={
+            loadingBusPlans
+          }
         />
       </Box>
     </Container>
@@ -777,7 +1060,8 @@ const EnrollDialog = ({
   onSubmit,
   loading,
   candidates,
-  plans,
+  busPlans,
+  loadingBusPlans,
 }) => {
   const {
     register,
@@ -792,11 +1076,7 @@ const EnrollDialog = ({
     if (open) {
       reset({
         studentId: "",
-        fee: "",
-        serviceType:
-          "both",
-        installmentPlanId:
-          "",
+        busPlanId: "",
       });
     }
   }, [
@@ -825,8 +1105,8 @@ const EnrollDialog = ({
         icon={
           <DirectionsBusRounded />
         }
-        title="إضافة طالب إلى خدمة الباص"
-        description="حدّد الطالب والرسوم ونوع الخدمة وخطة التقسيط."
+        title="تحديد خطة الباص للطالب"
+        description="اختر الطالب ثم اختر خطة باص جاهزة. بدون باص لا يرسل أي طلب للسيرفر."
         loading={loading}
         onClose={
           onClose
@@ -881,48 +1161,6 @@ const EnrollDialog = ({
             />
           </Box>
 
-          <Input
-            register={
-              register
-            }
-            registerName="fee"
-            error={
-              errors.fee
-                ?.message
-            }
-            label="رسوم الباص"
-            required
-            type="number"
-            valueAsNumber
-          />
-
-          <Select
-            register={
-              register
-            }
-            registerName="serviceType"
-            data={[
-              {
-                _id: "pickup",
-                displayName:
-                  "ذهاب فقط",
-              },
-              {
-                _id: "dropoff",
-                displayName:
-                  "عودة فقط",
-              },
-              {
-                _id: "both",
-                displayName:
-                  "ذهاب وعودة",
-              },
-            ]}
-            name="displayName"
-            label="نوع الخدمة"
-            required
-          />
-
           <Box
             sx={{
               gridColumn: {
@@ -934,11 +1172,16 @@ const EnrollDialog = ({
               register={
                 register
               }
-              registerName="installmentPlanId"
-              data={plans}
+              registerName="busPlanId"
+              data={
+                busPlans
+              }
               name="displayName"
-              label="خطة التقسيط"
-              defaultSelect="كاش بدون تقسيط"
+              label="خطة الباص"
+              defaultSelect="بدون باص"
+              disabled={
+                loadingBusPlans
+              }
             />
           </Box>
 
@@ -956,9 +1199,10 @@ const EnrollDialog = ({
               onCancel={
                 onClose
               }
-              label="إضافة الطالب"
+              label="حفظ اختيار الباص"
               disabled={
-                !candidates.length
+                !candidates.length ||
+                loadingBusPlans
               }
             />
           </Box>

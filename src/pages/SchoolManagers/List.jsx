@@ -3,6 +3,7 @@ import {
   AdminPanelSettingsRounded,
   CheckCircleRounded,
   DeleteOutlineRounded,
+  LockResetRounded,
   ManageAccountsRounded,
   RefreshRounded,
   SearchRounded,
@@ -28,29 +29,40 @@ import {
   Typography,
 } from "@mui/material";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuthUser } from "react-auth-kit";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
+import AdminSetPasswordDialog from "@/components/school/AdminSetPasswordDialog";
 
 import {
+  adminSetManagerPassword,
   deleteManager,
   fetchManagers,
-  MANAGER_DEFAULT_PERMISSIONS,
-  updateManagerPermissions,
 } from "@/APIs/school/managers";
+import {
+  ROLES,
+  normalizeRole,
+} from "@/shared/auth/roles";
 
 const ROLE_LABELS = {
-  OWNER: "مالك المدرسة",
-  SUPERVISOR: "مشرف",
-  MANAGER: "مدير",
+  [ROLES.OWNER]: "مالك المدرسة",
+  [ROLES.SUPERVISOR]: "مدير المدرسة",
+  [ROLES.MANAGER]: "مساعد إداري",
 };
 
-const normalizeRole = (role) =>
-  String(role || "")
-    .trim()
-    .toUpperCase();
+const getCurrentRoleFromAuthState = (authState) =>
+  normalizeRole(
+    authState?.user?.role ||
+      authState?.admin?.role ||
+      authState?.data?.user?.role ||
+      authState?.data?.admin?.role ||
+      authState?.data?.data?.user?.role ||
+      authState?.data?.data?.admin?.role ||
+      authState?.role
+  );
 
 const getResponseMessage = (
   response,
@@ -101,6 +113,18 @@ const getManagerId = (item) =>
   item?.userId ||
   "";
 
+const getManagerType = (item) => {
+  const type =
+    String(item?.type || "")
+      .trim()
+      .toLowerCase();
+
+  return type === "admin" ||
+    type === "teacher"
+    ? type
+    : "";
+};
+
 const getManagerUsername = (
   item
 ) =>
@@ -135,14 +159,62 @@ const getManagerStatus = (
   return "active";
 };
 
+const canResetAdministrativePassword = (
+  callerRole,
+  targetRole
+) => {
+  const caller =
+    normalizeRole(callerRole);
+
+  const target =
+    normalizeRole(targetRole);
+
+  if (caller === ROLES.SUPER_ADMIN) {
+    return [
+      ROLES.OWNER,
+      ROLES.SUPERVISOR,
+      ROLES.MANAGER,
+    ].includes(target);
+  }
+
+  if (caller === ROLES.OWNER) {
+    return [
+      ROLES.SUPERVISOR,
+      ROLES.MANAGER,
+    ].includes(target);
+  }
+
+  if (caller === ROLES.SUPERVISOR) {
+    return target === ROLES.MANAGER;
+  }
+
+  return false;
+};
+
 const SchoolManagersList = () => {
   const navigate = useNavigate();
+  const getAuthUser = useAuthUser();
+  const authState = getAuthUser();
+
+  const currentRole =
+    getCurrentRoleFromAuthState(
+      authState
+    );
+
+  const canViewAdministrativeAccounts = [
+    ROLES.OWNER,
+    ROLES.SUPERVISOR,
+    ROLES.SUPER_ADMIN,
+  ].includes(currentRole);
+
+  const canManageAdministrativeAccounts =
+    currentRole === ROLES.OWNER;
 
   const [items, setItems] =
     useState([]);
 
   const [loading, setLoading] =
-    useState(true);
+    useState(false);
 
   const [search, setSearch] =
     useState("");
@@ -161,47 +233,61 @@ const SchoolManagersList = () => {
   ] = useState(false);
 
   const [
-    syncingManagerId,
-    setSyncingManagerId,
-  ] = useState("");
+    passwordTarget,
+    setPasswordTarget,
+  ] = useState(null);
 
-  const loadManagers = async (
-    force = false
-  ) => {
-    setLoading(true);
+  const [
+    passwordDialogOpen,
+    setPasswordDialogOpen,
+  ] = useState(false);
 
-    const response =
-      await fetchManagers({
-        force,
-      });
+  const loadManagers = useCallback(
+    async (force = false) => {
+      if (
+        !canViewAdministrativeAccounts
+      ) {
+        setItems([]);
+        setLoading(false);
+        return;
+      }
 
-    if (
-      !isSuccessfulResponse(
-        response
-      )
-    ) {
-      toast.error(
-        getResponseMessage(
-          response,
-          "تعذر تحميل المديرين والمشرفين"
+      setLoading(true);
+
+      const response =
+        await fetchManagers({
+          force,
+        });
+
+      if (
+        !isSuccessfulResponse(
+          response
         )
+      ) {
+        toast.error(
+          getResponseMessage(
+            response,
+            "تعذر تحميل المديرين والمساعدين"
+          )
+        );
+
+        setItems([]);
+        setLoading(false);
+        return;
+      }
+
+      setItems(
+        extractManagers(response)
       );
 
-      setItems([]);
       setLoading(false);
-      return;
-    }
-
-    setItems(
-      extractManagers(response)
-    );
-
-    setLoading(false);
-  };
+    },
+    [canViewAdministrativeAccounts]
+  );
 
   useEffect(() => {
     loadManagers();
-  }, []);
+  }, [loadManagers]);
 
   const filteredItems =
     useMemo(() => {
@@ -251,14 +337,14 @@ const SchoolManagersList = () => {
     items.filter(
       (item) =>
         getManagerRole(item) ===
-        "SUPERVISOR"
+        ROLES.SUPERVISOR
     ).length;
 
   const managersCount =
     items.filter(
       (item) =>
         getManagerRole(item) ===
-        "MANAGER"
+        ROLES.MANAGER
     ).length;
 
   const activeCount =
@@ -268,59 +354,28 @@ const SchoolManagersList = () => {
         "active"
     ).length;
 
-  const handleSyncPermissions =
-    async (item) => {
-      const id =
-        getManagerId(item);
-
-      if (!id) {
-        toast.error(
-          "معرّف المدير غير موجود"
-        );
-        return;
-      }
-
-      setSyncingManagerId(id);
-
-      const response =
-        await updateManagerPermissions(
-          id,
-          MANAGER_DEFAULT_PERMISSIONS
-        );
-
-      if (
-        !isSuccessfulResponse(
-          response
-        )
-      ) {
-        toast.error(
-          getResponseMessage(
-            response,
-            "تعذر ضبط صلاحيات المدير"
-          )
-        );
-
-        setSyncingManagerId("");
-        return;
-      }
-
-      setSyncingManagerId("");
-
-      await loadManagers(true);
-
-      toast.success(
-        "تم ضبط صلاحيات المدير الإدارية والأكاديمية فقط. تم استبعاد المالية والمصروفات، ويجب تسجيل الخروج ثم الدخول بالحساب مرة أخرى."
-      );
-    };
-
   const handleDelete =
     async () => {
+      if (
+        !canManageAdministrativeAccounts
+      ) {
+        toast.error(
+          "ليس لديك صلاحية حذف الحسابات الإدارية"
+        );
+        return;
+      }
+
       const id =
         getManagerId(
           deleteTarget
         );
 
-      if (!id) {
+      const type =
+        getManagerType(
+          deleteTarget
+        );
+
+      if (!id || !type) {
         toast.error(
           "تعذر تحديد الحساب المطلوب حذفه"
         );
@@ -330,7 +385,10 @@ const SchoolManagersList = () => {
       setDeleting(true);
 
       const response =
-        await deleteManager(id);
+        await deleteManager(
+          id,
+          type
+        );
 
       if (
         !isSuccessfulResponse(
@@ -361,9 +419,114 @@ const SchoolManagersList = () => {
       setDeleting(false);
 
       toast.success(
-        "تم حذف الحساب الإداري بنجاح"
+        type === "teacher"
+          ? "تم إلغاء صلاحية المدير من المعلم بنجاح"
+          : "تم حذف الحساب الإداري بنجاح"
       );
     };
+
+  const openPasswordDialog = (item) => {
+    const targetRole =
+      getManagerRole(item);
+
+    if (
+      !canResetAdministrativePassword(
+        currentRole,
+        targetRole
+      )
+    ) {
+      return;
+    }
+
+    setPasswordTarget(item);
+    setPasswordDialogOpen(true);
+  };
+
+  const closePasswordDialog = () => {
+    setPasswordDialogOpen(false);
+    setPasswordTarget(null);
+  };
+
+  const handleSetPassword = (payload) =>
+    adminSetManagerPassword(
+      getManagerId(passwordTarget),
+      payload
+    );
+
+  if (!canViewAdministrativeAccounts) {
+    return (
+      <Container>
+        <Box
+          dir="rtl"
+          sx={{
+            width: "100%",
+            minHeight: 360,
+            display: "grid",
+            placeItems: "center",
+            px: { xs: 2, md: 3 },
+            py: 4,
+          }}
+        >
+          <Box
+            sx={{
+              width: "100%",
+              maxWidth: 620,
+              p: { xs: 2.5, md: 4 },
+              textAlign: "center",
+              borderRadius: "20px",
+              border: "1px solid #DED8CD",
+              bgcolor: "#FFFFFF",
+              boxShadow:
+                "0 8px 22px rgba(18,47,77,0.035)",
+            }}
+          >
+            <Box
+              sx={{
+                width: 64,
+                height: 64,
+                mx: "auto",
+                display: "grid",
+                placeItems: "center",
+                borderRadius: "18px",
+                bgcolor: "#FBF0D8",
+                color: "#B78430",
+              }}
+            >
+              <SecurityRounded
+                sx={{ fontSize: 32 }}
+              />
+            </Box>
+
+            <Typography
+              sx={{
+                mt: 1.5,
+                color: "#122F4D",
+                fontSize: {
+                  xs: "18px",
+                  md: "21px",
+                },
+                fontWeight: 900,
+              }}
+            >
+              غير مصرح لك بإدارة الحسابات الإدارية
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.8,
+                color: "#7E8791",
+                fontSize: "13px",
+                lineHeight: 1.9,
+              }}
+            >
+              لا تملك صلاحية الوصول إلى حسابات المديرين والمساعدين.
+            </Typography>
+          </Box>
+        </Box>
+      </Container>
+    );
+  }
+
   return (
     <Container>
       <Box dir="rtl" sx={{ pb: 4, width: "100%" }}>
@@ -393,7 +556,7 @@ const SchoolManagersList = () => {
                   lineHeight: 1.25,
                 }}
               >
-                إدارة المديرين والمشرفين
+                إدارة المديرين والمساعدين
               </Typography>
 
               <Box
@@ -422,7 +585,7 @@ const SchoolManagersList = () => {
                 fontWeight: 600,
               }}
             >
-              إدارة الحسابات الإدارية والأدوار والصلاحيات من مكان واحد.
+              إدارة الحسابات الإدارية وتعيين كلمات المرور حسب صلاحيات دورك.
             </Typography>
           </Box>
 
@@ -431,28 +594,59 @@ const SchoolManagersList = () => {
             spacing={1}
             sx={{ flexShrink: 0 }}
           >
-            <Button
-              variant="contained"
-              startIcon={<AddCircleOutlineRounded />}
-              onClick={() => navigate("/school/managers/add")}
-              sx={{
-                minHeight: 48,
-                px: 2.3,
-                borderRadius: "12px",
-                bgcolor: "#244A70",
-                color: "#FFFFFF",
-                fontSize: "13px",
-                fontWeight: 900,
-                boxShadow: "none",
-                "& .MuiButton-startIcon": { ml: 0.7, mr: 0 },
-                "&:hover": {
-                  bgcolor: "#122F4D",
-                  boxShadow: "none",
-                },
-              }}
-            >
-              إضافة حساب إداري
-            </Button>
+            {canManageAdministrativeAccounts && (
+              <>
+                <Button
+                  variant="outlined"
+                  startIcon={<SecurityRounded />}
+                  onClick={() =>
+                    navigate(
+                      "/school/permissions?role=MANAGER"
+                    )
+                  }
+                  sx={{
+                    minHeight: 48,
+                    px: 2,
+                    borderRadius: "12px",
+                    borderColor: "#C9D3DC",
+                    color: "#244A70",
+                    bgcolor: "#FFFFFF",
+                    fontSize: "13px",
+                    fontWeight: 900,
+                    "& .MuiButton-startIcon": { ml: 0.65, mr: 0 },
+                    "&:hover": {
+                      borderColor: "#244A70",
+                      bgcolor: "#F7FAFC",
+                    },
+                  }}
+                >
+                  صلاحيات المساعدين
+                </Button>
+
+                <Button
+                  variant="contained"
+                  startIcon={<AddCircleOutlineRounded />}
+                  onClick={() => navigate("/school/managers/add")}
+                  sx={{
+                    minHeight: 48,
+                    px: 2.3,
+                    borderRadius: "12px",
+                    bgcolor: "#244A70",
+                    color: "#FFFFFF",
+                    fontSize: "13px",
+                    fontWeight: 900,
+                    boxShadow: "none",
+                    "& .MuiButton-startIcon": { ml: 0.7, mr: 0 },
+                    "&:hover": {
+                      bgcolor: "#122F4D",
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  إضافة حساب إداري
+                </Button>
+              </>
+            )}
 
             <Button
               variant="outlined"
@@ -503,12 +697,12 @@ const SchoolManagersList = () => {
             icon={<CheckCircleRounded />}
           />
           <StatCard
-            label="المديرون"
+            label="المساعدون الإداريون"
             value={managersCount}
             icon={<ManageAccountsRounded />}
           />
           <StatCard
-            label="المشرفون"
+            label="مديرو المدرسة"
             value={supervisorsCount}
             icon={<SupervisorAccountRounded />}
           />
@@ -576,8 +770,8 @@ const SchoolManagersList = () => {
               }}
             >
               <MenuItem value="">كل الأدوار</MenuItem>
-              <MenuItem value="MANAGER">مدير</MenuItem>
-              <MenuItem value="SUPERVISOR">مشرف</MenuItem>
+              <MenuItem value={ROLES.MANAGER}>مساعد إداري</MenuItem>
+              <MenuItem value={ROLES.SUPERVISOR}>مدير المدرسة</MenuItem>
             </TextField>
           </Stack>
         </Box>
@@ -754,9 +948,9 @@ const SchoolManagersList = () => {
                             sx={{
                               height: 27,
                               bgcolor:
-                                role === "SUPERVISOR" ? "#FBF0D8" : "#EEF3F7",
+                                role === ROLES.SUPERVISOR ? "#FBF0D8" : "#EEF3F7",
                               color:
-                                role === "SUPERVISOR" ? "#8A6220" : "#244A70",
+                                role === ROLES.SUPERVISOR ? "#8A6220" : "#244A70",
                               borderRadius: "8px",
                               fontSize: "10px",
                               fontWeight: 900,
@@ -786,51 +980,52 @@ const SchoolManagersList = () => {
 
                         <td>
                           <Stack direction="row" spacing={0.65} justifyContent="center">
-                            {role === "MANAGER" && (
-                              <Tooltip title="تطبيق صلاحيات المدير الافتراضية">
+                            {canResetAdministrativePassword(
+                              currentRole,
+                              role
+                            ) && (
+                              <Tooltip title="تعيين كلمة المرور">
                                 <span>
                                   <IconButton
-                                    onClick={() => handleSyncPermissions(item)}
-                                    disabled={!id || syncingManagerId === id}
+                                    onClick={() => openPasswordDialog(item)}
+                                    disabled={!id}
                                     size="small"
                                     sx={{
                                       width: 36,
                                       height: 36,
                                       color: "#244A70",
                                       bgcolor: "#EEF3F7",
-                                      border: "1px solid #DDE5EC",
+                                      border: "1px solid #D9E2EA",
                                       "&:hover": { bgcolor: "#E2EAF1" },
                                     }}
                                   >
-                                    {syncingManagerId === id ? (
-                                      <CircularProgress size={18} />
-                                    ) : (
-                                      <SecurityRounded sx={{ fontSize: 20 }} />
-                                    )}
+                                    <LockResetRounded sx={{ fontSize: 20 }} />
                                   </IconButton>
                                 </span>
                               </Tooltip>
                             )}
 
-                            <Tooltip title="حذف الحساب">
-                              <span>
-                                <IconButton
-                                  onClick={() => setDeleteTarget(item)}
-                                  disabled={!id}
-                                  size="small"
-                                  sx={{
-                                    width: 36,
-                                    height: 36,
-                                    color: "#C94F4F",
-                                    bgcolor: "#FDECEC",
-                                    border: "1px solid #F3D4D4",
-                                    "&:hover": { bgcolor: "#F9DDDD" },
-                                  }}
-                                >
-                                  <DeleteOutlineRounded sx={{ fontSize: 20 }} />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
+                            {canManageAdministrativeAccounts && (
+                              <Tooltip title="حذف الحساب">
+                                <span>
+                                  <IconButton
+                                    onClick={() => setDeleteTarget(item)}
+                                    disabled={!id}
+                                    size="small"
+                                    sx={{
+                                      width: 36,
+                                      height: 36,
+                                      color: "#C94F4F",
+                                      bgcolor: "#FDECEC",
+                                      border: "1px solid #F3D4D4",
+                                      "&:hover": { bgcolor: "#F9DDDD" },
+                                    }}
+                                  >
+                                    <DeleteOutlineRounded sx={{ fontSize: 20 }} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            )}
                           </Stack>
                         </td>
                       </tr>
@@ -842,6 +1037,18 @@ const SchoolManagersList = () => {
           )}
         </Box>
       </Box>
+
+      <AdminSetPasswordDialog
+        open={passwordDialogOpen}
+        name={
+          getManagerUsername(passwordTarget) === "—"
+            ? ""
+            : getManagerUsername(passwordTarget)
+        }
+        subjectId={getManagerId(passwordTarget)}
+        onClose={closePasswordDialog}
+        onSubmit={handleSetPassword}
+      />
 
       <Dialog
         open={Boolean(deleteTarget)}
@@ -874,7 +1081,7 @@ const SchoolManagersList = () => {
               lineHeight: 1.8,
             }}
           >
-            سيتم حذف حساب "{getManagerUsername(deleteTarget)}" نهائيًا. لا يمكن التراجع عن هذه العملية.
+            سيتم حذف حساب «{getManagerUsername(deleteTarget)}» نهائيًا. لا يمكن التراجع عن هذه العملية.
           </Typography>
         </DialogContent>
 

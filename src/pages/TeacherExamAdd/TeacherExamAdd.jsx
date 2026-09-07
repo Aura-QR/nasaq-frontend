@@ -42,11 +42,15 @@ import {
   useState,
 } from "react";
 
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
 import { api } from "@/APIs/Axios";
-import { addExam } from "@/APIs/school/exams";
+import {
+  addExam,
+  editExam,
+  fetchSingleExam,
+} from "@/APIs/school/exams";
 import {
   fetchTeacherAssignments,
 } from "@/APIs/school/lectures";
@@ -129,6 +133,33 @@ const extractEntity = (response) => {
   }
 
   return payload.teacher || payload.profile || payload;
+};
+
+const extractExamEntity = (response) => {
+  const payload = unwrapResponse(response);
+
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  return payload.exam || payload;
+};
+
+const getExamOffering = (exam) => {
+  const candidates = [
+    exam?.subjectOffering,
+    typeof exam?.subjectOfferingId === "object"
+      ? exam.subjectOfferingId
+      : null,
+    typeof exam?.gradesCriteria?.subjectOfferingId === "object"
+      ? exam.gradesCriteria.subjectOfferingId
+      : null,
+    exam?.gradesCriteria?.subjectOffering,
+  ];
+
+  return candidates.find(
+    (value) => value && typeof value === "object"
+  ) || null;
 };
 
 const getErrorMessage = (error, fallback) =>
@@ -352,8 +383,12 @@ const fieldSx = {
 
 const TeacherExamAdd = () => {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEdit = Boolean(id);
 
   const [loadingOptions, setLoadingOptions] = useState(true);
+  const [loadingExam, setLoadingExam] = useState(Boolean(id));
+  const [loadedExamId, setLoadedExamId] = useState("");
   const [saving, setSaving] = useState(false);
   const [optionsError, setOptionsError] = useState("");
   const [offerings, setOfferings] = useState([]);
@@ -521,6 +556,160 @@ const TeacherExamAdd = () => {
   useEffect(() => {
     loadOptions();
   }, [loadOptions]);
+
+  useEffect(() => {
+    if (!isEdit || !id || loadingOptions || loadedExamId === id) {
+      if (!isEdit) {
+        setLoadingExam(false);
+      }
+      return;
+    }
+
+    let active = true;
+
+    const loadCurrentExam = async () => {
+      setLoadingExam(true);
+
+      try {
+        const response = await fetchSingleExam(id);
+
+        if (isFailedResponse(response)) {
+          throw new Error(
+            typeof response === "string"
+              ? response
+              : response?.message || "تعذر تحميل بيانات الاختبار"
+          );
+        }
+
+        const exam = extractExamEntity(response);
+
+        if (!exam) {
+          throw new Error("لم يتم العثور على بيانات الاختبار");
+        }
+
+        let offering = getExamOffering(exam);
+        const offeringId = normalizeId(
+          exam?.subjectOfferingId ||
+            offering ||
+            exam?.gradesCriteria?.subjectOfferingId
+        );
+
+        if (!offering && offeringId) {
+          try {
+            const offeringResponse = await api.get(
+              `/subject-offerings/${offeringId}`
+            );
+            offering = extractEntity(offeringResponse);
+          } catch {
+            offering = null;
+          }
+        }
+
+        if (!active) return;
+
+        if (offering && offeringId) {
+          setOptionsError("");
+          setOfferings((previous) => {
+            const next = [...previous];
+            const index = next.findIndex(
+              (item) => normalizeId(item) === offeringId
+            );
+
+            if (index >= 0) {
+              next[index] = { ...next[index], ...offering };
+            } else {
+              next.push(offering);
+            }
+
+            return next;
+          });
+        }
+
+        const examClasses = Array.isArray(exam?.classes)
+          ? exam.classes.filter(
+              (item) => item && typeof item === "object"
+            )
+          : [];
+
+        if (examClasses.length) {
+          setClasses((previous) => {
+            const map = new Map(
+              previous
+                .map((item) => [normalizeId(item), item])
+                .filter(([key]) => Boolean(key))
+            );
+
+            examClasses.forEach((item) => {
+              const classId = normalizeId(item);
+              if (classId) {
+                map.set(classId, {
+                  ...(map.get(classId) || {}),
+                  ...item,
+                });
+              }
+            });
+
+            return Array.from(map.values());
+          });
+        }
+
+        const nextClassIds = (
+          Array.isArray(exam?.classIds) && exam.classIds.length
+            ? exam.classIds
+            : examClasses
+        )
+          .map(normalizeId)
+          .filter(Boolean);
+
+        setSubjectOfferingId(offeringId);
+        setClassIds(nextClassIds);
+        setExamType(exam?.examType || "quiz");
+        setStartDate(
+          exam?.startDate
+            ? String(exam.startDate).slice(0, 10)
+            : ""
+        );
+        setEndDate(
+          exam?.endDate
+            ? String(exam.endDate).slice(0, 10)
+            : ""
+        );
+        setDuration(Number(exam?.duration || 30));
+
+        const nextQuestions = Array.isArray(exam?.questions)
+          ? exam.questions.map((question) => createQuestion(question))
+          : [];
+
+        setQuestions(
+          nextQuestions.length
+            ? nextQuestions
+            : [createQuestion()]
+        );
+        setValidationErrors({});
+        setLoadedExamId(id);
+      } catch (error) {
+        if (!active) return;
+        toast.error(
+          getErrorMessage(error, "تعذر تحميل بيانات الاختبار")
+        );
+      } finally {
+        if (active) {
+          setLoadingExam(false);
+        }
+      }
+    };
+
+    loadCurrentExam();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    id,
+    isEdit,
+    loadingOptions,
+    loadedExamId,
+  ]);
 
   const selectedOffering = useMemo(
     () =>
@@ -839,21 +1028,37 @@ const TeacherExamAdd = () => {
     setSaving(true);
 
     try {
-      const response = await addExam(payload);
+      const response = isEdit
+        ? await editExam(payload, id)
+        : await addExam(payload);
 
       if (isFailedResponse(response)) {
         toast.error(
           typeof response === "string"
             ? response
-            : response?.message || "تعذر إنشاء الاختبار"
+            : response?.message ||
+                (isEdit
+                  ? "تعذر تعديل الاختبار"
+                  : "تعذر إنشاء الاختبار")
         );
         return;
       }
 
-      toast.success("تم إنشاء الاختبار بنجاح");
+      toast.success(
+        isEdit
+          ? "تم تعديل الاختبار بنجاح"
+          : "تم إنشاء الاختبار بنجاح"
+      );
       navigate("/teacher/exams", { replace: true });
     } catch (error) {
-      toast.error(getErrorMessage(error, "حدث خطأ أثناء إنشاء الاختبار"));
+      toast.error(
+        getErrorMessage(
+          error,
+          isEdit
+            ? "حدث خطأ أثناء تعديل الاختبار"
+            : "حدث خطأ أثناء إنشاء الاختبار"
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -965,7 +1170,7 @@ const TeacherExamAdd = () => {
                     lineHeight: 1.2,
                   }}
                 >
-                  إنشاء اختبار جديد
+                  {isEdit ? "تعديل الاختبار" : "إنشاء اختبار جديد"}
                 </Typography>
                 <Typography
                   sx={{
@@ -974,7 +1179,9 @@ const TeacherExamAdd = () => {
                     fontSize: { xs: "12.5px", md: "14px" },
                   }}
                 >
-                  حدد المادة والفصول ثم أضف الأسئلة والإجابات الصحيحة.
+                  {isEdit
+                    ? "عدّل بيانات الاختبار والفصول والأسئلة ثم احفظ التغييرات."
+                    : "حدد المادة والفصول ثم أضف الأسئلة والإجابات الصحيحة."}
                 </Typography>
               </Box>
             </Stack>
@@ -1012,6 +1219,7 @@ const TeacherExamAdd = () => {
                 disabled={
                   saving ||
                   loadingOptions ||
+                  loadingExam ||
                   criteriaLoading ||
                   !offerings.length ||
                   (criteriaChecked &&
@@ -1042,7 +1250,13 @@ const TeacherExamAdd = () => {
                   },
                 }}
               >
-                {saving ? "جارٍ إنشاء الاختبار" : "حفظ الاختبار"}
+                {saving
+                  ? isEdit
+                    ? "جارٍ حفظ التعديلات"
+                    : "جارٍ إنشاء الاختبار"
+                  : isEdit
+                  ? "حفظ التعديلات"
+                  : "حفظ الاختبار"}
               </Button>
             </Stack>
           </Stack>
@@ -1059,6 +1273,12 @@ const TeacherExamAdd = () => {
             sx={{ mt: 1.4, borderRadius: "14px" }}
           >
             {optionsError}
+          </Alert>
+        )}
+
+        {isEdit && loadingExam && (
+          <Alert severity="info" sx={{ mt: 1.4, borderRadius: "14px" }}>
+            جاري تحميل بيانات الاختبار...
           </Alert>
         )}
 
@@ -1647,6 +1867,7 @@ const TeacherExamAdd = () => {
               disabled={
                   saving ||
                   loadingOptions ||
+                  loadingExam ||
                   criteriaLoading ||
                   !offerings.length ||
                   (criteriaChecked &&
@@ -1670,7 +1891,11 @@ const TeacherExamAdd = () => {
                 "& .MuiButton-startIcon": { marginLeft: "5px", marginRight: 0 },
               }}
             >
-              {saving ? "جارٍ الحفظ" : "إنشاء الاختبار"}
+              {saving
+                ? "جارٍ الحفظ"
+                : isEdit
+                ? "حفظ التعديلات"
+                : "إنشاء الاختبار"}
             </Button>
           </Stack>
         </Paper>

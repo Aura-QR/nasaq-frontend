@@ -170,6 +170,46 @@ const getSubjectName = (
   );
 };
 
+const getPreparationId = (lecture) => {
+  const candidates = [
+    lecture?.preparationId,
+    lecture?.preparation,
+    Array.isArray(lecture?.preparations)
+      ? lecture.preparations[0]
+      : null,
+  ];
+
+  for (const value of candidates) {
+    if (!value) continue;
+
+    if (typeof value === "string") {
+      return value;
+    }
+
+    const status = String(
+      value?.reviewStatus ||
+        value?.status ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    if (
+      status &&
+      !["pending", "approved"].includes(
+        status
+      )
+    ) {
+      continue;
+    }
+
+    const id = value?._id || value?.id;
+    if (id) return String(id);
+  }
+
+  return "";
+};
+
 const getClassLabel = (
   classData
 ) => {
@@ -433,6 +473,11 @@ const MySchedule = ({
 
           dayOfWeek:
             lecture?.dayOfWeek,
+
+          preparationId:
+            getPreparationId(
+              lecture
+            ),
 
           raw: lecture,
         };
@@ -1454,6 +1499,10 @@ const LessonCell = ({
   isToday,
   teacherData,
 }) => {
+  const navigate = useNavigate();
+  const preparationId =
+    lesson?.preparationId || "";
+
   const style =
     LESSON_COLORS[
       (rowIndex +
@@ -1488,6 +1537,15 @@ const LessonCell = ({
       {lesson ? (
         <Paper
           elevation={0}
+          component={preparationId ? "button" : "div"}
+          type={preparationId ? "button" : undefined}
+          onClick={() => {
+            if (preparationId) {
+              navigate(
+                `/student-dashboard/preparations/${preparationId}`
+              );
+            }
+          }}
           sx={{
             width: "100%",
 
@@ -1510,6 +1568,14 @@ const LessonCell = ({
 
             backgroundColor:
               style.bg,
+
+            ...(preparationId
+              ? {
+                  cursor: "pointer",
+                  textAlign: "right",
+                  font: "inherit",
+                }
+              : {}),
 
             transition:
               "transform .18s ease, box-shadow .18s ease",
@@ -1593,6 +1659,20 @@ const LessonCell = ({
               </Typography>
             </Stack>
           )}
+
+
+          {preparationId && (
+            <Typography
+              sx={{
+                mt: 0.55,
+                color: style.color,
+                fontSize: "7px",
+                fontWeight: 900,
+              }}
+            >
+              فتح تحضير الدرس
+            </Typography>
+          )}
         </Paper>
       ) : (
         <Typography
@@ -1627,6 +1707,8 @@ const MobileSchedule = ({
   currentDayId,
   teacherData,
 }) => {
+  const navigate = useNavigate();
+
   return (
     <Box>
       {/* ===============================================
@@ -1889,9 +1971,30 @@ const MobileSchedule = ({
 
                   {lesson ? (
                     <Box
+                      role={lesson.preparationId ? "button" : undefined}
+                      tabIndex={lesson.preparationId ? 0 : undefined}
+                      onClick={() => {
+                        if (lesson.preparationId) {
+                          navigate(
+                            `/student-dashboard/preparations/${lesson.preparationId}`
+                          );
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (
+                          lesson.preparationId &&
+                          (event.key === "Enter" || event.key === " ")
+                        ) {
+                          event.preventDefault();
+                          navigate(
+                            `/student-dashboard/preparations/${lesson.preparationId}`
+                          );
+                        }
+                      }}
                       sx={{
                         flex: 1,
                         minWidth: 0,
+                        cursor: lesson.preparationId ? "pointer" : "default",
                       }}
                     >
                       <Stack
