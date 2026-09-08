@@ -79,6 +79,10 @@
     ticked: new Set(),
     error: '',
     result: null,
+    /** Write the content too, not just file the period. */
+    withContent: true,
+    /** `${done}/${total}` while generation is running, else null. */
+    generating: null,
     /*
      * Owner and manager see the week one teacher at a time.
      *
@@ -218,7 +222,49 @@
 
     state.result = response.data;
     render();
+
+    if (state.withContent) await fillContent(response.data);
+
     await loadWeek();
+  }
+
+  /**
+   * Write the warm-up, closure and the rest into each preparation just made.
+   *
+   * One request per preparation, in sequence: each one is a model call that
+   * takes seconds, and a school firing twenty-two at once is a queue nobody
+   * asked for. Sequential also means a failure is one row, and the count keeps
+   * moving so the teacher can see it is working.
+   *
+   * Only rows that got a lesson — the server refuses the rest, because content
+   * written from a subject name alone is filler.
+   */
+  async function fillContent(bulk) {
+    const created = (bulk?.results || []).filter(
+      (row) => row.status === 'created' && row.lessonTitle,
+    );
+    if (!created.length) return;
+
+    let done = 0;
+    let failed = 0;
+    state.generating = `0/${created.length}`;
+    render();
+
+    for (const row of created) {
+      const response = await api(`/preparation/${row.preparationId}/generate`, {
+        method: 'POST',
+      });
+      if (!response.ok) failed++;
+      done++;
+      state.generating = `${done}/${created.length}`;
+      render();
+    }
+
+    state.generating = null;
+    if (failed) {
+      state.error = `تم إنشاء التحاضير، وتعذّر توليد المحتوى لـ ${failed} منها.`;
+    }
+    render();
   }
 
   // --------------------------------------------------------------- rendering
@@ -313,9 +359,26 @@
     if (!footer) return;
     footer.textContent = '';
 
+    const toggle = el('label', 'nq-toggle');
+    const box = el('input');
+    box.type = 'checkbox';
+    box.checked = state.withContent;
+    box.addEventListener('change', () => {
+      state.withContent = box.checked;
+    });
+    toggle.appendChild(box);
+    toggle.appendChild(el('span', null, 'اكتب التمهيد والإغلاق والأهداف تلقائيًا'));
+    footer.appendChild(toggle);
+
     const count = state.ticked.size;
-    const button = el('button', 'nq-btn nq-btn-main', `حضّر المحدد (${count})`);
-    button.disabled = !count || state.loading;
+    const button = el(
+      'button',
+      'nq-btn nq-btn-main',
+      state.generating
+        ? `جارٍ كتابة المحتوى… ${state.generating}`
+        : `حضّر المحدد (${count})`,
+    );
+    button.disabled = !count || state.loading || Boolean(state.generating);
     button.addEventListener('click', prepare);
     footer.appendChild(button);
   }

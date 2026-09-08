@@ -146,3 +146,15 @@
 .nasaq-prep-root .nq-btn-main:disabled { background: #b9c6d2; cursor: not-allowed; }
 
 .nasaq-prep-root .nq-teacher { width: 100%; margin-bottom: 8px; padding: 7px; font-size: 12px; }
+
+.nasaq-prep-root .nq-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #5b7186;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.nasaq-prep-root .nq-toggle input { width: 14px; height: 14px; accent-color: #0f2f4f; }

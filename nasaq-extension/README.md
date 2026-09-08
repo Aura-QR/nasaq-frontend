@@ -25,7 +25,22 @@ production one.
    └── the school's own lessons for each subject     GET  /curriculum/units
        and grade in it                               GET  /curriculum/units/:id/lessons
    └── one lesson per period, one press              POST /preparation/bulk
+   └── and the content written into each             POST /preparation/:id/generate
 ```
+
+**اكتب التمهيد والإغلاق والأهداف تلقائيًا** is on by default. After the
+periods are filed, the extension asks the server to write each one's warm-up,
+closure, vocabulary, thinking skills, objectives, strategies and aids — one
+request per preparation, in sequence, with the count moving as it goes.
+
+It only does this for periods that got a lesson; the server refuses the rest,
+because content written from a subject name alone is filler. And it never
+overwrites anything a teacher has already written — only blanks are filled, so
+running it again is safe.
+
+Requires `AI_WEBHOOK_URL` on the server (see
+`nasaq-backend/docs/SETUP-Lesson-Content.md`). Without it the periods are still
+filed; only the writing is skipped.
 
 Everything with no preparation yet is ticked for you — a teacher opens this to
 fill gaps, and making her tick twenty rows first is the work it exists to
