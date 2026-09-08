@@ -93,11 +93,26 @@ export const fetchCurriculumLessons = async (unitId) => {
 };
 
 
-export const fetchCatalogSubjects = async ({ page = 1, limit = 100 } = {}) => {
+/**
+ * GET /catalog/subjects
+ *
+ * The platform catalogue: 162 courses of the national curriculum, shared and
+ * read-only. `q` matches the subject name or the course variant — without it
+ * the caller pages through 162 rows to find one book.
+ *
+ * A row is not identified by `name` alone. The catalogue holds 35 courses
+ * called العلوم and 24 called الرياضيات, so `variant`, `unitCount`,
+ * `lessonCount` and `unitPreview` are what a picker needs to show.
+ */
+export const fetchCatalogSubjects = async ({ page = 1, limit = 100, q } = {}) => {
+  const term = String(q || "").trim();
+
   try {
     return unwrap(
       await api.get("/catalog/subjects", {
-        params: { page, limit },
+        // Sent only when there is one: the backend validates the query with
+        // forbidNonWhitelisted, and an empty q is simply noise.
+        params: { page, limit, ...(term ? { q: term } : {}) },
       })
     );
   } catch (error) {

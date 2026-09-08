@@ -1,6 +1,7 @@
 import {
   AddRounded,
   AutoStoriesRounded,
+  CloudDownloadRounded,
   CheckRounded,
   ChevronLeftRounded,
   CloseRounded,
@@ -47,6 +48,7 @@ import {
 } from "@/APIs/school/curriculum";
 import { fetchSubjectsList } from "@/APIs/school/subjects";
 import { fetchGradeLevels } from "@/APIs/school/gradeLevels";
+import ImportCurriculumDialog from "./ImportCurriculumDialog";
 
 const normalizeId = (value) => {
   if (value && typeof value === "object") {
@@ -321,6 +323,7 @@ const CurriculumManagement = () => {
   const [editing, setEditing] = useState(null);
 
   const [unitDialogOpen, setUnitDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [unitName, setUnitName] = useState("");
 
   const [bulkDialog, setBulkDialog] = useState(null);
@@ -854,15 +857,30 @@ const CurriculumManagement = () => {
               </Box>
             </Stack>
 
-            <Button
-              variant="outlined"
-              startIcon={<AddRounded />}
-              onClick={openCreateUnit}
-              disabled={!subjectId || !gradeLevelId || mutationLoading}
-              sx={{ fontWeight: 900, whiteSpace: "nowrap" }}
-            >
-              وحدة جديدة
-            </Button>
+            <Stack direction="row" gap={1}>
+              {/*
+               * First, and filled, because it is the difference between typing
+               * 113 lessons and pressing a button.
+               */}
+              <Button
+                variant="contained"
+                startIcon={<CloudDownloadRounded />}
+                onClick={() => setImportOpen(true)}
+                disabled={!subjectId || !gradeLevelId || mutationLoading}
+                sx={{ fontWeight: 900, whiteSpace: "nowrap", bgcolor: "var(--color-navy)" }}
+              >
+                استيراد منهج جاهز
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<AddRounded />}
+                onClick={openCreateUnit}
+                disabled={!subjectId || !gradeLevelId || mutationLoading}
+                sx={{ fontWeight: 900, whiteSpace: "nowrap" }}
+              >
+                وحدة جديدة
+              </Button>
+            </Stack>
           </Stack>
 
           {treeLoading ? (
@@ -909,16 +927,26 @@ const CurriculumManagement = () => {
                   لا توجد وحدات لهذه المادة بعد
                 </Typography>
                 <Typography sx={{ fontSize: 11, color: "var(--color-muted)", mt: 0.5, mb: 1.3 }}>
-                  ابدأ بإضافة أول وحدة لمنهج هذه المادة والصف.
+                  استورد المنهج الوطني جاهزًا بوحداته ودروسه، أو ابدأ بإضافة وحدة بنفسك.
                 </Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<AddRounded />}
-                  onClick={openCreateUnit}
-                  sx={{ fontWeight: 900, bgcolor: "var(--color-navy)" }}
-                >
-                  وحدة جديدة
-                </Button>
+                <Stack direction={{ xs: "column", sm: "row" }} gap={1} justifyContent="center">
+                  <Button
+                    variant="contained"
+                    startIcon={<CloudDownloadRounded />}
+                    onClick={() => setImportOpen(true)}
+                    sx={{ fontWeight: 900, bgcolor: "var(--color-navy)" }}
+                  >
+                    استيراد منهج جاهز
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<AddRounded />}
+                    onClick={openCreateUnit}
+                    sx={{ fontWeight: 900 }}
+                  >
+                    وحدة جديدة
+                  </Button>
+                </Stack>
               </Box>
             </Box>
           ) : (
@@ -1320,6 +1348,14 @@ const CurriculumManagement = () => {
             )}
           </DialogActions>
         </Dialog>
+
+        <ImportCurriculumDialog
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          subject={selectedSubject}
+          grade={selectedGrade}
+          onImported={() => refreshUnits({ preserveScroll: false })}
+        />
       </Box>
     </Container>
   );
