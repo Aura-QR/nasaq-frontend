@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "نسق — تحضير سريع",
+  "description": "حضّر حصص الأسبوع كلها من نسق بضغطة واحدة، كل حصة بدرسها.",
+  "version": "1.0.0",
+
+  "action": {
+    "default_title": "نسق — تحضير سريع",
+    "default_popup": "popup.html"
+  },
+
+  "background": { "service_worker": "background.js" },
+
+  "permissions": ["storage", "cookies"],
+
+  "host_permissions": [
+    "https://nasaq.185.170.196.120.sslip.io/*",
+    "https://api.nasaq.185.170.196.120.sslip.io/*",
+    "http://127.0.0.1:5000/*",
+    "http://localhost:5000/*"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://nasaq.185.170.196.120.sslip.io/*",
+        "http://127.0.0.1:5000/*",
+        "http://localhost:5000/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
