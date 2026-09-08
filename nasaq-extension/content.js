@@ -81,6 +81,8 @@
     result: null,
     /** Write the content too, not just file the period. */
     withContent: true,
+    /** Send each finished preparation for review at the end. */
+    andSubmit: true,
     /** `${done}/${total}` while generation is running, else null. */
     generating: null,
     /*
@@ -246,23 +248,45 @@
     if (!created.length) return;
 
     let done = 0;
-    let failed = 0;
+    const problems = [];
     state.generating = `0/${created.length}`;
     render();
 
     for (const row of created) {
-      const response = await api(`/preparation/${row.preparationId}/generate`, {
+      const written = await api(`/preparation/${row.preparationId}/generate`, {
         method: 'POST',
       });
-      if (!response.ok) failed++;
+
+      if (!written.ok) {
+        problems.push(written.message);
+      } else if (state.andSubmit) {
+        /*
+         * Submitting is the last thing, and it can legitimately refuse.
+         *
+         * Nasaq will not accept a preparation without a lesson, a digital
+         * content item, an assignment and an objective. Generation supplies
+         * all four when the school has them — but a school with nothing in
+         * its library has no content item to attach, and the refusal says so.
+         * The draft stays, complete but for that one thing.
+         */
+        const sent = await api(`/preparation/${row.preparationId}/submit`, {
+          method: 'POST',
+        });
+        if (!sent.ok) problems.push(sent.message);
+      }
+
       done++;
       state.generating = `${done}/${created.length}`;
       render();
     }
 
     state.generating = null;
-    if (failed) {
-      state.error = `تم إنشاء التحاضير، وتعذّر توليد المحتوى لـ ${failed} منها.`;
+    if (problems.length) {
+      // The same reason repeated twenty-two times is one reason.
+      const reasons = [...new Set(problems.filter(Boolean))];
+      state.error =
+        `التحاضير أُنشئت. ${problems.length} منها لم تكتمل: ` +
+        reasons.slice(0, 2).join(' — ');
     }
     render();
   }
@@ -359,23 +383,34 @@
     if (!footer) return;
     footer.textContent = '';
 
-    const toggle = el('label', 'nq-toggle');
-    const box = el('input');
-    box.type = 'checkbox';
-    box.checked = state.withContent;
-    box.addEventListener('change', () => {
-      state.withContent = box.checked;
-    });
-    toggle.appendChild(box);
-    toggle.appendChild(el('span', null, 'اكتب التمهيد والإغلاق والأهداف تلقائيًا'));
-    footer.appendChild(toggle);
+    const option = (label, key) => {
+      const wrap = el('label', 'nq-toggle');
+      const box = el('input');
+      box.type = 'checkbox';
+      box.checked = state[key];
+      box.addEventListener('change', () => {
+        state[key] = box.checked;
+        renderFooter();
+      });
+      wrap.appendChild(box);
+      wrap.appendChild(el('span', null, label));
+      return wrap;
+    };
+
+    footer.appendChild(option('اكتب المحتوى تلقائيًا', 'withContent'));
+    // Only meaningful with the content: a draft with no objectives and no
+    // assignment is refused on submit, so offering it alone invites the
+    // refusal.
+    if (state.withContent) {
+      footer.appendChild(option('وأرسلها للمراجعة', 'andSubmit'));
+    }
 
     const count = state.ticked.size;
     const button = el(
       'button',
       'nq-btn nq-btn-main',
       state.generating
-        ? `جارٍ كتابة المحتوى… ${state.generating}`
+        ? `جارٍ الإنهاء… ${state.generating}`
         : `حضّر المحدد (${count})`,
     );
     button.disabled = !count || state.loading || Boolean(state.generating);

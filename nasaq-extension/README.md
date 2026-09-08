@@ -25,7 +25,8 @@ production one.
    └── the school's own lessons for each subject     GET  /curriculum/units
        and grade in it                               GET  /curriculum/units/:id/lessons
    └── one lesson per period, one press              POST /preparation/bulk
-   └── and the content written into each             POST /preparation/:id/generate
+   └── and each one finished                         POST /preparation/:id/generate
+   └── and sent for review                           POST /preparation/:id/submit
 ```
 
 **اكتب التمهيد والإغلاق والأهداف تلقائيًا** is on by default. After the
@@ -37,6 +38,12 @@ It only does this for periods that got a lesson; the server refuses the rest,
 because content written from a subject name alone is filler. And it never
 overwrites anything a teacher has already written — only blanks are filled, so
 running it again is safe.
+
+**وأرسلها للمراجعة** then sends each finished preparation on. Nasaq accepts a
+submit only with a lesson, a digital content item, an assignment and an
+objective — generation supplies all four when the school has them. A school
+with an empty library has no content item to attach, so that submit is refused
+and the panel says why; the draft stays, complete but for that one thing.
 
 Requires `AI_WEBHOOK_URL` on the server (see
 `nasaq-backend/docs/SETUP-Lesson-Content.md`). Without it the periods are still
