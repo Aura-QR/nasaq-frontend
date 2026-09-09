@@ -146,7 +146,7 @@
     // teacher is here to fill gaps; making her tick twenty rows first is the
     // work this is supposed to remove.
     for (const slot of preparableSlots()) {
-      if (!slot.preparation && pairKey(slot)) state.ticked.add(slot.lectureId);
+      if (slotState(slot) !== 'sent' && pairKey(slot)) state.ticked.add(slot.lectureId);
     }
 
     state.loading = false;
@@ -195,21 +195,34 @@
 
   async function prepare() {
     const items = [];
+    // Rows that already hold a draft: the bulk would report them as existing
+    // and do nothing, so they go straight to being finished.
+    const drafts = [];
+
     for (const slot of preparableSlots()) {
       if (!state.ticked.has(slot.lectureId)) continue;
+      if (slotState(slot) === 'draft') {
+        drafts.push({
+          preparationId: String(slot.preparation._id),
+          lessonTitle: slot.preparation.lessonTitle || '',
+        });
+        continue;
+      }
       const lessonId = state.chosen.get(slot.lectureId);
       items.push({ lectureId: slot.lectureId, ...(lessonId ? { lessonId } : {}) });
     }
-    if (!items.length) return;
+    if (!items.length && !drafts.length) return;
 
     state.loading = true;
     state.error = '';
     render();
 
-    const response = await api('/preparation/bulk', {
-      method: 'POST',
-      body: { weekOf: state.weekOf, items },
-    });
+    const response = items.length
+      ? await api('/preparation/bulk', {
+          method: 'POST',
+          body: { weekOf: state.weekOf, items },
+        })
+      : { ok: true, data: { created: 0, skipped: 0, results: [] } };
 
     state.loading = false;
 
@@ -225,7 +238,12 @@
     state.result = response.data;
     render();
 
-    if (state.withContent) await fillContent(response.data);
+    if (state.withContent) {
+      await fillContent([
+        ...(response.data.results || []).filter((r) => r.status === 'created'),
+        ...drafts,
+      ]);
+    }
 
     await loadWeek();
   }
@@ -241,11 +259,20 @@
    * Only rows that got a lesson — the server refuses the rest, because content
    * written from a subject name alone is filler.
    */
-  async function fillContent(bulk) {
-    const created = (bulk?.results || []).filter(
-      (row) => row.status === 'created' && row.lessonTitle,
-    );
-    if (!created.length) return;
+  async function fillContent(rows) {
+    /*
+     * Only rows that carry a lesson. The server refuses the rest — content
+     * written from a subject name alone is filler — and a school that has not
+     * imported a curriculum has none of them, which is why pressing the button
+     * there returns instantly having only filed drafts.
+     */
+    const created = (rows || []).filter((row) => row.lessonTitle);
+    if (!created.length) {
+      state.error =
+        'أُنشئت المسودات، ولم يُكتب محتوى: لم تُختر دروس. استوردي منهج المادة أولًا.';
+      render();
+      return;
+    }
 
     let done = 0;
     const problems = [];
@@ -301,11 +328,31 @@
     document.body.appendChild(root);
   }
 
+  /**
+   * What state this period is really in.
+   *
+   * "Prepared" means two different things in Nasaq, and they disagree on a
+   * draft: the schedule page paints a lecture green as soon as any
+   * preparation exists, while /preparation/weekly counts anything not
+   * submitted as missing. A teacher then sees تم التحضير on the timetable and
+   * a counter telling her seventeen are outstanding.
+   *
+   * This panel follows the counter, because that is the one the school's
+   * review actually uses — and it names the state instead of hiding it.
+   */
+  const slotState = (slot) => {
+    const status = slot.preparation?.reviewStatus;
+    if (!slot.preparation) return 'none';
+    if (status === 'draft' || status === 'needs_revision') return 'draft';
+    return 'sent';
+  };
+
   function renderSlot(slot) {
     const row = el('div', 'nq-row');
     const key = pairKey(slot);
     const groups = state.lessonsByPair.get(key);
-    const done = Boolean(slot.preparation);
+    const status = slotState(slot);
+    const done = status === 'sent';
     const unusable = !key;
 
     const box = el('input');
@@ -335,9 +382,21 @@
     row.appendChild(meta);
 
     if (done) {
-      row.appendChild(el('span', 'nq-tag nq-tag-done', 'محضّرة'));
+      row.appendChild(el('span', 'nq-tag nq-tag-done', 'مُرسلة'));
       return row;
     }
+    // A draft is not finished — it is exactly the row this panel should be
+    // able to complete, so it stays tickable and says what it is.
+    if (status === 'draft') {
+      row.appendChild(
+        el(
+          'span',
+          'nq-tag nq-tag-warn',
+          slot.preparation.reviewStatus === 'needs_revision' ? 'تحتاج تعديل' : 'مسودة',
+        ),
+      );
+    }
+
     if (unusable) {
       // A lecture with no subject offering cannot be matched to a curriculum,
       // and the server would reject it. Show it, greyed, with the reason —
@@ -499,7 +558,11 @@
         el(
           'div',
           'nq-stats',
-          `${stats.total ?? 0} حصة · ${stats.missing ?? 0} بدون تحضير`,
+          // Spelled out, because "17 بدون تحضير" beside rows the timetable
+          // paints green is the exact confusion this panel caused.
+          `${stats.total ?? 0} حصة · ${stats.pending ?? 0} مُرسلة · ` +
+            `${stats.draft ?? 0} مسودة · ` +
+            `${(stats.total ?? 0) - (stats.draft ?? 0) - (stats.submitted ?? 0)} بلا تحضير`,
         ),
       );
 
