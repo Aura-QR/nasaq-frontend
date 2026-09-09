@@ -50,6 +50,7 @@ import nasaqLogo from "@/images/wadq-logo.png";
 import {
   deletePreparation,
   fetchPreparations,
+  fetchSinglePreparation,
 } from "@/APIs/school/preparation";
 import {
   fetchLectures,
@@ -651,6 +652,36 @@ const getPreparationLessonTitle = (preparation) =>
 
 const getAssignmentCount = getPreparationAssignmentCount;
 
+const hydratePreparationDetails = async (preparations = []) => {
+  const list = Array.isArray(preparations) ? preparations : [];
+  const byId = new Map();
+
+  list.forEach((preparation) => {
+    const id = getPreparationId(preparation);
+    if (id && !byId.has(id)) byId.set(id, preparation);
+  });
+
+  const detailEntries = await Promise.all(
+    Array.from(byId.entries()).map(async ([id, summary]) => {
+      try {
+        const response = await fetchSinglePreparation(id);
+        if (isFailedResponse(response)) return [id, summary];
+
+        const detail = extractEntity(response);
+        return detail ? [id, { ...summary, ...detail }] : [id, summary];
+      } catch {
+        return [id, summary];
+      }
+    })
+  );
+
+  const hydratedById = new Map(detailEntries);
+  return list.map((preparation) => {
+    const id = getPreparationId(preparation);
+    return id ? hydratedById.get(id) || preparation : preparation;
+  });
+};
+
 const loadTeacherPreparations = async (teacherId, lectures) => {
   const mainResponse = await fetchPreparations({
     teacherId,
@@ -662,7 +693,9 @@ const loadTeacherPreparations = async (teacherId, lectures) => {
     ? []
     : extractCollection(mainResponse, ["preparations"]);
 
-  if (list.length > 0 || lectures.length === 0) return list;
+  if (list.length > 0 || lectures.length === 0) {
+    return hydratePreparationDetails(list);
+  }
 
   const results = await Promise.allSettled(
     lectures.map(async (lecture) => {
@@ -690,9 +723,11 @@ const loadTeacherPreparations = async (teacherId, lectures) => {
     })
   );
 
-  return results.flatMap((result) =>
+  const fallbackList = results.flatMap((result) =>
     result.status === "fulfilled" ? result.value : []
   );
+
+  return hydratePreparationDetails(fallbackList);
 };
 
 const StatCard = ({ title, value, helper, icon, tone = "blue" }) => {

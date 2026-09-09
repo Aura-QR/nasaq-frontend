@@ -60,6 +60,7 @@ import { fetchMyDay } from "@/APIs/school/notifications";
 import {
   addPreparation,
   fetchPreparations,
+  fetchSinglePreparation,
 } from "@/APIs/school/preparation";
 
 import nasaqLogo from "../../images/wadq-logo.png";
@@ -571,6 +572,42 @@ const formatWeekRange = (weekStart) => {
   return `${formatter.format(weekStart)} — ${formatter.format(weekEnd)}`;
 };
 
+const hydratePreparationDetails = async (preparations = []) => {
+  const list = Array.isArray(preparations) ? preparations : [];
+  const byId = new Map();
+
+  list.forEach((preparation) => {
+    const id = getPreparationId(preparation);
+    if (id && !byId.has(id)) byId.set(id, preparation);
+  });
+
+  const detailEntries = await Promise.all(
+    Array.from(byId.entries()).map(async ([id, summary]) => {
+      try {
+        const response = await fetchSinglePreparation(id);
+        if (isFailedResponse(response)) return [id, summary];
+
+        const detail = unwrapResponse(response);
+        if (!detail || Array.isArray(detail) || typeof detail !== "object") {
+          return [id, summary];
+        }
+
+        // List rows are intentionally compact and can omit resources/resourcesCount.
+        // Merge the detail model so completion is calculated from the real saved data.
+        return [id, { ...summary, ...detail }];
+      } catch {
+        return [id, summary];
+      }
+    })
+  );
+
+  const hydratedById = new Map(detailEntries);
+  return list.map((preparation) => {
+    const id = getPreparationId(preparation);
+    return id ? hydratedById.get(id) || preparation : preparation;
+  });
+};
+
 const loadPreparationsForTeacher = async (
   teacherId,
   weekOf
@@ -581,9 +618,11 @@ const loadPreparationsForTeacher = async (
     limit: 500,
   });
 
-  return isFailedResponse(response)
+  const list = isFailedResponse(response)
     ? []
     : extractCollection(response, ["preparations"]);
+
+  return hydratePreparationDetails(list);
 };
 
 const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
