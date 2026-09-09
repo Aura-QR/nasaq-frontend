@@ -1,4 +1,4 @@
-# نسق — تحضير سريع (1.1.3)
+# نسق — تحضير سريع (1.2.0)
 
 Chrome extension for the Nasaq weekly preparation workflow. It uses the API;
 there is no scraping of the frontend's DOM. The backend contract was checked
@@ -38,12 +38,22 @@ See [teacher route access](../docs/teacher-route-access.md) for the full route a
    تلقائيًا: افتحها، واقرأ ملاحظات المراجع، وأجرِ التعديلات أولًا.
 3. اختر درسًا لكل حصة. إذا كانت المسودة بلا درس، يُحفظ اختيارك عليها قبل التوليد.
    الدرس المحفوظ يظهر باسمه؛ لتغييره افتح محرر التحضير وراجع محتواه المرتبط.
-4. اختر العمل المطلوب:
-   - **حفظ المسودات فقط:** أوقف التوليد والإرسال. يمكن الحفظ دون دروس.
+4. لكل حصة، اختر **إثراء / واجب / امتحان / نشاط**. يمكن الجمع بينها أو إلغاء الجميع.
+   الواجب محدد افتراضيًا للحصص الجديدة فقط؛ المسودات الموجودة تبدأ دون إضافات محددة.
+   إلغاء الاختيار لا يحذف شيئًا موجودًا. النوع الموجود لا يُضاف مرة ثانية.
+5. عند اختيار **امتحان**، حدد نوعه وتاريخ البداية والنهاية والمدة وعدد الأسئلة.
+   يُنشأ امتحان فعلي مثل لوحة التحكم، ويظهر في **اختباراتي** مع رابط لمراجعته.
+   الأسئلة اختيار من متعدد، والدرجة تُحسب من توزيع درجات المدرسة، والفصل والمادة من الحصة.
+   المدة من ١ إلى ٢٤٠ دقيقة، والأسئلة من ١ إلى ٢٠؛ يمكن أن يبدأ وينتهي في اليوم نفسه.
+   **يُتاح للطلاب وفق التواريخ المحددة حتى قبل إرسال التحضير للمراجعة.** اختر موعدًا
+   يسمح لك بمراجعة الأسئلة أولًا. إنشاء الامتحان متاح من حساب المعلم صاحب الحصة فقط.
+6. اختر العمل المطلوب:
+   - **حفظ المسودات فقط:** ألغِ إضافات الحصص وأوقف التوليد والإرسال. يمكن الحفظ دون دروس.
    - **توليد المحتوى للمراجعة الشخصية:** شغّل التوليد وأوقف الإرسال.
+   - **إضافات فقط:** اخترها لكل حصة وأوقف كتابة حقول التحضير؛ اختر درسًا لكل حصة.
    - **توليد وإرسال:** شغّل الخيارين بعد اختيار الدروس.
-   - **إرسال محتوى مكتمل سابقًا:** أوقف التوليد وشغّل الإرسال.
-5. اضغط **حضّر المحدد**. تظل النتائج والأخطاء ظاهرة بعد تحديث البيانات التلقائي،
+   - **إرسال محتوى مكتمل سابقًا:** ألغِ الإضافات وأوقف التوليد وشغّل الإرسال.
+7. اضغط **حضّر المحدد**. تظل النتائج والأخطاء ظاهرة بعد تحديث البيانات التلقائي،
    مع رابط لفتح كل تحضير يحتاج استكمالًا. حدّد المسودات المطلوبة صراحةً للمحاولة مجددًا.
 
 التحضير القابل للإرسال يحتاج درسًا من المنهج، وهدفًا، ومحتوى رقميًا، وتكليفًا
@@ -59,6 +69,9 @@ See [teacher route access](../docs/teacher-route-access.md) for the full route a
 | لا توجد دروس | الإدارة الأكاديمية ← المناهج والدروس ← استيراد المنهج للمادة والصف؛ أو احفظ مسودة فقط. |
 | تعذر تحميل المنهج | يظهر خطأ الطلب الحقيقي؛ استخدم «تحديث» بعد حل الاتصال أو الصلاحية. |
 | التوليد غير مفعّل | يراجع مسؤول الخادم إعدادات AI_ENABLED وAI_WEBHOOK_URL وخدمة التوليد. المسودات المحفوظة تبقى. |
+| تعذر تأكيد دعم الإضافات | انشر تحديث الخادم واستورد سير عمل n8n المحدث ثم أعد المحاولة. الإضافة تتوقف قبل إنشاء مسودات جديدة. |
+| لا يوجد توزيع درجات / وزن الامتحان صفر | تطلب من الإدارة إعداد توزيع درجات المادة لهذا النوع؛ يُحفظ بقية المحتوى الناجح ويؤجل الإرسال. |
+| فشل توليد إضافة أو أسئلة امتحان | راجع الخطأ، ثم أعد تحديد الحصة والإضافة المطلوبة. لا تُكرّر الأنواع المحفوظة ولا يُرسل التحضير تلقائيًا مع فشل إضافة مطلوبة. |
 | نقص محتوى رقمي أو تكليف أو هدف | افتح التحضير من رابط الخطأ وأضف المطلوب، ثم أعد الإرسال دون توليد إذا اكتمل المحتوى. |
 | انتهت الجلسة / تغيّر الحساب | سجّل الدخول وحدّث الأسبوع. تتوقف الدفعة قبل الطلب التالي. |
 | 403 | اطلب مراجعة صلاحيات القراءة والإنشاء والتعديل والمنهج لدى مسؤول المدرسة. |
@@ -112,10 +125,18 @@ and [cross-origin request rules](https://developer.chrome.com/docs/extensions/de
 | POST /preparation/bulk | Create up to 40 individual lesson selections |
 | GET /preparation/:id | Recheck an existing draft |
 | PATCH /preparation/:id | Attach a selected lesson to a lessonless draft |
-| POST /preparation/:id/generate | Fill empty content fields |
+| GET /preparation/generation-options | Verify selected-addition and linked-exam support before mutation |
+| POST /preparation/:id/generate | Fill blanks and/or generate selected resources with optional exam settings |
 | POST /preparation/:id/submit | Validate and submit for review |
 
 ## Verification
+
+Version 1.2.0 requires the matching backend changes in `nasaq-backend` and the
+updated `n8n/nasaq-lesson-content.json` workflow. Deploy/import both before
+reloading the extension. See the backend's `docs/SETUP-Lesson-Content.md` for
+the request contract and required unique indexes. The capability endpoint
+confirms backend support; malformed/missing workflow additions still surface
+as individual errors and prevent submission of that preparation.
 
 From the frontend root:
 
@@ -135,3 +156,8 @@ Browser smoke test: load the extension, open a teacher week, save one draft,
 attach a lesson, generate without submitting, review the content, then submit.
 Repeat with an owner/manager teacher selector and at a narrow viewport. Verify
 logout, offline recovery, a missing curriculum, cancellation and a rejected submit.
+Also select different additions on two lessons; try none and additions-only.
+Create a future-dated exam, open its result link, verify questions, class and
+grade in the dashboard, then repeat generation and confirm there is one exam.
+Check missing grade criteria and invalid dates, and verify that successful
+resources remain available when another requested addition fails.

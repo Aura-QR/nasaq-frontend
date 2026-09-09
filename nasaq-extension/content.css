@@ -179,3 +179,10 @@
   .nasaq-prep-root .nq-meta { min-width: 0; flex: 1; }
   .nasaq-prep-root .nq-panel { max-height: calc(100dvh - 96px); }
 }
+.nasaq-prep-root .nq-resources { flex-basis: 100%; min-width: 0; margin: 5px 0 0; padding: 8px; border: 1px solid #dce4eb; border-radius: 8px; }
+.nasaq-prep-root .nq-resources legend { font-size: 11px; font-weight: 700; }
+.nasaq-prep-root .nq-resource-choice { display: inline-flex; align-items: center; gap: 4px; margin-inline-end: 10px; font-size: 12px; cursor: pointer; }
+.nasaq-prep-root .nq-resource-choice input { accent-color: #0f2f4f; }
+.nasaq-prep-root .nq-exam-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
+.nasaq-prep-root .nq-exam-fields label { font-size: 11px; }
+.nasaq-prep-root .nq-exam-fields input, .nasaq-prep-root .nq-exam-fields select { display: block; width: 100%; font: inherit; padding: 5px; border: 1px solid #c8d3dd; border-radius: 6px; background: #fff; color: #0f2f4f; }

@@ -192,3 +192,55 @@ test('preparation navigation follows the frontend role portals', () => {
     assert.equal(C.preparationPath(role, 'p1', true), '/school/preparation/p1');
   }
 });
+
+test('per-lesson additions and exam settings are sent independently', async () => {
+  const exam = { startDate: '2026-10-01', endDate: '2026-10-02', duration: 25, questionCount: 3, examType: 'quiz' };
+  const rows = fresh(2).map((row, i) => ({ ...row, resourceTypes: i ? ['quiz', 'activity'] : ['enrichment'], ...(i ? { exam } : {}) }));
+  const bodies = [];
+  const result = await run(rows, async (path, options) => {
+    if (path.endsWith('/generation-options')) return ok({ version: 1, linkedExams: true, resourceTypes: Object.keys(C.RESOURCE_LABELS) });
+    if (path.endsWith('/bulk')) return bulk(options);
+    if (path.endsWith('/generate')) {
+      bodies.push(options.body);
+      return ok({ resourceResults: options.body.resourceTypes.map((type) => ({ type, status: 'created', ...(type === 'quiz' ? { examId: 'exam1' } : {}) })) });
+    }
+    return ok();
+  }, { withContent: false });
+  assert.deepEqual(bodies[0], { resourceTypes: ['enrichment'], includeContent: false });
+  assert.deepEqual(bodies[1], { resourceTypes: ['quiz', 'activity'], includeContent: false, exam });
+  assert.equal(result.resourcesAdded, 3); assert.equal(result.exams[0].examId, 'exam1'); assert.equal(result.submitted, 2);
+});
+test('explicit no-additions selection never falls back to automatic homework', async () => {
+  const result = await run([{ ...fresh()[0], resourceTypes: [] }], async (path, options) => {
+    if (path.endsWith('/generation-options')) return ok({ version: 1, resourceTypes: Object.keys(C.RESOURCE_LABELS) });
+    if (path.endsWith('/bulk')) return bulk(options);
+    assert.deepEqual(options.body, { resourceTypes: [], includeContent: true });
+    return ok({ resourceResults: [] });
+  }, { andSubmit: false });
+  assert.equal(result.resourcesAdded, 0);
+});
+test('unsupported server stops before creating preparations or invoking legacy generation', async () => {
+  const calls = [];
+  const result = await run([{ ...fresh()[0], resourceTypes: ['activity'] }], async (path) => {
+    calls.push(path); return C.failure(404, {});
+  });
+  assert.deepEqual(calls, ['/preparation/generation-options']); assert.equal(result.stopped, true);
+});
+test('partial addition failure prevents submission and keeps successful additions visible', async () => {
+  const paths = [];
+  const result = await run([{ ...fresh()[0], resourceTypes: ['activity', 'enrichment'] }], async (path, options) => {
+    paths.push(path);
+    if (path.endsWith('/generation-options')) return ok({ version: 1, resourceTypes: Object.keys(C.RESOURCE_LABELS) });
+    if (path.endsWith('/bulk')) return bulk(options);
+    return ok({ resourceResults: [{ type: 'activity', status: 'created' }, { type: 'enrichment', status: 'failed', message: 'تعذر توليد الإثراء' }] });
+  });
+  assert.equal(result.resourcesAdded, 1); assert.equal(result.generated, 1); assert.equal(result.submitted, 0);
+  assert.equal(result.problems[0].stage, 'إثراء'); assert.equal(paths.some((path) => path.endsWith('/submit')), false);
+});
+test('exam settings are required and validated before any API request', async () => {
+  let calls = 0;
+  for (const exam of [undefined, { examType: 'quiz', startDate: '2026-02-30', endDate: '2026-03-01', duration: 30, questionCount: 5 }]) {
+    const result = await run([{ ...fresh()[0], resourceTypes: ['quiz'], exam }], async () => { calls++; return ok(); });
+    assert.equal(calls, 0); assert.equal(result.stopped, true);
+  }
+});

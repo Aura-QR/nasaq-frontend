@@ -35,6 +35,7 @@ test('busy batch locks controls, ignores duplicate start, and retains errors aft
   const generation = deferred(); let generateCalls = 0;
   const prep = { _id: 'p1', reviewStatus: 'draft', lessonId: 'lesson1', lessonTitle: 'الجمع' };
   const p = await panel(async (base, token, path) => {
+    if (path.endsWith('/generation-options')) return ok({ version: 1, resourceTypes: ['homework', 'activity', 'enrichment', 'quiz'], linkedExams: true });
     if (path.startsWith('/preparation/weekly')) return ok(week([slot(prep)]));
     if (path.endsWith('/generate')) { generateCalls++; return generation.promise; }
     if (path.endsWith('/submit')) return { ok: false, status: 400, message: 'يجب إضافة محتوى رقمي واحد على الأقل' };
@@ -94,7 +95,7 @@ test('late curriculum responses do not populate a different week', async () => {
   assert.equal(p.find('.nq-row').querySelector('select').disabled, false);
 });
 
-test('missing curriculum permits draft-only saving after both options are turned off', async () => {
+test('missing curriculum permits draft-only saving after additions and both options are turned off', async () => {
   const paths = [];
   const p = await panel(async (base, token, path, options) => {
     paths.push(path);
@@ -105,6 +106,8 @@ test('missing curriculum permits draft-only saving after both options are turned
     }
     return ok([]);
   });
+  const homework = p.body.all().find((n) => n.attributes['aria-label'] === 'واجب للحصة 1');
+  homework.checked = false; homework.fire('change');
   const toggles = p.body.all().filter((n) => n.className === 'nq-toggle').map((n) => n.querySelector('input'));
   toggles[0].checked = false; toggles[0].fire('change');
   const submit = p.body.all().filter((n) => n.className === 'nq-toggle')[1].querySelector('input');
@@ -118,6 +121,7 @@ test('missing curriculum permits draft-only saving after both options are turned
 test('teacher row and failure links open the teacher editor and hide curriculum administration', async () => {
   const prep = { _id: 'p1', reviewStatus: 'draft', lessonId: 'lesson1', lessonTitle: 'الجمع' };
   const p = await panel(async (base, token, path) => {
+    if (path.endsWith('/generation-options')) return ok({ version: 1, resourceTypes: ['homework', 'activity', 'enrichment', 'quiz'], linkedExams: true });
     if (path.startsWith('/preparation/weekly')) return ok(week([slot(prep)]));
     if (path.endsWith('/generate')) return { ok: false, status: 400, message: 'توليد غير متاح' };
     return ok(prep);
@@ -138,4 +142,21 @@ test('administrator links open preparation details and only owners/managers see 
     assert.equal(p.find('.nq-row').querySelector('a').href, '/school/preparation/p1');
     assert.equal(p.body.all().some((node) => node.href === '/school/curriculum'), role !== 'SUPERVISOR');
   }
+});
+
+test('each lecture has independent additions and selecting exam requires its settings', async () => {
+  const p = await panel(async (base, token, path) => path.startsWith('/preparation/weekly') ? ok(week([
+    slot({ _id: 'p1', reviewStatus: 'draft', lessonId: 'lesson1' }),
+    { ...slot({ _id: 'p2', reviewStatus: 'draft', lessonId: 'lesson1' }), lectureId: 'l2', slot: 2 },
+  ])) : curriculum(path));
+  let quiz = p.body.all().find(n => n.attributes['aria-label'] === 'امتحان للحصة 1');
+  quiz.checked = true; quiz.fire('change');
+  assert.equal(p.body.all().find(n => n.attributes['aria-label'] === 'امتحان للحصة 2').checked, false);
+  assert.equal(p.find('.nq-btn-main').disabled, true);
+  const first = p.body.all().find(n => n.attributes['aria-label'] === 'تاريخ البداية للحصة 1');
+  first.value = '2026-10-01'; first.fire('input');
+  const last = p.body.all().find(n => n.attributes['aria-label'] === 'تاريخ النهاية للحصة 1');
+  last.value = '2026-10-02'; last.fire('input');
+  assert.equal(p.find('.nq-btn-main').disabled, false);
+  assert.match(p.body.textContent, /اختباراتي/);
 });

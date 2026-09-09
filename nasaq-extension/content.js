@@ -11,7 +11,7 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
   const state = { open: false, loading: false, busy: false, cancel: false, weekOf: today(), week: null,
-    teacherId: '', teachers: null, chosen: new Map(), ticked: new Set(), lessons: new Map(),
+    teacherId: '', teachers: null, chosen: new Map(), ticked: new Set(), lessons: new Map(), additions: new Map(), exams: new Map(),
     error: '', result: null, progress: '', withContent: true, andSubmit: true, session: null, version: 0 };
   const root = document.createElement('div');
   root.className = 'nasaq-prep-root'; root.dir = 'rtl'; document.body.appendChild(root);
@@ -60,6 +60,7 @@
     const version = ++state.version;
     state.loading = true; state.error = ''; state.week = null;
     state.chosen.clear(); state.ticked.clear(); state.lessons.clear();
+    if (!preserve) { state.additions.clear(); state.exams.clear(); }
     if (!preserve) state.result = null;
     render();
     const current = await session();
@@ -71,6 +72,7 @@
     }
     if (state.session && (current.token !== state.session.token || current.base !== state.session.base)) {
       state.teacherId = ''; state.teachers = null;
+      state.additions.clear(); state.exams.clear();
     }
     state.session = current;
     const query = new URLSearchParams({ weekOf: state.weekOf });
@@ -90,6 +92,7 @@
     for (const slot of slots()) {
       const lesson = C.id(slot.preparation?.lessonId);
       if (lesson) state.chosen.set(slot.lectureId, lesson);
+      if (!state.additions.has(slot.lectureId)) state.additions.set(slot.lectureId, slot.preparation ? new Set() : new Set(['homework']));
       if (!preserve && eligible(slot) && C.status(slot) !== 'needs_revision') state.ticked.add(slot.lectureId);
     }
     render();
@@ -118,17 +121,21 @@
     const rows = slots().filter((slot) => eligible(slot) && state.ticked.has(slot.lectureId)).map((slot) => ({
       lectureId: slot.lectureId, preparationId: C.id(slot.preparation), existing: Boolean(slot.preparation),
       originalLessonId: C.id(slot.preparation?.lessonId), lessonId: state.chosen.get(slot.lectureId) || '',
+      resourceTypes: [...(state.additions.get(slot.lectureId) || [])],
+      exam: state.exams.has(slot.lectureId) ? { ...state.exams.get(slot.lectureId) } : undefined,
       label: `${DAYS[slot.dayOfWeek] || slot.dayOfWeek} · ح${slot.slot} · ${slot.subject?.name || ''} · ${slot.class?.name || ''}`,
     }));
     if (!rows.length) return;
-    if (state.withContent && rows.some((row) => !row.lessonId)) {
-      state.error = 'اختر درسًا لكل حصة محددة لتوليد المحتوى. لحفظ مسودات دون دروس، أوقف التوليد والإرسال للمراجعة.';
+    if (rows.some((row) => (state.withContent || row.resourceTypes.length) && !row.lessonId)) {
+      state.error = 'اختر درسًا لكل حصة محددة لتوليد المحتوى والإضافات. لحفظ مسودات دون دروس، ألغِ الإضافات والتوليد والإرسال للمراجعة.';
       render(); return;
     }
     if (state.andSubmit && rows.some((row) => !row.lessonId)) {
       state.error = 'الإرسال يتطلب درسًا ومحتوى رقميًا وتكليفًا وهدفًا. اختر الدروس أو أوقف الإرسال لحفظ المسودات.';
       render(); return;
     }
+    const invalidExam = rows.find((row) => row.resourceTypes.includes('quiz') && C.examIssue(row.exam));
+    if (invalidExam) { state.error = `${invalidExam.label} — ${C.examIssue(invalidExam.exam)}`; render(); return; }
     const expected = state.session;
     state.busy = true; state.cancel = false; state.error = ''; state.result = null; render();
     try {
@@ -194,24 +201,63 @@
     }
     if (status === 'needs_revision') row.appendChild(el('div', 'nq-row-help',
       'راجع ملاحظات المراجع وعدّل التحضير قبل تحديده للإرسال. التوليد يملأ الفراغات فقط.'));
+    const choices = state.additions.get(slot.lectureId) || new Set();
+    const resources = el('fieldset', 'nq-resources');
+    resources.appendChild(el('legend', null, 'إضافات تُولّد لهذه الحصة'));
+    for (const [type, title] of Object.entries(C.RESOURCE_LABELS)) {
+      const label = el('label', 'nq-resource-choice'); const check = el('input');
+      check.type = 'checkbox'; check.checked = choices.has(type);
+      check.disabled = busy || (type === 'quiz' && state.session?.role !== 'TEACHER');
+      check.setAttribute('aria-label', `${title} للحصة ${slot.slot}`);
+      check.addEventListener('change', () => {
+        if (check.checked) choices.add(type); else choices.delete(type);
+        state.additions.set(slot.lectureId, choices); render();
+      });
+      label.append(check, el('span', null, title)); resources.appendChild(label);
+    }
+    resources.appendChild(el('div', 'nq-row-help', 'يمكن اختيار أكثر من نوع أو إلغاء الجميع. الإضافات الموجودة تُحفظ ولا تُحذف عند إلغاء الاختيار.'));
+    if (state.session?.role !== 'TEACHER') resources.appendChild(el('div', 'nq-row-help', 'إنشاء الامتحان متاح للمعلم صاحب الحصة من حسابه فقط.'));
+    if (choices.has('quiz')) {
+      if (!state.exams.has(slot.lectureId)) state.exams.set(slot.lectureId, { examType: 'quiz', startDate: '', endDate: '', duration: 30, questionCount: 5 });
+      const config = state.exams.get(slot.lectureId); const fields = el('div', 'nq-exam-fields');
+      const typeLabel = el('label', null, 'نوع الامتحان'); const typeSelect = el('select', 'nq-select');
+      for (const [value, name] of [['quiz', 'اختبار قصير'], ['final', 'امتحان نهائي'], ['assignment', 'واجب إلكتروني'], ['activity', 'نشاط إلكتروني']]) typeSelect.appendChild(new Option(name, value));
+      typeSelect.value = config.examType; typeSelect.disabled = busy;
+      typeSelect.addEventListener('change', () => { config.examType = typeSelect.value; renderFooter(); }); typeLabel.appendChild(typeSelect); fields.appendChild(typeLabel);
+      for (const [key, title, type, min, max] of [['startDate', 'تاريخ البداية', 'date'], ['endDate', 'تاريخ النهاية', 'date'],
+        ['duration', 'المدة بالدقائق', 'number', 1, 240], ['questionCount', 'عدد الأسئلة', 'number', 1, 20]]) {
+        const label = el('label', null, title); const input = el('input', 'nq-exam-input');
+        input.type = type; input.value = config[key]; input.disabled = busy; input.required = true;
+        if (min) { input.min = min; input.max = max; input.step = 1; }
+        input.setAttribute('aria-label', `${title} للحصة ${slot.slot}`);
+        input.addEventListener('input', () => { config[key] = type === 'number' ? Number(input.value) : input.value; renderFooter(); });
+        label.appendChild(input); fields.appendChild(label);
+      }
+      resources.append(fields, el('div', 'nq-row-help', 'سيظهر الامتحان في «اختباراتي» ويتاح للطلاب وفق التواريخ المحددة، حتى قبل إرسال التحضير. الأسئلة اختيار من متعدد. راجعها قبل موعد البداية. يشترط توزيع درجات لهذا النوع.'));
+    }
+    row.appendChild(resources);
     return row;
   }
   function renderFooter() {
     const footer = root.querySelector('.nq-footer'); if (!footer) return;
     footer.textContent = '';
     const busy = state.busy || state.loading;
-    for (const [key, title] of [['withContent', 'اكتب الحقول الفارغة تلقائيًا'], ['andSubmit', 'أرسل التحاضير المكتملة للمراجعة']]) {
+    for (const [key, title] of [['withContent', 'اكتب حقول التحضير الفارغة تلقائيًا'], ['andSubmit', 'أرسل التحاضير المكتملة للمراجعة']]) {
       const label = el('label', 'nq-toggle'); const box = el('input'); box.type = 'checkbox'; box.checked = state[key]; box.disabled = busy;
       box.addEventListener('change', () => { state[key] = box.checked; renderFooter(); });
       label.append(box, el('span', null, title)); footer.appendChild(label);
     }
     const selected = slots().filter((slot) => state.ticked.has(slot.lectureId));
     const missing = selected.filter((slot) => !state.chosen.get(slot.lectureId)).length;
+    const missingForAdditions = selected.some((slot) => state.additions.get(slot.lectureId)?.size && !state.chosen.get(slot.lectureId));
+    const invalidExam = selected.some((slot) => state.additions.get(slot.lectureId)?.has('quiz') && C.examIssue(state.exams.get(slot.lectureId)));
+    if (invalidExam) footer.appendChild(el('div', 'nq-row-help nq-error-text', 'أكمل تواريخ وإعدادات الامتحان في الحصص المحددة.'));
+    footer.appendChild(el('div', 'nq-row-help', 'تُولّد الإضافات المحددة حتى عند إيقاف كتابة حقول التحضير. لحفظ مسودة فقط ألغِ الإضافات والتوليد والإرسال. الإرسال يحتاج تكليفًا واحدًا على الأقل.'));
     if (missing) footer.appendChild(el('div', 'nq-row-help', `${missing} حصة محددة دون درس. التوليد والإرسال يحتاجان اختيار الدروس.`));
     const progress = el('div', 'nq-progress', state.busy ? state.progress : '');
     progress.setAttribute('role', 'status'); footer.appendChild(progress);
     footer.appendChild(button(`حضّر المحدد (${selected.length})`, prepare,
-      busy || !selected.length || ((state.withContent || state.andSubmit) && missing > 0), 'nq-btn nq-btn-main'));
+      busy || !selected.length || invalidExam || missingForAdditions || ((state.withContent || state.andSubmit) && missing > 0), 'nq-btn nq-btn-main'));
     if (state.busy) footer.appendChild(button(state.cancel ? 'سيتم التوقف بعد الطلب الحالي' : 'إيقاف بعد الطلب الحالي', () => {
       state.cancel = true; renderFooter();
     }, state.cancel));
@@ -239,7 +285,7 @@
     const body = el('div', 'nq-body');
     const guide = el('details', 'nq-guide'); guide.appendChild(el('summary', null, 'طريقة الاستخدام وحل المشكلات'));
     guide.open = guideOpen;
-    guide.appendChild(el('p', null, '١. اختر الأسبوع والمعلم. ٢. حدّد الحصص واختر درس كل حصة. ٣. اختر حفظ المسودات أو التوليد أو الإرسال. التحاضير المعتمدة والمُرسلة لا تُعدّل هنا.'));
+    guide.appendChild(el('p', null, '١. اختر الأسبوع والمعلم. ٢. حدّد الحصص واختر درس كل حصة وإضافاته: إثراء أو واجب أو امتحان أو نشاط. ٣. اختر التوليد والإرسال حسب حاجتك. لحفظ مسودات فقط ألغِ الإضافات والتوليد والإرسال. التحاضير المعتمدة والمُرسلة لا تُعدّل هنا.'));
     guide.appendChild(el('p', null, 'الإرسال يحتاج درسًا من المنهج، وهدفًا، ومحتوى رقميًا، وتكليفًا واحدًا على الأقل. افتح التحضير لإكمال النواقص أو مراجعة ملاحظات التعديل.'));
     guide.appendChild(el('p', null, 'التوليد يملأ الفراغات فقط، ويتطلب تفعيل خدمة التوليد على الخادم. افحص المحتوى قبل الإرسال. أوقف خيار الإرسال إذا أردت مراجعته أولًا.'));
     guide.appendChild(el('p', null, 'أبقِ صفحة نسق مفتوحة أثناء التنفيذ. إغلاق اللوحة لا يوقف العمل. الإيقاف ينتظر الطلب الجاري، والدفعات السابقة تظل محفوظة. عند انقطاع الاتصال حدّث الأسبوع قبل إعادة المحاولة.'));
@@ -261,8 +307,9 @@
     if (state.result) {
       const r = state.result;
       const summary = el('div', 'nq-alert nq-alert-ok',
-        `${r.stopped ? 'توقفت العملية. ' : 'انتهت العملية. '}تم إنشاء ${r.created} · موجود مسبقًا ${r.skipped} · حُفظ درس ${r.saved} · تم توليد ${r.generated} · أُرسل ${r.submitted}`);
+        `${r.stopped ? 'توقفت العملية. ' : 'انتهت العملية. '}تم إنشاء ${r.created} · موجود مسبقًا ${r.skipped} · حُفظ درس ${r.saved} · تم توليد ${r.generated} · إضافات جديدة ${r.resourcesAdded || 0} · أُرسل ${r.submitted}`);
       summary.setAttribute('role', 'status'); body.appendChild(summary);
+      for (const exam of r.exams || []) body.appendChild(link(`${exam.label} — مراجعة الامتحان`, `/teacher/exams/edit/${encodeURIComponent(exam.examId)}`));
       if (r.skipped) body.appendChild(el('div', 'nq-row-help', 'الحصص الموجودة مسبقًا لم تُعدّل. راجع حالتها بعد التحديث وحدّد المسودات المطلوبة.'));
       for (const issue of r.problems) {
         const node = el('div', 'nq-alert nq-alert-error', `${issue.label} — ${issue.stage}: ${issue.message}`);

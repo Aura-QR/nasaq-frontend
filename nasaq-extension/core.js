@@ -7,6 +7,17 @@
     'http://api.nasaq.185.170.196.120.sslip.io',
   ]);
   const id = (value) => String(value?._id ?? value ?? '');
+  const RESOURCE_LABELS = { enrichment: 'إثراء', homework: 'واجب', quiz: 'امتحان', activity: 'نشاط' };
+  const validExamDate = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+  const examIssue = (exam) => {
+    if (!exam || !['quiz', 'final', 'assignment', 'activity'].includes(exam.examType) ||
+        !validExamDate(exam.startDate) || !validExamDate(exam.endDate) || exam.endDate < exam.startDate ||
+        !Number.isInteger(exam.duration) || exam.duration < 1 || exam.duration > 240 ||
+        !Number.isInteger(exam.questionCount) || exam.questionCount < 1 || exam.questionCount > 20)
+      return 'حدد تواريخ الامتحان بالترتيب الصحيح، والمدة من ١ إلى ٢٤٠ دقيقة، وعدد الأسئلة من ١ إلى ٢٠.';
+    return '';
+  };
   // Navigation hint only. The API verifies the JWT and enforces permissions.
   const sessionRole = (token) => {
     try {
@@ -79,13 +90,32 @@
   }
   // Never replay ambiguous mutations: a lost response may follow a successful save.
   async function run({ rows, weekOf, withContent, andSubmit, api, progress, cancelled }) {
-    const result = { created: 0, skipped: 0, generated: 0, submitted: 0, saved: 0, problems: [], stopped: false };
+    const result = { created: 0, skipped: 0, generated: 0, submitted: 0, saved: 0, resourcesAdded: 0, exams: [], problems: [], stopped: false };
     const problem = (row, stage, response) => {
       result.problems.push({ lectureId: row.lectureId, preparationId: row.preparationId,
         label: row.label, stage, message: response.message });
       if (response.uncertain || [0, 401, 403, 429].includes(response.status)) result.stopped = true;
     };
     const fresh = rows.filter((row) => !row.preparationId);
+    const requestedRows = rows.filter((row) => row.resourceTypes !== undefined);
+    for (const row of requestedRows) {
+      if (!Array.isArray(row.resourceTypes) || row.resourceTypes.some((type) => !RESOURCE_LABELS[type])) {
+        problem(row, 'الإضافات', { message: 'اختيارات الإضافات غير صالحة.' }); result.stopped = true; return result;
+      }
+      if (row.resourceTypes.includes('quiz') && examIssue(row.exam)) {
+        problem(row, 'إعداد الامتحان', { message: examIssue(row.exam) }); result.stopped = true; return result;
+      }
+    }
+    if (requestedRows.length && (withContent || requestedRows.some((row) => row.resourceTypes.length))) {
+      progress('جارٍ التحقق من دعم الإضافات…');
+      const capabilities = await api('/preparation/generation-options');
+      if (!capabilities.ok || capabilities.data?.version !== 1 ||
+          !Object.keys(RESOURCE_LABELS).every((type) => capabilities.data?.resourceTypes?.includes(type)) ||
+          (requestedRows.some((row) => row.resourceTypes.includes('quiz')) && !capabilities.data?.linkedExams)) {
+        problem({ label: 'خدمة التحضير' }, 'الإضافات', { message: 'تعذر تأكيد دعم اختيارات الإضافات. يجب نشر تحديث الخادم وسير عمل التوليد قبل الاستخدام. ' + (capabilities.message || ''), status: capabilities.status });
+        result.stopped = true; return result;
+      }
+    }
     for (let start = 0; start < fresh.length; start += 40) {
       if (cancelled() || result.stopped) break;
       const batch = fresh.slice(start, start + 40);
@@ -136,14 +166,28 @@
         }
       }
       if (cancelled()) break;
-      if (withContent) {
+      if (withContent || row.resourceTypes?.length) {
         if (!row.lessonId) {
           problem(row, 'المحتوى', { message: 'المسودة محفوظة دون درس. اختر درسًا أو اطلب استيراد المنهج ثم أعد المحاولة.' });
           continue;
         }
-        const generated = await api(`/preparation/${row.preparationId}/generate`, { method: 'POST' });
+        const generated = await api(`/preparation/${row.preparationId}/generate`, { method: 'POST',
+          ...(row.resourceTypes !== undefined ? { body: { resourceTypes: [...row.resourceTypes], includeContent: withContent,
+            ...(row.resourceTypes.includes('quiz') ? { exam: { ...row.exam } } : {}) } } : {}) });
         if (!generated.ok) { problem(row, 'توليد المحتوى', generated); continue; }
         result.generated++;
+        let incomplete = false;
+        for (const type of row.resourceTypes || []) {
+          const resource = generated.data?.resourceResults?.find((item) => item.type === type);
+          if (!resource || !['created', 'existing'].includes(resource.status)) {
+            problem(row, RESOURCE_LABELS[type], { message: resource?.message || 'لم يؤكد الخادم إضافة هذا النوع. افتح التحضير للتحقق ثم أعد المحاولة.' });
+            incomplete = true;
+          } else {
+            if (resource.status === 'created') result.resourcesAdded++;
+            if (resource.examId) result.exams.push({ examId: resource.examId, label: row.label });
+          }
+        }
+        if (incomplete) continue;
       }
       if (cancelled()) break;
       if (andSubmit) {
@@ -155,5 +199,5 @@
     result.stopped ||= cancelled();
     return result;
   }
-  globalThis.NasaqPrep = { DEFAULT_API, id, sessionRole, preparationPath, status, editable, pairKey, apiBase, failure, request, run };
+  globalThis.NasaqPrep = { DEFAULT_API, RESOURCE_LABELS, examIssue, id, sessionRole, preparationPath, status, editable, pairKey, apiBase, failure, request, run };
 })();
