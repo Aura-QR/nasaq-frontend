@@ -2,10 +2,18 @@
   "manifest_version": 3,
   "name": "نسق — تحضير سريع",
   "description": "حضّر حصص الأسبوع كلها من نسق بضغطة واحدة، كل حصة بدرسها.",
-  "version": "1.0.0",
+  "version": "1.1.3",
+
+  "icons": {
+    "16": "logo/nasaq logo.jpeg",
+    "32": "logo/nasaq logo.jpeg",
+    "48": "logo/nasaq logo.jpeg",
+    "128": "logo/nasaq logo.jpeg"
+  },
 
   "action": {
     "default_title": "نسق — تحضير سريع",
+    "default_icon": "logo/nasaq logo.jpeg",
     "default_popup": "popup.html"
   },
 
@@ -14,20 +22,21 @@
   "permissions": ["storage", "cookies"],
 
   "host_permissions": [
-    "https://nasaq.185.170.196.120.sslip.io/*",
-    "https://api.nasaq.185.170.196.120.sslip.io/*",
-    "http://127.0.0.1:5000/*",
-    "http://localhost:5000/*"
+    "https://nasaqedu.org/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
   ],
 
   "content_scripts": [
     {
       "matches": [
-        "https://nasaq.185.170.196.120.sslip.io/*",
+        "https://nasaqedu.org/*",
         "http://127.0.0.1:5000/*",
-        "http://localhost:5000/*"
+        "http://localhost:5000/*",
+        "http://127.0.0.1:5173/*",
+        "http://localhost:5173/*"
       ],
-      "js": ["content.js"],
+      "js": ["core.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }

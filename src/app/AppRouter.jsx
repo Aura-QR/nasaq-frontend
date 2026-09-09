@@ -351,6 +351,10 @@ const AppRouter = () => {
             element={<TeacherClasses />}
           />
 
+          {/* Compatibility for earlier teacher sidebar links. */}
+          <Route path="/teacher/students" element={<Navigate to="/teacher/classes" replace />} />
+          <Route path="/teacher/lectures" element={<Navigate to="/teacher/schedule" replace />} />
+
           <Route
             path="/teacher/attendance"
             element={<TeacherAttendance />}

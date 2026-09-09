@@ -11,6 +11,7 @@ import {
 import {
   getStoredPermissions,
 } from "@/shared/auth/permissions";
+import { teacherPreparationRedirect } from "@/shared/navigation/preparationRoutes";
 
 const SCHOOL_ADMIN_ROLES = [
   "OWNER",
@@ -220,6 +221,15 @@ const ModuleAccessRoute = ({
         "role"
       )
     );
+
+  // Old extension/bookmark links should reach the teacher portal, while school
+  // administration remains protected by the existing role and permission checks.
+  const teacherTarget = role === "TEACHER" && module === "preparation"
+    ? teacherPreparationRedirect(location.pathname)
+    : null;
+  if (teacherTarget) {
+    return <Navigate to={{ pathname: teacherTarget, search: location.search, hash: location.hash }} replace />;
+  }
 
   /*
    * لازم يكون من أدوار إدارة المدرسة.

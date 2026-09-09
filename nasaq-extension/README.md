@@ -1,125 +1,137 @@
-# نسق — تحضير سريع
+# نسق — تحضير سريع (1.1.3)
 
-A Chrome extension that prepares a teacher's whole week from inside Nasaq, one
-period per lesson, in a single press.
+Chrome extension for the Nasaq weekly preparation workflow. It uses the API;
+there is no scraping of the frontend's DOM. The backend contract was checked
+against `D:\Work\Aura\nasaq-backend`.
 
----
+## Install / update
 
-## Install
+1. Open `chrome://extensions` and enable Developer mode.
+2. Load unpacked → select `nasaq-extension`. For an existing installation, click Reload.
+3. Open or reload `https://nasaqedu.org`, sign in, and click **حضّر أسبوعي** at the bottom left.
+4. For local development, open the frontend at `http://localhost:5000` or
+   `http://localhost:5173` (also supports `127.0.0.1`). In the popup, set the API
+   to the actual backend origin, usually `http://localhost:3000`.
 
-1. Chrome → `chrome://extensions`
-2. Turn on **Developer mode** (top right)
-3. **Load unpacked** → choose this folder
-4. Open Nasaq and sign in. A **حضّر أسبوعي** button appears at the bottom-left.
+The API defaults to `https://api.nasaqedu.org`.
+Saved settings using the old HTTP or HTTPS `api.nasaq.185.170.196.120.sslip.io`
+origin automatically resolve to the new HTTPS API; local development settings are preserved.
+Settings accept that official origin or an HTTP(S) localhost / 127.0.0.1 origin
+with a port. Credentials, paths, queries, fragments, and other hosts are rejected.
+The supplied `logo/nasaq logo.jpeg` is used for the toolbar/extension icon and popup branding.
+A new production domain requires updating the trusted origins in the code and manifest.
+After changing the API, refresh the week inside the panel.
 
-The API address can be changed from the extension's popup; it defaults to the
-production one.
+Preparation links follow the signed-in role: teachers use
+`/teacher/preparations/edit/:id` for completion and `/teacher/preparations/:id`
+for viewing. School administrators open `/school/preparation/:id` for review.
+Curriculum administration links are shown only to owners and managers.
+The frontend also redirects old school preparation links to the teacher portal
+for teacher sessions; this compatibility fix requires deploying the frontend.
+See [teacher route access](../docs/teacher-route-access.md) for the full route audit.
 
----
+## دليل المستخدم
 
-## What it does
+1. اختر تاريخًا داخل الأسبوع المطلوب. حساب المعلم يعرض أسبوعه؛ حساب الإدارة
+   يعرض قائمة المعلمين أولًا. الرجوع إلى «اختر المعلم» يمسح الأسبوع السابق.
+2. الحصص الجديدة والمسودات متاحة للتحديد. التحاضير التي تحتاج تعديلًا لا تُحدّد
+   تلقائيًا: افتحها، واقرأ ملاحظات المراجع، وأجرِ التعديلات أولًا.
+3. اختر درسًا لكل حصة. إذا كانت المسودة بلا درس، يُحفظ اختيارك عليها قبل التوليد.
+   الدرس المحفوظ يظهر باسمه؛ لتغييره افتح محرر التحضير وراجع محتواه المرتبط.
+4. اختر العمل المطلوب:
+   - **حفظ المسودات فقط:** أوقف التوليد والإرسال. يمكن الحفظ دون دروس.
+   - **توليد المحتوى للمراجعة الشخصية:** شغّل التوليد وأوقف الإرسال.
+   - **توليد وإرسال:** شغّل الخيارين بعد اختيار الدروس.
+   - **إرسال محتوى مكتمل سابقًا:** أوقف التوليد وشغّل الإرسال.
+5. اضغط **حضّر المحدد**. تظل النتائج والأخطاء ظاهرة بعد تحديث البيانات التلقائي،
+   مع رابط لفتح كل تحضير يحتاج استكمالًا. حدّد المسودات المطلوبة صراحةً للمحاولة مجددًا.
 
+التحضير القابل للإرسال يحتاج درسًا من المنهج، وهدفًا، ومحتوى رقميًا، وتكليفًا
+واحدًا على الأقل. التوليد يملأ الحقول الفارغة فقط؛ لا يصحح نصًا موجودًا تلقائيًا.
+يظل قرار قبول الإرسال والتحقق من الصلاحيات لدى الخادم.
+
+## الأخطاء والإرشادات
+
+| الحالة | التصرف |
+| --- | --- |
+| لا توجد حصص / معلمون | تحقق من الأسبوع واطلب من الإدارة مراجعة الجدول. |
+| الحصة بدون مادة أو صف | صحح عرض المادة والصف في الجدول لدى الإدارة. |
+| لا توجد دروس | الإدارة الأكاديمية ← المناهج والدروس ← استيراد المنهج للمادة والصف؛ أو احفظ مسودة فقط. |
+| تعذر تحميل المنهج | يظهر خطأ الطلب الحقيقي؛ استخدم «تحديث» بعد حل الاتصال أو الصلاحية. |
+| التوليد غير مفعّل | يراجع مسؤول الخادم إعدادات AI_ENABLED وAI_WEBHOOK_URL وخدمة التوليد. المسودات المحفوظة تبقى. |
+| نقص محتوى رقمي أو تكليف أو هدف | افتح التحضير من رابط الخطأ وأضف المطلوب، ثم أعد الإرسال دون توليد إذا اكتمل المحتوى. |
+| انتهت الجلسة / تغيّر الحساب | سجّل الدخول وحدّث الأسبوع. تتوقف الدفعة قبل الطلب التالي. |
+| 403 | اطلب مراجعة صلاحيات القراءة والإنشاء والتعديل والمنهج لدى مسؤول المدرسة. |
+| 409 | حدّث الأسبوع وراجع تغييرات التحضير قبل المحاولة. |
+| 429 | انتظر قبل المحاولة مجددًا؛ تتوقف الدفعة. |
+| مهلة / انقطاع / خطأ خادم أثناء الحفظ | قد يكون الطلب حُفظ بالفعل. تتوقف المعالجة عند نتيجة غير مؤكدة؛ حدّث الأسبوع وافتح التحضير للتحقق. لا تعيد الإضافة الطلب تلقائيًا. |
+| الإضافة لا تستجيب بعد تحديثها | أعد تحميل صفحة نسق. |
+
+## Execution and recovery
+
+- New preparations are created in sequential batches of at most 40. A later
+  batch failure does not erase earlier saves; the result reports confirmed counts.
+- Existing drafts are read again before changes. A changed lesson or submitted
+  status is reported instead of being overwritten using the old selection.
+- Bulk records reported as already existing are left alone until refreshed and
+  explicitly selected. This avoids modifying another tab's newly created work.
+- Week, teacher, selections and operation options are locked during a run.
+- **إيقاف بعد الطلب الحالي** stops before the next request. It does not roll back
+  completed requests or abort a save that may already have reached the server.
+- Closing the panel leaves work running. Keep the Nasaq tab open; closing or
+  reloading the tab ends its workflow. The extension warns on navigation while
+  busy, but does not persist/resume jobs after page/browser closure.
+- Results survive the automatic refresh and panel close/reopen, but are cleared
+  by a manual refresh, week/teacher change, new run, or page reload.
+- Concurrent writes still need backend enforcement. The draft re-read reduces
+  stale updates; it is not an atomic lock against edits from other clients.
+
+## API and session design
+
+`background.js` validates the actual message sender and reads the `_auth` cookie
+for that page. Credentials are returned only to the extension's isolated content
+script and held in memory, never written to extension storage or page scripts.
+Each API request checks the current session and API origin against the loaded week.
+
+Requests execute in the content script with the backend's existing frontend CORS
+support. This avoids the MV3 worker's 30-second fetch-response lifetime, which is
+shorter than the backend generation timeout of 90 seconds. Generation receives a
+120-second client timeout; ordinary requests receive 30 seconds. Redirects are
+rejected. If deploying different CORS settings, allow the frontend origin and the
+Authorization, Accept and Content-Type headers. Browser mixed-content restrictions
+still apply when selecting an HTTP backend from an HTTPS page.
+
+See Chrome's [service worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)
+and [cross-origin request rules](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests).
+
+| Request | Purpose |
+| --- | --- |
+| GET /preparation/weekly?weekOf=&teacherId= | Teacher summary or individual week |
+| GET /curriculum/units?subjectId=&gradeLevelId= | School curriculum units |
+| GET /curriculum/units/:id/lessons | Lessons grouped by unit |
+| POST /preparation/bulk | Create up to 40 individual lesson selections |
+| GET /preparation/:id | Recheck an existing draft |
+| PATCH /preparation/:id | Attach a selected lesson to a lessonless draft |
+| POST /preparation/:id/generate | Fill empty content fields |
+| POST /preparation/:id/submit | Validate and submit for review |
+
+## Verification
+
+From the frontend root:
+
+```powershell
+npm run test:extension
+npx eslint nasaq-extension --ext js,mjs --max-warnings 0
+npm run build
 ```
-حضّر أسبوعي
-   └── the week, with what is already filed          GET  /preparation/weekly
-   └── the school's own lessons for each subject     GET  /curriculum/units
-       and grade in it                               GET  /curriculum/units/:id/lessons
-   └── one lesson per period, one press              POST /preparation/bulk
-   └── and each one finished                         POST /preparation/:id/generate
-   └── and sent for review                           POST /preparation/:id/submit
-```
 
-**اكتب التمهيد والإغلاق والأهداف تلقائيًا** is on by default. After the
-periods are filed, the extension asks the server to write each one's warm-up,
-closure, vocabulary, thinking skills, objectives, strategies and aids — one
-request per preparation, in sequence, with the count moving as it goes.
+Tests cover batch boundaries, partial failures, duplicate starts, cancellation,
+existing-draft lesson saves, protected statuses, submit-only mode, stale curriculum
+responses, account changes, missing lessons, malformed responses and persistent
+row errors. DOM tests use a simulated DOM; visual layout, actual Chrome extension
+loading, real authentication/CORS, and live AI generation require a browser smoke test.
 
-It only does this for periods that got a lesson; the server refuses the rest,
-because content written from a subject name alone is filler. And it never
-overwrites anything a teacher has already written — only blanks are filled, so
-running it again is safe.
-
-**وأرسلها للمراجعة** then sends each finished preparation on. Nasaq accepts a
-submit only with a lesson, a digital content item, an assignment and an
-objective — generation supplies all four when the school has them. A school
-with an empty library has no content item to attach, so that submit is refused
-and the panel says why; the draft stays, complete but for that one thing.
-
-Requires `AI_WEBHOOK_URL` on the server (see
-`nasaq-backend/docs/SETUP-Lesson-Content.md`). Without it the periods are still
-filed; only the writing is skipped.
-
-Everything with no preparation yet is ticked for you — a teacher opens this to
-fill gaps, and making her tick twenty rows first is the work it exists to
-remove.
-
-**Owner and manager** see one row per teacher and pick whose week to prepare.
-A teacher always gets her own.
-
----
-
-## Why it is 400 lines and not 7,800
-
-The Madrasati extension this is modelled on spends almost all of its size on
-the cost of not owning the site: reading lesson ids out of the DOM, scraping a
-CSRF token from a fetched page, creating a silent Activity to satisfy a backend
-rule, an iframe fallback for when the headless path fails.
-
-None of that applies here. Nasaq has an API and the teacher is already signed
-in to it, so this asks the server what the week is and posts the answer back.
-
-**There is no DOM scraping in this extension, and there must not be.** The
-moment it reads the page instead of the API it starts breaking on redesigns,
-which is the entire failure mode it was built to avoid.
-
-### The session
-
-The frontend keeps its JWT in a cookie named `_auth`. The extension reads that
-cookie and uses it. It never asks for a password and never stores one, and when
-the teacher signs out of Nasaq it stops working too.
-
-### Why requests go through the service worker
-
-A content script's `fetch` is bound by the page's CORS, so a call from the
-Nasaq site to the API host would be refused. `background.js` has
-`host_permissions` and is not. It does nothing else.
-
----
-
-## What a row can say
-
-| | |
-|---|---|
-| a lesson dropdown | ready to prepare — options grouped by unit |
-| **محضّرة** | already filed this week; the checkbox is off |
-| **بلا منهج** | this subject and grade have no imported curriculum yet |
-| **بدون مادة أو صف** | the lecture has no subject offering, so the server would refuse it |
-
-The last two are shown rather than hidden. A slot that quietly disappears is a
-gap nobody sees until the week is over.
-
----
-
-## Before it is useful: import a curriculum
-
-A lesson dropdown can only offer what the school has imported. Until an owner
-or manager has been to **الإدارة الأكاديمية ← المناهج والدروس** and pressed
-**استيراد منهج جاهز** for a subject and grade, every row for that pair reads
-*لم يتم إعداد دروس هذه المادة بعد*.
-
-Preparing still works without it — the period is filed with no lesson attached
-— but the lesson, and the objectives the school wrote on it, are the reason to
-use this at all.
-
----
-
-## Limits worth knowing
-
-- **40 periods per press.** The server caps a bulk there.
-- **One preparation per period per week.** A second press reports those as
-  already existing rather than creating duplicates.
-- **A wrong lesson fails the whole press.** The server validates every item
-  before writing any of them, deliberately, so a mistake on the last row does
-  not leave the first twenty behind. The panel says nothing was created.
-- A picked lesson brings the objectives the school wrote on it. That is the
-  difference between this and typing a title.
+Browser smoke test: load the extension, open a teacher week, save one draft,
+attach a lesson, generate without submitting, review the content, then submit.
+Repeat with an owner/manager teacher selector and at a narrow viewport. Verify
+logout, offline recovery, a missing curriculum, cancellation and a rejected submit.

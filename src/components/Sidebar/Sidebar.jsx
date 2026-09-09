@@ -30,7 +30,6 @@ import {
   LocalOffer,
   Logout,
   ManageAccountsRounded,
-  PersonAddAlt1Rounded,
   MoneyOff,
   ReceiptLong,
   Route,
@@ -498,9 +497,8 @@ const Sidebar = ({ active, setActive }) => {
 
     if (isTeacher) {
       /*
-       * المعلم يستخدم نفس هيكل لوحة الإدارة، لكن كل رابط
-       * إداري يظهر فقط عند وجود الصلاحية الفعلية في الجلسة.
-       * مهام المعلم الشخصية تظل متاحة دائمًا عبر /teacher/*.
+       * روابط المعلم تطابق مسارات بوابته. الصلاحيات المخزنة لا تتجاوز
+       * حارس أدوار الإدارة، لذلك لا نعرض روابط إدارية تؤدي إلى 403.
        */
       return [
         {
@@ -525,65 +523,6 @@ const Sidebar = ({ active, setActive }) => {
               iconType: "mui",
               to: "/teacher/classes",
               show: true,
-            },
-          ],
-        },
-        {
-          title: "الأفراد",
-          items: [
-            {
-              name: "إدارة الطلاب",
-              icon: userIcon,
-              // صفحة الطلاب الخاصة بالمعلم تعرض طلاب فصوله فقط.
-              to: "/teacher/students",
-              show: studentsPermissions.read,
-            },
-            {
-              name: "إضافة طالب",
-              Icon: PersonAddAlt1Rounded,
-              iconType: "mui",
-              to: "/users/students/add",
-              show: studentsPermissions.add,
-            },
-            {
-              name: "إدارة المعلمين",
-              icon: teacherIcon,
-              to: "/users/teachers",
-              show: teachersPermissions.read,
-            },
-          ],
-        },
-        {
-          title: "الإدارة الأكاديمية",
-          items: [
-            {
-              name: "إدارة المواد",
-              icon: subjectIcon,
-              to: "/school/subjects",
-              show: subjectsPermissions.read,
-            },
-            {
-              name: "عروض المواد",
-              Icon: AutoStoriesRounded,
-              iconType: "mui",
-              to: "/subject-offerings",
-              show:
-                subjectOfferingsPermissions.read ||
-                subjectsPermissions.read,
-            },
-            {
-              name: "إدارة الفصول",
-              icon: userIcon,
-              // نستخدم صفحة فصول المعلم بدل صفحة الإدارة العامة.
-              to: "/teacher/classes",
-              show: classesPermissions.read,
-            },
-            {
-              name: "إدارة الحصص",
-              icon: lectureIcon,
-              // مسار مستقل للحصص داخل بوابة المعلم.
-              to: "/teacher/lectures",
-              show: lecturesPermissions.read,
             },
           ],
         },
@@ -615,12 +554,6 @@ const Sidebar = ({ active, setActive }) => {
               iconType: "mui",
               to: "/teacher/grading/projects",
               show: true,
-            },
-            {
-              name: "توزيع الدرجات",
-              icon: gradesCriteriaIcon,
-              to: "/school/gradesCriteria",
-              show: gradesCriteriaPermissions.read,
             },
           ],
         },
@@ -663,25 +596,6 @@ const Sidebar = ({ active, setActive }) => {
           ],
         },
         {
-          title: "الماليات والحسابات",
-          items: [
-            {
-              name: "السجلات المالية",
-              Icon: FolderCopyOutlined,
-              iconType: "mui",
-              to: "/financial/all-records",
-              show: financialPermissions.read,
-            },
-            {
-              name: "مصاريف الطلاب",
-              Icon: AccountBalanceWallet,
-              iconType: "mui",
-              to: "/financial/records",
-              show: financialPermissions.read,
-            },
-          ],
-        },
-        {
           title: "الحساب",
           items: [
             {
@@ -703,7 +617,6 @@ const Sidebar = ({ active, setActive }) => {
     canManageAcademicYears,
     canManageSchoolSettings,
     studentsPermissions.read,
-    studentsPermissions.add,
     teachersPermissions.read,
     subjectsPermissions.read,
     subjectOfferingsPermissions.read,
