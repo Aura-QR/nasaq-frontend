@@ -940,7 +940,7 @@ const TeacherSchedule = () => {
 
     if (preparationId) {
       navigate(
-        `/teacher/preparations?preparationId=${preparationId}`,
+        `/teacher/preparations/${preparationId}`,
         { replace: true }
       );
       return;
@@ -1297,11 +1297,8 @@ const TeacherSchedule = () => {
       );
 
     if (preparationId) {
-      /*
-       * لا نفتح School/Preparation/Profile القديمة.
-       */
       navigate(
-        `/teacher/preparations?preparationId=${preparationId}`
+        `/teacher/preparations/${preparationId}`
       );
       return;
     }
