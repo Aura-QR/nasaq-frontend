@@ -1,7 +1,6 @@
 import {
   AddRounded,
   ArrowBackRounded,
-  CalendarMonthRounded,
   CheckCircleRounded,
   DeleteOutlineRounded,
   EditRounded,
@@ -50,8 +49,11 @@ import nasaqLogo from "@/images/wadq-logo.png";
 import {
   deletePreparation,
   fetchPreparations,
-  fetchSinglePreparation,
 } from "@/APIs/school/preparation";
+import {
+  getPreparationResourceCount,
+  isPreparationComplete,
+} from "@/shared/preparation/completion";
 import {
   fetchLectures,
   fetchSingleLecture,
@@ -517,49 +519,6 @@ const getPreparationFiles = (preparation) => {
   return candidates.find(Array.isArray) || [];
 };
 
-const getPreparationFileLabel = (
-  file,
-  index = 0
-) => {
-  if (
-    typeof file ===
-    "string"
-  ) {
-    const parts =
-      file.split("/");
-
-    return (
-      decodeURIComponent(
-        parts[
-          parts.length - 1
-        ] ||
-          ""
-      ) ||
-      `ملف ${index + 1}`
-    );
-  }
-
-  const path =
-    file?.path ||
-    file?.url ||
-    file?.filePath ||
-    "";
-
-  const pathName =
-    typeof path ===
-    "string"
-      ? path.split("/").pop()
-      : "";
-
-  return (
-    file?.originalName ||
-    file?.name ||
-    file?.filename ||
-    pathName ||
-    `ملف ${index + 1}`
-  );
-};
-
 const getPreparationDate = (preparation) => {
   const raw = preparation?.updatedAt || preparation?.createdAt;
   if (!raw) return "";
@@ -575,37 +534,6 @@ const getPreparationDate = (preparation) => {
 const PREPARATION_STATUS_META = {
   draft: { label: "مسودة", color: COLORS.gold, background: COLORS.goldSoft },
   completed: { label: "تم التحضير", color: COLORS.green, background: COLORS.greenSoft },
-};
-
-const hasNonBlankValue = (value) =>
-  Array.isArray(value) &&
-  value.some((item) => String(item?.text || item?.title || item?.name || item || "").trim());
-
-const getPreparationAssignmentCount = (preparation) => {
-  if (Array.isArray(preparation?.resources)) {
-    return preparation.resources.length;
-  }
-
-  const directCount = Number(preparation?.resourcesCount || 0);
-  if (directCount > 0) return directCount;
-
-  return ["enrichments", "homeworks", "exams", "activities", "assignments"].reduce(
-    (total, key) => total + (Array.isArray(preparation?.[key]) ? preparation[key].length : 0),
-    0
-  );
-};
-
-const isPreparationComplete = (preparation) => {
-  if (!preparation) return false;
-  if (preparation?.isComplete === true || preparation?.completed === true) return true;
-
-  const hasLesson = Boolean(normalizeId(preparation?.lessonId || preparation?.lesson));
-  const hasObjectives = hasNonBlankValue(preparation?.objectives);
-  const hasDigitalContent =
-    Array.isArray(preparation?.digitalContentIds) && preparation.digitalContentIds.length > 0;
-  const hasAssignment = getPreparationAssignmentCount(preparation) > 0;
-
-  return hasLesson && hasObjectives && hasDigitalContent && hasAssignment;
 };
 
 const getPreparationStatus = (preparation) => {
@@ -650,37 +578,7 @@ const getPreparationLessonTitle = (preparation) =>
       ""
   ).trim();
 
-const getAssignmentCount = getPreparationAssignmentCount;
-
-const hydratePreparationDetails = async (preparations = []) => {
-  const list = Array.isArray(preparations) ? preparations : [];
-  const byId = new Map();
-
-  list.forEach((preparation) => {
-    const id = getPreparationId(preparation);
-    if (id && !byId.has(id)) byId.set(id, preparation);
-  });
-
-  const detailEntries = await Promise.all(
-    Array.from(byId.entries()).map(async ([id, summary]) => {
-      try {
-        const response = await fetchSinglePreparation(id);
-        if (isFailedResponse(response)) return [id, summary];
-
-        const detail = extractEntity(response);
-        return detail ? [id, { ...summary, ...detail }] : [id, summary];
-      } catch {
-        return [id, summary];
-      }
-    })
-  );
-
-  const hydratedById = new Map(detailEntries);
-  return list.map((preparation) => {
-    const id = getPreparationId(preparation);
-    return id ? hydratedById.get(id) || preparation : preparation;
-  });
-};
+const getAssignmentCount = getPreparationResourceCount;
 
 const loadTeacherPreparations = async (teacherId, lectures) => {
   const mainResponse = await fetchPreparations({
@@ -694,7 +592,7 @@ const loadTeacherPreparations = async (teacherId, lectures) => {
     : extractCollection(mainResponse, ["preparations"]);
 
   if (list.length > 0 || lectures.length === 0) {
-    return hydratePreparationDetails(list);
+    return list;
   }
 
   const results = await Promise.allSettled(
@@ -727,7 +625,7 @@ const loadTeacherPreparations = async (teacherId, lectures) => {
     result.status === "fulfilled" ? result.value : []
   );
 
-  return hydratePreparationDetails(fallbackList);
+  return fallbackList;
 };
 
 const StatCard = ({ title, value, helper, icon, tone = "blue" }) => {

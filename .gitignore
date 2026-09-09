@@ -33,3 +33,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Source archives — 4MB of the repo, committed by mistake.
+src.zip
+nasaq-extension.zip
+*.zip

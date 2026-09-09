@@ -6,7 +6,6 @@ import {
   CheckCircleRounded,
   CloseRounded,
   CloudUploadRounded,
-  ContentCopyRounded,
   DeleteOutlineRounded,
   EditNoteRounded,
   LinkRounded,
@@ -80,7 +79,6 @@ import {
 import { fetchSingleSubjectOffering } from "@/APIs/school/subjectOfferings";
 import {
   fetchCurriculumLessons,
-  fetchCurriculumUnits,
 } from "@/APIs/school/curriculum";
 import {
   addLibraryResource,
@@ -249,54 +247,7 @@ const extractEntity = (value) => {
   return payload.preparation || payload.lecture || payload.item || payload;
 };
 
-const extractLectureDetail = (response) => {
-  const candidates = [
-    response?.data?.data,
-    response?.data,
-    response?.lecture,
-    response,
-  ];
 
-  for (const candidate of candidates) {
-    if (
-      candidate &&
-      !Array.isArray(candidate) &&
-      typeof candidate === "object" &&
-      (candidate?._id || candidate?.id) &&
-      (candidate?.subjectOfferingId || candidate?.subjectOffering)
-    ) {
-      return candidate;
-    }
-  }
-
-  const fallback = extractEntity(response);
-  return fallback && typeof fallback === "object" ? fallback : {};
-};
-
-const extractSubjectOfferingDetail = (response) => {
-  const candidates = [
-    response?.data?.data,
-    response?.data,
-    response?.subjectOffering,
-    response?.item,
-    response,
-  ];
-
-  for (const candidate of candidates) {
-    if (
-      candidate &&
-      !Array.isArray(candidate) &&
-      typeof candidate === "object" &&
-      (candidate?._id || candidate?.id) &&
-      (candidate?.subjectId || candidate?.subject)
-    ) {
-      return candidate;
-    }
-  }
-
-  const fallback = extractEntity(response);
-  return fallback && typeof fallback === "object" ? fallback : {};
-};
 
 const getName = (value, fallback = "") => {
   if (value && typeof value === "object") {
@@ -379,41 +330,6 @@ const getLectureSubject = (lecture) => {
   };
 };
 
-const getLectureGrade = (lecture) => {
-  const offering = getLectureOffering(lecture);
-  const classroom =
-    (lecture?.classId && typeof lecture.classId === "object"
-      ? lecture.classId
-      : null) ||
-    (lecture?.class && typeof lecture.class === "object" ? lecture.class : null) ||
-    {};
-  const candidates = [
-    offering?.gradeLevelId,
-    offering?.gradeLevel,
-    classroom?.gradeLevelId,
-    classroom?.gradeLevel,
-    lecture?.gradeLevelId,
-    lecture?.gradeLevel,
-  ];
-  const entity =
-    candidates.find(
-      (item) => item && typeof item === "object" && !Array.isArray(item)
-    ) || {};
-
-  return {
-    id: candidates.map(normalizeId).find(Boolean) || "",
-    name:
-      getName(entity) ||
-      String(
-        offering?.gradeLevelName ||
-          offering?.gradeName ||
-          classroom?.gradeName ||
-          lecture?.gradeName ||
-          ""
-      ).trim() ||
-      "الصف الدراسي",
-  };
-};
 
 const resolveLectureCurriculumContext = async (lecture) => {
   if (!lecture || typeof lecture !== "object") {
@@ -503,21 +419,7 @@ const resolveLectureCurriculumContext = async (lecture) => {
   };
 };
 
-const hydrateLectureCurriculumContext = async (lecture) =>
-  (await resolveLectureCurriculumContext(lecture)).lecture;
 
-const getLectureCurriculumContext = (lecture) => {
-  const subject = getLectureSubject(lecture || {});
-  const grade = getLectureGrade(lecture || {});
-
-  return {
-    subjectId: subject.id,
-    subjectName: subject.name,
-    subjectOfferingId: subject.offeringId,
-    gradeLevelId: grade.id,
-    gradeName: grade.name,
-  };
-};
 
 const getLectureClassId = (lecture) =>
   normalizeId(

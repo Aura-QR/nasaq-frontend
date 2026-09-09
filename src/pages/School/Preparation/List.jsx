@@ -179,21 +179,6 @@ const getResponseList = (
   return [];
 };
 
-const getResponseId = (
-  response
-) => {
-  const payload =
-    getResponseData(response);
-
-  return (
-    payload?._id ||
-    payload?.id ||
-    payload?.preparation?._id ||
-    payload?.preparation?.id ||
-    ""
-  );
-};
-
 const getErrorMessage = (
   response,
   fallback
@@ -964,107 +949,6 @@ const fetchFilterList = async (
   }
 };
 
-const validatePdf = (
-  file
-) => {
-  if (!file) {
-    return {
-      valid: false,
-      message:
-        "يرجى اختيار ملف التحضير",
-    };
-  }
-
-  const isPdf =
-    file.type ===
-      "application/pdf" ||
-    file.name
-      ?.toLowerCase()
-      .endsWith(".pdf");
-
-  if (!isPdf) {
-    return {
-      valid: false,
-      message:
-        "نوع الملف غير مدعوم. الرجاء رفع ملف PDF فقط.",
-    };
-  }
-
-  if (
-    file.size >
-    20 * 1024 * 1024
-  ) {
-    return {
-      valid: false,
-      message:
-        "حجم الملف يجب ألا يتجاوز 20 ميجابايت",
-    };
-  }
-
-  return {
-    valid: true,
-  };
-};
-
-const repairArabicEncoding = (
-  value
-) => {
-  const text = String(
-    value || ""
-  );
-
-  if (
-    !/[ÃÂØÙ]/.test(text)
-  ) {
-    return text;
-  }
-
-  try {
-    const bytes =
-      Uint8Array.from(
-        text,
-        (character) =>
-          character.charCodeAt(0) & 255
-      );
-
-    const decoded =
-      new TextDecoder(
-        "utf-8",
-        { fatal: true }
-      ).decode(bytes);
-
-    return decoded || text;
-  } catch {
-    return text;
-  }
-};
-
-const getFileName = (
-  file,
-  index = 0
-) =>
-  repairArabicEncoding(
-    file?.originalName ||
-      file?.filename ||
-      file?.name ||
-      `ملف التحضير ${index + 1}`
-  );
-
-const getFileSize = (
-  file
-) => {
-  if (!file?.size) {
-    return "";
-  }
-
-  return `${(
-    file.size /
-    1024 /
-    1024
-  ).toFixed(2)} MB`;
-};
-
-
 const PREPARATION_STATUS_META = {
   draft: { label: "مسودة", color: "warning" },
   pending: { label: "بانتظار المراجعة", color: "info" },
@@ -1195,11 +1079,6 @@ const List = () => {
   const currentUser =
     getAuthUserData(
       authUser
-    );
-
-  const currentUserId =
-    getEntityId(
-      currentUser
     );
 
   const currentRole =

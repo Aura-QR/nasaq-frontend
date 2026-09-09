@@ -60,8 +60,8 @@ import { fetchMyDay } from "@/APIs/school/notifications";
 import {
   addPreparation,
   fetchPreparations,
-  fetchSinglePreparation,
 } from "@/APIs/school/preparation";
+import { isPreparationComplete } from "@/shared/preparation/completion";
 
 import nasaqLogo from "../../images/wadq-logo.png";
 import NotificationBell from "@/components/Notifications/NotificationBell";
@@ -494,40 +494,6 @@ const PREPARATION_STATE = {
   },
 };
 
-const hasNonBlankValue = (value) =>
-  Array.isArray(value) &&
-  value.some((item) => String(item?.text || item?.title || item?.name || item || "").trim());
-
-const getPreparationResourceCount = (preparation) => {
-  if (Array.isArray(preparation?.resources)) return preparation.resources.length;
-
-  const directCount = Number(preparation?.resourcesCount || 0);
-  if (directCount > 0) return directCount;
-
-  return ["enrichments", "homeworks", "exams", "activities", "assignments"]
-    .reduce(
-      (total, key) =>
-        total + (Array.isArray(preparation?.[key]) ? preparation[key].length : 0),
-      0
-    );
-};
-
-const isPreparationComplete = (preparation) => {
-  if (!getPreparationId(preparation)) return false;
-
-  if (preparation?.isComplete === true || preparation?.completed === true) {
-    return true;
-  }
-
-  const hasLesson = Boolean(normalizeId(preparation?.lessonId || preparation?.lesson));
-  const hasObjectives = hasNonBlankValue(preparation?.objectives);
-  const hasDigitalContent =
-    Array.isArray(preparation?.digitalContentIds) && preparation.digitalContentIds.length > 0;
-  const hasAssignment = getPreparationResourceCount(preparation) > 0;
-
-  return hasLesson && hasObjectives && hasDigitalContent && hasAssignment;
-};
-
 const getPreparationState = (preparation) => {
   if (!getPreparationId(preparation)) return PREPARATION_STATE.none;
   return isPreparationComplete(preparation)
@@ -572,42 +538,6 @@ const formatWeekRange = (weekStart) => {
   return `${formatter.format(weekStart)} — ${formatter.format(weekEnd)}`;
 };
 
-const hydratePreparationDetails = async (preparations = []) => {
-  const list = Array.isArray(preparations) ? preparations : [];
-  const byId = new Map();
-
-  list.forEach((preparation) => {
-    const id = getPreparationId(preparation);
-    if (id && !byId.has(id)) byId.set(id, preparation);
-  });
-
-  const detailEntries = await Promise.all(
-    Array.from(byId.entries()).map(async ([id, summary]) => {
-      try {
-        const response = await fetchSinglePreparation(id);
-        if (isFailedResponse(response)) return [id, summary];
-
-        const detail = unwrapResponse(response);
-        if (!detail || Array.isArray(detail) || typeof detail !== "object") {
-          return [id, summary];
-        }
-
-        // List rows are intentionally compact and can omit resources/resourcesCount.
-        // Merge the detail model so completion is calculated from the real saved data.
-        return [id, { ...summary, ...detail }];
-      } catch {
-        return [id, summary];
-      }
-    })
-  );
-
-  const hydratedById = new Map(detailEntries);
-  return list.map((preparation) => {
-    const id = getPreparationId(preparation);
-    return id ? hydratedById.get(id) || preparation : preparation;
-  });
-};
-
 const loadPreparationsForTeacher = async (
   teacherId,
   weekOf
@@ -618,11 +548,9 @@ const loadPreparationsForTeacher = async (
     limit: 500,
   });
 
-  const list = isFailedResponse(response)
+  return isFailedResponse(response)
     ? []
     : extractCollection(response, ["preparations"]);
-
-  return hydratePreparationDetails(list);
 };
 
 const StatCard = ({ icon, title, value, helper, tone = "blue" }) => {
@@ -2998,7 +2926,6 @@ const TeacherSchedule = () => {
                             ) : null}
 
                             {lecture ? (() => {
-                              const lectureId = getLectureId(lecture);
                               const prepState = getPreparationState(
                                 lecture.schedulePreparation
                               );
