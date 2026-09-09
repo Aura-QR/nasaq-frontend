@@ -29,7 +29,6 @@ import {
   CloudUploadRounded,
   EventAvailableRounded,
   GroupsRounded,
-  HowToRegRounded,
   MenuBookRounded,
   RefreshRounded,
   SaveRounded,
@@ -466,15 +465,9 @@ const getPreparationId = (preparation) =>
   normalizeId(preparation);
 
 /**
- * حالة تحضير الحصة — ثلاثة أوضاع، لا اثنان.
- *
- * كان السؤال «هل يوجد صف تحضير؟» فتظهر المسودة خضراء ومكتوباً عليها «تم
- * التحضير»، بينما تحسبها /preparation/weekly ناقصة لأنها لم تُرسل. فتقرأ
- * المعلمة في الشاشة نفسها «٥ حصص محضّرة» و«١٧ بدون تحضير» — والرقمان صحيحان،
- * والسؤال هو الخطأ.
- *
- * والمسودة ليست تحضيراً منتهياً: نسق ترفض إرسالها حتى يوجد درس ومحتوى رقمي
- * وتكليف وهدف. تركها خضراء يخبر المعلمة أنها انتهت بينما لم يصل المدير شيء.
+ * حالة التحضير في بوابة المعلم تعتمد على اكتمال خطوات التحضير نفسها،
+ * وليست على قرار المراجعة. المطلوب اكتماله هو نفس شروط النموذج:
+ * درس + هدف واحد على الأقل + محتوى رقمي + تكليف واحد على الأقل.
  */
 const PREPARATION_STATE = {
   none: {
@@ -491,13 +484,6 @@ const PREPARATION_STATE = {
     text: "#4d637a",
     tint: "rgba(107, 127, 149, .05)",
   },
-  revision: {
-    key: "revision",
-    label: "تحتاج تعديل",
-    dot: "#c0563f",
-    text: "#9a3f2c",
-    tint: "rgba(192, 86, 63, .05)",
-  },
   sent: {
     key: "sent",
     label: "تم التحضير",
@@ -507,19 +493,46 @@ const PREPARATION_STATE = {
   },
 };
 
-const getPreparationState = (preparation) => {
-  if (!getPreparationId(preparation)) return PREPARATION_STATE.none;
+const hasNonBlankValue = (value) =>
+  Array.isArray(value) &&
+  value.some((item) => String(item?.text || item?.title || item?.name || item || "").trim());
 
-  const status = String(preparation?.reviewStatus || "").trim();
-  if (status === "needs_revision") return PREPARATION_STATE.revision;
-  // المسودة، وأي حالة غير معروفة قادمة من صف قديم: لم تُرسل بعد.
-  if (status === "draft" || !status) return PREPARATION_STATE.draft;
-  return PREPARATION_STATE.sent;
+const getPreparationResourceCount = (preparation) => {
+  if (Array.isArray(preparation?.resources)) return preparation.resources.length;
+
+  const directCount = Number(preparation?.resourcesCount || 0);
+  if (directCount > 0) return directCount;
+
+  return ["enrichments", "homeworks", "exams", "activities", "assignments"]
+    .reduce(
+      (total, key) =>
+        total + (Array.isArray(preparation?.[key]) ? preparation[key].length : 0),
+      0
+    );
 };
 
-/** «محضّرة» بمعنى وصلت للمراجعة — وهو ما يعدّه الخادم. */
-const isPreparationSent = (preparation) =>
-  getPreparationState(preparation).key === "sent";
+const isPreparationComplete = (preparation) => {
+  if (!getPreparationId(preparation)) return false;
+
+  if (preparation?.isComplete === true || preparation?.completed === true) {
+    return true;
+  }
+
+  const hasLesson = Boolean(normalizeId(preparation?.lessonId || preparation?.lesson));
+  const hasObjectives = hasNonBlankValue(preparation?.objectives);
+  const hasDigitalContent =
+    Array.isArray(preparation?.digitalContentIds) && preparation.digitalContentIds.length > 0;
+  const hasAssignment = getPreparationResourceCount(preparation) > 0;
+
+  return hasLesson && hasObjectives && hasDigitalContent && hasAssignment;
+};
+
+const getPreparationState = (preparation) => {
+  if (!getPreparationId(preparation)) return PREPARATION_STATE.none;
+  return isPreparationComplete(preparation)
+    ? PREPARATION_STATE.sent
+    : PREPARATION_STATE.draft;
+};
 
 const formatLocalDate = (date = new Date()) =>
   [
@@ -938,15 +951,19 @@ const TeacherSchedule = () => {
           .schedulePreparation
       );
 
+    const returnTo = `/teacher/schedule?mode=prepare&weekOf=${formatLocalDate(weekStart)}`;
+
     if (preparationId) {
+      const target = isPreparationComplete(requestedLecture.schedulePreparation)
+        ? `/teacher/preparations/${preparationId}`
+        : `/teacher/preparations/edit/${preparationId}`;
+
       navigate(
-        `/teacher/preparations/${preparationId}`,
+        `${target}?returnTo=${encodeURIComponent(returnTo)}`,
         { replace: true }
       );
       return;
     }
-
-    const returnTo = `/teacher/schedule?mode=prepare&weekOf=${formatLocalDate(weekStart)}`;
 
     navigate(
       `/teacher/preparations/add?lectureId=${requestedPreparationLectureId}&returnTo=${encodeURIComponent(
@@ -1017,7 +1034,7 @@ const TeacherSchedule = () => {
         return false;
       }
 
-      // «تم التحضير» في الفلتر تعني ما تعنيه في الخلية: أُرسل للمراجعة.
+      // «تم التحضير» تعني أن خطوات النموذج المطلوبة مكتملة.
       if (
         preparationFilter === "prepared" &&
         prepState.key !== "sent"
@@ -1027,7 +1044,7 @@ const TeacherSchedule = () => {
 
       if (
         preparationFilter === "draft" &&
-        !["draft", "revision"].includes(prepState.key)
+        prepState.key !== "draft"
       ) {
         return false;
       }
@@ -1243,48 +1260,6 @@ const TeacherSchedule = () => {
     authRoot,
   ]);
 
-  const openAttendance = (lecture, day) => {
-    const classId =
-      lecture.scheduleClassId;
-
-    const lectureId =
-      getLectureId(
-        lecture
-      );
-
-    const dayDate =
-      getDateForDay(
-        weekStart,
-        day.jsDay
-      );
-
-    const params =
-      new URLSearchParams({
-        date:
-          formatLocalDate(
-            dayDate
-          ),
-      });
-
-    if (classId) {
-      params.set(
-        "classId",
-        classId
-      );
-    }
-
-    if (lectureId) {
-      params.set(
-        "lectureId",
-        lectureId
-      );
-    }
-
-    navigate(
-      `/teacher/attendance?${params.toString()}`
-    );
-  };
-
   const openPreparation = (lecture) => {
     const lectureId =
       getLectureId(
@@ -1296,9 +1271,17 @@ const TeacherSchedule = () => {
         lecture.schedulePreparation
       );
 
+    const returnTo = isPreparationMode
+      ? `/teacher/schedule?mode=prepare&weekOf=${formatLocalDate(weekStart)}`
+      : `/teacher/schedule?weekOf=${formatLocalDate(weekStart)}`;
+
     if (preparationId) {
+      const target = isPreparationComplete(lecture.schedulePreparation)
+        ? `/teacher/preparations/${preparationId}`
+        : `/teacher/preparations/edit/${preparationId}`;
+
       navigate(
-        `/teacher/preparations/${preparationId}`
+        `${target}?returnTo=${encodeURIComponent(returnTo)}`
       );
       return;
     }
@@ -1309,15 +1292,6 @@ const TeacherSchedule = () => {
       );
       return;
     }
-
-    /*
-     * التحضير الجديد يتم من خلال StructuredPreparationForm.
-     * لا نفتح Dialog رفع PDF القديم؛ ننتقل مباشرة إلى نموذج التحضير
-     * مع تمرير الحصة المختارة والصفحة التي نعود إليها بعد الحفظ.
-     */
-    const returnTo = isPreparationMode
-      ? `/teacher/schedule?mode=prepare&weekOf=${formatLocalDate(weekStart)}`
-      : `/teacher/schedule?weekOf=${formatLocalDate(weekStart)}`;
 
     navigate(
       `/teacher/preparations/add?lectureId=${lectureId}&returnTo=${encodeURIComponent(
@@ -3112,40 +3086,6 @@ const TeacherSchedule = () => {
                                           ? "عرض التحضير"
                                           : "أكمل التحضير"}
                                     </Button>
-
-                                    <Tooltip
-                                      title={
-                                        isExcused
-                                          ? "الحصة معفاة باستئذان معتمد"
-                                          : "تسجيل الحضور"
-                                      }
-                                    >
-                                      <span>
-                                        <IconButton
-                                          size="small"
-                                          disabled={isExcused}
-                                          onClick={() =>
-                                            openAttendance(lecture, day)
-                                          }
-                                          sx={{
-                                            width: 24,
-                                            height: 24,
-                                            flex: "0 0 auto",
-                                            color: "#356786",
-                                            bgcolor: "#fff",
-                                            border: "1px solid #dce4ea",
-                                            borderRadius: "50%",
-                                            "&:hover": {
-                                              bgcolor: "#f4f8fb",
-                                            },
-                                          }}
-                                        >
-                                          <HowToRegRounded
-                                            sx={{ fontSize: 14 }}
-                                          />
-                                        </IconButton>
-                                      </span>
-                                    </Tooltip>
                                   </Stack>
                                 </Box>
                               );

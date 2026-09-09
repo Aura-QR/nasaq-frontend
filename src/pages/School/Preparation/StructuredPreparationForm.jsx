@@ -64,6 +64,7 @@ import {
   addPreparation,
   addPreparationFiles,
   addPreparationResource,
+  deletePreparation,
   deletePreparationResource,
   editPreparation,
   fetchPreparationReferenceLists,
@@ -682,6 +683,14 @@ const assignmentCount = (form) =>
     (total, group) => total + (form[group.key]?.length || 0),
     0
   );
+
+const isStructuredPreparationComplete = (form) =>
+  Boolean(normalizeId(form?.lessonId)) &&
+  Array.isArray(form?.objectives) &&
+  form.objectives.some((item) => String(item || "").trim()) &&
+  Array.isArray(form?.digitalContentIds) &&
+  form.digitalContentIds.length > 0 &&
+  assignmentCount(form) > 0;
 
 const isOtherChoice = (item) => {
   const value = String(item?.value || item?.id || item?.name || item?.label || "")
@@ -1336,6 +1345,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const [reviewDialog, setReviewDialog] = useState(false);
   const [reviewDraft, setReviewDraft] = useState("");
   const [reviewing, setReviewing] = useState(false);
+  const [deletingPreparation, setDeletingPreparation] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [step, setStep] = useState(1);
   const [lectures, setLectures] = useState([]);
@@ -1404,14 +1414,20 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   );
   const currentSnapshot = useMemo(() => snapshot(form), [form]);
   const dirty = currentSnapshot !== savedSnapshotRef.current || Boolean(attachment);
+  const teacherFormComplete = useMemo(
+    () => isStructuredPreparationComplete(form),
+    [form]
+  );
+  const teacherPreparationComplete = teacherFormComplete && !dirty;
   const readOnly =
     mode === "view" ||
-    preparationStatus === "pending";
+    (!teacherPortal && preparationStatus === "pending");
   const editable =
     mode !== "view" &&
-    preparationStatus !== "pending";
+    (teacherPortal || preparationStatus !== "pending");
   const canPickLecture = mode === "create" && !preselectedLectureId && !preparationId;
   const canReview =
+    !teacherPortal &&
     mode === "view" &&
     preparationStatus === "pending" &&
     canReviewPreparation;
@@ -1456,6 +1472,36 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
     },
     [dirty, navigate]
   );
+
+  const editCurrentPreparation = useCallback(() => {
+    const id = normalizeId(preparationIdRef.current || preparationId);
+    if (!id) return;
+    navigate(
+      `/teacher/preparations/edit/${id}?returnTo=${encodeURIComponent(safeReturnTo)}`
+    );
+  }, [navigate, preparationId, safeReturnTo]);
+
+  const deleteCurrentPreparation = useCallback(async () => {
+    const id = normalizeId(preparationIdRef.current || preparationId);
+    if (!id || deletingPreparation) return;
+
+    if (!window.confirm("هل تريد حذف هذا التحضير؟")) return;
+
+    setDeletingPreparation(true);
+    try {
+      const response = await deletePreparation(id);
+      if (!response?.status) {
+        toast.error(response?.message || "تعذر حذف التحضير");
+        return;
+      }
+
+      clearDraftCache(form.lecture);
+      toast.success("تم حذف التحضير");
+      navigate(safeReturnTo, { replace: true });
+    } finally {
+      setDeletingPreparation(false);
+    }
+  }, [deletingPreparation, form.lecture, navigate, preparationId, safeReturnTo]);
 
   useEffect(() => {
     const beforeUnload = (event) => {
@@ -2271,8 +2317,8 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   );
 
   // Step navigation must never persist data by itself.
-  // Drafts are saved only from the explicit "حفظ كمسودة" action, while
-  // "إرسال للمراجعة" persists the latest form data and then submits it.
+  // الحفظ النهائي في بوابة المعلم يعتمد على اكتمال خطوات النموذج،
+  // بينما مسار الإدارة يحتفظ بسلوك الإرسال للمراجعة القديم.
   const changeStep = (nextStep) => {
     if (nextStep === step) return;
 
@@ -2977,7 +3023,21 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
       }
 
       if (!id) {
-        toast.error("تعذر تحديد المسودة بعد الحفظ");
+        toast.error("تعذر تحديد التحضير بعد الحفظ");
+        return;
+      }
+
+      setPreparationId(id);
+      savedSnapshotRef.current = snapshot(form);
+      setValidationErrors([]);
+      clearDraftCache(form.lecture);
+
+      if (teacherPortal) {
+        toast.success("تم حفظ التحضير");
+        navigate(
+          `/teacher/preparations/${id}?returnTo=${encodeURIComponent(safeReturnTo)}`,
+          { replace: true }
+        );
         return;
       }
 
@@ -2986,11 +3046,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
         toast.error(response?.message || "تعذر إرسال التحضير للمراجعة");
         return;
       }
-      setPreparationId(id);
       setPreparationStatus("pending");
-      savedSnapshotRef.current = snapshot(form);
-      setValidationErrors([]);
-      clearDraftCache(form.lecture);
       toast.success("تم إرسال التحضير للمراجعة");
     } finally {
       setSubmitting(false);
@@ -3076,7 +3132,11 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
   const filteredLibraryItems = libraryItems.filter((item) =>
     getName(item).toLowerCase().includes(librarySearch.trim().toLowerCase())
   );
-  const statusMeta = STATUS_META[preparationStatus] || STATUS_META.draft;
+  const statusMeta = teacherPortal
+    ? teacherPreparationComplete
+      ? { label: "تم التحضير", tone: "success" }
+      : { label: "مسودة", tone: "warning" }
+    : STATUS_META[preparationStatus] || STATUS_META.draft;
 
   if (mode === "view") {
     return (
@@ -3100,6 +3160,11 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
             setReviewDraft("");
             setReviewDialog(true);
           }}
+          isComplete={teacherPortal ? teacherPreparationComplete : undefined}
+          showEditDelete={teacherPortal}
+          deleting={deletingPreparation}
+          onEdit={teacherPortal && preparationPermissions.edit ? editCurrentPreparation : undefined}
+          onDelete={teacherPortal && preparationPermissions.delete ? deleteCurrentPreparation : undefined}
           onBack={goBack}
         />
 
@@ -3172,19 +3237,21 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
                   {mode === "create" ? "تحضير درس جديد" : mode === "view" ? "عرض التحضير" : "تعديل التحضير"}
                 </Typography>
                 <Typography sx={{ color: "rgba(255,255,255,.72)", fontSize: 10.5 }}>
-                  تحضير منظم خطوة بخطوة — يتم حفظ المسودة تلقائيًا كل 30 ثانية
+                  {teacherPortal
+                    ? "أكمل الخطوات المطلوبة ليظهر التحضير كتم التحضير"
+                    : "تحضير منظم خطوة بخطوة — يتم حفظ المسودة تلقائيًا كل 30 ثانية"}
                 </Typography>
               </Box>
             </Stack>
             <Stack direction="row" alignItems="center" gap={0.7}>
               <Chip label={statusMeta.label} color={statusMeta.tone} size="small" sx={{ fontWeight: 900 }} />
               {saving && <Chip label="جاري الحفظ..." size="small" sx={{ bgcolor: "rgba(255,255,255,.12)", color: "#fff" }} />}
-              {!saving && lastSaveRef.current && <Chip label="تم حفظ المسودة" size="small" icon={<CheckCircleRounded />} sx={{ bgcolor: "rgba(255,255,255,.12)", color: "#fff", "& .MuiChip-icon": { color: "#fff" } }} />}
+              {!saving && lastSaveRef.current && <Chip label={teacherPortal && teacherPreparationComplete ? "تم حفظ التحضير" : "تم حفظ المسودة"} size="small" icon={<CheckCircleRounded />} sx={{ bgcolor: "rgba(255,255,255,.12)", color: "#fff", "& .MuiChip-icon": { color: "#fff" } }} />}
             </Stack>
           </Stack>
         </Paper>
 
-        {reviewNote && preparationStatus === "needs_revision" && (
+        {!teacherPortal && reviewNote && preparationStatus === "needs_revision" && (
           <Alert severity="warning" icon={<WarningAmberRounded />} sx={{ mb: 1.1, borderRadius: "14px", fontWeight: 800 }}>
             <strong>ملاحظة المراجع:</strong> {reviewNote}
           </Alert>
@@ -3742,12 +3809,18 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
                 {editable && step === 2 && (
                   <Button
                     variant="contained"
-                    startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <SendRounded />}
+                    startIcon={
+                      submitting
+                        ? <CircularProgress size={16} color="inherit" />
+                        : teacherPortal
+                          ? <CheckCircleRounded />
+                          : <SendRounded />
+                    }
                     disabled={saving || submitting || resourceSaving || !form.lecture}
                     onClick={handleSubmitForReview}
                     sx={{ fontWeight: 900, textTransform: "none", bgcolor: "var(--color-navy)" }}
                   >
-                    إرسال للمراجعة
+                    {teacherPortal ? "حفظ التحضير" : "إرسال للمراجعة"}
                   </Button>
                 )}
               </Stack>

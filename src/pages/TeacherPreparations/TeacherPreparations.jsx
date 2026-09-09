@@ -12,7 +12,6 @@ import {
   SearchRounded,
   VisibilityRounded,
   WarningAmberRounded,
-  NotificationsActiveRounded,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -574,20 +573,43 @@ const getPreparationDate = (preparation) => {
 
 const PREPARATION_STATUS_META = {
   draft: { label: "مسودة", color: COLORS.gold, background: COLORS.goldSoft },
-  pending: { label: "بانتظار المراجعة", color: COLORS.navy, background: COLORS.navySoft },
-  approved: { label: "معتمد", color: COLORS.green, background: COLORS.greenSoft },
-  needs_revision: { label: "يحتاج تعديل", color: COLORS.red, background: COLORS.redSoft },
+  completed: { label: "تم التحضير", color: COLORS.green, background: COLORS.greenSoft },
+};
+
+const hasNonBlankValue = (value) =>
+  Array.isArray(value) &&
+  value.some((item) => String(item?.text || item?.title || item?.name || item || "").trim());
+
+const getPreparationAssignmentCount = (preparation) => {
+  if (Array.isArray(preparation?.resources)) {
+    return preparation.resources.length;
+  }
+
+  const directCount = Number(preparation?.resourcesCount || 0);
+  if (directCount > 0) return directCount;
+
+  return ["enrichments", "homeworks", "exams", "activities", "assignments"].reduce(
+    (total, key) => total + (Array.isArray(preparation?.[key]) ? preparation[key].length : 0),
+    0
+  );
+};
+
+const isPreparationComplete = (preparation) => {
+  if (!preparation) return false;
+  if (preparation?.isComplete === true || preparation?.completed === true) return true;
+
+  const hasLesson = Boolean(normalizeId(preparation?.lessonId || preparation?.lesson));
+  const hasObjectives = hasNonBlankValue(preparation?.objectives);
+  const hasDigitalContent =
+    Array.isArray(preparation?.digitalContentIds) && preparation.digitalContentIds.length > 0;
+  const hasAssignment = getPreparationAssignmentCount(preparation) > 0;
+
+  return hasLesson && hasObjectives && hasDigitalContent && hasAssignment;
 };
 
 const getPreparationStatus = (preparation) => {
   if (!preparation) return "missing";
-
-  const value = String(preparation?.status || preparation?.reviewStatus || "draft")
-    .trim()
-    .toLowerCase();
-
-  if (value === "pending_review" || value === "submitted") return "pending";
-  return PREPARATION_STATUS_META[value] ? value : "draft";
+  return isPreparationComplete(preparation) ? "completed" : "draft";
 };
 
 const getReviewTime = (preparation) => {
@@ -611,9 +633,7 @@ const choosePreferredPreparation = (current, candidate) => {
   }
 
   const priority = {
-    needs_revision: 4,
-    approved: 3,
-    pending: 2,
+    completed: 2,
     draft: 1,
   };
   const currentPriority = priority[getPreparationStatus(current)] || 0;
@@ -629,26 +649,7 @@ const getPreparationLessonTitle = (preparation) =>
       ""
   ).trim();
 
-const getAssignmentCount = (preparation) => {
-  if (Array.isArray(preparation?.resources)) {
-    return preparation.resources.length;
-  }
-
-  if (Number(preparation?.resourcesCount || 0) > 0) {
-    return Number(preparation.resourcesCount);
-  }
-
-  return [
-    preparation?.enrichments,
-    preparation?.homeworks || preparation?.assignments,
-    preparation?.exams,
-    preparation?.activities,
-  ].reduce(
-    (total, value) =>
-      total + (Array.isArray(value) ? value.length : 0),
-    0
-  );
-};
+const getAssignmentCount = getPreparationAssignmentCount;
 
 const loadTeacherPreparations = async (teacherId, lectures) => {
   const mainResponse = await fetchPreparations({
@@ -871,7 +872,7 @@ const TeacherPreparations = () => {
   }, [preparations]);
 
   const rows = useMemo(() => {
-    const priority = { draft: 0, needs_revision: 1, pending: 2, approved: 3, missing: 4 };
+    const priority = { draft: 0, completed: 1, missing: 2 };
 
     return lectures
       .map((lecture) => ({
@@ -946,38 +947,22 @@ const TeacherPreparations = () => {
     });
   }, [rows, search, subjectFilter, classFilter, statusFilter]);
 
-  /*
-   * المسودة ليست تحضيراً مُسلَّماً — قائمة المدير لا تراها. لو عددناها ضمن
-   * "المحضّرة" تظهر الصفحة 100% بينما كل صف مكتوب عليه "مسودة".
-   */
-  const sentCount = rows.filter((row) =>
-    ["pending", "approved"].includes(getPreparationStatus(row.preparation))
+  const completedCount = rows.filter(
+    (row) => getPreparationStatus(row.preparation) === "completed"
   ).length;
-  const draftCount = rows.filter((row) =>
-    ["draft", "needs_revision"].includes(getPreparationStatus(row.preparation))
+  const draftCount = rows.filter(
+    (row) => getPreparationStatus(row.preparation) === "draft"
   ).length;
-  const notStartedCount = Math.max(rows.length - sentCount - draftCount, 0);
-  const pendingCount = Math.max(rows.length - sentCount, 0);
+  const notStartedCount = Math.max(rows.length - completedCount - draftCount, 0);
+  const pendingCount = Math.max(rows.length - completedCount, 0);
   const totalFiles = preparations.reduce(
     (sum, preparation) => sum + getPreparationFiles(preparation).length,
     0
   );
   const completionRate = rows.length
-    ? Math.round((sentCount / rows.length) * 100)
+    ? Math.round((completedCount / rows.length) * 100)
     : 0;
 
-  const reviewUpdates = useMemo(
-    () =>
-      preparations
-        .filter((preparation) =>
-          ["approved", "needs_revision"].includes(
-            getPreparationStatus(preparation)
-          )
-        )
-        .sort((a, b) => getReviewTime(b) - getReviewTime(a))
-        .slice(0, 3),
-    [preparations]
-  );
 
   const nextMissing = rows.find((row) => !row.preparation);
 
@@ -1156,7 +1141,7 @@ const TeacherPreparations = () => {
           <Grid item xs={12} sm={6} lg={3}>
             <StatCard
               title="حصص محضّرة"
-              value={sentCount}
+              value={completedCount}
               helper={`${completionRate}% من إجمالي الحصص`}
               icon={<CheckCircleRounded fontSize="small" />}
               tone="green"
@@ -1186,78 +1171,6 @@ const TeacherPreparations = () => {
           </Grid>
         </Grid>
 
-        {reviewUpdates.length > 0 && (
-          <Paper
-            elevation={0}
-            sx={{
-              ...TEACHER_UI.section,
-              mt: 1.1,
-              border: `1px solid ${COLORS.border}`,
-              bgcolor: "#fff",
-            }}
-          >
-            <Stack direction="row" alignItems="center" gap={0.8} mb={0.9}>
-              <Box
-                sx={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 1.8,
-                  display: "grid",
-                  placeItems: "center",
-                  color: COLORS.navy,
-                  bgcolor: COLORS.navySoft,
-                }}
-              >
-                <NotificationsActiveRounded fontSize="small" />
-              </Box>
-              <Box>
-                <Typography sx={{ color: COLORS.navyDark, fontSize: 14, fontWeight: 900 }}>
-                  مستجدات مراجعة التحضير
-                </Typography>
-                <Typography sx={{ color: COLORS.muted, fontSize: 9.5 }}>
-                  آخر قرارات الإدارة على تحاضيرك
-                </Typography>
-              </Box>
-            </Stack>
-
-            <Stack spacing={0.65}>
-              {reviewUpdates.map((preparation) => {
-                const id = getPreparationId(preparation);
-                const status = getPreparationStatus(preparation);
-                const needsRevision = status === "needs_revision";
-                const note = String(preparation?.reviewNote || "").trim();
-                const lesson = getPreparationLessonTitle(preparation) || "التحضير";
-                return (
-                  <Alert
-                    key={`${id}-${status}-${preparation?.reviewedAt || preparation?.updatedAt || ""}`}
-                    severity={needsRevision ? "warning" : "success"}
-                    action={
-                      <Button
-                        size="small"
-                        onClick={() => navigate(`/teacher/preparations/${id}`)}
-                        sx={{ fontWeight: 900, textTransform: "none" }}
-                      >
-                        فتح
-                      </Button>
-                    }
-                    sx={{ borderRadius: 2, alignItems: "center" }}
-                  >
-                    <Typography sx={{ fontSize: 11.5, fontWeight: 900 }}>
-                      {needsRevision
-                        ? `مطلوب تعديل: ${lesson}`
-                        : `تم اعتماد: ${lesson}`}
-                    </Typography>
-                    {needsRevision && note ? (
-                      <Typography sx={{ mt: 0.2, fontSize: 10.5 }}>
-                        ملاحظة المراجع: {note}
-                      </Typography>
-                    ) : null}
-                  </Alert>
-                );
-              })}
-            </Stack>
-          </Paper>
-        )}
 
         <Paper
           elevation={0}
@@ -1330,10 +1243,8 @@ const TeacherPreparations = () => {
                   sx={{ ...TEACHER_UI.field, fontSize: 11 }}
                 >
                   <MenuItem value="all">كل الحالات</MenuItem>
+                  <MenuItem value="completed">تم التحضير</MenuItem>
                   <MenuItem value="draft">مسودة</MenuItem>
-                  <MenuItem value="pending">بانتظار المراجعة</MenuItem>
-                  <MenuItem value="approved">معتمد</MenuItem>
-                  <MenuItem value="needs_revision">يحتاج تعديل</MenuItem>
                   <MenuItem value="missing">تحتاج تحضير</MenuItem>
                 </Select>
               </FormControl>
@@ -1420,7 +1331,7 @@ const TeacherPreparations = () => {
                   : { label: "تحتاج تحضير", color: COLORS.gold, background: COLORS.goldSoft };
                 const lessonTitle = getPreparationLessonTitle(preparation);
                 const assignmentsCount = getAssignmentCount(preparation);
-                const canEditPreparation = ["draft", "needs_revision"].includes(preparationStatus);
+                const canEditPreparation = prepared;
 
                 return (
                   <Grid item xs={12} md={6} key={row.lectureId}>
@@ -1430,26 +1341,10 @@ const TeacherPreparations = () => {
                         ...TEACHER_UI.listCard,
                         minHeight: 92,
                         border: `1px solid ${
-                          !prepared
-                            ? "#eeddb4"
-                            : preparationStatus === "needs_revision"
-                              ? "#f0c8c8"
-                              : preparationStatus === "approved"
-                                ? "#cce9dd"
-                                : preparationStatus === "pending"
-                                  ? "#cfdce8"
-                                  : "#eeddb4"
+                          preparationStatus === "completed" ? "#cce9dd" : "#eeddb4"
                         }`,
                         bgcolor:
-                          !prepared
-                            ? "#fffdf8"
-                            : preparationStatus === "needs_revision"
-                              ? "#fffafa"
-                              : preparationStatus === "approved"
-                                ? "#fbfffd"
-                                : preparationStatus === "pending"
-                                  ? "#fbfdff"
-                                  : "#fffdf8",
+                          preparationStatus === "completed" ? "#fbfffd" : "#fffdf8",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
@@ -1464,12 +1359,12 @@ const TeacherPreparations = () => {
                             borderRadius: 2,
                             display: "grid",
                             placeItems: "center",
-                            color: prepared ? COLORS.green : COLORS.gold,
-                            bgcolor: prepared ? COLORS.greenSoft : COLORS.goldSoft,
+                            color: preparationStatus === "completed" ? COLORS.green : COLORS.gold,
+                            bgcolor: preparationStatus === "completed" ? COLORS.greenSoft : COLORS.goldSoft,
                             flexShrink: 0,
                           }}
                         >
-                          {prepared ? <CheckCircleRounded /> : <WarningAmberRounded />}
+                          {preparationStatus === "completed" ? <CheckCircleRounded /> : <WarningAmberRounded />}
                         </Box>
                         <Box sx={{ minWidth: 0 }}>
                           <Stack direction="row" alignItems="center" gap={0.8} flexWrap="wrap">
@@ -1497,22 +1392,6 @@ const TeacherPreparations = () => {
                               الدرس: {lessonTitle}
                             </Typography>
                           ) : null}
-                          {prepared && preparationStatus === "needs_revision" && String(preparation?.reviewNote || "").trim() ? (
-                            <Typography
-                              sx={{
-                                color: COLORS.red,
-                                fontSize: 10.5,
-                                mt: 0.3,
-                                fontWeight: 800,
-                                display: "-webkit-box",
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: "vertical",
-                                overflow: "hidden",
-                              }}
-                            >
-                              ملاحظة المراجع: {preparation.reviewNote}
-                            </Typography>
-                          ) : null}
                           <Typography noWrap sx={{ color: "#a2acb6", fontSize: 11.5, mt: 0.25 }}>
                             {prepared
                               ? `${assignmentsCount ? `${assignmentsCount} تكليف • ` : ""}${filesCount ? `${filesCount} مرفق • ` : ""}${getPreparationDate(preparation) ? `آخر تحديث ${getPreparationDate(preparation)}` : "محفوظ"}`
@@ -1524,9 +1403,15 @@ const TeacherPreparations = () => {
                       <Stack direction="row" alignItems="center" gap={0.45} flexShrink={0}>
                         {prepared ? (
                           <>
-                            <Tooltip title="عرض التحضير">
+                            <Tooltip title={preparationStatus === "completed" ? "عرض التحضير" : "أكمل التحضير"}>
                               <IconButton
-                                onClick={() => navigate(`/teacher/preparations/${preparationId}`)}
+                                onClick={() =>
+                                  navigate(
+                                    preparationStatus === "completed"
+                                      ? `/teacher/preparations/${preparationId}`
+                                      : `/teacher/preparations/edit/${preparationId}`
+                                  )
+                                }
                                 sx={{ width: 32, height: 32, color: COLORS.navy, bgcolor: COLORS.navySoft }}
                               >
                                 <VisibilityRounded sx={{ fontSize: 17 }} />

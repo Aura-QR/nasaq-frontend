@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Grid,
   Paper,
   Stack,
@@ -13,6 +14,7 @@ import {
   ArrowBackRounded,
   AttachFileRounded,
   CheckCircleRounded,
+  DeleteOutlineRounded,
   EditNoteRounded,
   LinkRounded,
   PrintRounded,
@@ -22,6 +24,7 @@ import {
 
 const STATUS_META = {
   draft: { label: "مسودة", tone: "warning" },
+  completed: { label: "تم التحضير", tone: "success" },
   pending: { label: "بانتظار المراجعة", tone: "info" },
   approved: { label: "معتمد", tone: "success" },
   needs_revision: { label: "يحتاج تعديل", tone: "error" },
@@ -299,6 +302,11 @@ const PreparationDocumentView = ({
   reviewing,
   onApprove,
   onRequestRevision,
+  isComplete,
+  showEditDelete = false,
+  deleting = false,
+  onEdit,
+  onDelete,
   onBack,
 }) => {
   const record = objectOf(preparationRecord);
@@ -334,10 +342,17 @@ const PreparationDocumentView = ({
   const unitNodeFromLesson = objectOf(lessonNode?.unitId || lessonNode?.unit);
   const recordUnit = objectOf(record?.unitId || record?.unit);
 
+  const usesCompletionStatus = typeof isComplete === "boolean";
   const status = String(preparationStatus || record?.reviewStatus || record?.status || "draft")
     .trim()
     .toLowerCase();
-  const normalizedStatus = STATUS_META[status] ? status : "draft";
+  const normalizedStatus = usesCompletionStatus
+    ? isComplete
+      ? "completed"
+      : "draft"
+    : STATUS_META[status]
+      ? status
+      : "draft";
   const statusMeta = STATUS_META[normalizedStatus];
 
   const selectedUnit =
@@ -479,17 +494,41 @@ const PreparationDocumentView = ({
         >
           عودة
         </Button>
-        <Button
-          variant="contained"
-          startIcon={<PrintRounded />}
-          onClick={() => window.print()}
-          sx={{ fontWeight: 900, textTransform: "none", bgcolor: "var(--color-navy)" }}
-        >
-          طباعة / حفظ PDF
-        </Button>
+        <Stack direction={{ xs: "column", sm: "row" }} gap={0.7}>
+          {showEditDelete && onEdit ? (
+            <Button
+              variant="outlined"
+              startIcon={<EditNoteRounded />}
+              onClick={onEdit}
+              sx={{ fontWeight: 900, textTransform: "none" }}
+            >
+              تعديل
+            </Button>
+          ) : null}
+          {showEditDelete && onDelete ? (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={deleting ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineRounded />}
+              onClick={onDelete}
+              disabled={deleting}
+              sx={{ fontWeight: 900, textTransform: "none" }}
+            >
+              حذف
+            </Button>
+          ) : null}
+          <Button
+            variant="contained"
+            startIcon={<PrintRounded />}
+            onClick={() => window.print()}
+            sx={{ fontWeight: 900, textTransform: "none", bgcolor: "var(--color-navy)" }}
+          >
+            طباعة / حفظ PDF
+          </Button>
+        </Stack>
       </Stack>
 
-      {normalizedStatus === "approved" && (
+      {!usesCompletionStatus && normalizedStatus === "approved" && (
         <Alert
           className="preparation-print-hide"
           severity="success"
@@ -501,7 +540,7 @@ const PreparationDocumentView = ({
         </Alert>
       )}
 
-      {normalizedStatus === "needs_revision" && (
+      {!usesCompletionStatus && normalizedStatus === "needs_revision" && (
         <Alert
           className="preparation-print-hide"
           severity="warning"
@@ -513,7 +552,7 @@ const PreparationDocumentView = ({
         </Alert>
       )}
 
-      {canReview && (
+      {!usesCompletionStatus && canReview && (
         <Paper
           className="preparation-print-hide"
           elevation={0}
@@ -623,7 +662,7 @@ const PreparationDocumentView = ({
               size="small"
               sx={{
                 fontWeight: 900,
-                ...(normalizedStatus === "approved"
+                ...(["approved", "completed"].includes(normalizedStatus)
                   ? {
                       bgcolor: "#eaf7f1",
                       color: "#187347",
@@ -816,7 +855,7 @@ const PreparationDocumentView = ({
           )}
         </Section>
 
-        {(normalizedStatus === "approved" || normalizedStatus === "needs_revision" || reviewedBy || record?.reviewedAt) && (
+        {!usesCompletionStatus && (normalizedStatus === "approved" || normalizedStatus === "needs_revision" || reviewedBy || record?.reviewedAt) && (
           <Section title="نتيجة المراجعة">
             <Grid container spacing={1}>
               <Grid item xs={12} sm={4}><MetaItem label="الحالة" value={statusMeta.label} /></Grid>
