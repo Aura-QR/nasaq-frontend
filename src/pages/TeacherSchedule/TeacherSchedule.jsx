@@ -465,6 +465,62 @@ const getPreparationLectureId = (preparation) =>
 const getPreparationId = (preparation) =>
   normalizeId(preparation);
 
+/**
+ * حالة تحضير الحصة — ثلاثة أوضاع، لا اثنان.
+ *
+ * كان السؤال «هل يوجد صف تحضير؟» فتظهر المسودة خضراء ومكتوباً عليها «تم
+ * التحضير»، بينما تحسبها /preparation/weekly ناقصة لأنها لم تُرسل. فتقرأ
+ * المعلمة في الشاشة نفسها «٥ حصص محضّرة» و«١٧ بدون تحضير» — والرقمان صحيحان،
+ * والسؤال هو الخطأ.
+ *
+ * والمسودة ليست تحضيراً منتهياً: نسق ترفض إرسالها حتى يوجد درس ومحتوى رقمي
+ * وتكليف وهدف. تركها خضراء يخبر المعلمة أنها انتهت بينما لم يصل المدير شيء.
+ */
+const PREPARATION_STATE = {
+  none: {
+    key: "none",
+    label: "تحتاج تحضير",
+    dot: "#cf9221",
+    text: "#97630f",
+    tint: "rgba(207, 146, 33, .035)",
+  },
+  draft: {
+    key: "draft",
+    label: "مسودة",
+    dot: "#6b7f95",
+    text: "#4d637a",
+    tint: "rgba(107, 127, 149, .05)",
+  },
+  revision: {
+    key: "revision",
+    label: "تحتاج تعديل",
+    dot: "#c0563f",
+    text: "#9a3f2c",
+    tint: "rgba(192, 86, 63, .05)",
+  },
+  sent: {
+    key: "sent",
+    label: "تم التحضير",
+    dot: "#25906a",
+    text: "#197857",
+    tint: "rgba(38, 144, 106, .035)",
+  },
+};
+
+const getPreparationState = (preparation) => {
+  if (!getPreparationId(preparation)) return PREPARATION_STATE.none;
+
+  const status = String(preparation?.reviewStatus || "").trim();
+  if (status === "needs_revision") return PREPARATION_STATE.revision;
+  // المسودة، وأي حالة غير معروفة قادمة من صف قديم: لم تُرسل بعد.
+  if (status === "draft" || !status) return PREPARATION_STATE.draft;
+  return PREPARATION_STATE.sent;
+};
+
+/** «محضّرة» بمعنى وصلت للمراجعة — وهو ما يعدّه الخادم. */
+const isPreparationSent = (preparation) =>
+  getPreparationState(preparation).key === "sent";
+
 const formatLocalDate = (date = new Date()) =>
   [
     date.getFullYear(),
@@ -944,9 +1000,7 @@ const TeacherSchedule = () => {
 
     return enrichedLectures.filter((lecture) => {
       const subject = lecture.scheduleSubject;
-      const hasPreparation = Boolean(
-        getPreparationId(lecture.schedulePreparation)
-      );
+      const prepState = getPreparationState(lecture.schedulePreparation);
 
       if (
         subjectFilter &&
@@ -963,16 +1017,24 @@ const TeacherSchedule = () => {
         return false;
       }
 
+      // «تم التحضير» في الفلتر تعني ما تعنيه في الخلية: أُرسل للمراجعة.
       if (
         preparationFilter === "prepared" &&
-        !hasPreparation
+        prepState.key !== "sent"
+      ) {
+        return false;
+      }
+
+      if (
+        preparationFilter === "draft" &&
+        !["draft", "revision"].includes(prepState.key)
       ) {
         return false;
       }
 
       if (
         preparationFilter === "unprepared" &&
-        hasPreparation
+        prepState.key !== "none"
       ) {
         return false;
       }
@@ -1099,9 +1161,24 @@ const TeacherSchedule = () => {
     [coverSlotsByDay]
   );
 
-  const preparedCount = enrichedLectures.filter((lecture) =>
-    Boolean(getPreparationId(lecture.schedulePreparation))
-  ).length;
+  /*
+   * ثلاثة أعداد، لأن حالتين لا تصفان ثلاثة أوضاع.
+   *
+   * كان الكارت يعدّ أي صف تحضير، فيقول «٥ حصص محضّرة» بينما لم يصل المدير
+   * شيء. «محضّرة» هنا تعني ما يعنيه الخادم: أُرسلت للمراجعة.
+   */
+  const preparationCounts = useMemo(() => {
+    const counts = { sent: 0, draft: 0, none: 0 };
+    enrichedLectures.forEach((lecture) => {
+      const key = getPreparationState(lecture.schedulePreparation).key;
+      if (key === "sent") counts.sent += 1;
+      else if (key === "none") counts.none += 1;
+      else counts.draft += 1;
+    });
+    return counts;
+  }, [enrichedLectures]);
+
+  const preparedCount = preparationCounts.sent;
 
   const todayLectures = enrichedLectures.filter(
     (lecture) => lecture.scheduleDayKey === todayKey
@@ -2313,10 +2390,11 @@ const TeacherSchedule = () => {
           <StatCard
             title="حصص محضّرة"
             value={preparedCount}
-            helper={`${Math.max(
-              enrichedLectures.length - preparedCount,
-              0
-            )} تحتاج تحضير`}
+            helper={
+              preparationCounts.draft
+                ? `${preparationCounts.draft} مسودة · ${preparationCounts.none} تحتاج تحضير`
+                : `${preparationCounts.none} تحتاج تحضير`
+            }
             icon={<EventAvailableRounded />}
             tone="gold"
           />
@@ -2421,6 +2499,7 @@ const TeacherSchedule = () => {
               >
                 <MenuItem value="all">كل الحصص</MenuItem>
                 <MenuItem value="prepared">تم التحضير</MenuItem>
+                <MenuItem value="draft">مسودة</MenuItem>
                 <MenuItem value="unprepared">تحتاج تحضير</MenuItem>
               </TextField>
             ) : null}
@@ -2910,6 +2989,9 @@ const TeacherSchedule = () => {
 
                             {lecture ? (() => {
                               const lectureId = getLectureId(lecture);
+                              const prepState = getPreparationState(
+                                lecture.schedulePreparation
+                              );
                               const hasPreparation = Boolean(
                                 getPreparationId(
                                   lecture.schedulePreparation
@@ -2930,15 +3012,9 @@ const TeacherSchedule = () => {
                                     borderRadius: 1.5,
                                     px: 0.7,
                                     py: 0.55,
-                                    bgcolor: hasPreparation
-                                      ? "rgba(38, 144, 106, .035)"
-                                      : "rgba(207, 146, 33, .035)",
+                                    bgcolor: prepState.tint,
                                     boxShadow: `inset -3px 0 0 ${
-                                      isExcused
-                                        ? "#c58b20"
-                                        : hasPreparation
-                                          ? "#25906a"
-                                          : "#cf9221"
+                                      isExcused ? "#c58b20" : prepState.dot
                                     }`,
                                   }}
                                 >
@@ -2972,24 +3048,18 @@ const TeacherSchedule = () => {
                                             width: 7,
                                             height: 7,
                                             borderRadius: "50%",
-                                            bgcolor: hasPreparation
-                                              ? "#25906a"
-                                              : "#cf9221",
+                                            bgcolor: prepState.dot,
                                           }}
                                         />
                                         <Typography
                                           sx={{
-                                            color: hasPreparation
-                                              ? "#197857"
-                                              : "#97630f",
+                                            color: prepState.text,
                                             fontWeight: 900,
                                             fontSize: 8.15,
                                             whiteSpace: "nowrap",
                                           }}
                                         >
-                                          {hasPreparation
-                                            ? "تم التحضير"
-                                            : "تحتاج تحضير"}
+                                          {prepState.label}
                                         </Typography>
                                       </Stack>
                                     </Stack>
@@ -3039,9 +3109,11 @@ const TeacherSchedule = () => {
                                         },
                                       }}
                                     >
-                                      {hasPreparation
-                                        ? "عرض التحضير"
-                                        : "إضافة تحضير"}
+                                      {prepState.key === "none"
+                                        ? "إضافة تحضير"
+                                        : prepState.key === "sent"
+                                          ? "عرض التحضير"
+                                          : "أكمل التحضير"}
                                     </Button>
 
                                     <Tooltip
