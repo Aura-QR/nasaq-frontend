@@ -192,7 +192,7 @@
       if (cancelled()) break;
       if (andSubmit) {
         const submitted = await api(`/preparation/${row.preparationId}/submit`, { method: 'POST' });
-        if (!submitted.ok) { problem(row, 'الإرسال للمراجعة', submitted); continue; }
+        if (!submitted.ok) { problem(row, 'تحضير ناقص', submitted); continue; }
         result.submitted++;
       }
     }

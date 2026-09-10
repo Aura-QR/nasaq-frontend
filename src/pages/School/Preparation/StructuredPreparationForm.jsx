@@ -1095,8 +1095,8 @@ const PreparationProgress = ({ form, step, assignmentTotal = 0 }) => {
         {step === 1
           ? "أكمل بيانات الدرس ثم انتقل إلى إعداد الدرس. الحفظ التلقائي يعمل أثناء الكتابة."
           : percent === 100
-            ? "التحضير مستوفٍ المتطلبات الأساسية ويمكن إرساله للمراجعة."
-            : "أكمل العناصر الناقصة قبل إرسال التحضير للمراجعة."}
+            ? "التحضير مستوفٍ المتطلبات الأساسية."
+            : "أكمل العناصر الناقصة ليكتمل التحضير."}
       </Typography>
     </Paper>
   );
@@ -2945,11 +2945,11 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
 
       const response = await submitPreparation(id);
       if (!response?.status) {
-        toast.error(response?.message || "تعذر إرسال التحضير للمراجعة");
+        toast.error(response?.message || "تعذر تأكيد اكتمال التحضير");
         return;
       }
       setPreparationStatus("pending");
-      toast.success("تم إرسال التحضير للمراجعة");
+      toast.success("تم اكتمال التحضير");
     } finally {
       setSubmitting(false);
     }
@@ -3539,7 +3539,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
               <SectionCard
                 id="assignments-section"
                 title="تكليفات الحصة"
-                subtitle="يجب إضافة نوع واحد على الأقل قبل الإرسال للمراجعة."
+                subtitle="يجب إضافة نوع واحد على الأقل ليكتمل التحضير."
                 icon={<MenuBookRounded />}
               >
                 <Alert severity="info" sx={{ mb: 1.2, borderRadius: "12px", fontWeight: 900 }}>
@@ -3630,7 +3630,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
 
               <SectionCard
                 title="مرفقات (اختياري)"
-                subtitle="ورقة عمل أو عرض أو ملف مساند. المرفق لا يُحتسب ضمن شروط إرسال التحضير."
+                subtitle="ورقة عمل أو عرض أو ملف مساند. المرفق لا يُحتسب ضمن شروط اكتمال التحضير."
                 icon={<AttachFileRounded />}
               >
                 {existingFiles.length > 0 && (

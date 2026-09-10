@@ -127,7 +127,7 @@
     }));
     if (!rows.length) return;
     if (rows.some((row) => (state.withContent || row.resourceTypes.length) && !row.lessonId)) {
-      state.error = 'اختر درسًا لكل حصة محددة لتوليد المحتوى والإضافات. لحفظ مسودات دون دروس، ألغِ الإضافات والتوليد والإرسال للمراجعة.';
+      state.error = 'اختر درسًا لكل حصة محددة لتوليد المحتوى والإضافات. لحفظ مسودات دون دروس، ألغِ الإضافات والتوليد وتأكيد الاكتمال.';
       render(); return;
     }
     if (state.andSubmit && rows.some((row) => !row.lessonId)) {
@@ -242,7 +242,7 @@
     const footer = root.querySelector('.nq-footer'); if (!footer) return;
     footer.textContent = '';
     const busy = state.busy || state.loading;
-    for (const [key, title] of [['withContent', 'اكتب حقول التحضير الفارغة تلقائيًا'], ['andSubmit', 'أرسل التحاضير المكتملة للمراجعة']]) {
+    for (const [key, title] of [['withContent', 'اكتب حقول التحضير الفارغة تلقائيًا'], ['andSubmit', 'تأكّد إن كل حصة مكتملة']]) {
       const label = el('label', 'nq-toggle'); const box = el('input'); box.type = 'checkbox'; box.checked = state[key]; box.disabled = busy;
       box.addEventListener('change', () => { state[key] = box.checked; renderFooter(); });
       label.append(box, el('span', null, title)); footer.appendChild(label);
@@ -307,7 +307,7 @@
     if (state.result) {
       const r = state.result;
       const summary = el('div', 'nq-alert nq-alert-ok',
-        `${r.stopped ? 'توقفت العملية. ' : 'انتهت العملية. '}تم إنشاء ${r.created} · موجود مسبقًا ${r.skipped} · حُفظ درس ${r.saved} · تم توليد ${r.generated} · إضافات جديدة ${r.resourcesAdded || 0} · أُرسل ${r.submitted}`);
+        `${r.stopped ? 'توقفت العملية. ' : 'انتهت العملية. '}تم إنشاء ${r.created} · موجود مسبقًا ${r.skipped} · حُفظ درس ${r.saved} · تم توليد ${r.generated} · إضافات جديدة ${r.resourcesAdded || 0} · مكتمل ${r.submitted}`);
       summary.setAttribute('role', 'status'); body.appendChild(summary);
       for (const exam of r.exams || []) body.appendChild(link(`${exam.label} — مراجعة الامتحان`, `/teacher/exams/edit/${encodeURIComponent(exam.examId)}`));
       if (r.skipped) body.appendChild(el('div', 'nq-row-help', 'الحصص الموجودة مسبقًا لم تُعدّل. راجع حالتها بعد التحديث وحدّد المسودات المطلوبة.'));
