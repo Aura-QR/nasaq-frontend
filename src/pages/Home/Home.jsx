@@ -1230,6 +1230,7 @@ function Home() {
             <a href="#journey">كيف تعمل؟</a>
             <a href="#tools">الأدوات</a>
             <a href="#difference">الفرق</a>
+            <Link to="/privacy/quick-prep">سياسة الخصوصية</Link>
           </div>
 
           <p>جميع الحقوق محفوظة لمنصة نَسّق © {new Date().getFullYear()}</p>

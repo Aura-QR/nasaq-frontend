@@ -71,3 +71,12 @@ test('all teacher sidebar links resolve to declared teacher routes', () => {
     assert.ok(matchRoutes(teacherRoutes, teacherPreparationRedirect(path)), path);
   }
 });
+
+test('quick prep privacy policy is a public route outside authentication guards', () => {
+  const router = readFileSync(new URL('../src/app/AppRouter.jsx', import.meta.url), 'utf8');
+  const privacyRoute = router.indexOf('path="/privacy/quick-prep"');
+  const authenticatedRoutes = router.indexOf('<AuthenticatedRoute');
+  assert.ok(privacyRoute >= 0, 'privacy route is missing');
+  assert.ok(authenticatedRoutes >= 0, 'authenticated route group is missing');
+  assert.ok(privacyRoute < authenticatedRoutes, 'privacy route must remain public');
+});

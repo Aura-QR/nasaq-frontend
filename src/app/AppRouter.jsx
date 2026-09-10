@@ -13,6 +13,7 @@ import ForgotPassword from "@/pages/ForgotPassword/ForgotPassword";
 import Register from "@/pages/Register/Register";
 import Onboarding from "@/pages/Onboarding/Onboarding";
 import NoAccess from "@/pages/Others/NoAccess";
+import QuickPrepPrivacy from "@/pages/Privacy/QuickPrepPrivacy";
 
 // =========================
 // Teacher Pages
@@ -105,6 +106,11 @@ const AppRouter = () => {
       <Route
         path="/no-access"
         element={<NoAccess />}
+      />
+
+      <Route
+        path="/privacy/quick-prep"
+        element={<QuickPrepPrivacy />}
       />
 
       <Route
