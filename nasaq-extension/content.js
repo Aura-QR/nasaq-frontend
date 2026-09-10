@@ -266,7 +266,7 @@
     const bodyScroll = root.querySelector('.nq-body')?.scrollTop || 0;
     const guideOpen = root.querySelector('.nq-guide')?.open || false;
     root.textContent = '';
-    const fab = button(state.open ? 'إغلاق' : 'حضّر أسبوعي', () => {
+    const fab = button(state.open ? 'إغلاق' : 'نسق أسبوعي', () => {
       state.open = !state.open; render();
       if (state.open && !state.week && !state.loading && !state.busy) void loadWeek();
     }, false, 'nq-fab');

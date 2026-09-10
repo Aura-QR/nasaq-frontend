@@ -70,6 +70,7 @@ import {
   fetchTeacherAssignments,
 } from "@/APIs/school/lectures";
 import { TEACHER_UI } from "@/shared/ui/teacherUi";
+import usePermissions from "@/utils/hooks/usePermissions";
 
 import nasaqLogo from "../../images/wadq-logo.png";
 
