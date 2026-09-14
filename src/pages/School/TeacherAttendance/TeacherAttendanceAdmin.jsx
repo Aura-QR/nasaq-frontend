@@ -773,8 +773,8 @@ const TeacherAttendanceAdmin = () => {
     }
 
     const numericRadius = Number(radius);
-    if (!Number.isFinite(numericRadius) || numericRadius < 20 || numericRadius > 500) {
-      toast.error("نصف قطر القبول يجب أن يكون بين 20 و500 متر");
+    if (!Number.isFinite(numericRadius) || numericRadius < 20 || numericRadius > 2000) {
+      toast.error("نصف قطر القبول يجب أن يكون بين 20 و2000 متر");
       return;
     }
 
@@ -814,7 +814,7 @@ const TeacherAttendanceAdmin = () => {
       return;
     }
 
-    toast.success("تم حفظ إعدادات حضور المعلمين");
+    toast.success("تم حفظ إعدادات حضور المعلمين والإعدادات المشتركة");
     await loadSettings();
   };
 
@@ -937,10 +937,10 @@ const TeacherAttendanceAdmin = () => {
           >
             <Box>
               <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
-                تفعيل تسجيل الحضور والانصراف الذاتي
+                تفعيل الحضور والانصراف الذاتي للمعلمين
               </Typography>
               <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
-                يستخدم نفس الإعداد للحضور والانصراف الذاتي. لا يمكن تفعيله قبل وجود موقع صالح للمدرسة، وشبكة المدرسة اختيارية.
+                هذا المفتاح خاص بالمعلمين فقط. موقع المدرسة ونطاق التحقق والشبكة وجدول الدوام إعدادات مشتركة مع الإداريين والمشرفين.
               </Typography>
             </Box>
 
@@ -957,7 +957,7 @@ const TeacherAttendanceAdmin = () => {
 
           {teacherCheckInEnabled && !hasValidLocation && (
             <Alert severity="warning" sx={{ mt: 1.2, borderRadius: "12px" }}>
-              حدد موقع المدرسة أولًا. الباك سيرفض التفعيل من غير Location.
+              حدد موقع المدرسة المشترك أولًا. الباك سيرفض التفعيل من غير Location.
             </Alert>
           )}
         </Paper>
@@ -965,10 +965,10 @@ const TeacherAttendanceAdmin = () => {
         <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
           <Box>
             <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
-              جدول دوام المعلمين الأسبوعي
+              جدول الدوام الأسبوعي المشترك
             </Typography>
             <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
-              حدّد أيام العمل ووقت البداية والنهاية لكل يوم. اليوم غير المفعّل يُرسل بدون أوقات.
+              يُستخدم نفس جدول الدوام للمعلمين والإداريين والمشرفين. حدّد أيام العمل ووقت البداية والنهاية مرة واحدة.
             </Typography>
           </Box>
 
@@ -1117,10 +1117,10 @@ const TeacherAttendanceAdmin = () => {
             <Box>
               <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
                 <LocationOnRounded sx={{ verticalAlign: "middle", ml: 0.6, color: "#B78430" }} />
-                موقع المدرسة
+                موقع المدرسة المشترك
               </Typography>
               <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10 }}>
-                استخدم موقع الجهاز وأنت داخل المدرسة أو أدخل الإحداثيات يدويًا.
+                اضبط الموقع مرة واحدة فقط؛ وسيُستخدم للتحقق من حضور المعلمين والإداريين والمشرفين.
               </Typography>
             </Box>
 
@@ -1154,8 +1154,8 @@ const TeacherAttendanceAdmin = () => {
           >
             <Box
               sx={{
-                width: Math.max(80, Math.min(160, 70 + (Number(radius) / 500) * 100)),
-                height: Math.max(80, Math.min(160, 70 + (Number(radius) / 500) * 100)),
+                width: Math.max(80, Math.min(160, 70 + (Number(radius) / 2000) * 100)),
+                height: Math.max(80, Math.min(160, 70 + (Number(radius) / 2000) * 100)),
                 position: "absolute",
                 borderRadius: "50%",
                 border: "2px dashed rgba(183,132,48,.55)",
@@ -1200,7 +1200,7 @@ const TeacherAttendanceAdmin = () => {
               value={Number(radius)}
               onChange={(_, value) => setRadius(Number(value))}
               min={20}
-              max={500}
+              max={2000}
               step={10}
               valueLabelDisplay="auto"
               sx={{ mt: 1, color: "#B78430" }}
@@ -1213,10 +1213,10 @@ const TeacherAttendanceAdmin = () => {
             <Box>
               <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
                 <RouterRounded sx={{ verticalAlign: "middle", ml: 0.6, color: "#B78430" }} />
-                شبكة المدرسة / IP
+                شبكة المدرسة / IP المشتركة
               </Typography>
               <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10 }}>
-                اختياري. زر الاكتشاف يقرأ الـIP الذي يراه السيرفر فعليًا.
+                اختيارية ومشتركة لكل فئات الحضور. زر الاكتشاف يقرأ الـIP الذي يراه السيرفر فعليًا.
               </Typography>
             </Box>
 
@@ -1287,7 +1287,7 @@ const TeacherAttendanceAdmin = () => {
               "&:hover": { backgroundColor: "#E8C96F", boxShadow: "none" },
             }}
           >
-            حفظ إعدادات الحضور
+            حفظ إعدادات المعلمين والمشتركة
           </Button>
         </Stack>
       </Stack>
