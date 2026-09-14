@@ -39,6 +39,8 @@ import TeacherCheckIn from "@/pages/TeacherCheckIn/TeacherCheckIn";
 // School Pages
 // =========================
 import TeacherAttendanceAdmin from "@/pages/School/TeacherAttendance/TeacherAttendanceAdmin";
+import StaffAttendanceAdmin from "@/pages/School/StaffAttendance/StaffAttendanceAdmin";
+import StaffAttendance from "@/pages/StaffAttendance/StaffAttendance";
 import CoverageBoard from "@/pages/School/Duty/CoverageBoard";
 import LeaveRequests from "@/pages/School/Duty/LeaveRequests";
 import CoverReport from "@/pages/School/Duty/CoverReport";
@@ -304,6 +306,11 @@ const AppRouter = () => {
           />
 
           <Route
+            path="/school/staff-attendance"
+            element={<StaffAttendanceAdmin />}
+          />
+
+          <Route
             path="/school/duty"
             element={<CoverageBoard />}
           />
@@ -316,6 +323,26 @@ const AppRouter = () => {
           <Route
             path="/school/cover-report"
             element={<CoverReport />}
+          />
+        </Route>
+
+        {/* =====================================================
+            MANAGER / SUPERVISOR — PERSONAL STAFF ATTENDANCE
+        ===================================================== */}
+
+        <Route
+          element={
+            <RoleRoute
+              allowedRoles={[
+                ROLES.MANAGER,
+                ROLES.SUPERVISOR,
+              ]}
+            />
+          }
+        >
+          <Route
+            path="/staff-attendance"
+            element={<StaffAttendance />}
           />
         </Route>
 

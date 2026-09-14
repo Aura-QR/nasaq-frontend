@@ -379,6 +379,20 @@ const Sidebar = ({ active, setActive }) => {
             show: canManageSchoolSettings,
           },
           {
+            name: "حضور الإداريين والمشرفين",
+            Icon: HowToRegRounded,
+            iconType: "mui",
+            to: "/school/staff-attendance",
+            show: canManageSchoolSettings,
+          },
+          {
+            name: "حضوري",
+            Icon: HowToRegRounded,
+            iconType: "mui",
+            to: "/staff-attendance",
+            show: role === "MANAGER" || role === "SUPERVISOR",
+          },
+          {
             name: "الاحتياطي والمناوبة",
             Icon: ShieldRounded,
             iconType: "mui",

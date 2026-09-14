@@ -148,6 +148,25 @@ const NAVIGATION_SECTIONS = [
 
     items: [
       {
+        label: "حضور الإداريين والمشرفين",
+        path: "/school/staff-attendance",
+        icon: <AssignmentRounded />,
+        allowedRoles: [
+          ROLES.OWNER,
+          ROLES.MANAGER,
+          ROLES.SUPERVISOR,
+        ],
+      },
+      {
+        label: "حضوري",
+        path: "/staff-attendance",
+        icon: <AssignmentRounded />,
+        allowedRoles: [
+          ROLES.MANAGER,
+          ROLES.SUPERVISOR,
+        ],
+      },
+      {
         label: "الحضور",
         path: "/school/attendance",
         icon: <AssignmentRounded />,
