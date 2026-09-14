@@ -1,5 +1,6 @@
 import {
   AdminPanelSettingsRounded,
+  BadgeRounded,
   PersonRounded,
   RefreshRounded,
   SaveRounded,
@@ -37,18 +38,26 @@ import {
 } from "react-toastify";
 
 import Container from "@/components/Container/Container";
+import JobTitlesPanel from "./JobTitlesPanel";
 
 import {
   getSchoolPermissions,
   updateSchoolRolePermissions,
 } from "@/APIs/school/permissions";
 
+import {
+  ACTION_LABELS,
+  ACTION_ORDER,
+  ENTITY_ACTIONS,
+  ENTITY_LABELS,
+} from "./permissionLabels";
+
 const ROLE_CONFIG = {
   MANAGER: {
     label: "المساعدون الإداريون",
     shortLabel: "MANAGER",
     description:
-      "صلاحيات موحّدة لكل حسابات المساعد الإداري في المدرسة.",
+      "صلاحيات المساعدين الذين ليس لهم مسمى وظيفي. من له مسمى يأخذ صلاحيات مسمّاه.",
     icon: <AdminPanelSettingsRounded />,
   },
   TEACHER: {
@@ -73,69 +82,15 @@ const ROLE_ORDER = [
   "STUDENT",
 ];
 
-const ENTITY_LABELS = {
-  students: "الطلاب",
-  teachers: "المعلمون",
-  classes: "الفصول",
-  subjects: "المواد",
-  lectures: "الحصص",
-  library: "المكتبة",
-  attendance: "حضور الطلاب",
-  gradesCriteria: "معايير الدرجات",
-  exams: "الاختبارات",
-  projects: "المشاريع",
-  grades: "الدرجات",
-  preparation: "التحضير",
-  financial: "المالية",
-  financialSettings: "إعدادات المالية",
-  expenses: "المصروفات",
-  teacherAttendance: "حضور المعلمين",
-  duty: "الاحتياطي والمناوبة والاستئذان",
-  curriculum: "المناهج والدروس",
-  academicStructure: "المراحل والصفوف والترمات",
-  academicYears: "السنوات الدراسية",
-  schoolSettings: "إعدادات المدرسة",
-  messaging: "سجل رسائل واتساب",
-  managers: "المديرون والمساعدون",
-  analytics: "التقارير",
-  settings: "الإعدادات",
-};
-
-const ACTION_LABELS = {
-  read: "عرض",
-  add: "إضافة",
-  edit: "تعديل",
-  delete: "حذف",
-};
-
-const ACTION_ORDER = [
-  "read",
-  "add",
-  "edit",
-  "delete",
-];
-
-/*
- * For these areas the server checks only some actions, so only those boxes
- * are shown. The rest stay in the draft untouched and are sent back as they
- * were.
- *
- * - academicStructure / academicYears: anyone can read them (every screen
- *   needs the year, stage and grade lists); deleting a year is owner-only.
- * - schoolSettings: reading is open too — the teacher check-in screen needs it.
- * - messaging: view the delivery log, and retry (تعديل).
- */
-const ENTITY_ACTIONS = {
-  academicStructure: ["add", "edit", "delete"],
-  academicYears: ["add", "edit"],
-  schoolSettings: ["edit"],
-  messaging: ["read", "edit"],
-};
+/* Not a role: the tab that edits the school's job titles. */
+const JOB_TITLES_TAB = "JOB_TITLES";
 
 const normalizeRole = (value) => {
   const role = String(value || "")
     .trim()
     .toUpperCase();
+
+  if (role === JOB_TITLES_TAB) return JOB_TITLES_TAB;
 
   return ROLE_ORDER.includes(role)
     ? role
@@ -616,8 +571,25 @@ const SchoolPermissions = () => {
               },
             }}
           >
-            {ROLE_ORDER.map(
-              (role) => (
+            {[ROLE_ORDER[0], JOB_TITLES_TAB, ...ROLE_ORDER.slice(1)].map(
+              (role) => role === JOB_TITLES_TAB ? (
+                <Tab
+                  key={JOB_TITLES_TAB}
+                  value={JOB_TITLES_TAB}
+                  icon={<BadgeRounded />}
+                  iconPosition="start"
+                  label="المسميات الوظيفية"
+                  sx={{
+                    minHeight: 58,
+                    color: "#7E8791",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    "&.Mui-selected": {
+                      color: "#244A70",
+                    },
+                  }}
+                />
+              ) : (
                 <Tab
                   key={role}
                   value={role}
@@ -653,6 +625,10 @@ const SchoolPermissions = () => {
               bgcolor: "#FFFCF7",
             }}
           >
+            {activeRole === JOB_TITLES_TAB ? (
+              <JobTitlesPanel />
+            ) : (
+            <>
             <Stack
               direction={{
                 xs: "column",
@@ -916,6 +892,8 @@ const SchoolPermissions = () => {
                   }
                 )}
               </Box>
+            )}
+            </>
             )}
           </Box>
         </Paper>

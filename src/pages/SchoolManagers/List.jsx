@@ -42,6 +42,7 @@ import {
   deleteManager,
   fetchManagers,
 } from "@/APIs/school/managers";
+import { assignJobTitle, fetchJobTitles } from "@/APIs/school/jobTitles";
 import {
   ROLES,
   normalizeRole,
@@ -51,7 +52,12 @@ const ROLE_LABELS = {
   [ROLES.OWNER]: "مالك المدرسة",
   [ROLES.SUPERVISOR]: "مدير المدرسة",
   [ROLES.MANAGER]: "مساعد إداري",
+  [ROLES.TEACHER]: "معلم مساعد إداري",
 };
+
+/* Only assistants carry a job title: MANAGER accounts and promoted teachers. */
+const canCarryJobTitle = (role) =>
+  role === ROLES.MANAGER || role === ROLES.TEACHER;
 
 const getCurrentRoleFromAuthState = (authState) =>
   normalizeRole(
@@ -210,6 +216,15 @@ const SchoolManagersList = () => {
   const canManageAdministrativeAccounts =
     currentRole === ROLES.OWNER;
 
+  // Same people who can edit the permissions screen.
+  const canAssignJobTitles = [
+    ROLES.OWNER,
+    ROLES.SUPERVISOR,
+  ].includes(currentRole);
+
+  const [jobTitles, setJobTitles] = useState([]);
+  const [assigningId, setAssigningId] = useState("");
+
   const [items, setItems] =
     useState([]);
 
@@ -288,6 +303,32 @@ const SchoolManagersList = () => {
   useEffect(() => {
     loadManagers();
   }, [loadManagers]);
+
+  useEffect(() => {
+    if (!canAssignJobTitles) return;
+    fetchJobTitles().then((response) => {
+      if (response?.status !== false && Array.isArray(response?.data)) {
+        setJobTitles(response.data);
+      }
+    });
+  }, [canAssignJobTitles]);
+
+  const changeJobTitle = async (item, jobTitleId) => {
+    const id = getManagerId(item);
+    if (!id || jobTitleId === "__create") return;
+    setAssigningId(id);
+    const response = await assignJobTitle(id, {
+      type: getManagerType(item) || "admin",
+      jobTitleId: jobTitleId || null,
+    });
+    setAssigningId("");
+    if (response?.status === false) {
+      if (!response?.silent) toast.error(response.message);
+      return;
+    }
+    toast.success(response?.message || "تم تحديث المسمى الوظيفي");
+    await loadManagers(true);
+  };
 
   const filteredItems =
     useMemo(() => {
@@ -879,7 +920,7 @@ const SchoolManagersList = () => {
                   <tr>
                     <th>المستخدم</th>
                     <th>التواصل</th>
-                    <th>الدور</th>
+                    <th>الدور / المسمى الوظيفي</th>
                     <th>الحالة</th>
                     <th style={{ textAlign: "center", width: 150 }}>
                       الإجراءات
@@ -942,20 +983,62 @@ const SchoolManagersList = () => {
                         </td>
 
                         <td>
-                          <Chip
-                            size="small"
-                            label={ROLE_LABELS[role] || role || "—"}
-                            sx={{
-                              height: 27,
-                              bgcolor:
-                                role === ROLES.SUPERVISOR ? "#FBF0D8" : "#EEF3F7",
-                              color:
-                                role === ROLES.SUPERVISOR ? "#8A6220" : "#244A70",
-                              borderRadius: "8px",
-                              fontSize: "10px",
-                              fontWeight: 900,
-                            }}
-                          />
+                          {canCarryJobTitle(role) && canAssignJobTitles ? (
+                            <TextField
+                              select
+                              size="small"
+                              value={item?.jobTitle?.id || ""}
+                              onChange={(event) => changeJobTitle(item, event.target.value)}
+                              disabled={assigningId === id}
+                              SelectProps={{ displayEmpty: true }}
+                              sx={{
+                                minWidth: 170,
+                                "& .MuiInputBase-root": {
+                                  height: 32,
+                                  borderRadius: "8px",
+                                  bgcolor: item?.jobTitle ? "#EAF2FA" : "#FFFFFF",
+                                  fontSize: "11px",
+                                  fontWeight: 900,
+                                  color: "#244A70",
+                                },
+                              }}
+                            >
+                              <MenuItem value="">
+                                {ROLE_LABELS[role]} (بدون مسمى)
+                              </MenuItem>
+                              {jobTitles.map((title) => (
+                                <MenuItem key={title.id} value={title.id}>
+                                  {title.name}
+                                </MenuItem>
+                              ))}
+                              {jobTitles.length === 0 && (
+                                <MenuItem
+                                  value="__create"
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    navigate("/school/permissions?role=JOB_TITLES");
+                                  }}
+                                >
+                                  + إنشاء مسمى وظيفي
+                                </MenuItem>
+                              )}
+                            </TextField>
+                          ) : (
+                            <Chip
+                              size="small"
+                              label={item?.jobTitle?.name || ROLE_LABELS[role] || role || "—"}
+                              sx={{
+                                height: 27,
+                                bgcolor:
+                                  role === ROLES.SUPERVISOR ? "#FBF0D8" : "#EEF3F7",
+                                color:
+                                  role === ROLES.SUPERVISOR ? "#8A6220" : "#244A70",
+                                borderRadius: "8px",
+                                fontSize: "10px",
+                                fontWeight: 900,
+                              }}
+                            />
+                          )}
                         </td>
 
                         <td>

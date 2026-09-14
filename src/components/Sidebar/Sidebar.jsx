@@ -212,8 +212,11 @@ const Sidebar = ({ active, setActive }) => {
 
   const displayName = getDisplayName(user);
 
+  // An assistant with a job title reads «المالية», not «مساعد إداري».
   const roleLabel =
-    ROLE_LABELS[role] || "مستخدم";
+    user?.jobTitle?.name ||
+    ROLE_LABELS[role] ||
+    "مستخدم";
 
   const isTeacher = role === "TEACHER";
 

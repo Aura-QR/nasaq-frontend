@@ -285,6 +285,8 @@ const normalizeRecordDate = (record) =>
       ""
   ).slice(0, 10);
 
+const METHOD_LABELS = { location: "ذاتي", manual: "يدوي" };
+
 const formatTime = (value, timeZone = "Asia/Riyadh") => {
   if (!value) return "—";
   const text = String(value);
@@ -1156,7 +1158,7 @@ const StaffAttendanceAdmin = () => {
                         <TableCell align="right">
                           {formatMinutes(record?.workMinutes, { duration: true })}
                         </TableCell>
-                        <TableCell align="right">{record?.checkOutMethod || "—"}</TableCell>
+                        <TableCell align="right">{METHOD_LABELS[record?.checkOutMethod] || record?.checkOutMethod || "—"}</TableCell>
                         <TableCell align="right">
                           <Chip
                             size="small"
