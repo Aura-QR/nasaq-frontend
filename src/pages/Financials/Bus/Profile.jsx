@@ -56,6 +56,8 @@ import {
 } from "@/APIs/financials/busPlans";
 
 import Back from "@/components/Back/Back";
+import PaymentHistoryDialog from "@/components/Financial/PaymentHistoryDialog";
+import { lastEffectivePaymentDate } from "@/shared/financial/paymentVoid";
 import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
 import Loading from "@/components/Loading";
@@ -254,6 +256,12 @@ const BusProfilePage = () => {
     refundOpen,
     setRefundOpen,
   ] = useState(false);
+
+  // The installment whose payment history (and voiding) is open.
+  const [
+    historyInstallment,
+    setHistoryInstallment,
+  ] = useState(null);
 
   const [
     unenrollOpen,
@@ -518,6 +526,9 @@ const BusProfilePage = () => {
           installmentNumber:
             item?.installmentNumber,
 
+          payments:
+            item?.payments || [],
+
           amountRaw:
             Number(
               item?.amount || 0
@@ -555,12 +566,12 @@ const BusProfilePage = () => {
               item?.dueDate
             ),
 
+          // A voided entry stays in the array but never happened; it must not
+          // be reported as the last payment.
           paymentDate:
-            item?.payments?.length
+            lastEffectivePaymentDate(item?.payments)
               ? formatDate(
-                  item.payments.at(
-                    -1
-                  )?.paidAt
+                  lastEffectivePaymentDate(item?.payments)
                 )
               : "—",
 
@@ -651,7 +662,7 @@ const BusProfilePage = () => {
       ).trim()
     ) {
       toast.error(
-        "سبب التصحيح مطلوب"
+        "سبب الاسترداد مطلوب"
       );
       return;
     }
@@ -1603,7 +1614,25 @@ const BusProfilePage = () => {
                                         9.5,
                                     }}
                                   >
-                                    تصحيح دفعة
+                                    استرداد
+                                  </Button>
+                                )}
+
+                                {item.payments?.length > 0 && (
+                                  <Button
+                                    variant="outlined"
+                                    onClick={() =>
+                                      setHistoryInstallment(item)
+                                    }
+                                    sx={{
+                                      minHeight: 34,
+                                      borderRadius:
+                                        "9px",
+                                      fontSize:
+                                        9.5,
+                                    }}
+                                  >
+                                    السجل
                                   </Button>
                                 )}
 
@@ -1658,6 +1687,27 @@ const BusProfilePage = () => {
           item={selected}
           onSubmit={pay}
           loading={saving}
+        />
+
+        <PaymentHistoryDialog
+          open={Boolean(historyInstallment)}
+          onClose={() => setHistoryInstallment(null)}
+          onChanged={refetch}
+          title={
+            historyInstallment
+              ? `الباص · القسط ${historyInstallment.installmentNumber}`
+              : ""
+          }
+          payments={historyInstallment?.payments}
+          studentId={studentId}
+          target={
+            historyInstallment
+              ? {
+                  section: "bus",
+                  installmentNumber: historyInstallment.installmentNumber,
+                }
+              : null
+          }
         />
 
         <RefundBusDialog
@@ -2008,7 +2058,7 @@ const RefundBusDialog = ({
     >
       <DialogHeader
         icon={<UndoRounded />}
-        title="تصحيح دفعة الباص"
+        title="استرداد دفعة الباص"
         description={
           item
             ? `القسط رقم ${item.installmentNumber} — المدفوع ${item.paidAmount}`
@@ -2085,7 +2135,7 @@ const RefundBusDialog = ({
                 errors.reason
                   ?.message
               }
-              label="سبب التصحيح"
+              label="سبب الاسترداد"
               required
               multiline
               rows={3}

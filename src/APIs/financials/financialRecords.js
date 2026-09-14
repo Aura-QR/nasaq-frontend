@@ -8,4 +8,10 @@ export const fetchFinancialSummary=async(id)=>{try{return(await api.get(id?`${E}
 export const fetchMyTripsOverview=async()=>{try{return(await api.get(`${E}/me/trips`)).data}catch(e){return apiError(e,"تعذر تحميل ملخص الرحلات")}};
 export const payTuitionInstallment=async(id,data)=>{try{return(await api.post(`${E}/${id}/tuition/pay`,data)).data}catch(e){return apiError(e,"تعذر تسجيل دفعة المصروفات")}};
 export const switchTuitionInstallmentPlan=async(id,installmentPlanId)=>{try{return(await api.patch(`${E}/${id}/tuition/switch-plan`,{installmentPlanId})).data}catch(e){return apiError(e,"تعذر تغيير خطة التقسيط")}};
-export default {fetchFinancialRecords,fetchSingleFinancialRecord,fetchMyFinancialRecord,fetchFinancialSummary,fetchMyTripsOverview,payTuitionInstallment,switchTuitionInstallmentPlan};
+/**
+ * Void a payment recorded by mistake. `target` addresses the entry:
+ * { section: "tuition"|"bus"|"trip"|"additionalFee", tripId?, additionalFeeId?,
+ *   installmentNumber?, paymentIndex, expectedAmount, reason, academicYearId? }
+ */
+export const voidPayment=async(studentId,target)=>{try{return(await api.post(`${E}/${studentId}/payments/void`,target)).data}catch(e){return apiError(e,"تعذر إلغاء الدفعة")}};
+export default {voidPayment,fetchFinancialRecords,fetchSingleFinancialRecord,fetchMyFinancialRecord,fetchFinancialSummary,fetchMyTripsOverview,payTuitionInstallment,switchTuitionInstallmentPlan};

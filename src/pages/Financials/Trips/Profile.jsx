@@ -40,6 +40,8 @@ import {
 } from "@/APIs/financials/trips";
 
 import Back from "@/components/Back/Back";
+import PaymentHistoryDialog from "@/components/Financial/PaymentHistoryDialog";
+import { lastEffectivePaymentDate } from "@/shared/financial/paymentVoid";
 import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
 import Loading from "@/components/Loading";
@@ -168,6 +170,12 @@ const TripProfilePage = () => {
     setRefundOpen,
   ] = useState(false);
 
+  // The installment whose payment history (and voiding) is open.
+  const [
+    historyInstallment,
+    setHistoryInstallment,
+  ] = useState(null);
+
   const [
     deleteOpen,
     setDeleteOpen,
@@ -194,6 +202,9 @@ const TripProfilePage = () => {
 
         installmentNumber:
           item?.installmentNumber,
+
+        payments:
+          item?.payments || [],
 
         amountRaw: Number(
           item?.amount || 0
@@ -228,14 +239,12 @@ const TripProfilePage = () => {
           item?.dueDate
         ),
 
+        // A voided entry stays in the array but never happened; it must not
+        // be reported as the last payment.
         paymentDate:
-          item?.payments?.length >
-          0
+          lastEffectivePaymentDate(item?.payments)
             ? formatDate(
-                item?.payments[
-                  item.payments
-                    .length - 1
-                ]?.paidAt
+                lastEffectivePaymentDate(item?.payments)
               )
             : "—",
 
@@ -379,7 +388,7 @@ const TripProfilePage = () => {
 
       if (!reason) {
         toast.error(
-          "سبب التصحيح مطلوب"
+          "سبب الاسترداد مطلوب"
         );
         return;
       }
@@ -738,7 +747,7 @@ const TripProfilePage = () => {
                 }}
               >
                 راجع الاستحقاق وسجّل
-                الدفعات أو التصحيحات.
+                الدفعات أو الاستردادات.
               </Typography>
             </Box>
 
@@ -963,7 +972,28 @@ const TripProfilePage = () => {
                                       900,
                                   }}
                                 >
-                                  تصحيح دفعة
+                                  استرداد
+                                </Button>
+                              )}
+
+                              {item.payments?.length > 0 && (
+                                <Button
+                                  variant="outlined"
+                                  onClick={() =>
+                                    setHistoryInstallment(item)
+                                  }
+                                  sx={{
+                                    minHeight: 34,
+                                    px: 1.5,
+                                    borderRadius:
+                                      "9px",
+                                    fontSize:
+                                      9.5,
+                                    fontWeight:
+                                      900,
+                                  }}
+                                >
+                                  السجل
                                 </Button>
                               )}
 
@@ -994,6 +1024,28 @@ const TripProfilePage = () => {
           }
           onSubmit={handlePay}
           loading={actionLoading}
+        />
+
+        <PaymentHistoryDialog
+          open={Boolean(historyInstallment)}
+          onClose={() => setHistoryInstallment(null)}
+          onChanged={refetch}
+          title={
+            historyInstallment
+              ? `${trip?.name || "الرحلة"} · القسط ${historyInstallment.installmentNumber}`
+              : ""
+          }
+          payments={historyInstallment?.payments}
+          studentId={studentId}
+          target={
+            historyInstallment
+              ? {
+                  section: "trip",
+                  tripId,
+                  installmentNumber: historyInstallment.installmentNumber,
+                }
+              : null
+          }
         />
 
         <RefundTripDialog
@@ -1257,7 +1309,7 @@ const RefundTripDialog = ({
           fontWeight: 900,
         }}
       >
-        تصحيح / استرداد دفعة الرحلة
+        استرداد دفعة الرحلة
       </DialogTitle>
 
       <DialogContent
@@ -1322,7 +1374,7 @@ const RefundTripDialog = ({
               errors.reason
                 ?.message
             }
-            label="سبب التصحيح"
+            label="سبب الاسترداد"
             required
             multiline
             rows={3}

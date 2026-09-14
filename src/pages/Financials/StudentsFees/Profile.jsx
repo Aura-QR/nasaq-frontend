@@ -61,6 +61,10 @@ import {
 } from "@/APIs/financials/additionalFees";
 
 import Back from "@/components/Back/Back";
+import PaymentHistoryDialog, {
+  PaymentEventRow,
+} from "@/components/Financial/PaymentHistoryDialog";
+import VoidPaymentDialog from "@/components/Financial/VoidPaymentDialog";
 import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
 import Loading from "@/components/Loading";
@@ -253,34 +257,6 @@ const statusChipSx = (
   };
 };
 
-const getPaymentEventType = (
-  event
-) => {
-  const type =
-    String(
-      event?.type ||
-      event?.eventType ||
-      event?.kind ||
-      ""
-    ).toLowerCase();
-
-  if (
-    type.includes(
-      "refund"
-    ) ||
-    type.includes(
-      "reversal"
-    ) ||
-    numberOf(
-      event?.amount
-    ) < 0
-  ) {
-    return "refund";
-  }
-
-  return "payment";
-};
-
 const getPaymentDate = (
   event
 ) =>
@@ -288,25 +264,6 @@ const getPaymentDate = (
   event?.paidAt ||
   event?.createdAt ||
   event?.date;
-
-const getEventAmount = (
-  event
-) =>
-  Math.abs(
-    numberOf(
-      event?.amount,
-      event?.paidAmount,
-      event?.refundAmount
-    )
-  );
-
-const getEventText = (
-  event
-) =>
-  event?.reason ||
-  event?.notes ||
-  event?.note ||
-  "—";
 
 const SummaryCell = ({
   label,
@@ -525,6 +482,13 @@ const FinancialRecordProfilePage =
         "financial"
       );
 
+    // A tuition payment picked from the history to void, and the additional
+    // fee whose payment history is open.
+    const [voidTarget, setVoidTarget] =
+      useState(null);
+    const [historyFee, setHistoryFee] =
+      useState(null);
+
     const {
       getAcademicYearLabel,
     } =
@@ -738,6 +702,8 @@ const FinancialRecordProfilePage =
                     installmentNumber:
                       installment
                         ?.installmentNumber,
+                    paymentIndex:
+                      index,
                     eventKey:
                       event?._id ||
                       `${installment?.installmentNumber}-${index}`,
@@ -1172,7 +1138,7 @@ const FinancialRecordProfilePage =
           !permissions?.edit
         ) {
           toast.error(
-            "ليس لديك صلاحية تصحيح الدفعات"
+            "ليس لديك صلاحية استرداد الدفعات"
           );
           return;
         }
@@ -1205,7 +1171,7 @@ const FinancialRecordProfilePage =
           paidAmount
         ) {
           toast.error(
-            `قيمة التصحيح لا يمكن أن تتجاوز المدفوع ${formatMoney(
+            `قيمة الاسترداد لا يمكن أن تتجاوز المدفوع ${formatMoney(
               paidAmount
             )}`
           );
@@ -1219,7 +1185,7 @@ const FinancialRecordProfilePage =
           ).trim()
         ) {
           toast.error(
-            "سبب التصحيح مطلوب"
+            "سبب الاسترداد مطلوب"
           );
           return;
         }
@@ -1259,7 +1225,7 @@ const FinancialRecordProfilePage =
         ) {
           toast.success(
             response?.message ||
-              "تم تسجيل التصحيح بنجاح"
+              "تم تسجيل الاسترداد بنجاح"
           );
 
           closeDialogs();
@@ -1268,7 +1234,7 @@ const FinancialRecordProfilePage =
           toast.error(
             getErrorMessage(
               response,
-              "تعذر تسجيل التصحيح"
+              "تعذر تسجيل الاسترداد"
             )
           );
         }
@@ -1800,25 +1766,44 @@ const FinancialRecordProfilePage =
                           />
                         </td>
                         <td>
-                          {permissions?.edit && item.remaining > 0 ? (
-                            <Button
-                              variant="contained"
-                              onClick={() => {
-                                setSelectedAdditionalFee(item);
-                                setAdditionalPayOpen(true);
-                              }}
-                              sx={{
-                                minHeight: 34,
-                                borderRadius: "9px",
-                                fontSize: "9.5px",
-                                fontWeight: 800,
-                              }}
-                            >
-                              تسجيل سداد
-                            </Button>
-                          ) : (
-                            "—"
-                          )}
+                          <Stack direction="row" gap={0.75} justifyContent="center">
+                            {permissions?.edit && item.remaining > 0 ? (
+                              <Button
+                                variant="contained"
+                                onClick={() => {
+                                  setSelectedAdditionalFee(item);
+                                  setAdditionalPayOpen(true);
+                                }}
+                                sx={{
+                                  minHeight: 34,
+                                  borderRadius: "9px",
+                                  fontSize: "9.5px",
+                                  fontWeight: 800,
+                                }}
+                              >
+                                تسجيل سداد
+                              </Button>
+                            ) : null}
+                            {Array.isArray(item.raw?.payments) &&
+                            item.raw.payments.length > 0 ? (
+                              <Button
+                                variant="outlined"
+                                onClick={() => setHistoryFee(item)}
+                                sx={{
+                                  minHeight: 34,
+                                  borderRadius: "9px",
+                                  fontSize: "9.5px",
+                                  fontWeight: 800,
+                                }}
+                              >
+                                السجل
+                              </Button>
+                            ) : null}
+                            {!(permissions?.edit && item.remaining > 0) &&
+                            !(item.raw?.payments?.length > 0)
+                              ? "—"
+                              : null}
+                          </Stack>
                         </td>
                       </tr>
                     ))}
@@ -2291,7 +2276,7 @@ const FinancialRecordProfilePage =
                                       "none",
                                   }}
                                 >
-                                  تصحيح دفعة
+                                  استرداد
                                 </Button>
                               )}
                           </Stack>
@@ -2331,7 +2316,6 @@ const FinancialRecordProfilePage =
               }}
             >
               سجل الدفعات
-              والتصحيحات
             </Typography>
 
             <Typography
@@ -2345,9 +2329,10 @@ const FinancialRecordProfilePage =
               }}
             >
               سجل موثّق:
-              التصحيح لا
-              يحذف الدفعة
-              الأصلية.
+              الإلغاء
+              والاسترداد
+              لا يحذفان
+              الدفعة الأصلية.
             </Typography>
 
             {paymentHistory.length ===
@@ -2375,155 +2360,14 @@ const FinancialRecordProfilePage =
                 spacing={0}
               >
                 {paymentHistory.map(
-                  (event) => {
-                    const type =
-                      getPaymentEventType(
-                        event
-                      );
-
-                    const amount =
-                      getEventAmount(
-                        event
-                      );
-
-                    return (
-                      <Box
-                        key={
-                          event.eventKey
-                        }
-                        sx={{
-                          display:
-                            "grid",
-                          gridTemplateColumns:
-                            "14px minmax(0,1fr)",
-                          gap: 1,
-                          py: 1.2,
-                          borderBottom:
-                            "1px dashed rgba(36,74,112,.12)",
-                          "&:last-of-type":
-                            {
-                              borderBottom:
-                                "none",
-                            },
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            width:
-                              10,
-                            height:
-                              10,
-                            mt: 0.6,
-                            borderRadius:
-                              "50%",
-                            bgcolor:
-                              type ===
-                              "refund"
-                                ? "#d14343"
-                                : "#237449",
-                          }}
-                        />
-
-                        <Stack
-                          direction={{
-                            xs:
-                              "column",
-                            sm:
-                              "row",
-                          }}
-                          justifyContent="space-between"
-                          gap={1}
-                        >
-                          <Box>
-                            <Typography
-                              sx={{
-                                fontSize:
-                                  "11px",
-                                fontWeight:
-                                  800,
-                                color:
-                                  "var(--color-navy-deep)",
-                              }}
-                            >
-                              {type ===
-                              "refund"
-                                ? "تصحيح / استرداد"
-                                : "دفعة"}
-                              {" · "}
-                              القسط{" "}
-                              {
-                                event
-                                  ?.installmentNumber
-                              }
-                            </Typography>
-
-                            <Typography
-                              sx={{
-                                mt: 0.2,
-                                fontSize:
-                                  "9.5px",
-                                color:
-                                  "var(--color-muted)",
-                              }}
-                            >
-                              {getEventText(
-                                event
-                              )}
-                            </Typography>
-                          </Box>
-
-                          <Box
-                            sx={{
-                              textAlign: {
-                                xs:
-                                  "right",
-                                sm:
-                                  "left",
-                              },
-                            }}
-                          >
-                            <Typography
-                              sx={{
-                                fontSize:
-                                  "12px",
-                                fontWeight:
-                                  800,
-                                color:
-                                  type ===
-                                  "refund"
-                                    ? "#d14343"
-                                    : "#237449",
-                              }}
-                            >
-                              {type ===
-                              "refund"
-                                ? "−"
-                                : "+"}{" "}
-                              {formatMoney(
-                                amount
-                              )}
-                            </Typography>
-
-                            <Typography
-                              sx={{
-                                mt: 0.2,
-                                fontSize:
-                                  "9px",
-                                color:
-                                  "var(--color-muted)",
-                              }}
-                            >
-                              {formatDate(
-                                getPaymentDate(
-                                  event
-                                )
-                              )}
-                            </Typography>
-                          </Box>
-                        </Stack>
-                      </Box>
-                    );
-                  }
+                  (event) => (
+                    <PaymentEventRow
+                      key={event.eventKey}
+                      event={event}
+                      label={`القسط ${event?.installmentNumber}`}
+                      onVoid={setVoidTarget}
+                    />
+                  )
                 )}
               </Stack>
             )}
@@ -3012,6 +2856,48 @@ const FinancialRecordProfilePage =
             item={selectedAdditionalFee}
             loading={additionalPayLoading}
             onSubmit={handleAdditionalFeePayment}
+          />
+
+          <VoidPaymentDialog
+            open={Boolean(voidTarget)}
+            onClose={() => setVoidTarget(null)}
+            onVoided={refetch}
+            studentId={studentId}
+            academicYearId={academicYearId}
+            title={
+              voidTarget
+                ? `المصروفات الدراسية · القسط ${voidTarget.installmentNumber}`
+                : ""
+            }
+            target={
+              voidTarget
+                ? {
+                    section: "tuition",
+                    installmentNumber: voidTarget.installmentNumber,
+                    paymentIndex: voidTarget.paymentIndex,
+                    amount: voidTarget.amount,
+                    paidAt: voidTarget.paidAt,
+                  }
+                : null
+            }
+          />
+
+          <PaymentHistoryDialog
+            open={Boolean(historyFee)}
+            onClose={() => setHistoryFee(null)}
+            onChanged={refetch}
+            title={historyFee?.name}
+            payments={historyFee?.raw?.payments}
+            studentId={studentId}
+            academicYearId={academicYearId}
+            target={
+              historyFee
+                ? {
+                    section: "additionalFee",
+                    additionalFeeId: historyFee.feeId,
+                  }
+                : null
+            }
           />
 
           <PayDialog
@@ -3518,7 +3404,7 @@ const RefundDialog = ({
       }}
     >
       <DialogTitle>
-        تصحيح / استرداد
+        استرداد
         دفعة
       </DialogTitle>
 
@@ -3557,7 +3443,7 @@ const RefundDialog = ({
                   .amount
                   ?.message
               }
-              label="قيمة التصحيح"
+              label="قيمة الاسترداد"
               type="number"
               required
               valueAsNumber
@@ -3578,7 +3464,7 @@ const RefundDialog = ({
                   .reason
                   ?.message
               }
-              label="سبب التصحيح"
+              label="سبب الاسترداد"
               required
               multiline
               rows={2}
@@ -3599,7 +3485,7 @@ const RefundDialog = ({
                   .refundedAt
                   ?.message
               }
-              label="تاريخ التصحيح"
+              label="تاريخ الاسترداد"
               type="date"
             />
           </Grid>
@@ -3647,7 +3533,7 @@ const RefundDialog = ({
             ).trim()
           }
         >
-          تسجيل التصحيح
+          تسجيل الاسترداد
         </Button>
       </DialogActions>
     </Dialog>
