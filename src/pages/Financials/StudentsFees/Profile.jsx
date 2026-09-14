@@ -63,8 +63,8 @@ import {
 import Back from "@/components/Back/Back";
 import PaymentHistoryDialog, {
   PaymentEventRow,
-} from "@/components/Financial/PaymentHistoryDialog";
-import VoidPaymentDialog from "@/components/Financial/VoidPaymentDialog";
+} from "@/components/financial/PaymentHistoryDialog";
+import VoidPaymentDialog from "@/components/financial/VoidPaymentDialog";
 import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
 import Loading from "@/components/Loading";

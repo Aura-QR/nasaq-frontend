@@ -56,7 +56,7 @@ import {
 } from "@/APIs/financials/busPlans";
 
 import Back from "@/components/Back/Back";
-import PaymentHistoryDialog from "@/components/Financial/PaymentHistoryDialog";
+import PaymentHistoryDialog from "@/components/financial/PaymentHistoryDialog";
 import { lastEffectivePaymentDate } from "@/shared/financial/paymentVoid";
 import Container from "@/components/Container/Container";
 import Input from "@/components/Input/Input";
