@@ -274,7 +274,7 @@ const normalizeRecordDate = (record) =>
       ""
   ).slice(0, 10);
 
-const formatTime = (value) => {
+const formatTime = (value, timeZone = "Asia/Riyadh") => {
   if (!value) return "—";
   const text = String(value);
   if (/^\d{2}:\d{2}/.test(text)) return text.slice(0, 5);
@@ -282,11 +282,71 @@ const formatTime = (value) => {
   const date = new Date(text);
   if (!Number.isNaN(date.getTime())) {
     return new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
+      timeZone,
       hour: "2-digit",
       minute: "2-digit",
     }).format(date);
   }
   return text;
+};
+
+const formatTimeForInput = (value, timeZone = "Asia/Riyadh") => {
+  if (!value) return "";
+
+  const text = String(value);
+  if (/^\d{2}:\d{2}/.test(text)) return text.slice(0, 5);
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+};
+
+const zonedLocalToIso = (date, time, timeZone = "Asia/Riyadh") => {
+  if (!date || !time) return "";
+
+  const [year, month, day] = String(date).split("-").map(Number);
+  const [hour, minute, second = 0] = String(time).split(":").map(Number);
+
+  if (![year, month, day, hour, minute].every(Number.isFinite)) return "";
+
+  const desiredUtc = Date.UTC(year, month - 1, day, hour, minute, second || 0);
+
+  const getOffset = (timestamp) => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date(timestamp));
+
+    const read = (type) =>
+      Number(parts.find((part) => part.type === type)?.value || 0);
+
+    const asUtc = Date.UTC(
+      read("year"),
+      read("month") - 1,
+      read("day"),
+      read("hour"),
+      read("minute"),
+      read("second")
+    );
+
+    return asUtc - timestamp;
+  };
+
+  let result = desiredUtc - getOffset(desiredUtc);
+  result = desiredUtc - getOffset(result);
+  return new Date(result).toISOString();
 };
 
 const formatMinutes = (value, { duration = false } = {}) => {
@@ -362,6 +422,7 @@ const TeacherAttendanceAdmin = () => {
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [teacherCheckInEnabled, setTeacherCheckInEnabled] = useState(false);
   const [schoolLocationConfigured, setSchoolLocationConfigured] = useState(false);
+  const [timezone, setTimezone] = useState("Asia/Riyadh");
 
   // Admin list
   const [recordsLoading, setRecordsLoading] = useState(true);
@@ -419,6 +480,7 @@ const TeacherAttendanceAdmin = () => {
 
     setTeacherCheckInEnabled(Boolean(settings?.teacherCheckInEnabled));
     setSchoolLocationConfigured(isValidSchoolLocation(settings?.location));
+    setTimezone(settings?.timezone || "Asia/Riyadh");
 
     setSettingsLoading(false);
   }, []);
@@ -618,8 +680,22 @@ const TeacherAttendanceAdmin = () => {
       return;
     }
 
+    const checkInAt = zonedLocalToIso(
+      manualForm.date,
+      manualForm.checkInAt,
+      timezone
+    );
+
+    if (!checkInAt) {
+      toast.error("وقت الحضور غير صالح");
+      return;
+    }
+
     setManualSaving(true);
-    const response = await createManualTeacherAttendance(manualForm);
+    const response = await createManualTeacherAttendance({
+      ...manualForm,
+      checkInAt,
+    });
     setManualSaving(false);
 
     if (isFailed(response)) {
@@ -635,14 +711,8 @@ const TeacherAttendanceAdmin = () => {
   const openEditDialog = (record) => {
     setSelectedRecord(record);
     setEditForm({
-      checkInAt:
-        formatTime(record?.checkInAt) === "—"
-          ? ""
-          : formatTime(record?.checkInAt),
-      checkOutAt:
-        formatTime(record?.checkOutAt) === "—"
-          ? ""
-          : formatTime(record?.checkOutAt),
+      checkInAt: formatTimeForInput(record?.checkInAt, timezone),
+      checkOutAt: formatTimeForInput(record?.checkOutAt, timezone),
       notes: record?.notes || "",
     });
     setEditOpen(true);
@@ -657,8 +727,36 @@ const TeacherAttendanceAdmin = () => {
       return;
     }
 
+    if (editForm.checkOutAt && editForm.checkOutAt < editForm.checkInAt) {
+      toast.error("وقت الانصراف لا يمكن أن يسبق وقت الحضور");
+      return;
+    }
+
+    const recordDate = normalizeRecordDate(selectedRecord);
+    const originalCheckInAt = formatTimeForInput(selectedRecord?.checkInAt, timezone);
+    const originalCheckOutAt = formatTimeForInput(selectedRecord?.checkOutAt, timezone);
+    const payload = {
+      notes: editForm.notes,
+    };
+
+    if (editForm.checkInAt !== originalCheckInAt) {
+      payload.checkInAt = zonedLocalToIso(
+        recordDate,
+        editForm.checkInAt,
+        timezone
+      );
+    }
+
+    if (editForm.checkOutAt && editForm.checkOutAt !== originalCheckOutAt) {
+      payload.checkOutAt = zonedLocalToIso(
+        recordDate,
+        editForm.checkOutAt,
+        timezone
+      );
+    }
+
     setEditSaving(true);
-    const response = await updateTeacherAttendance(id, editForm);
+    const response = await updateTeacherAttendance(id, payload);
     setEditSaving(false);
 
     if (isFailed(response)) {
@@ -986,8 +1084,8 @@ const TeacherAttendanceAdmin = () => {
                           </Box>
                         </TableCell>
                         <TableCell align="right">{normalizeRecordDate(record) || "—"}</TableCell>
-                        <TableCell align="right">{formatTime(record?.checkInAt)}</TableCell>
-                        <TableCell align="right">{formatTime(record?.checkOutAt)}</TableCell>
+                        <TableCell align="right">{formatTime(record?.checkInAt, timezone)}</TableCell>
+                        <TableCell align="right">{formatTime(record?.checkOutAt, timezone)}</TableCell>
                         <TableCell align="right">
                           {record?.lateMinutes === null || record?.lateMinutes === undefined
                             ? "غير مقاس"

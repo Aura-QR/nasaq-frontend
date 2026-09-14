@@ -49,6 +49,7 @@ import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
 import Back from "@/components/Back/Back";
+import usePermissions from "@/utils/hooks/usePermissions";
 
 import {
   createManualStaffAttendance,
@@ -257,7 +258,13 @@ const getStaffName = (recordOrStaff) =>
   "إداري / مشرف";
 
 const getStaffId = (item) =>
-  String(item?.staffId || item?._id || item?.id || "").trim();
+  normalizeId(
+    item?.staffId ||
+      item?.staff ||
+      item?._id ||
+      item?.id ||
+      ""
+  );
 
 const roleLabel = (role) =>
   String(role || "").toUpperCase() === "SUPERVISOR" ? "مشرف" : "مدير / إداري";
@@ -292,6 +299,23 @@ const formatTime = (value, timeZone = "Asia/Riyadh") => {
     }).format(date);
   }
   return text;
+};
+
+const formatTimeForInput = (value, timeZone = "Asia/Riyadh") => {
+  if (!value) return "";
+
+  const text = String(value);
+  if (/^\d{2}:\d{2}/.test(text)) return text.slice(0, 5);
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
 };
 
 const formatMinutes = (value, { duration = false } = {}) => {
@@ -370,10 +394,26 @@ const StaffAttendanceAdmin = () => {
   const authState = getAuthUser?.();
   const currentUser = authState?.user || authState || {};
   const adminName = currentUser?.name || currentUser?.fullName || "الإدارة";
+  const currentUserId = normalizeId(
+    currentUser?.userId ||
+      currentUser?._id ||
+      currentUser?.id ||
+      currentUser?.sub ||
+      ""
+  );
+  const currentRole = String(
+    currentUser?.role || authState?.role || ""
+  ).trim().toUpperCase();
+
+  const staffAttendancePermissions = usePermissions("staffAttendance");
+  const canCreateRecords = Boolean(staffAttendancePermissions.add);
+  const canEditRecords = Boolean(staffAttendancePermissions.edit);
+  const canDeleteRecords = Boolean(staffAttendancePermissions.delete);
+  const canConfigureAttendance = ["OWNER", "SUPERVISOR"].includes(currentRole);
 
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(() => (canConfigureAttendance ? 0 : 1));
 
   // Settings
   const [settingsLoading, setSettingsLoading] = useState(true);
@@ -647,6 +687,11 @@ const StaffAttendanceAdmin = () => {
       return;
     }
 
+    if (currentUserId && normalizeId(manualForm.staffId) === currentUserId) {
+      toast.error("لا يمكن تسجيل حضورك يدويًا من شاشة الإدارة");
+      return;
+    }
+
     if (!manualForm.date || !manualForm.checkInAt) {
       toast.error("حدد التاريخ ووقت الحضور");
       return;
@@ -690,14 +735,8 @@ const StaffAttendanceAdmin = () => {
   const openEditDialog = (record) => {
     setSelectedRecord(record);
     setEditForm({
-      checkInAt:
-        formatTime(record?.checkInAt, timezone) === "—"
-          ? ""
-          : formatTime(record?.checkInAt, timezone),
-      checkOutAt:
-        formatTime(record?.checkOutAt, timezone) === "—"
-          ? ""
-          : formatTime(record?.checkOutAt, timezone),
+      checkInAt: formatTimeForInput(record?.checkInAt, timezone),
+      checkOutAt: formatTimeForInput(record?.checkOutAt, timezone),
       notes: record?.notes || "",
     });
     setEditOpen(true);
@@ -712,18 +751,32 @@ const StaffAttendanceAdmin = () => {
       return;
     }
 
-    const recordDate = normalizeRecordDate(selectedRecord);
-    const payload = {
-      checkInAt: zonedLocalToIso(recordDate, editForm.checkInAt, timezone),
-      ...(editForm.checkOutAt
-        ? { checkOutAt: zonedLocalToIso(recordDate, editForm.checkOutAt, timezone) }
-        : {}),
-      notes: editForm.notes,
-    };
-
     if (editForm.checkOutAt && editForm.checkOutAt < editForm.checkInAt) {
       toast.error("وقت الانصراف لا يمكن أن يسبق وقت الحضور");
       return;
+    }
+
+    const recordDate = normalizeRecordDate(selectedRecord);
+    const originalCheckInAt = formatTimeForInput(selectedRecord?.checkInAt, timezone);
+    const originalCheckOutAt = formatTimeForInput(selectedRecord?.checkOutAt, timezone);
+    const payload = {
+      notes: editForm.notes,
+    };
+
+    if (editForm.checkInAt !== originalCheckInAt) {
+      payload.checkInAt = zonedLocalToIso(
+        recordDate,
+        editForm.checkInAt,
+        timezone
+      );
+    }
+
+    if (editForm.checkOutAt && editForm.checkOutAt !== originalCheckOutAt) {
+      payload.checkOutAt = zonedLocalToIso(
+        recordDate,
+        editForm.checkOutAt,
+        timezone
+      );
     }
 
     setEditSaving(true);
@@ -888,19 +941,21 @@ const StaffAttendanceAdmin = () => {
             >
               تحديث
             </Button>
-            <Button
-              variant="contained"
-              onClick={openManualDialog}
-              startIcon={<AddRounded />}
-              sx={{
-                color: "#122F4D",
-                backgroundColor: "#F2D792",
-                boxShadow: "none",
-                "&:hover": { backgroundColor: "#E8C96F", boxShadow: "none" },
-              }}
-            >
-              تسجيل حضور يدوي
-            </Button>
+            {canCreateRecords && (
+              <Button
+                variant="contained"
+                onClick={openManualDialog}
+                startIcon={<AddRounded />}
+                sx={{
+                  color: "#122F4D",
+                  backgroundColor: "#F2D792",
+                  boxShadow: "none",
+                  "&:hover": { backgroundColor: "#E8C96F", boxShadow: "none" },
+                }}
+              >
+                تسجيل حضور يدوي
+              </Button>
+            )}
           </Stack>
         </Stack>
       </Paper>
@@ -1124,22 +1179,32 @@ const StaffAttendanceAdmin = () => {
                           {manual ? getRecordedByName(record) : "—"}
                         </TableCell>
                         <TableCell align="center">
-                          <Stack direction="row" justifyContent="center" spacing={0.2}>
-                            <Tooltip title="تعديل">
-                              <IconButton size="small" onClick={() => openEditDialog(record)}>
-                                <EditRounded fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="حذف">
-                              <IconButton
-                                size="small"
-                                onClick={() => openDeleteDialog(record)}
-                                sx={{ color: "#C94848" }}
-                              >
-                                <DeleteOutlineRounded fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Stack>
+                          {currentUserId && getStaffId(record) === currentUserId ? (
+                            <Typography sx={{ color: "#98A2B3", fontSize: 11 }}>—</Typography>
+                          ) : canEditRecords || canDeleteRecords ? (
+                            <Stack direction="row" justifyContent="center" spacing={0.2}>
+                              {canEditRecords && (
+                                <Tooltip title="تعديل">
+                                  <IconButton size="small" onClick={() => openEditDialog(record)}>
+                                    <EditRounded fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {canDeleteRecords && (
+                                <Tooltip title="حذف">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => openDeleteDialog(record)}
+                                    sx={{ color: "#C94848" }}
+                                  >
+                                    <DeleteOutlineRounded fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </Stack>
+                          ) : (
+                            <Typography sx={{ color: "#98A2B3", fontSize: 11 }}>—</Typography>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -1526,9 +1591,11 @@ const StaffAttendanceAdmin = () => {
             variant="scrollable"
             scrollButtons="auto"
           >
-            <Tab icon={<SettingsRounded />} iconPosition="start" label="إعدادات الحضور" />
-            <Tab icon={<GpsFixedRounded />} iconPosition="start" label="سجل الحضور اليومي" />
-            <Tab icon={<AssessmentRounded />} iconPosition="start" label="تقرير الحضور" />
+            {canConfigureAttendance && (
+              <Tab value={0} icon={<SettingsRounded />} iconPosition="start" label="إعدادات الحضور" />
+            )}
+            <Tab value={1} icon={<GpsFixedRounded />} iconPosition="start" label="سجل الحضور اليومي" />
+            <Tab value={2} icon={<AssessmentRounded />} iconPosition="start" label="تقرير الحضور" />
           </Tabs>
         </Paper>
 
@@ -1563,11 +1630,13 @@ const StaffAttendanceAdmin = () => {
               required
             >
               <MenuItem value="" disabled>اختر الإداري / المشرف</MenuItem>
-              {staffMembers.map((teacher, index) => (
-                <MenuItem key={getStaffId(teacher) || index} value={getStaffId(teacher)}>
-                  {getStaffName(teacher)}
-                </MenuItem>
-              ))}
+              {staffMembers
+                .filter((member) => !currentUserId || getStaffId(member) !== currentUserId)
+                .map((teacher, index) => (
+                  <MenuItem key={getStaffId(teacher) || index} value={getStaffId(teacher)}>
+                    {getStaffName(teacher)}
+                  </MenuItem>
+                ))}
             </TextField>
 
             <Box

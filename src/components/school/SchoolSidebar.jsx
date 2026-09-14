@@ -151,11 +151,7 @@ const NAVIGATION_SECTIONS = [
         label: "حضور الإداريين والمشرفين",
         path: "/school/staff-attendance",
         icon: <AssignmentRounded />,
-        allowedRoles: [
-          ROLES.OWNER,
-          ROLES.MANAGER,
-          ROLES.SUPERVISOR,
-        ],
+        module: "staffAttendance",
       },
       {
         label: "حضوري",
@@ -332,6 +328,11 @@ const SchoolSidebar = ({
     attendance:
       usePermissions(
         "attendance"
+      ),
+
+    staffAttendance:
+      usePermissions(
+        "staffAttendance"
       ),
 
     preparation:

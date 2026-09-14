@@ -71,6 +71,7 @@ import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
 import AuthenticatedRoute from "@/shared/guards/AuthenticatedRoute";
 import GuestRoute from "@/shared/guards/GuestRoute";
 import RoleRoute from "@/shared/guards/RoleRoute";
+import RequirePermission from "@/components/RequirePermission";
 
 // =========================
 // Roles
@@ -307,7 +308,11 @@ const AppRouter = () => {
 
           <Route
             path="/school/staff-attendance"
-            element={<StaffAttendanceAdmin />}
+            element={
+              <RequirePermission module="staffAttendance" operation="read">
+                <StaffAttendanceAdmin />
+              </RequirePermission>
+            }
           />
 
           <Route

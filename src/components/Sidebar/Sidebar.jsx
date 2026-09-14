@@ -185,6 +185,9 @@ const Sidebar = ({ active, setActive }) => {
   const teacherAttendancePermissions =
     usePermissions("teacherAttendance");
 
+  const staffAttendancePermissions =
+    usePermissions("staffAttendance");
+
   const dutyPermissions =
     usePermissions("duty");
 
@@ -400,7 +403,7 @@ const Sidebar = ({ active, setActive }) => {
             Icon: HowToRegRounded,
             iconType: "mui",
             to: "/school/staff-attendance",
-            show: canManageSchoolSettings,
+            show: staffAttendancePermissions.read,
           },
           {
             name: "حضوري",
@@ -668,6 +671,7 @@ const Sidebar = ({ active, setActive }) => {
     financialPermissions.read,
     expensesPermissions.read,
     teacherAttendancePermissions.read,
+    staffAttendancePermissions.read,
     dutyPermissions.read,
     curriculumPermissions.read,
     schoolSettingsPermissions.read,
