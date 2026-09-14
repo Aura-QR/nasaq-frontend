@@ -15,16 +15,22 @@ import {
 } from "@mui/material";
 
 import {
+  AddRounded,
   CheckCircleRounded,
   FactCheckRounded,
   FlagRounded,
+  GpsFixedRounded,
   InfoOutlined,
   AccessTimeRounded,
+  LocationOnRounded,
+  MyLocationRounded,
   RestartAltRounded,
+  RouterRounded,
   SaveRounded,
   SettingsRounded,
   TuneRounded,
   WarningAmberRounded,
+  WifiFindRounded,
 } from "@mui/icons-material";
 
 import {
@@ -41,6 +47,9 @@ import Back from "@/components/Back/Back";
 import Input from "@/components/Input/Input";
 import Loading from "@/components/Loading";
 import usePermissions from "@/utils/hooks/usePermissions";
+import { requestBrowserLocation } from "@/utils/geolocation";
+
+import { detectStaffAttendanceIp } from "@/APIs/school/staffAttendance";
 
 import {
   fetchSchoolSettings,
@@ -548,6 +557,60 @@ const getLocalNationalities = (
       []
   );
 
+const normalizeCoordinate = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+};
+
+const isValidAttendanceLocation = (latValue, lngValue) => {
+  const latitude = normalizeCoordinate(latValue);
+  const longitude = normalizeCoordinate(lngValue);
+
+  if (latitude === null || longitude === null) {
+    return false;
+  }
+
+  const insideValidRange =
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180;
+
+  return insideValidRange && !(latitude === 0 && longitude === 0);
+};
+
+const normalizeNetworkIps = (value) =>
+  Array.from(
+    new Set(
+      (Array.isArray(value) ? value : [])
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+const sameNetworkIps = (first, second) => {
+  const a = normalizeNetworkIps(first).sort();
+  const b = normalizeNetworkIps(second).sort();
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+};
+
+const sameAttendanceLocation = (firstLat, firstLng, secondLat, secondLng) => {
+  const firstIsValid = isValidAttendanceLocation(firstLat, firstLng);
+  const secondIsValid = isValidAttendanceLocation(secondLat, secondLng);
+
+  if (!firstIsValid && !secondIsValid) return true;
+  if (firstIsValid !== secondIsValid) return false;
+
+  return (
+    Number(firstLat) === Number(secondLat) &&
+    Number(firstLng) === Number(secondLng)
+  );
+};
+
 const pageCardSx = {
   border:
     "1px solid rgba(36,74,112,0.08)",
@@ -577,6 +640,11 @@ const SchoolSettings = () => {
       workStartTime: "",
       workSchedule:
         createDefaultWorkSchedule(),
+      timezone: "Asia/Riyadh",
+      locationLat: "",
+      locationLng: "",
+      checkInRadiusMeters: 150,
+      schoolNetworkIps: [],
       localNationalities: [],
     },
   });
@@ -585,6 +653,12 @@ const SchoolSettings = () => {
     useState(true);
   const [saving, setSaving] =
     useState(false);
+  const [locating, setLocating] =
+    useState(false);
+  const [detectingIp, setDetectingIp] =
+    useState(false);
+  const [newIp, setNewIp] =
+    useState("");
 
   const [
     nationalityOptions,
@@ -612,6 +686,11 @@ const SchoolSettings = () => {
     workStartTime: "",
     workSchedule:
       createDefaultWorkSchedule(),
+    timezone: "Asia/Riyadh",
+    locationLat: "",
+    locationLng: "",
+    checkInRadiusMeters: 150,
+    schoolNetworkIps: [],
     localNationalities: [],
   });
 
@@ -639,6 +718,17 @@ const SchoolSettings = () => {
       currentWorkStartTime,
       currentPeriodsPerDay
     );
+
+  const currentTimezone =
+    String(watch("timezone") || "Asia/Riyadh").trim() || "Asia/Riyadh";
+
+  const currentLocationLat = watch("locationLat");
+  const currentLocationLng = watch("locationLng");
+  const currentRadius = Number(watch("checkInRadiusMeters") || 150);
+  const currentNetworkIps = normalizeNetworkIps(watch("schoolNetworkIps"));
+
+  const currentLocationIsValid =
+    isValidAttendanceLocation(currentLocationLat, currentLocationLng);
 
   const workingDaysCount =
     currentWorkSchedule.filter(
@@ -687,6 +777,18 @@ const SchoolSettings = () => {
         currentWorkSchedule,
         savedSettings.workSchedule
       ) ||
+      currentTimezone !== savedSettings.timezone ||
+      !sameAttendanceLocation(
+        currentLocationLat,
+        currentLocationLng,
+        savedSettings.locationLat,
+        savedSettings.locationLng
+      ) ||
+      currentRadius !== savedSettings.checkInRadiusMeters ||
+      !sameNetworkIps(
+        currentNetworkIps,
+        savedSettings.schoolNetworkIps
+      ) ||
       !sameStringArray(
         currentLocalNationalities,
         savedSettings.localNationalities
@@ -694,6 +796,11 @@ const SchoolSettings = () => {
     [
       currentValue,
       currentWorkSchedule,
+      currentTimezone,
+      currentLocationLat,
+      currentLocationLng,
+      currentRadius,
+      currentNetworkIps,
       currentLocalNationalities,
       savedSettings,
     ]
@@ -725,6 +832,11 @@ const SchoolSettings = () => {
       let nextWorkStartTime = "";
       let nextWorkSchedule =
         createDefaultWorkSchedule();
+      let nextTimezone = "Asia/Riyadh";
+      let nextLocationLat = "";
+      let nextLocationLng = "";
+      let nextCheckInRadiusMeters = 150;
+      let nextSchoolNetworkIps = [];
       let nextLocalNationalities = [];
 
       if (
@@ -775,6 +887,29 @@ const SchoolSettings = () => {
               nextWorkStartTime,
               nextPeriodsPerDay
             );
+
+          nextTimezone =
+            String(settings?.timezone || "Asia/Riyadh").trim() || "Asia/Riyadh";
+
+          if (
+            isValidAttendanceLocation(
+              settings?.location?.lat,
+              settings?.location?.lng
+            )
+          ) {
+            nextLocationLat = String(settings.location.lat);
+            nextLocationLng = String(settings.location.lng);
+          }
+
+          const savedRadius = Number(settings?.checkInRadiusMeters);
+          nextCheckInRadiusMeters =
+            Number.isFinite(savedRadius) && savedRadius >= 20 && savedRadius <= 2000
+              ? savedRadius
+              : 150;
+
+          nextSchoolNetworkIps = normalizeNetworkIps(
+            settings?.schoolNetworkIps
+          );
 
           nextLocalNationalities =
             getLocalNationalities(
@@ -840,6 +975,13 @@ const SchoolSettings = () => {
           ),
         workSchedule:
           nextWorkSchedule,
+        timezone: nextTimezone,
+        locationLat: nextLocationLat,
+        locationLng: nextLocationLng,
+        checkInRadiusMeters:
+          nextCheckInRadiusMeters,
+        schoolNetworkIps:
+          nextSchoolNetworkIps,
         localNationalities:
           nextLocalNationalities,
       };
@@ -980,6 +1122,78 @@ const SchoolSettings = () => {
     );
   };
 
+  const handleUseMyLocation = async () => {
+    setLocating(true);
+
+    try {
+      const { lat, lng } = await requestBrowserLocation();
+
+      if (!isValidAttendanceLocation(lat, lng)) {
+        toast.error(
+          "المتصفح أعاد موقعًا غير صالح. تأكد من تشغيل خدمة الموقع ثم حاول مرة أخرى."
+        );
+        return;
+      }
+
+      setValue("locationLat", String(lat), { shouldDirty: true });
+      setValue("locationLng", String(lng), { shouldDirty: true });
+      toast.success("تم التقاط موقع المدرسة الحالي");
+    } catch (error) {
+      toast.error(
+        error?.message ||
+          "تعذر التقاط الموقع. تأكد من السماح للمتصفح باستخدام الموقع."
+      );
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  const handleDetectIp = async () => {
+    setDetectingIp(true);
+    const response = await detectStaffAttendanceIp();
+    setDetectingIp(false);
+
+    if (response?.status === false) {
+      toast.error(response?.message || "تعذر اكتشاف عنوان الشبكة الحالي");
+      return;
+    }
+
+    const ip = String(response?.data?.ip || response?.ip || "").trim();
+    if (!ip) {
+      toast.error("لم يرجع السيرفر عنوان IP صالحًا");
+      return;
+    }
+
+    const nextIps = normalizeNetworkIps([ip, ...currentNetworkIps]);
+    setValue("schoolNetworkIps", nextIps, { shouldDirty: true });
+    toast.success(`تم اكتشاف ${ip}`);
+  };
+
+  const addManualIp = () => {
+    const value = newIp.trim();
+    if (!value) return;
+
+    if (currentNetworkIps.includes(value)) {
+      toast.info("عنوان الشبكة موجود بالفعل");
+      return;
+    }
+
+    setValue(
+      "schoolNetworkIps",
+      normalizeNetworkIps([...currentNetworkIps, value]),
+      { shouldDirty: true }
+    );
+    setNewIp("");
+  };
+
+  const removeNetworkIp = (ip) => {
+    setValue(
+      "schoolNetworkIps",
+      currentNetworkIps.filter((item) => item !== ip),
+      { shouldDirty: true }
+    );
+  };
+
   const onSubmit = async (formData) => {
     const defaultPassingGrade =
       normalizePassingGrade(
@@ -1009,6 +1223,18 @@ const SchoolSettings = () => {
         formData.localNationalities
       );
 
+    const timezone =
+      String(formData.timezone || "Asia/Riyadh").trim() || "Asia/Riyadh";
+    const locationLat = normalizeCoordinate(formData.locationLat);
+    const locationLng = normalizeCoordinate(formData.locationLng);
+    const checkInRadiusMeters = Number(formData.checkInRadiusMeters);
+    const schoolNetworkIps = normalizeNetworkIps(formData.schoolNetworkIps);
+    const hasAnyLocationValue =
+      String(formData.locationLat ?? "").trim() !== "" ||
+      String(formData.locationLng ?? "").trim() !== "";
+    const hasValidLocation =
+      isValidAttendanceLocation(locationLat, locationLng);
+
     if (
       !isValidPassingGrade(
         defaultPassingGrade
@@ -1032,6 +1258,27 @@ const SchoolSettings = () => {
 
     if (workScheduleError) {
       toast.error(workScheduleError);
+      return;
+    }
+
+    if (!timezone) {
+      toast.error("حدد المنطقة الزمنية للمدرسة");
+      return;
+    }
+
+    if (
+      !Number.isFinite(checkInRadiusMeters) ||
+      checkInRadiusMeters < 20 ||
+      checkInRadiusMeters > 2000
+    ) {
+      toast.error("نصف قطر تسجيل الحضور يجب أن يكون بين 20 و2000 متر");
+      return;
+    }
+
+    if (hasAnyLocationValue && !hasValidLocation) {
+      toast.error(
+        "إحداثيات موقع المدرسة غير صالحة. أدخل Latitude وLongitude صحيحين ولا تستخدم 0,0."
+      );
       return;
     }
 
@@ -1085,6 +1332,17 @@ const SchoolSettings = () => {
           // Compatibility shim for older attendance logic.
           workStartTime:
             workStartTime || null,
+          timezone,
+          checkInRadiusMeters,
+          schoolNetworkIps,
+          ...(hasValidLocation
+            ? {
+                location: {
+                  lat: locationLat,
+                  lng: locationLng,
+                },
+              }
+            : {}),
           localNationalities,
         });
 
@@ -1126,6 +1384,29 @@ const SchoolSettings = () => {
           ),
         workSchedule:
           nextWorkSchedule,
+        timezone:
+          String(updatedSettings?.timezone || timezone).trim() || timezone,
+        locationLat:
+          isValidAttendanceLocation(
+            updatedSettings?.location?.lat ?? locationLat,
+            updatedSettings?.location?.lng ?? locationLng
+          )
+            ? String(updatedSettings?.location?.lat ?? locationLat)
+            : "",
+        locationLng:
+          isValidAttendanceLocation(
+            updatedSettings?.location?.lat ?? locationLat,
+            updatedSettings?.location?.lng ?? locationLng
+          )
+            ? String(updatedSettings?.location?.lng ?? locationLng)
+            : "",
+        checkInRadiusMeters:
+          Number(updatedSettings?.checkInRadiusMeters ?? checkInRadiusMeters) ||
+          checkInRadiusMeters,
+        schoolNetworkIps:
+          normalizeNetworkIps(
+            updatedSettings?.schoolNetworkIps ?? schoolNetworkIps
+          ),
         localNationalities:
           normalizeNationalityCodes(
             updatedSettings
@@ -1683,6 +1964,327 @@ const SchoolSettings = () => {
                 </Stack>
               </Box>
             </Paper>
+          </Box>
+
+          <Box
+            sx={{
+              px: { xs: 1.4, md: 1.8 },
+              py: 1.25,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 1,
+              background:
+                "linear-gradient(135deg, rgba(36,74,112,0.035), rgba(255,255,255,0.9))",
+            }}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1}
+            >
+              <Box
+                sx={{
+                  width: 40,
+                  height: 40,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                  color: "var(--color-gold-dark)",
+                  backgroundColor: "var(--color-gold-soft)",
+                  borderRadius: "12px",
+                }}
+              >
+                <LocationOnRounded />
+              </Box>
+
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  sx={{
+                    color: "var(--color-navy-deep)",
+                    fontSize: { xs: "15px", md: "17px" },
+                    fontWeight: 900,
+                  }}
+                >
+                  إعدادات الحضور والموقع
+                </Typography>
+                <Typography
+                  sx={{
+                    mt: 0.15,
+                    color: "var(--color-muted)",
+                    fontSize: "10px",
+                    lineHeight: 1.65,
+                  }}
+                >
+                  يتم ضبط موقع المدرسة ونطاق التحقق والشبكة والمنطقة الزمنية هنا مرة واحدة، وتستخدمها أنظمة حضور المعلمين والإداريين والمشرفين.
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Chip
+              label={currentLocationIsValid ? "موقع المدرسة مضبوط" : "موقع المدرسة غير مضبوط"}
+              size="small"
+              sx={{
+                height: 29,
+                color: currentLocationIsValid ? "#1f805f" : "#9a681d",
+                backgroundColor: currentLocationIsValid
+                  ? "rgba(39,150,111,0.1)"
+                  : "var(--color-gold-soft)",
+                border: currentLocationIsValid
+                  ? "1px solid rgba(39,150,111,0.18)"
+                  : "1px solid rgba(211,164,79,0.22)",
+                fontSize: "9.5px",
+                fontWeight: 800,
+              }}
+            />
+          </Box>
+
+          <Box sx={{ p: { xs: 1.35, md: 1.8 } }}>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1.15fr) minmax(300px,.85fr)" },
+                gap: 1.25,
+                alignItems: "stretch",
+              }}
+            >
+              <Paper
+                elevation={0}
+                sx={{
+                  p: { xs: 1.25, md: 1.5 },
+                  border: "1px solid rgba(36,74,112,0.09)",
+                  borderRadius: "15px",
+                  backgroundColor: "var(--color-white)",
+                }}
+              >
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "stretch", sm: "center" }}
+                  gap={1}
+                >
+                  <Box>
+                    <Stack direction="row" alignItems="center" spacing={0.7}>
+                      <GpsFixedRounded sx={{ color: "var(--color-gold-dark)", fontSize: 20 }} />
+                      <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "12px", fontWeight: 900 }}>
+                        موقع المدرسة
+                      </Typography>
+                    </Stack>
+                    <Typography sx={{ mt: 0.25, color: "var(--color-muted)", fontSize: "9.5px", lineHeight: 1.7 }}>
+                      الموقع ده هو المرجع الوحيد للتحقق من حضور كل الفئات.
+                    </Typography>
+                  </Box>
+
+                  <Button
+                    type="button"
+                    variant="outlined"
+                    onClick={handleUseMyLocation}
+                    disabled={saving || locating}
+                    startIcon={locating ? <CircularProgress size={15} /> : <MyLocationRounded />}
+                    sx={{ borderRadius: "11px", whiteSpace: "nowrap" }}
+                  >
+                    {locating ? "جارٍ تحديد الموقع" : "استخدم موقعي الحالي"}
+                  </Button>
+                </Stack>
+
+                <Box
+                  sx={{
+                    mt: 1.3,
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                    gap: 1,
+                  }}
+                >
+                  <TextField
+                    label="Latitude"
+                    value={currentLocationLat || ""}
+                    onChange={(event) =>
+                      setValue("locationLat", event.target.value, { shouldDirty: true })
+                    }
+                    type="number"
+                    inputProps={{ step: "any", min: -90, max: 90 }}
+                    disabled={saving}
+                    fullWidth
+                    size="small"
+                  />
+                  <TextField
+                    label="Longitude"
+                    value={currentLocationLng || ""}
+                    onChange={(event) =>
+                      setValue("locationLng", event.target.value, { shouldDirty: true })
+                    }
+                    type="number"
+                    inputProps={{ step: "any", min: -180, max: 180 }}
+                    disabled={saving}
+                    fullWidth
+                    size="small"
+                  />
+                </Box>
+
+                {!currentLocationIsValid &&
+                  (String(currentLocationLat || "").trim() || String(currentLocationLng || "").trim()) ? (
+                    <Alert severity="warning" sx={{ mt: 1, py: 0.2, borderRadius: "11px", fontSize: "9.5px" }}>
+                      أكمل الإحداثيات الصحيحة ولا تستخدم 0,0.
+                    </Alert>
+                  ) : null}
+
+                <Box sx={{ mt: 1.6 }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                    <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "10.5px", fontWeight: 800 }}>
+                      نصف قطر قبول تسجيل الحضور
+                    </Typography>
+                    <Chip
+                      label={`${Number.isFinite(currentRadius) ? currentRadius : 150} متر`}
+                      size="small"
+                      sx={{ height: 25, fontSize: "9px", fontWeight: 800 }}
+                    />
+                  </Stack>
+                  <Slider
+                    value={Number.isFinite(currentRadius) ? currentRadius : 150}
+                    onChange={(_, value) =>
+                      setValue("checkInRadiusMeters", Number(value), { shouldDirty: true })
+                    }
+                    min={20}
+                    max={2000}
+                    step={10}
+                    disabled={saving}
+                    valueLabelDisplay="auto"
+                    sx={{ mt: 0.6, color: "var(--color-gold-dark)" }}
+                  />
+                </Box>
+              </Paper>
+
+              <Paper
+                elevation={0}
+                sx={{
+                  p: { xs: 1.25, md: 1.5 },
+                  border: "1px solid rgba(36,74,112,0.09)",
+                  borderRadius: "15px",
+                  backgroundColor: "var(--color-white)",
+                }}
+              >
+                <Stack spacing={1.2}>
+                  <Box>
+                    <Stack direction="row" alignItems="center" spacing={0.7}>
+                      <AccessTimeRounded sx={{ color: "var(--color-gold-dark)", fontSize: 20 }} />
+                      <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "12px", fontWeight: 900 }}>
+                        المنطقة الزمنية
+                      </Typography>
+                    </Stack>
+                    <TextField
+                      value={currentTimezone}
+                      onChange={(event) =>
+                        setValue("timezone", event.target.value, { shouldDirty: true })
+                      }
+                      label="Timezone"
+                      placeholder="Asia/Riyadh"
+                      disabled={saving}
+                      fullWidth
+                      size="small"
+                      sx={{ mt: 1 }}
+                    />
+                  </Box>
+
+                  <Divider sx={{ borderColor: "rgba(36,74,112,0.07)" }} />
+
+                  <Box>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      justifyContent="space-between"
+                      alignItems={{ xs: "stretch", sm: "center" }}
+                      gap={0.8}
+                    >
+                      <Box>
+                        <Stack direction="row" alignItems="center" spacing={0.7}>
+                          <RouterRounded sx={{ color: "var(--color-gold-dark)", fontSize: 20 }} />
+                          <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "12px", fontWeight: 900 }}>
+                            شبكة المدرسة
+                          </Typography>
+                        </Stack>
+                        <Typography sx={{ mt: 0.2, color: "var(--color-muted)", fontSize: "9px" }}>
+                          اختيارية؛ يمكن الاعتماد على GPS فقط.
+                        </Typography>
+                      </Box>
+
+                      <Button
+                        type="button"
+                        variant="outlined"
+                        onClick={handleDetectIp}
+                        disabled={saving || detectingIp}
+                        startIcon={detectingIp ? <CircularProgress size={14} /> : <WifiFindRounded />}
+                        sx={{ borderRadius: "10px", whiteSpace: "nowrap" }}
+                      >
+                        {detectingIp ? "جارٍ الاكتشاف" : "اكتشاف IP"}
+                      </Button>
+                    </Stack>
+
+                    <Stack direction="row" flexWrap="wrap" gap={0.65} sx={{ mt: 1 }}>
+                      {currentNetworkIps.length ? (
+                        currentNetworkIps.map((ip) => (
+                          <Chip
+                            key={ip}
+                            label={ip}
+                            onDelete={saving ? undefined : () => removeNetworkIp(ip)}
+                            size="small"
+                            sx={{ fontFamily: "monospace", fontSize: "9px" }}
+                          />
+                        ))
+                      ) : (
+                        <Typography sx={{ color: "var(--color-muted)", fontSize: "9.5px" }}>
+                          لا توجد شبكة مسجلة حاليًا.
+                        </Typography>
+                      )}
+                    </Stack>
+
+                    <Stack direction={{ xs: "column", sm: "row" }} gap={0.8} sx={{ mt: 1 }}>
+                      <TextField
+                        label="إضافة IP يدوي"
+                        value={newIp}
+                        onChange={(event) => setNewIp(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            addManualIp();
+                          }
+                        }}
+                        disabled={saving}
+                        placeholder="مثال: 203.0.113.10"
+                        fullWidth
+                        size="small"
+                      />
+                      <Button
+                        type="button"
+                        onClick={addManualIp}
+                        disabled={saving || !newIp.trim()}
+                        variant="outlined"
+                        startIcon={<AddRounded />}
+                        sx={{ borderRadius: "10px", whiteSpace: "nowrap" }}
+                      >
+                        إضافة
+                      </Button>
+                    </Stack>
+                  </Box>
+                </Stack>
+              </Paper>
+            </Box>
+
+            <Alert
+              severity="info"
+              icon={<InfoOutlined />}
+              sx={{
+                mt: 1.15,
+                py: 0.35,
+                borderRadius: "13px",
+                border: "1px solid rgba(36,74,112,0.1)",
+                backgroundColor: "rgba(36,74,112,0.035)",
+                color: "var(--color-navy-deep)",
+                fontSize: "9.5px",
+                lineHeight: 1.7,
+              }}
+            >
+              التفعيل يظل منفصلًا: المعلمين من شاشة حضور المعلمين، والإداريين والمشرفين من شاشتهم. أما الإعدادات الموجودة هنا فهي مشتركة للجميع.
+            </Alert>
           </Box>
 
           <Divider

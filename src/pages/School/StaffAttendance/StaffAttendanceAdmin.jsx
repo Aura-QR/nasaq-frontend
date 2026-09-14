@@ -333,54 +333,21 @@ const getRecordId = (record) => normalizeId(record);
 const isFailed = (response) =>
   response?.status === false || Number(response?.statusCode) >= 400;
 
-const WORK_WEEK_DAYS = [
-  { day: "sunday", label: "الأحد" },
-  { day: "monday", label: "الاثنين" },
-  { day: "tuesday", label: "الثلاثاء" },
-  { day: "wednesday", label: "الأربعاء" },
-  { day: "thursday", label: "الخميس" },
-  { day: "friday", label: "الجمعة" },
-  { day: "saturday", label: "السبت" },
-];
+const isValidSchoolLocation = (location) => {
+  const latitude = Number(location?.lat);
+  const longitude = Number(location?.lng);
 
-const normalizeWorkSchedule = (value) => {
-  const incoming = Array.isArray(value) ? value : [];
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return false;
+  }
 
-  return WORK_WEEK_DAYS.map(({ day }) => {
-    const saved = incoming.find(
-      (item) =>
-        String(item?.day || "")
-          .trim()
-          .toLowerCase() === day
-    );
+  const insideValidRange =
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180;
 
-    if (!saved) {
-      // Empty/unconfigured schedule means every day is treated as a
-      // working day but without measured start/end times.
-      return {
-        day,
-        isWorkingDay: true,
-        startTime: "",
-        endTime: "",
-      };
-    }
-
-    const isWorkingDay =
-      saved?.isWorkingDay !== false;
-
-    return {
-      day,
-      isWorkingDay,
-      startTime:
-        isWorkingDay && saved?.startTime
-          ? String(saved.startTime).slice(0, 5)
-          : "",
-      endTime:
-        isWorkingDay && saved?.endTime
-          ? String(saved.endTime).slice(0, 5)
-          : "",
-    };
-  });
+  return insideValidRange && !(latitude === 0 && longitude === 0);
 };
 
 const pageCardSx = {
@@ -412,11 +379,7 @@ const StaffAttendanceAdmin = () => {
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [staffCheckInEnabled, setStaffCheckInEnabled] = useState(false);
-  const [lat, setLat] = useState("");
-  const [lng, setLng] = useState("");
-  const [radius, setRadius] = useState(150);
-  const [workSchedule, setWorkSchedule] = useState(() => normalizeWorkSchedule([]));
-  const [networkIps, setNetworkIps] = useState([]);
+  const [schoolLocationConfigured, setSchoolLocationConfigured] = useState(false);
 
   // Admin list
   const [recordsLoading, setRecordsLoading] = useState(true);
@@ -464,40 +427,6 @@ const StaffAttendanceAdmin = () => {
 
   const today = useMemo(() => todayKey(timezone), [timezone]);
 
-  const parseCoordinate = (value) => {
-    if (value === null || value === undefined) return null;
-
-    const normalized = String(value).trim();
-    if (!normalized) return null;
-
-    const numericValue = Number(normalized);
-    return Number.isFinite(numericValue) ? numericValue : null;
-  };
-
-  const isValidSchoolLocation = (latValue, lngValue) => {
-    const latitude = parseCoordinate(latValue);
-    const longitude = parseCoordinate(lngValue);
-
-    if (latitude === null || longitude === null) return false;
-
-    const insideValidRange =
-      latitude >= -90 &&
-      latitude <= 90 &&
-      longitude >= -180 &&
-      longitude <= 180;
-
-    // 0,0 is almost always an empty/default coordinate in our UI flow.
-    // Do not allow it to activate attendance by mistake.
-    const isZeroZero = latitude === 0 && longitude === 0;
-
-    return insideValidRange && !isZeroZero;
-  };
-
-  const hasValidLocation = useMemo(
-    () => isValidSchoolLocation(lat, lng),
-    [lat, lng]
-  );
-
   const loadSettings = useCallback(async () => {
     setSettingsLoading(true);
 
@@ -510,15 +439,9 @@ const StaffAttendanceAdmin = () => {
 
     const settings = extractSettings(response);
 
-    const savedLat = settings?.location?.lat;
-    const savedLng = settings?.location?.lng;
-    const savedLocationIsValid = isValidSchoolLocation(savedLat, savedLng);
-
-    // Ignore the accidental 0,0 value that may have been saved by older UI logic.
-    setLat(savedLocationIsValid ? String(savedLat) : "");
-    setLng(savedLocationIsValid ? String(savedLng) : "");
-
     setStaffCheckInEnabled(settings?.staffCheckInEnabled === true);
+    setSchoolLocationConfigured(isValidSchoolLocation(settings?.location));
+
     const nextTimezone = settings?.timezone || "Asia/Riyadh";
     setTimezone(nextTimezone);
     setSummaryRange((current) => ({
@@ -526,16 +449,6 @@ const StaffAttendanceAdmin = () => {
       dateFrom: monthStartKey(nextTimezone),
       dateTo: todayKey(nextTimezone),
     }));
-
-    setRadius(Number(settings?.checkInRadiusMeters) || 150);
-    setWorkSchedule(
-      normalizeWorkSchedule(settings?.workSchedule)
-    );
-    setNetworkIps(
-      Array.isArray(settings?.schoolNetworkIps)
-        ? settings.schoolNetworkIps.filter(Boolean)
-        : []
-    );
 
     setSettingsLoading(false);
   }, []);
@@ -697,9 +610,9 @@ const StaffAttendanceAdmin = () => {
   );
 
   const saveSettings = async () => {
-    if (staffCheckInEnabled && !hasValidLocation) {
+    if (staffCheckInEnabled && !schoolLocationConfigured) {
       toast.error(
-        "حدد موقع المدرسة من إعدادات الحضور المشتركة أولًا قبل تفعيل حضور الإداريين والمشرفين."
+        "حدد موقع المدرسة من إعدادات المدرسة أولًا قبل تفعيل حضور الإداريين والمشرفين."
       );
       return;
     }
@@ -707,8 +620,7 @@ const StaffAttendanceAdmin = () => {
     setSettingsSaving(true);
 
     // Only this flag belongs to the staff attendance screen.
-    // Location, radius, network and work schedule are shared school settings
-    // and are edited once from the teacher attendance settings screen.
+    // Shared attendance settings are edited once from School Settings.
     const response = await updateStaffAttendanceSettings({
       staffCheckInEnabled,
     });
@@ -862,8 +774,6 @@ const StaffAttendanceAdmin = () => {
       );
     }
 
-    const workingDaysCount = workSchedule.filter((item) => item?.isWorkingDay).length;
-
     return (
       <Stack spacing={1.5}>
         <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
@@ -878,7 +788,7 @@ const StaffAttendanceAdmin = () => {
                 تفعيل الحضور والانصراف الذاتي للإداريين والمشرفين
               </Typography>
               <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
-                هذا المفتاح خاص بالإداريين والمشرفين فقط. موقع المدرسة ونطاق التحقق والشبكة وجدول الدوام إعدادات مشتركة ولا يتم ضبطها مرة ثانية هنا.
+                هنا يتم تفعيل حضور الإداريين والمشرفين فقط. موقع المدرسة ونطاق التحقق والشبكة وجدول الدوام يتم ضبطهم مرة واحدة من إعدادات المدرسة.
               </Typography>
             </Box>
 
@@ -893,54 +803,39 @@ const StaffAttendanceAdmin = () => {
             />
           </Stack>
 
-          {staffCheckInEnabled && !hasValidLocation && (
+          {staffCheckInEnabled && !schoolLocationConfigured && (
             <Alert severity="warning" sx={{ mt: 1.2, borderRadius: "12px" }}>
-              لا يوجد موقع مدرسة صالح محفوظ. اضبط الموقع مرة واحدة من إعدادات حضور المعلمين ثم فعّل حضور الإداريين والمشرفين.
+              موقع المدرسة غير مضبوط. اضبطه من «إعدادات المدرسة» أولًا ثم فعّل تسجيل الحضور.
             </Alert>
           )}
         </Paper>
 
         <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
           <Stack
-            direction={{ xs: "column", md: "row" }}
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ xs: "stretch", sm: "center" }}
             justifyContent="space-between"
-            alignItems={{ xs: "stretch", md: "center" }}
-            gap={1.4}
+            gap={1.2}
           >
             <Box>
-              <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
-                إعدادات التحقق المشتركة
+              <Typography sx={{ color: "#122F4D", fontSize: 14, fontWeight: 900 }}>
+                إعدادات الموقع والحضور المشتركة
               </Typography>
-              <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.8 }}>
-                نفس موقع المدرسة ونصف قطر القبول وشبكة المدرسة وجدول الدوام تُستخدم للمعلمين والإداريين والمشرفين. يتم تعديلها من مكان واحد فقط لتجنب اختلاف الإعدادات.
+              <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
+                يتم تعديل الموقع، نصف قطر القبول، شبكة المدرسة وجدول الدوام من إعدادات المدرسة فقط حتى تستخدمها كل فئات الحضور بنفس القيم.
               </Typography>
             </Box>
 
             <Button
               type="button"
               variant="outlined"
-              onClick={() => navigate("/school/teacher-attendance")}
+              onClick={() => navigate("/school/settings")}
               startIcon={<SettingsRounded />}
               sx={{ borderRadius: "11px", whiteSpace: "nowrap" }}
             >
-              تعديل الإعدادات المشتركة
+              فتح إعدادات المدرسة
             </Button>
           </Stack>
-
-          <Stack direction="row" flexWrap="wrap" gap={0.8} sx={{ mt: 1.5 }}>
-            <Chip
-              label={hasValidLocation ? "موقع المدرسة: مضبوط" : "موقع المدرسة: غير مضبوط"}
-              color={hasValidLocation ? "success" : "warning"}
-              variant="outlined"
-            />
-            <Chip label={`نصف قطر القبول: ${Number(radius) || 150} متر`} variant="outlined" />
-            <Chip label={`الشبكات المسجلة: ${networkIps.length}`} variant="outlined" />
-            <Chip label={`أيام العمل: ${workingDaysCount}`} variant="outlined" />
-          </Stack>
-
-          <Alert severity="info" sx={{ mt: 1.3, borderRadius: "12px" }}>
-            تغيير الإعدادات المشتركة يؤثر على تحقق الحضور للمعلمين والإداريين والمشرفين معًا، بينما يظل التفعيل منفصلًا لكل فئة.
-          </Alert>
         </Paper>
 
         <Stack direction="row" justifyContent="flex-end">

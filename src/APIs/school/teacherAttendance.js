@@ -47,15 +47,33 @@ export const updateTeacherAttendanceSettings = async (
         data?.teacherCheckInEnabled
       ),
 
-      checkInRadiusMeters: Number(
-        data?.checkInRadiusMeters
-      ),
-
-      schoolNetworkIps: Array.isArray(
-        data?.schoolNetworkIps
+      ...(Object.prototype.hasOwnProperty.call(
+        data,
+        "checkInRadiusMeters"
       )
-        ? data.schoolNetworkIps.filter(Boolean)
-        : [],
+        ? {
+            checkInRadiusMeters: Number(
+              data.checkInRadiusMeters
+            ),
+          }
+        : {}),
+
+      ...(Object.prototype.hasOwnProperty.call(
+        data,
+        "schoolNetworkIps"
+      )
+        ? {
+            schoolNetworkIps: Array.isArray(
+              data.schoolNetworkIps
+            )
+              ? data.schoolNetworkIps
+                  .map((item) =>
+                    String(item || "").trim()
+                  )
+                  .filter(Boolean)
+              : [],
+          }
+        : {}),
 
       ...(data?.location &&
       Number.isFinite(Number(data.location.lat)) &&
@@ -69,7 +87,7 @@ export const updateTeacherAttendanceSettings = async (
         : {}),
 
       // workSchedule يستبدل الجدول بالكامل في الباك،
-      // لذلك الصفحة ترسل الأيام السبعة كاملة عند الحفظ.
+      // لذلك لا نرسله إلا من شاشة إعدادات المدرسة المشتركة.
       ...(Object.prototype.hasOwnProperty.call(
         data,
         "workSchedule"

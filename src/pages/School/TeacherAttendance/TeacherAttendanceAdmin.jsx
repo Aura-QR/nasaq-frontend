@@ -15,7 +15,6 @@ import {
   MenuItem,
   Pagination,
   Paper,
-  Slider,
   Stack,
   Switch,
   Tab,
@@ -37,21 +36,17 @@ import {
   DeleteOutlineRounded,
   EditRounded,
   GpsFixedRounded,
-  LocationOnRounded,
-  MyLocationRounded,
   PersonOffRounded,
   RefreshRounded,
-  RouterRounded,
   SaveRounded,
   SettingsRounded,
-  WifiFindRounded,
 } from "@mui/icons-material";
 
 import { useAuthUser } from "react-auth-kit";
+import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 
-import { requestBrowserLocation } from "@/utils/geolocation";
 
 import Container from "@/components/Container/Container";
 import Back from "@/components/Back/Back";
@@ -61,7 +56,6 @@ import { getSchoolTeachers } from "@/APIs/school/teachers";
 import {
   createManualTeacherAttendance,
   deleteTeacherAttendance,
-  detectTeacherAttendanceIp,
   fetchAbsentTeachers,
   fetchTeacherAttendanceAdmin,
   fetchTeacherAttendanceSettings,
@@ -323,54 +317,21 @@ const getRecordId = (record) => normalizeId(record);
 const isFailed = (response) =>
   response?.status === false || Number(response?.statusCode) >= 400;
 
-const WORK_WEEK_DAYS = [
-  { day: "sunday", label: "الأحد" },
-  { day: "monday", label: "الاثنين" },
-  { day: "tuesday", label: "الثلاثاء" },
-  { day: "wednesday", label: "الأربعاء" },
-  { day: "thursday", label: "الخميس" },
-  { day: "friday", label: "الجمعة" },
-  { day: "saturday", label: "السبت" },
-];
+const isValidSchoolLocation = (location) => {
+  const latitude = Number(location?.lat);
+  const longitude = Number(location?.lng);
 
-const normalizeWorkSchedule = (value) => {
-  const incoming = Array.isArray(value) ? value : [];
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return false;
+  }
 
-  return WORK_WEEK_DAYS.map(({ day }) => {
-    const saved = incoming.find(
-      (item) =>
-        String(item?.day || "")
-          .trim()
-          .toLowerCase() === day
-    );
+  const insideValidRange =
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180;
 
-    if (!saved) {
-      // Empty/unconfigured schedule means every day is treated as a
-      // working day but without measured start/end times.
-      return {
-        day,
-        isWorkingDay: true,
-        startTime: "",
-        endTime: "",
-      };
-    }
-
-    const isWorkingDay =
-      saved?.isWorkingDay !== false;
-
-    return {
-      day,
-      isWorkingDay,
-      startTime:
-        isWorkingDay && saved?.startTime
-          ? String(saved.startTime).slice(0, 5)
-          : "",
-      endTime:
-        isWorkingDay && saved?.endTime
-          ? String(saved.endTime).slice(0, 5)
-          : "",
-    };
-  });
+  return insideValidRange && !(latitude === 0 && longitude === 0);
 };
 
 const pageCardSx = {
@@ -388,6 +349,7 @@ const emptyManualForm = () => ({
 });
 
 const TeacherAttendanceAdmin = () => {
+  const navigate = useNavigate();
   const getAuthUser = useAuthUser();
   const authState = getAuthUser?.();
   const currentUser = authState?.user || authState || {};
@@ -399,14 +361,7 @@ const TeacherAttendanceAdmin = () => {
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [teacherCheckInEnabled, setTeacherCheckInEnabled] = useState(false);
-  const [lat, setLat] = useState("");
-  const [lng, setLng] = useState("");
-  const [radius, setRadius] = useState(150);
-  const [workSchedule, setWorkSchedule] = useState(() => normalizeWorkSchedule([]));
-  const [networkIps, setNetworkIps] = useState([]);
-  const [newIp, setNewIp] = useState("");
-  const [detectingIp, setDetectingIp] = useState(false);
-  const [locating, setLocating] = useState(false);
+  const [schoolLocationConfigured, setSchoolLocationConfigured] = useState(false);
 
   // Admin list
   const [recordsLoading, setRecordsLoading] = useState(true);
@@ -450,40 +405,6 @@ const TeacherAttendanceAdmin = () => {
 
   const today = useMemo(todayKey, []);
 
-  const parseCoordinate = (value) => {
-    if (value === null || value === undefined) return null;
-
-    const normalized = String(value).trim();
-    if (!normalized) return null;
-
-    const numericValue = Number(normalized);
-    return Number.isFinite(numericValue) ? numericValue : null;
-  };
-
-  const isValidSchoolLocation = (latValue, lngValue) => {
-    const latitude = parseCoordinate(latValue);
-    const longitude = parseCoordinate(lngValue);
-
-    if (latitude === null || longitude === null) return false;
-
-    const insideValidRange =
-      latitude >= -90 &&
-      latitude <= 90 &&
-      longitude >= -180 &&
-      longitude <= 180;
-
-    // 0,0 is almost always an empty/default coordinate in our UI flow.
-    // Do not allow it to activate attendance by mistake.
-    const isZeroZero = latitude === 0 && longitude === 0;
-
-    return insideValidRange && !isZeroZero;
-  };
-
-  const hasValidLocation = useMemo(
-    () => isValidSchoolLocation(lat, lng),
-    [lat, lng]
-  );
-
   const loadSettings = useCallback(async () => {
     setSettingsLoading(true);
 
@@ -496,28 +417,8 @@ const TeacherAttendanceAdmin = () => {
 
     const settings = extractSettings(response);
 
-    const savedLat = settings?.location?.lat;
-    const savedLng = settings?.location?.lng;
-    const savedLocationIsValid = isValidSchoolLocation(savedLat, savedLng);
-
-    // Ignore the accidental 0,0 value that may have been saved by older UI logic.
-    setLat(savedLocationIsValid ? String(savedLat) : "");
-    setLng(savedLocationIsValid ? String(savedLng) : "");
-
-    // Never show self check-in as enabled while the school location is invalid.
-    setTeacherCheckInEnabled(
-      Boolean(settings?.teacherCheckInEnabled) && savedLocationIsValid
-    );
-
-    setRadius(Number(settings?.checkInRadiusMeters) || 150);
-    setWorkSchedule(
-      normalizeWorkSchedule(settings?.workSchedule)
-    );
-    setNetworkIps(
-      Array.isArray(settings?.schoolNetworkIps)
-        ? settings.schoolNetworkIps.filter(Boolean)
-        : []
-    );
+    setTeacherCheckInEnabled(Boolean(settings?.teacherCheckInEnabled));
+    setSchoolLocationConfigured(isValidSchoolLocation(settings?.location));
 
     setSettingsLoading(false);
   }, []);
@@ -671,150 +572,28 @@ const TeacherAttendanceAdmin = () => {
     [summaryRows]
   );
 
-  /*
-   * A prompt nobody answers used to leave `locating` true for good, so the
-   * button that sets the school's own location could sit spinning forever —
-   * and without that location no teacher can check in at all.
-   */
-  const handleUseMyLocation = async () => {
-    setLocating(true);
-
-    try {
-      const { lat: latitude, lng: longitude } =
-        await requestBrowserLocation();
-
-      if (!isValidSchoolLocation(latitude, longitude)) {
-        toast.error(
-          "المتصفح أعاد موقعًا غير صالح. تأكد من تشغيل خدمة الموقع ثم حاول مرة أخرى."
-        );
-        return;
-      }
-
-      setLat(String(latitude));
-      setLng(String(longitude));
-      toast.success("تم التقاط موقع الجهاز الحالي");
-    } catch (error) {
-      toast.error(
-        error?.message ||
-          "تعذر التقاط موقع الجهاز. تأكد من صلاحية الموقع."
-      );
-    } finally {
-      setLocating(false);
-    }
-  };
-
-  const handleDetectIp = async () => {
-    setDetectingIp(true);
-    const response = await detectTeacherAttendanceIp();
-    setDetectingIp(false);
-
-    if (response?.status === false) {
-      toast.error(response?.message || "تعذر اكتشاف عنوان الشبكة");
-      return;
-    }
-
-    const ip = response?.data?.ip || response?.ip;
-    if (!ip) {
-      toast.error("لم يرجع السيرفر عنوان IP صالحًا");
-      return;
-    }
-
-    setNetworkIps((previous) =>
-      previous.includes(ip) ? previous : [ip, ...previous]
-    );
-    toast.success(`تم اكتشاف ${ip}`);
-  };
-
-  const addManualIp = () => {
-    const value = newIp.trim();
-    if (!value) return;
-
-    if (networkIps.includes(value)) {
-      toast.info("عنوان الشبكة موجود بالفعل");
-      return;
-    }
-
-    setNetworkIps((previous) => [...previous, value]);
-    setNewIp("");
-  };
-
-  const updateWorkScheduleDay = (
-    day,
-    changes
-  ) => {
-    setWorkSchedule((current) =>
-      current.map((item) => {
-        if (item.day !== day) return item;
-
-        const next = {
-          ...item,
-          ...changes,
-        };
-
-        if (changes?.isWorkingDay === false) {
-          next.startTime = "";
-          next.endTime = "";
-        }
-
-        return next;
-      })
-    );
-  };
-
   const saveSettings = async () => {
-    const latitude = parseCoordinate(lat);
-    const longitude = parseCoordinate(lng);
-
-    if (teacherCheckInEnabled && !hasValidLocation) {
+    if (teacherCheckInEnabled && !schoolLocationConfigured) {
       toast.error(
-        "حدد موقع مدرسة صالحًا أولًا. لا يمكن استخدام إحداثيات فارغة أو 0,0."
+        "حدد موقع المدرسة من إعدادات المدرسة أولًا قبل تفعيل حضور المعلمين."
       );
-      return;
-    }
-
-    const numericRadius = Number(radius);
-    if (!Number.isFinite(numericRadius) || numericRadius < 20 || numericRadius > 2000) {
-      toast.error("نصف قطر القبول يجب أن يكون بين 20 و2000 متر");
       return;
     }
 
     setSettingsSaving(true);
 
-    const payload = {
+    const response = await updateTeacherAttendanceSettings({
       teacherCheckInEnabled,
-      checkInRadiusMeters: numericRadius,
-      workSchedule: workSchedule.map((item) => ({
-        day: item.day,
-        isWorkingDay: Boolean(item.isWorkingDay),
-        startTime:
-          item.isWorkingDay && item.startTime
-            ? item.startTime
-            : null,
-        endTime:
-          item.isWorkingDay && item.endTime
-            ? item.endTime
-            : null,
-      })),
-      schoolNetworkIps: networkIps,
-      ...(hasValidLocation
-        ? {
-            location: {
-              lat: latitude,
-              lng: longitude,
-            },
-          }
-        : {}),
-    };
+    });
 
-    const response = await updateTeacherAttendanceSettings(payload);
     setSettingsSaving(false);
 
     if (response?.status === false) {
-      toast.error(response?.message || "تعذر حفظ إعدادات حضور المعلمين");
+      toast.error(response?.message || "تعذر حفظ إعداد حضور المعلمين");
       return;
     }
 
-    toast.success("تم حفظ إعدادات حضور المعلمين والإعدادات المشتركة");
+    toast.success("تم حفظ إعداد حضور المعلمين");
     await loadSettings();
   };
 
@@ -940,7 +719,7 @@ const TeacherAttendanceAdmin = () => {
                 تفعيل الحضور والانصراف الذاتي للمعلمين
               </Typography>
               <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
-                هذا المفتاح خاص بالمعلمين فقط. موقع المدرسة ونطاق التحقق والشبكة وجدول الدوام إعدادات مشتركة مع الإداريين والمشرفين.
+                هنا يتم تفعيل حضور المعلمين فقط. موقع المدرسة ونطاق التحقق والشبكة وجدول الدوام يتم ضبطهم مرة واحدة من إعدادات المدرسة.
               </Typography>
             </Box>
 
@@ -955,317 +734,37 @@ const TeacherAttendanceAdmin = () => {
             />
           </Stack>
 
-          {teacherCheckInEnabled && !hasValidLocation && (
+          {teacherCheckInEnabled && !schoolLocationConfigured && (
             <Alert severity="warning" sx={{ mt: 1.2, borderRadius: "12px" }}>
-              حدد موقع المدرسة المشترك أولًا. الباك سيرفض التفعيل من غير Location.
+              موقع المدرسة غير مضبوط. اضبطه من «إعدادات المدرسة» أولًا ثم فعّل تسجيل الحضور.
             </Alert>
           )}
         </Paper>
 
         <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
-          <Box>
-            <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
-              جدول الدوام الأسبوعي المشترك
-            </Typography>
-            <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
-              يُستخدم نفس جدول الدوام للمعلمين والإداريين والمشرفين. حدّد أيام العمل ووقت البداية والنهاية مرة واحدة.
-            </Typography>
-          </Box>
-
-          <Stack spacing={0.9} sx={{ mt: 1.5 }}>
-            {WORK_WEEK_DAYS.map(({ day, label }) => {
-              const item =
-                workSchedule.find(
-                  (row) => row.day === day
-                ) || {
-                  day,
-                  isWorkingDay: true,
-                  startTime: "",
-                  endTime: "",
-                };
-
-              return (
-                <Paper
-                  key={day}
-                  elevation={0}
-                  sx={{
-                    p: 1.1,
-                    border:
-                      "1px solid rgba(36,74,112,.08)",
-                    borderRadius: "14px",
-                    backgroundColor: item.isWorkingDay
-                      ? "#fff"
-                      : "rgba(36,74,112,.025)",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: {
-                        xs: "1fr",
-                        md: "180px minmax(0,1fr)",
-                      },
-                      alignItems: "center",
-                      gap: 1,
-                    }}
-                  >
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={item.isWorkingDay}
-                          onChange={(event) =>
-                            updateWorkScheduleDay(
-                              day,
-                              {
-                                isWorkingDay:
-                                  event.target.checked,
-                              }
-                            )
-                          }
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography
-                            sx={{
-                              fontSize: 11,
-                              fontWeight: 900,
-                              color: "#122F4D",
-                            }}
-                          >
-                            {label}
-                          </Typography>
-                          <Typography
-                            sx={{
-                              mt: 0.1,
-                              color: "#708198",
-                              fontSize: 8.5,
-                            }}
-                          >
-                            {item.isWorkingDay
-                              ? "يوم عمل"
-                              : "إجازة"}
-                          </Typography>
-                        </Box>
-                      }
-                      sx={{ m: 0 }}
-                    />
-
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: {
-                          xs: "1fr",
-                          sm: "1fr 1fr",
-                        },
-                        gap: 1,
-                      }}
-                    >
-                      <TextField
-                        type="time"
-                        label="بداية الدوام"
-                        value={item.startTime}
-                        disabled={!item.isWorkingDay}
-                        onChange={(event) =>
-                          updateWorkScheduleDay(
-                            day,
-                            {
-                              startTime:
-                                event.target.value,
-                            }
-                          )
-                        }
-                        InputLabelProps={{ shrink: true }}
-                        inputProps={{ step: 60 }}
-                        fullWidth
-                        size="small"
-                      />
-
-                      <TextField
-                        type="time"
-                        label="نهاية الدوام"
-                        value={item.endTime}
-                        disabled={!item.isWorkingDay}
-                        onChange={(event) =>
-                          updateWorkScheduleDay(
-                            day,
-                            {
-                              endTime:
-                                event.target.value,
-                            }
-                          )
-                        }
-                        InputLabelProps={{ shrink: true }}
-                        inputProps={{ step: 60 }}
-                        fullWidth
-                        size="small"
-                      />
-                    </Box>
-                  </Box>
-                </Paper>
-              );
-            })}
-          </Stack>
-
-          <Alert severity="info" sx={{ mt: 1.2, borderRadius: "12px" }}>
-            لو وقت البداية أو النهاية فارغ في يوم عمل، يعتبر اليوم يوم دوام لكن القياس المرتبط بهذا الوقت يكون غير متاح.
-          </Alert>
-        </Paper>
-
-        <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
-          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ xs: "stretch", sm: "center" }}
+            justifyContent="space-between"
+            gap={1.2}
+          >
             <Box>
-              <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
-                <LocationOnRounded sx={{ verticalAlign: "middle", ml: 0.6, color: "#B78430" }} />
-                موقع المدرسة المشترك
+              <Typography sx={{ color: "#122F4D", fontSize: 14, fontWeight: 900 }}>
+                إعدادات الموقع والحضور المشتركة
               </Typography>
-              <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10 }}>
-                اضبط الموقع مرة واحدة فقط؛ وسيُستخدم للتحقق من حضور المعلمين والإداريين والمشرفين.
+              <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10, lineHeight: 1.7 }}>
+                يتم تعديل الموقع، نصف قطر القبول، شبكة المدرسة وجدول الدوام من إعدادات المدرسة فقط حتى تستخدمها كل فئات الحضور بنفس القيم.
               </Typography>
             </Box>
 
             <Button
               type="button"
               variant="outlined"
-              onClick={handleUseMyLocation}
-              disabled={locating}
-              startIcon={locating ? <CircularProgress size={15} /> : <MyLocationRounded />}
-              sx={{ borderRadius: "11px" }}
+              onClick={() => navigate("/school/settings")}
+              startIcon={<SettingsRounded />}
+              sx={{ borderRadius: "11px", whiteSpace: "nowrap" }}
             >
-              {locating ? "جارٍ تحديد الموقع" : "استخدم موقعي الحالي"}
-            </Button>
-          </Stack>
-
-          <Box
-            sx={{
-              mt: 1.5,
-              height: 180,
-              display: "grid",
-              placeItems: "center",
-              position: "relative",
-              overflow: "hidden",
-              borderRadius: "16px",
-              border: "1px solid rgba(36,74,112,.09)",
-              backgroundImage:
-                "linear-gradient(rgba(36,74,112,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(36,74,112,.045) 1px, transparent 1px)",
-              backgroundSize: "28px 28px",
-              backgroundColor: "rgba(36,74,112,.025)",
-            }}
-          >
-            <Box
-              sx={{
-                width: Math.max(80, Math.min(160, 70 + (Number(radius) / 2000) * 100)),
-                height: Math.max(80, Math.min(160, 70 + (Number(radius) / 2000) * 100)),
-                position: "absolute",
-                borderRadius: "50%",
-                border: "2px dashed rgba(183,132,48,.55)",
-                backgroundColor: "rgba(251,240,216,.38)",
-              }}
-            />
-            <GpsFixedRounded sx={{ zIndex: 1, color: "#B78430", fontSize: 38 }} />
-          </Box>
-
-          <Box
-            sx={{
-              mt: 1.4,
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-              gap: 1,
-            }}
-          >
-            <TextField
-              label="Latitude"
-              value={lat}
-              onChange={(event) => setLat(event.target.value)}
-              type="number"
-              inputProps={{ step: "any", min: -90, max: 90 }}
-              fullWidth
-            />
-            <TextField
-              label="Longitude"
-              value={lng}
-              onChange={(event) => setLng(event.target.value)}
-              type="number"
-              inputProps={{ step: "any", min: -180, max: 180 }}
-              fullWidth
-            />
-          </Box>
-
-          <Box sx={{ mt: 2 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Typography sx={{ fontSize: 11, fontWeight: 800 }}>نصف قطر القبول</Typography>
-              <Chip label={`${radius} متر`} size="small" sx={{ fontWeight: 800 }} />
-            </Stack>
-            <Slider
-              value={Number(radius)}
-              onChange={(_, value) => setRadius(Number(value))}
-              min={20}
-              max={2000}
-              step={10}
-              valueLabelDisplay="auto"
-              sx={{ mt: 1, color: "#B78430" }}
-            />
-          </Box>
-        </Paper>
-
-        <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
-          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1}>
-            <Box>
-              <Typography sx={{ color: "#122F4D", fontSize: 15, fontWeight: 900 }}>
-                <RouterRounded sx={{ verticalAlign: "middle", ml: 0.6, color: "#B78430" }} />
-                شبكة المدرسة / IP المشتركة
-              </Typography>
-              <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10 }}>
-                اختيارية ومشتركة لكل فئات الحضور. زر الاكتشاف يقرأ الـIP الذي يراه السيرفر فعليًا.
-              </Typography>
-            </Box>
-
-            <Button
-              onClick={handleDetectIp}
-              disabled={detectingIp}
-              startIcon={detectingIp ? <CircularProgress size={15} /> : <WifiFindRounded />}
-              variant="outlined"
-              sx={{ borderRadius: "11px" }}
-            >
-              {detectingIp ? "جارٍ الاكتشاف" : "اكتشاف IP الحالي"}
-            </Button>
-          </Stack>
-
-          <Stack direction="row" flexWrap="wrap" gap={0.8} sx={{ mt: 1.5 }}>
-            {!networkIps.length ? (
-              <Alert severity="info" sx={{ width: "100%", borderRadius: "12px" }}>
-                لا توجد شبكة مسجلة. يمكن الاعتماد على الموقع الجغرافي فقط.
-              </Alert>
-            ) : (
-              networkIps.map((ip) => (
-                <Chip
-                  key={ip}
-                  label={ip}
-                  onDelete={() =>
-                    setNetworkIps((previous) => previous.filter((item) => item !== ip))
-                  }
-                  sx={{ fontFamily: "monospace" }}
-                />
-              ))
-            )}
-          </Stack>
-
-          <Stack direction={{ xs: "column", sm: "row" }} gap={1} sx={{ mt: 1.4 }}>
-            <TextField
-              label="إضافة IP يدوي"
-              value={newIp}
-              onChange={(event) => setNewIp(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addManualIp();
-                }
-              }}
-              fullWidth
-              placeholder="مثال: 156.203.44.118"
-            />
-            <Button onClick={addManualIp} variant="outlined" startIcon={<AddRounded />}>
-              إضافة
+              فتح إعدادات المدرسة
             </Button>
           </Stack>
         </Paper>
@@ -1287,7 +786,7 @@ const TeacherAttendanceAdmin = () => {
               "&:hover": { backgroundColor: "#E8C96F", boxShadow: "none" },
             }}
           >
-            حفظ إعدادات المعلمين والمشتركة
+            حفظ تفعيل المعلمين
           </Button>
         </Stack>
       </Stack>
