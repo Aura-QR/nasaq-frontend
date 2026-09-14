@@ -80,7 +80,7 @@ const ENTITY_LABELS = {
   subjects: "المواد",
   lectures: "الحصص",
   library: "المكتبة",
-  attendance: "الحضور",
+  attendance: "حضور الطلاب",
   gradesCriteria: "معايير الدرجات",
   exams: "الاختبارات",
   projects: "المشاريع",
@@ -89,6 +89,13 @@ const ENTITY_LABELS = {
   financial: "المالية",
   financialSettings: "إعدادات المالية",
   expenses: "المصروفات",
+  teacherAttendance: "حضور المعلمين",
+  duty: "الاحتياطي والمناوبة والاستئذان",
+  curriculum: "المناهج والدروس",
+  academicStructure: "المراحل والصفوف والترمات",
+  academicYears: "السنوات الدراسية",
+  schoolSettings: "إعدادات المدرسة",
+  messaging: "سجل رسائل واتساب",
   managers: "المديرون والمساعدون",
   analytics: "التقارير",
   settings: "الإعدادات",
@@ -107,6 +114,23 @@ const ACTION_ORDER = [
   "edit",
   "delete",
 ];
+
+/*
+ * For these areas the server checks only some actions, so only those boxes
+ * are shown. The rest stay in the draft untouched and are sent back as they
+ * were.
+ *
+ * - academicStructure / academicYears: anyone can read them (every screen
+ *   needs the year, stage and grade lists); deleting a year is owner-only.
+ * - schoolSettings: reading is open too — the teacher check-in screen needs it.
+ * - messaging: view the delivery log, and retry (تعديل).
+ */
+const ENTITY_ACTIONS = {
+  academicStructure: ["add", "edit", "delete"],
+  academicYears: ["add", "edit"],
+  schoolSettings: ["edit"],
+  messaging: ["read", "edit"],
+};
 
 const normalizeRole = (value) => {
   const role = String(value || "")
@@ -190,7 +214,7 @@ const unwrapPayload = (value) => {
 };
 
 
-const getVisibleActionKeys = (role, actions) => {
+const getVisibleActionKeys = (role, actions, entity) => {
   const available = actions || {};
 
   // الطالب مستخدم نهائي وليس دور CRUD إداري.
@@ -201,6 +225,15 @@ const getVisibleActionKeys = (role, actions) => {
     return Object.prototype.hasOwnProperty.call(available, "read")
       ? ["read"]
       : [];
+  }
+
+  const onlyThese = ENTITY_ACTIONS[entity];
+  if (onlyThese) {
+    return ACTION_ORDER.filter(
+      (action) =>
+        onlyThese.includes(action) &&
+        Object.prototype.hasOwnProperty.call(available, action)
+    );
   }
 
   const extraActions = Object.keys(available).filter(
@@ -216,8 +249,8 @@ const getVisibleActionKeys = (role, actions) => {
 };
 
 const countVisibleEnabled = (role, permissions) =>
-  Object.values(permissions || {}).reduce((total, actions) => {
-    const visibleKeys = getVisibleActionKeys(role, actions);
+  Object.entries(permissions || {}).reduce((total, [entity, actions]) => {
+    const visibleKeys = getVisibleActionKeys(role, actions, entity);
     return (
       total +
       visibleKeys.filter((action) => Boolean(actions?.[action])).length
@@ -315,8 +348,8 @@ const SchoolPermissions = () => {
   const entities = useMemo(
     () =>
       Object.entries(currentDraft).filter(
-        ([, actions]) =>
-          getVisibleActionKeys(activeRole, actions).length > 0
+        ([entity, actions]) =>
+          getVisibleActionKeys(activeRole, actions, entity).length > 0
       ),
     [currentDraft, activeRole]
   );
@@ -793,7 +826,8 @@ const SchoolPermissions = () => {
                     const actionKeys =
                       getVisibleActionKeys(
                         activeRole,
-                        actions
+                        actions,
+                        entity
                       );
 
                     return (

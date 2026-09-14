@@ -182,6 +182,18 @@ const Sidebar = ({ active, setActive }) => {
   const expensesPermissions =
     usePermissions("expenses");
 
+  const teacherAttendancePermissions =
+    usePermissions("teacherAttendance");
+
+  const dutyPermissions =
+    usePermissions("duty");
+
+  const curriculumPermissions =
+    usePermissions("curriculum");
+
+  const schoolSettingsPermissions =
+    usePermissions("schoolSettings");
+
   const getAuthUser = useAuthUser();
   const signOut = useSignOut();
   const navigate = useNavigate();
@@ -311,7 +323,8 @@ const Sidebar = ({ active, setActive }) => {
             to: "/school/curriculum",
             show:
               role === "OWNER" ||
-              role === "MANAGER",
+              (role === "MANAGER" &&
+                curriculumPermissions.read),
           },
           {
             name: "إدارة الفصول",
@@ -335,7 +348,9 @@ const Sidebar = ({ active, setActive }) => {
             Icon: SettingsRounded,
             iconType: "mui",
             to: "/school/settings",
-            show: canManageSchoolSettings,
+            show:
+              canManageSchoolSettings &&
+              schoolSettingsPermissions.read,
           },
         ],
       },
@@ -376,7 +391,9 @@ const Sidebar = ({ active, setActive }) => {
             Icon: HowToRegRounded,
             iconType: "mui",
             to: "/school/teacher-attendance",
-            show: canManageSchoolSettings,
+            show:
+              canManageSchoolSettings &&
+              teacherAttendancePermissions.read,
           },
           {
             name: "حضور الإداريين والمشرفين",
@@ -397,21 +414,27 @@ const Sidebar = ({ active, setActive }) => {
             Icon: ShieldRounded,
             iconType: "mui",
             to: "/school/duty",
-            show: canManageSchoolSettings,
+            show:
+              canManageSchoolSettings &&
+              dutyPermissions.read,
           },
           {
             name: "طلبات الاستئذان",
             Icon: EventBusyRounded,
             iconType: "mui",
             to: "/school/leave-requests",
-            show: canManageSchoolSettings,
+            show:
+              canManageSchoolSettings &&
+              dutyPermissions.read,
           },
           {
             name: "تقرير الاحتياطي",
             Icon: InsightsRounded,
             iconType: "mui",
             to: "/school/cover-report",
-            show: canManageSchoolSettings,
+            show:
+              canManageSchoolSettings &&
+              dutyPermissions.read,
           },
           {
             name: "إدارة التحضير",
@@ -644,6 +667,10 @@ const Sidebar = ({ active, setActive }) => {
     libraryPermissions.read,
     financialPermissions.read,
     expensesPermissions.read,
+    teacherAttendancePermissions.read,
+    dutyPermissions.read,
+    curriculumPermissions.read,
+    schoolSettingsPermissions.read,
   ]);
 
   const handleSignOut = () => {
