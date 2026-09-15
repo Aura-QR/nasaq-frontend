@@ -47,6 +47,7 @@ import Back from "@/components/Back/Back";
 import Input from "@/components/Input/Input";
 import Loading from "@/components/Loading";
 import usePermissions from "@/utils/hooks/usePermissions";
+import { useAuthUser } from "react-auth-kit";
 import { requestBrowserLocation } from "@/utils/geolocation";
 
 import { detectStaffAttendanceIp } from "@/APIs/school/staffAttendance";
@@ -622,7 +623,21 @@ const pageCardSx = {
 };
 
 const SchoolSettings = () => {
-  const settingsPermissions = usePermissions("settings");
+  // The key is schoolSettings; "settings" matched no permission, so an
+  // assistant granted the page never saw the save button.
+  const settingsPermissions = usePermissions("schoolSettings");
+
+  // The attendance geofence, school network, timezone and work schedule are
+  // the owner's and the school director's: the server refuses them from anyone
+  // else (403), and a save that carried them would fail whole — the passing
+  // grade included. Others see them, unchanged and unsent.
+  const getAuthUser = useAuthUser();
+  const authState = getAuthUser?.() || {};
+  const accountRole = String(
+    authState?.user?.role || authState?.role || ""
+  ).toUpperCase();
+  const canEditAttendanceSettings =
+    accountRole === "OWNER" || accountRole === "SUPERVISOR";
 
   const {
     register,
@@ -1327,23 +1342,27 @@ const SchoolSettings = () => {
       const response =
         await updateSchoolSettings({
           defaultPassingGrade,
-          periodsPerDay,
-          workSchedule,
-          // Compatibility shim for older attendance logic.
-          workStartTime:
-            workStartTime || null,
-          timezone,
-          checkInRadiusMeters,
-          schoolNetworkIps,
-          ...(hasValidLocation
+          localNationalities,
+          ...(canEditAttendanceSettings
             ? {
-                location: {
-                  lat: locationLat,
-                  lng: locationLng,
-                },
+                periodsPerDay,
+                workSchedule,
+                // Compatibility shim for older attendance logic.
+                workStartTime:
+                  workStartTime || null,
+                timezone,
+                checkInRadiusMeters,
+                schoolNetworkIps,
+                ...(hasValidLocation
+                  ? {
+                      location: {
+                        lat: locationLat,
+                        lng: locationLng,
+                      },
+                    }
+                  : {}),
               }
             : {}),
-          localNationalities,
         });
 
       if (response?.status === false) {
@@ -1530,6 +1549,15 @@ const SchoolSettings = () => {
             }}
           >
             {loadError}
+          </Alert>
+        ) : null}
+
+        {!canEditAttendanceSettings ? (
+          <Alert
+            severity="info"
+            sx={{ mt: 1, py: 0.25, borderRadius: "14px", fontSize: "10.5px", fontWeight: 700 }}
+          >
+            إعدادات الحضور والموقع والجدول الأسبوعي يعدّلها مالك المدرسة ومدير المدرسة فقط، وتظهر لك للاطلاع.
           </Alert>
         ) : null}
 
@@ -2040,7 +2068,13 @@ const SchoolSettings = () => {
             />
           </Box>
 
-          <Box sx={{ p: { xs: 1.35, md: 1.8 } }}>
+          <Box
+            inert={!canEditAttendanceSettings}
+            sx={{
+              p: { xs: 1.35, md: 1.8 },
+              opacity: canEditAttendanceSettings ? 1 : 0.6,
+            }}
+          >
             <Box
               sx={{
                 display: "grid",
@@ -2376,8 +2410,10 @@ const SchoolSettings = () => {
           </Box>
 
           <Box
+            inert={!canEditAttendanceSettings}
             sx={{
               p: { xs: 1.35, md: 1.8 },
+              opacity: canEditAttendanceSettings ? 1 : 0.6,
             }}
           >
             <Stack spacing={0.8}>

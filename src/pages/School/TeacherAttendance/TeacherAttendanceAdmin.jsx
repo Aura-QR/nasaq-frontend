@@ -43,6 +43,7 @@ import {
 } from "@mui/icons-material";
 
 import { useAuthUser } from "react-auth-kit";
+import usePermissions from "@/utils/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
@@ -416,8 +417,20 @@ const TeacherAttendanceAdmin = () => {
   const authState = getAuthUser?.();
   const currentUser = authState?.user || authState || {};
   const adminName = currentUser?.name || currentUser?.fullName || "الإدارة";
+  const currentRole = String(
+    currentUser?.role || authState?.role || ""
+  ).trim().toUpperCase();
 
-  const [tab, setTab] = useState(0);
+  // Enabling teacher self check-in is the owner's and the school director's:
+  // the server refuses teacherCheckInEnabled from anyone else (403). An
+  // assistant opens straight on the daily log, as on the staff attendance page.
+  const canConfigureAttendance = ["OWNER", "SUPERVISOR"].includes(currentRole);
+  const teacherAttendancePermissions = usePermissions("teacherAttendance");
+  const canCreateRecords = Boolean(teacherAttendancePermissions.add);
+  const canEditRecords = Boolean(teacherAttendancePermissions.edit);
+  const canDeleteRecords = Boolean(teacherAttendancePermissions.delete);
+
+  const [tab, setTab] = useState(() => (canConfigureAttendance ? 0 : 1));
 
   // Settings
   const [settingsLoading, setSettingsLoading] = useState(true);
@@ -637,6 +650,7 @@ const TeacherAttendanceAdmin = () => {
   );
 
   const saveSettings = async () => {
+    if (!canConfigureAttendance) return;
     if (teacherCheckInEnabled && !schoolLocationConfigured) {
       toast.error(
         "حدد موقع المدرسة من إعدادات المدرسة أولًا قبل تفعيل حضور المعلمين."
@@ -919,6 +933,7 @@ const TeacherAttendanceAdmin = () => {
             >
               تحديث
             </Button>
+            {canCreateRecords && (
             <Button
               variant="contained"
               onClick={openManualDialog}
@@ -932,6 +947,7 @@ const TeacherAttendanceAdmin = () => {
             >
               تسجيل حضور يدوي
             </Button>
+            )}
           </Stack>
         </Stack>
       </Paper>
@@ -1120,11 +1136,14 @@ const TeacherAttendanceAdmin = () => {
                         </TableCell>
                         <TableCell align="center">
                           <Stack direction="row" justifyContent="center" spacing={0.2}>
+                            {canEditRecords && (
                             <Tooltip title="تعديل">
                               <IconButton size="small" onClick={() => openEditDialog(record)}>
                                 <EditRounded fontSize="small" />
                               </IconButton>
                             </Tooltip>
+                            )}
+                            {canDeleteRecords && (
                             <Tooltip title="حذف">
                               <IconButton
                                 size="small"
@@ -1134,6 +1153,7 @@ const TeacherAttendanceAdmin = () => {
                                 <DeleteOutlineRounded fontSize="small" />
                               </IconButton>
                             </Tooltip>
+                            )}
                           </Stack>
                         </TableCell>
                       </TableRow>
@@ -1505,9 +1525,11 @@ const TeacherAttendanceAdmin = () => {
             variant="scrollable"
             scrollButtons="auto"
           >
-            <Tab icon={<SettingsRounded />} iconPosition="start" label="إعدادات الحضور" />
-            <Tab icon={<GpsFixedRounded />} iconPosition="start" label="سجل الحضور اليومي" />
-            <Tab icon={<AssessmentRounded />} iconPosition="start" label="تقرير الحضور" />
+            {canConfigureAttendance && (
+              <Tab value={0} icon={<SettingsRounded />} iconPosition="start" label="إعدادات الحضور" />
+            )}
+            <Tab value={1} icon={<GpsFixedRounded />} iconPosition="start" label="سجل الحضور اليومي" />
+            <Tab value={2} icon={<AssessmentRounded />} iconPosition="start" label="تقرير الحضور" />
           </Tabs>
         </Paper>
 

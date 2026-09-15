@@ -172,8 +172,11 @@ const List = () => {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordTeacher, setPasswordTeacher] = useState(null);
 
+  // The school director may reset passwords too; the server admits
+  // SUPERVISOR on PATCH /:id/password alongside owner and assistant.
   const canSetPassword = [
     ROLES.OWNER,
+    ROLES.SUPERVISOR,
     ROLES.MANAGER,
     ROLES.SUPER_ADMIN,
   ].includes(getStoredRole());

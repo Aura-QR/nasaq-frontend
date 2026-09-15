@@ -39,6 +39,7 @@ import {
 
 import Container from "@/components/Container/Container";
 import JobTitlesPanel from "./JobTitlesPanel";
+import { fetchJobTitles } from "@/APIs/school/jobTitles";
 
 import {
   getSchoolPermissions,
@@ -283,6 +284,28 @@ const SchoolPermissions = () => {
   useEffect(() => {
     loadPermissions();
   }, []);
+
+  /*
+   * Assistants holding a job title take their title's boxes, not this tab's.
+   * Without saying so, an owner who unticks a box here and sees «المالية»
+   * unchanged has every reason to think the page is broken.
+   */
+  const [titledAssistants, setTitledAssistants] = useState(null);
+
+  useEffect(() => {
+    if (activeRole !== "MANAGER") return;
+    let cancelled = false;
+    fetchJobTitles().then((response) => {
+      if (cancelled || response?.status === false) return;
+      const list = Array.isArray(response?.data) ? response.data : [];
+      setTitledAssistants(
+        list.reduce((sum, title) => sum + (Number(title?.assignedCount) || 0), 0)
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRole]);
 
   useEffect(() => {
     const requested = normalizeRole(
@@ -754,6 +777,33 @@ const SchoolPermissions = () => {
                   : "حفظ صلاحيات الدور"}
               </Button>
             </Stack>
+
+            {activeRole === "MANAGER" && (
+              <Alert
+                severity="warning"
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => changeRole(null, JOB_TITLES_TAB)}
+                    sx={{ fontWeight: 900, whiteSpace: "nowrap" }}
+                  >
+                    المسميات الوظيفية
+                  </Button>
+                }
+                sx={{
+                  mb: 1.4,
+                  borderRadius: "12px",
+                  fontSize: "11px",
+                  lineHeight: 1.7,
+                }}
+              >
+                هذه الصلاحيات تسري فقط على المساعدين الذين ليس لهم مسمى وظيفي.
+                {titledAssistants > 0
+                  ? ` يوجد ${titledAssistants} مساعد لهم مسمى وظيفي، ولن تتغير صلاحياتهم من هنا — عدّلها من تبويب المسميات الوظيفية.`
+                  : " من يُسند له مسمى وظيفي يأخذ صلاحيات المسمى بدلًا منها."}
+              </Alert>
+            )}
 
             <Alert
               severity="info"

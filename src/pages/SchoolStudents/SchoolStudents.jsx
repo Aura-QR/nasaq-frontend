@@ -206,6 +206,7 @@ const SchoolStudents = () => {
   const canSetPassword =
     [
       ROLES.OWNER,
+      ROLES.SUPERVISOR,
       ROLES.MANAGER,
     ].includes(role);
 
