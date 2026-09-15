@@ -36,6 +36,14 @@ export const updateTripTemplate = async (id, data) => {
   }
 };
 
+export const deleteTripTemplate = async (id) => {
+  try {
+    return (await api.delete(`${E}/${id}`)).data;
+  } catch (e) {
+    return apiError(e, "تعذر حذف الرحلة");
+  }
+};
+
 export const fetchTripTemplateStudents = async (id, filters = {}) => {
   try {
     return (await api.get(`${E}/${id}/students`, { params: filters })).data;
@@ -131,6 +139,7 @@ export default {
   fetchTripTemplate,
   createTripTemplate,
   updateTripTemplate,
+  deleteTripTemplate,
   fetchTripTemplateStudents,
   fetchTripTemplateCandidates,
   enrollStudentInTripTemplate,

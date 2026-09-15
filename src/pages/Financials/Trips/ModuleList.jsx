@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
-import { fetchTripTemplates } from "@/APIs/financials/trips";
+import { deleteTripTemplate, fetchTripTemplates } from "@/APIs/financials/trips";
 import Container from "@/components/Container/Container";
 import Table from "@/components/Table/Table";
 import {
@@ -140,6 +140,28 @@ const ModuleTripsListPage = () => {
     (item) => item.isActive
   ).length;
 
+  const handleDelete = async (id, setActiveDelete) => {
+    if (!settingsPermissions?.delete) {
+      toast.error("ليس لديك صلاحية حذف الرحلة");
+      return;
+    }
+
+    const response = await deleteTripTemplate(id);
+
+    if (response?.status) {
+      toast.success(response?.message || "تم حذف الرحلة بنجاح");
+      setTemplates((previous) =>
+        previous.filter((item) => (item?._id || item?.id) !== id)
+      );
+      setActiveDelete?.(false);
+      return;
+    }
+
+    toast.error(
+      response?.message || response || "حدث خطأ أثناء حذف الرحلة"
+    );
+  };
+
   const addAction = settingsPermissions?.add ? (
     <Button
       type="button"
@@ -215,7 +237,12 @@ const ModuleTripsListPage = () => {
                 data={mapped}
                 loading={loading}
                 edit={settingsPermissions?.edit}
-               profile={true}
+                profile={true}
+                deleteFn={
+                  settingsPermissions?.delete
+                    ? handleDelete
+                    : undefined
+                }
                 body={BODY}
               />
             </Box>
