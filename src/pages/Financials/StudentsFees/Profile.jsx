@@ -598,13 +598,6 @@ const FinancialRecordProfilePage =
         tuition?.installments
       );
 
-    const originalFee =
-      numberOf(
-        tuition?.fee,
-        tuition?.originalFee,
-        tuition?.grossFee
-      );
-
     const netFee =
       getEffectiveFee(
         tuition
@@ -632,16 +625,50 @@ const FinancialRecordProfilePage =
       tuition?.discount ||
       null;
 
+    /*
+     * The expatriate surcharge (tuition.surcharge) is added to the fee before
+     * any discount, and the discount is taken off that total. It was never
+     * shown, so a non-local student's 2,000 read as a net 2,400 with nothing
+     * explaining the 400.
+     */
+    const surchargeAmount =
+      numberOf(
+        tuition?.surcharge?.amount
+      );
+
+    const surchargePercentage =
+      numberOf(
+        tuition?.surcharge?.percentage
+      );
+
     const discountAmount =
       numberOf(
         discount?.discountAmount,
-        tuition?.discountAmount,
-        Math.max(
-          originalFee -
-            netFee,
-          0
-        )
+        tuition?.discountAmount
       );
+
+    /*
+     * The server sends tuition.fee as the net fee once a discount applies, so
+     * the original fee is rebuilt from the parts: net + discount − surcharge.
+     */
+    const originalFee =
+      tuition?.netFee !== undefined &&
+      tuition?.netFee !== null
+        ? Math.max(
+            netFee +
+              discountAmount -
+              surchargeAmount,
+            0
+          )
+        : numberOf(
+            tuition?.fee,
+            tuition?.originalFee
+          );
+
+    const summaryCellCount =
+      3 +
+      (surchargeAmount > 0 ? 1 : 0) +
+      (discountAmount > 0 ? 1 : 0);
 
     const academicYearId =
       idOf(
@@ -1608,15 +1635,15 @@ const FinancialRecordProfilePage =
                 display:
                   "grid",
                 gridTemplateColumns:
-                  discountAmount >
-                  0
+                  summaryCellCount >
+                  3
                     ? {
                         xs:
                           "1fr",
                         sm:
                           "repeat(2,1fr)",
                         lg:
-                          "repeat(4,1fr)",
+                          `repeat(${summaryCellCount},1fr)`,
                       }
                     : {
                         xs:
@@ -1642,6 +1669,20 @@ const FinancialRecordProfilePage =
                   originalFee
                 )}
               />
+
+              {surchargeAmount >
+                0 && (
+                <SummaryCell
+                  label={`رسوم غير المحليين${
+                    surchargePercentage
+                      ? ` ${surchargePercentage}%`
+                      : ""
+                  }`}
+                  value={`+ ${formatMoney(
+                    surchargeAmount
+                  )}`}
+                />
+              )}
 
               {discountAmount >
                 0 && (
