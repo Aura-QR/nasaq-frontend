@@ -40,6 +40,7 @@ import {
 } from "@/utils/hooks/apis/student/useStudent";
 
 import AssignmentCard from "./components/AssignmentCard";
+import ExamResultDialog from "@/components/ExamResultDialog/ExamResultDialog";
 
 // =====================================================
 // COLORS
@@ -480,6 +481,14 @@ const MyAssignments = () => {
     selectedStatus,
     setSelectedStatus,
   ] = useState("");
+
+  // The assignment whose result is being shown. A submitted assignment
+  // used to end at a dead "تم تسليم الواجب" button, with the mark it
+  // earned readable nowhere.
+  const [
+    resultFor,
+    setResultFor,
+  ] = useState(null);
 
   // ===================================================
   // API
@@ -1465,7 +1474,7 @@ const MyAssignments = () => {
                     actionLabel={
                       item.status ===
                       "completed"
-                        ? "تم تسليم الواجب"
+                        ? "عرض النتيجة"
                         : item.status ===
                             "overdue"
                           ? "انتهى الواجب"
@@ -1476,10 +1485,17 @@ const MyAssignments = () => {
                     }
                     actionDisabled={
                       item.status !==
-                      "pending"
+                        "pending" &&
+                      item.status !==
+                        "completed"
                     }
                     onAction={() =>
-                      navigate(
+                      item.status ===
+                      "completed"
+                        ? setResultFor(
+                            item
+                          )
+                        : navigate(
                         `/student-dashboard/assignments/${item.id}/quiz`,
                         {
                           state: {
@@ -1513,6 +1529,17 @@ const MyAssignments = () => {
             }
           />
         )}
+
+        <ExamResultDialog
+          open={Boolean(resultFor)}
+          onClose={() =>
+            setResultFor(null)
+          }
+          examId={resultFor?.id}
+          examTitle={
+            resultFor?.title
+          }
+        />
       </Box>
     </Container>
   );

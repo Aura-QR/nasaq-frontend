@@ -348,6 +348,42 @@ export const gradeStudentExam =
   };
 
 // =====================================================
+// MY EXAM RESULT
+// GET /exams/:examId/my-result
+//
+// The score of an exam already sat. Grading answers with the full
+// breakdown once, in the reply to the submission, and the student never
+// saw it again — a finished exam showed "تم إكمال الاختبار" and nothing
+// else. Anything submitted before the server started keeping answers
+// comes back with an exact score and an empty `results`.
+// =====================================================
+
+export const fetchMyExamResult =
+  async (examId) => {
+    try {
+      if (!examId) {
+        return {
+          status: false,
+          message:
+            "معرّف الاختبار مطلوب",
+        };
+      }
+
+      const response =
+        await api.get(
+          `/exams/${examId}/my-result`
+        );
+
+      return response.data;
+    } catch (err) {
+      return normalizeFailure(
+        err,
+        "تعذر عرض نتيجة الاختبار"
+      );
+    }
+  };
+
+// =====================================================
 // PROJECT SUBMISSION
 // GET /projects/:projectId/my-submission
 // =====================================================

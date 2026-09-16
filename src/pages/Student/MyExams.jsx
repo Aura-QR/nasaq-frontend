@@ -38,6 +38,7 @@ import {
 } from "react-router-dom";
 
 import Container from "@/components/Container/Container";
+import ExamResultDialog from "@/components/ExamResultDialog/ExamResultDialog";
 
 import {
   useStudentExams,
@@ -1613,6 +1614,15 @@ const ExamCard = ({
     exam.status ===
     "pending";
 
+  const isCompleted =
+    exam.status ===
+    "completed";
+
+  const [
+    resultOpen,
+    setResultOpen,
+  ] = useState(false);
+
   return (
     <Paper
       elevation={0}
@@ -1787,10 +1797,16 @@ const ExamCard = ({
       <Button
         fullWidth
         disabled={
-          !isAvailable
+          !isAvailable &&
+          !isCompleted
         }
         onClick={
-          onOpen
+          isCompleted
+            ? () =>
+                setResultOpen(
+                  true
+                )
+            : onOpen
         }
         endIcon={
           <ChevronLeftRounded />
@@ -1829,9 +1845,8 @@ const ExamCard = ({
           },
         }}
       >
-        {exam.status ===
-        "completed"
-          ? "تم إكمال الاختبار"
+        {isCompleted
+          ? "عرض النتيجة"
           : exam.status ===
               "overdue"
             ? "انتهى الاختبار"
@@ -1844,6 +1859,17 @@ const ExamCard = ({
                   ? "ابدأ النشاط"
                   : "ابدأ الاختبار القصير"}
       </Button>
+
+      {isCompleted && (
+        <ExamResultDialog
+          open={resultOpen}
+          onClose={() =>
+            setResultOpen(false)
+          }
+          examId={exam.id}
+          examTitle={exam.title}
+        />
+      )}
     </Paper>
   );
 };
