@@ -222,6 +222,49 @@ const getName = (value) => {
   );
 };
 
+/**
+ * The id of the academic year the student sits in, from their enrollment or
+ * from their class. The edit form opens on this year so the class list is the
+ * student's own year, and nobody has to pick a year to change a class.
+ */
+export const getStudentAcademicYearId = (
+  student,
+  enrollmentSource
+) => {
+  const enrollment =
+    getCurrentEnrollment(
+      enrollmentSource
+    ) ||
+    getCurrentEnrollment(student);
+
+  const classData =
+    getStudentClass(
+      student,
+      enrollment
+    );
+
+  const candidates = [
+    enrollment?.academicYearId,
+    enrollment?.academicYear,
+    classData?.academicYearId,
+    classData?.academicYear,
+    student?.academicYearId,
+  ];
+
+  for (const candidate of candidates) {
+    const id =
+      typeof candidate === "string"
+        ? candidate
+        : candidate?._id || candidate?.id || "";
+
+    if (id && /^[a-f\d]{24}$/i.test(String(id))) {
+      return String(id);
+    }
+  }
+
+  return "";
+};
+
 export const getStudentAcademicYearLabel = (
   student,
   enrollmentSource

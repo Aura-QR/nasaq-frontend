@@ -35,6 +35,7 @@ import { api } from "@/APIs/Axios";
 import { getChangedValues } from "@/utils/helpers/getChangedValues";
 import {
   getCurrentEnrollment,
+  getStudentAcademicYearId,
   getStudentClassId,
 } from "@/utils/helpers/studentAcademic";
 import { useStudent } from "@/utils/hooks/apis/useStudent";
@@ -164,6 +165,17 @@ const Edit = () => {
           student,
           currentEnrollment
         ),
+
+      /*
+       * The form opens on the student's own year, so the class list is that
+       * year's classes. It is never sent to the API — the class decides the
+       * enrollment — so it stays in the ignored list below.
+       */
+      academicYear:
+        getStudentAcademicYearId(
+          student,
+          currentEnrollment
+        ),
     };
 
     /*
@@ -175,7 +187,6 @@ const Edit = () => {
     delete formattedStudent.enrollment;
     delete formattedStudent.enrollments;
     delete formattedStudent.installmentPlanId;
-    delete formattedStudent.academicYear;
 
     reset(formattedStudent);
     setDefaultValues(
@@ -210,6 +221,28 @@ const Edit = () => {
           ]
         );
 
+      /*
+       * An optional field the student never had reads as "" in the form and
+       * undefined in the record, so «المدرسة السابقة» and «الملاحظات» counted
+       * as edits on every save: the page reported a successful edit while
+       * sending an empty body.
+       */
+      const isBlank = (value) =>
+        value === undefined ||
+        value === null ||
+        value === "";
+
+      Object.keys(changedData).forEach(
+        (key) => {
+          if (
+            isBlank(changedData[key]) &&
+            isBlank(defaultValues[key])
+          ) {
+            delete changedData[key];
+          }
+        }
+      );
+
       if (
         Object.keys(
           changedData
@@ -231,6 +264,21 @@ const Edit = () => {
         !changedData.classId
       ) {
         delete changedData.classId;
+      }
+
+      /*
+       * Dropping the empty class could leave nothing to send, and the page
+       * still reported a successful edit.
+       */
+      if (
+        Object.keys(
+          changedData
+        ).length === 0
+      ) {
+        toast.info(
+          "لم يتم إجراء أي تغييرات على البيانات"
+        );
+        return;
       }
 
       const response =

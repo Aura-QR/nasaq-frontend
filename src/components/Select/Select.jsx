@@ -1,6 +1,6 @@
 import { MenuItem, Stack, TextField, Typography } from "@mui/material";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 // Register is the imported register from useForm
 // Error : error={errors?.city?.message || (error?.city && error?.city[0])} |||| Errors => from useForm , Error => respond
 // data : is data need to be listed
@@ -25,6 +25,22 @@ const Select = ({
 }) => {
   const [changed, setChanged] = useState(false);
 
+  /*
+   * The value follows `defaultValue` for the life of the field, not only on
+   * the first render.
+   *
+   * It used to be an uncontrolled select: a value arriving later — the active
+   * academic year once the list loads, or a class cleared because the year
+   * changed — never reached the screen. The student edit form showed a class
+   * the form no longer held, so saving sent nothing and still reported
+   * success, and the class stayed as it was.
+   */
+  const [value, setValue] = useState(defaultValue ?? "");
+
+  useEffect(() => {
+    setValue(defaultValue ?? "");
+  }, [defaultValue]);
+
   return (
     <Stack alignItems={"start"} spacing={4}>
       <Typography variant="subtitle" color={"text.secondary"} fontWeight={500}>
@@ -46,15 +62,16 @@ const Select = ({
           borderColor: "primary.border",
           bgcolor: "#eceff9",
         }}
-        defaultValue={defaultValue ?? ""}
+        value={value}
         onChange={(e) => {
+          setValue(e.target.value ?? "");
           setChanged(true);
           if (onChange) {
             onChange(e.target.value);
           }
         }}
       >
-        {!required && <MenuItem key={0} value={null} >{defaultSelect}</MenuItem>}
+        {!required && <MenuItem key={0} value="">{defaultSelect}</MenuItem>}
         {data &&
           data.map((item) => {
             return (
