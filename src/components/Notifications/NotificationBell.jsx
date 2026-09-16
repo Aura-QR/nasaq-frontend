@@ -332,7 +332,7 @@ const NotificationBell = ({
               color="text.secondary"
               sx={{ px: 2, py: 4, textAlign: "center" }}
             >
-              مفيش إشعارات.
+             لا يوجدإشعارات.
             </Typography>
           ) : (
             <List dense disablePadding>

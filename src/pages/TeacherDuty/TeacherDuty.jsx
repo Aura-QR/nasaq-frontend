@@ -1248,7 +1248,7 @@ const MyDay = ({ day }) => {
               fontWeight: 900,
             }}
           >
-            يومك النهارده
+          اليوم
           </Typography>
 
           <Typography
@@ -1344,8 +1344,7 @@ const MyDay = ({ day }) => {
                 fontWeight: 900,
               }}
             >
-              مفيش حصص عليك
-              النهارده
+             لا يوجد حصص اليوم
             </Typography>
           </Stack>
         </Box>
