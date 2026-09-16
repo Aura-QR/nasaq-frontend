@@ -48,6 +48,12 @@ import {
 } from "@/APIs/school/curriculum";
 import { fetchSubjectsList } from "@/APIs/school/subjects";
 import { fetchGradeLevels } from "@/APIs/school/gradeLevels";
+import { fetchSubjectOfferings } from "@/APIs/school/subjectOfferings";
+import {
+  buildSubjectGradeMap,
+  subjectLabel,
+  subjectsForGrade,
+} from "@/shared/curriculum/subjectPicker";
 import ImportCurriculumDialog from "./ImportCurriculumDialog";
 
 const normalizeId = (value) => {
@@ -313,6 +319,9 @@ const CurriculumManagement = () => {
   const [subjectId, setSubjectId] = useState("");
   const [gradeLevelId, setGradeLevelId] = useState("");
 
+  /* subjectId -> the grades that subject is offered in. */
+  const [subjectGrades, setSubjectGrades] = useState(null);
+
   const [schoolUnits, setSchoolUnits] = useState([]);
   const [lessonMap, setLessonMap] = useState({});
   const [expandedUnits, setExpandedUnits] = useState(() => new Set());
@@ -332,6 +341,20 @@ const CurriculumManagement = () => {
   const [bulkPreviewing, setBulkPreviewing] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
 
+
+  /*
+   * Only the subjects taught in the chosen grade. A school with a separate
+   * «التربية الفنية» per grade shows the whole set otherwise, with nothing to
+   * pick by — and importing onto the wrong one puts the curriculum where no
+   * teacher will look for it.
+   *
+   * Until the offerings are known, and for a grade with no offerings at all,
+   * every subject stays selectable rather than leaving an empty list.
+   */
+  const subjectOptions = useMemo(
+    () => subjectsForGrade(schoolSubjects, subjectGrades, gradeLevelId),
+    [schoolSubjects, subjectGrades, gradeLevelId]
+  );
 
   const selectedSubject = useMemo(
     () => schoolSubjects.find((item) => normalizeId(item) === subjectId) || null,
@@ -367,6 +390,12 @@ const CurriculumManagement = () => {
     setSchoolSubjects(extractList(subjectsResponse));
     setGradeLevels(extractList(gradesResponse));
     setLoading(false);
+
+    /* After the page is usable: which grades each subject is offered in. */
+    const offeringsResponse = await fetchSubjectOfferings();
+    if (offeringsResponse?.status === false) return;
+
+    setSubjectGrades(buildSubjectGradeMap(extractList(offeringsResponse)));
   }, []);
 
   useEffect(() => {
@@ -801,10 +830,15 @@ const CurriculumManagement = () => {
                 label="المادة"
                 value={subjectId}
                 onChange={(event) => setSubjectId(event.target.value)}
+                helperText={
+                  gradeLevelId && subjectGrades
+                    ? "مواد هذا الصف فقط"
+                    : " "
+                }
               >
-                {schoolSubjects.map((item) => (
+                {subjectOptions.map((item) => (
                   <MenuItem key={normalizeId(item)} value={normalizeId(item)}>
-                    {getName(item)}
+                    {subjectLabel(item)}
                   </MenuItem>
                 ))}
               </TextField>
@@ -816,7 +850,12 @@ const CurriculumManagement = () => {
                 size="small"
                 label="الصف الدراسي"
                 value={gradeLevelId}
-                onChange={(event) => setGradeLevelId(event.target.value)}
+                onChange={(event) => {
+                  setGradeLevelId(event.target.value);
+                  /* The chosen subject may not be taught in the new grade. */
+                  setSubjectId("");
+                }}
+                helperText=" "
               >
                 {gradeLevels.map((item) => (
                   <MenuItem key={normalizeId(item)} value={normalizeId(item)}>
@@ -848,7 +887,7 @@ const CurriculumManagement = () => {
               <Box>
                 <Typography sx={{ fontWeight: 900, color: "var(--color-navy-deep)" }}>
                   {selectedSubject && selectedGrade
-                    ? `${getName(selectedSubject)} — ${getName(selectedGrade)}`
+                    ? `${subjectLabel(selectedSubject)} — ${getName(selectedGrade)}`
                     : "منهج المدرسة"}
                 </Typography>
                 <Typography sx={{ fontSize: 10.5, color: "var(--color-muted)" }}>
