@@ -6,7 +6,7 @@ import {
 } from "@/APIs/student";
 
 import {
-  getStudentSubjects,
+  getStudentGradeSubjects,
   getStudentGrades,
   getStudentGradingCriteria,
 } from "@/APIs/student/dashboard";
@@ -63,124 +63,6 @@ const normalizeId = (value) => {
   }
 
   return String(value).trim();
-};
-
-const getStudentSubjectTermId = (item) => {
-  if (!item) {
-    return "";
-  }
-
-  const offering =
-    item?.subjectOfferingId ||
-    item?.subjectOffering ||
-    item?.offering ||
-    item;
-
-  return normalizeId(
-    offering?.termId ||
-      offering?.term ||
-      item?.termId ||
-      item?.term
-  );
-};
-
-const getActiveStudentTermId = async (subjects = []) => {
-  const availableTermIds = Array.from(
-    new Set(
-      subjects
-        .map(getStudentSubjectTermId)
-        .filter(Boolean)
-    )
-  );
-
-  // لا يوجد تعارض بين أكثر من ترم، فلا نحتاج طلبات إضافية.
-  if (availableTermIds.length <= 1) {
-    return availableTermIds[0] || "";
-  }
-
-  try {
-    const activeYearResponse =
-      await api.get(
-        "/academic-years/active"
-      );
-
-    const activeYearPayload =
-      activeYearResponse?.data?.data ??
-      activeYearResponse?.data ??
-      null;
-
-    const activeYear =
-      activeYearPayload?.academicYear ||
-      activeYearPayload?.year ||
-      activeYearPayload;
-
-    const activeYearId =
-      normalizeId(activeYear);
-
-    if (!activeYearId) {
-      return "";
-    }
-
-    const termsResponse =
-      await api.get(
-        `/terms/by-year/${activeYearId}`
-      );
-
-    const termsPayload =
-      termsResponse?.data?.data ??
-      termsResponse?.data ??
-      [];
-
-    const terms = asArray(termsPayload);
-
-    const now = Date.now();
-
-    const activeTerm =
-      terms.find(
-        (term) =>
-          String(
-            term?.status || ""
-          ).toLowerCase() ===
-          "active"
-      ) ||
-      terms.find((term) => {
-        const start = term?.startDate
-          ? new Date(
-              term.startDate
-            ).getTime()
-          : Number.NaN;
-
-        const end = term?.endDate
-          ? new Date(
-              term.endDate
-            ).getTime()
-          : Number.NaN;
-
-        return (
-          Number.isFinite(start) &&
-          Number.isFinite(end) &&
-          start <= now &&
-          now <= end
-        );
-      });
-
-    const activeTermId =
-      normalizeId(activeTerm);
-
-    return availableTermIds.includes(
-      activeTermId
-    )
-      ? activeTermId
-      : "";
-  } catch (error) {
-    console.warn(
-      "[Student Subjects] Could not resolve active term:",
-      error?.response?.status ||
-        error?.message
-    );
-
-    return "";
-  }
 };
 
 const getErrorMessage = (
@@ -1031,11 +913,11 @@ export const useStudentAttendance =
 
 // =====================================================
 // STUDENT SUBJECTS
-// GET /subjects/student/me
+// GET /gradesCriteria/student/me/subjects
 //
-// الـ endpoint قد يرجّع SubjectOfferings لنفس المادة في أكثر من ترم.
-// صفحات الطالب الحالية لازم تعرض مواد الترم النشط فقط، لذلك نحل
-// الترم النشط من السنة الدراسية النشطة ثم نفلتر بالـ termId.
+// ده الـ endpoint المستخدم في Student flow في الـ collection.
+// العناصر هنا لازم تحتفظ بـ subjectOfferingId لأن صفحة الدرجات
+// تعتمد على subjectOfferingId وليس subjectId فقط.
 // =====================================================
 
 export const useStudentSubjects = () => {
@@ -1059,7 +941,7 @@ export const useStudentSubjects = () => {
         }
 
         const response =
-          await getStudentSubjects();
+          await getStudentGradeSubjects();
 
         if (!mounted) {
           return;
@@ -1087,47 +969,12 @@ export const useStudentSubjects = () => {
               payload
           );
 
-        const activeTermId =
-          await getActiveStudentTermId(
-            list
-          );
-
-        if (!mounted) {
-          return;
-        }
-
-        const currentTermSubjects =
-          activeTermId
-            ? list.filter((item) => {
-                const termId =
-                  getStudentSubjectTermId(
-                    item
-                  );
-
-                // نحافظ على أي record قديم لا يحتوي termId بدل إسقاطه.
-                return (
-                  !termId ||
-                  termId ===
-                    activeTermId
-                );
-              })
-            : list;
-
         console.log(
-          "[Student Subjects] source: /subjects/student/me",
-          {
-            activeTermId,
-            total: list.length,
-            visible:
-              currentTermSubjects.length,
-            subjects:
-              currentTermSubjects,
-          }
+          "[Student Subjects] source: /gradesCriteria/student/me/subjects",
+          list
         );
 
-        setSubjects(
-          currentTermSubjects
-        );
+        setSubjects(list);
       } catch (error) {
         if (!mounted) {
           return;
