@@ -2,24 +2,16 @@ import {
   Box,
   Button,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
   Paper,
   Stack,
   TextField,
   MenuItem,
-  Tooltip,
   Typography,
 } from "@mui/material";
 
 import {
   AddCircleOutlineOutlined,
   AutoStoriesRounded,
-  CheckCircleRounded,
-  EditNoteRounded,
   FileDownloadOutlined,
   FilterAltRounded,
   MenuBookRounded,
@@ -52,7 +44,6 @@ import useDebounce from "@/utils/hooks/useDebounce";
 import { api } from "@/APIs/Axios";
 import {
   deletePreparation,
-  reviewPreparation,
 } from "@/APIs/school/preparation";
 
 import Days from "@/utils/constants/Days";
@@ -69,24 +60,6 @@ const SCHOOL_ADMIN_ROLES = [
   "ADMIN",
 ];
 
-const REVIEW_STATUS_OPTIONS = [
-  {
-    id: "draft",
-    name: "مسودة",
-  },
-  {
-    id: "pending",
-    name: "بانتظار المراجعة",
-  },
-  {
-    id: "approved",
-    name: "معتمد",
-  },
-  {
-    id: "needs_revision",
-    name: "يحتاج تعديل",
-  },
-];
 
 const EMPTY_FILTER_OPTIONS = {
   teachers: [],
@@ -949,24 +922,25 @@ const fetchFilterList = async (
   }
 };
 
+/*
+ * What a manager reads here is what the teacher reads on their own page:
+ * whether the preparation is finished.
+ *
+ * It used to be the review state — مسودة / بانتظار المراجعة / معتمد — which
+ * described a process this school does not run. Nobody sends a preparation to
+ * a manager and waits, and the numbers said so: every school had preparations
+ * sitting at "بانتظار المراجعة" and not one that had ever been approved. So
+ * the same finished preparation read "تم التحضير" to the teacher who wrote it
+ * and "بانتظار المراجعة" to the manager looking at it, and the manager waited
+ * for a step nobody was going to take.
+ */
 const PREPARATION_STATUS_META = {
-  draft: { label: "مسودة", color: "warning" },
-  pending: { label: "بانتظار المراجعة", color: "info" },
-  approved: { label: "معتمد", color: "success" },
-  needs_revision: { label: "يحتاج تعديل", color: "error" },
+  complete: { label: "مكتمل", color: "success" },
+  incomplete: { label: "غير مكتمل", color: "warning" },
 };
 
-const normalizePreparationStatus = (item) => {
-  const value = String(item?.status || item?.reviewStatus || "draft")
-    .trim()
-    .toLowerCase();
-
-  if (value === "pending_review" || value === "submitted") {
-    return "pending";
-  }
-
-  return PREPARATION_STATUS_META[value] ? value : "draft";
-};
+const normalizePreparationStatus = (item) =>
+  item?.isComplete ? "complete" : "incomplete";
 
 const getPreparationLessonTitle = (item) =>
   String(
@@ -1094,13 +1068,6 @@ const List = () => {
   const [items, setItems] =
     useState([]);
 
-  const [reviewDialog, setReviewDialog] = useState({
-    open: false,
-    action: "",
-    item: null,
-  });
-  const [reviewNote, setReviewNote] = useState("");
-  const [reviewing, setReviewing] = useState(false);
 
   const [page, setPage] =
     useState(1);
@@ -1157,10 +1124,6 @@ const List = () => {
     setLessonTitle,
   ] = useState("");
 
-  const [
-    reviewStatus,
-    setReviewStatus,
-  ] = useState("");
 
   const debouncedTeacherName =
     useDebounce(
@@ -1239,11 +1202,6 @@ const List = () => {
           debouncedLessonTitle.trim();
       }
 
-      if (reviewStatus) {
-        params.reviewStatus =
-          reviewStatus;
-      }
-
       return params;
     },
     [
@@ -1260,7 +1218,6 @@ const List = () => {
       weekFrom,
       weekTo,
       debouncedLessonTitle,
-      reviewStatus,
     ]
   );
 
@@ -1272,9 +1229,6 @@ const List = () => {
 
   const permissions =
     usePermissions("preparation");
-
-  const canReviewPreparations =
-    usePermissions("preparation", "review");
 
   useEffect(() => {
     let active = true;
@@ -1469,7 +1423,6 @@ const List = () => {
     weekFrom,
     weekTo,
     debouncedLessonTitle,
-    reviewStatus,
   ]);
 
   const currentPagination =
@@ -1491,7 +1444,6 @@ const List = () => {
     weekFrom,
     weekTo,
     lessonTitle,
-    reviewStatus,
   ].filter(Boolean).length;
 
   const stats = useMemo(
@@ -1566,7 +1518,6 @@ const List = () => {
     setWeekFrom("");
     setWeekTo("");
     setLessonTitle("");
-    setReviewStatus("");
     setPage(1);
   };
 
@@ -1650,71 +1601,6 @@ const List = () => {
     }
   };
 
-  const openReviewDialog = (item, action) => {
-    setReviewNote("");
-    setReviewDialog({ open: true, action, item });
-  };
-
-  const closeReviewDialog = () => {
-    if (reviewing) return;
-    setReviewDialog({ open: false, action: "", item: null });
-    setReviewNote("");
-  };
-
-  const handleReview = async () => {
-    const item = reviewDialog.item;
-    const action = reviewDialog.action;
-
-    if (!item?.id || !["approved", "needs_revision"].includes(action)) {
-      return;
-    }
-
-    setReviewing(true);
-    try {
-      const response = await reviewPreparation(item.id, {
-        reviewStatus: action,
-        reviewNote: action === "needs_revision" ? reviewNote : "",
-      });
-
-      if (!response?.status) {
-        toast.error(
-          getErrorMessage(
-            response,
-            action === "approved"
-              ? "تعذر اعتماد التحضير"
-              : "تعذر طلب التعديل"
-          )
-        );
-        return;
-      }
-
-      setItems((previousItems) =>
-        previousItems.map((current) =>
-          current.id === item.id
-            ? {
-                ...current,
-                preparationStatus: action,
-                statusDisplay:
-                  PREPARATION_STATUS_META[action]?.label || action,
-                reviewStatus: action,
-                reviewNote:
-                  action === "needs_revision" ? reviewNote.trim() : "",
-              }
-            : current
-        )
-      );
-
-      toast.success(
-        action === "approved"
-          ? "تم اعتماد التحضير"
-          : "تم إرسال التحضير للمعلم للتعديل"
-      );
-      setReviewDialog({ open: false, action: "", item: null });
-      setReviewNote("");
-    } finally {
-      setReviewing(false);
-    }
-  };
 
   const showEmptyState =
     !loading &&
@@ -2415,32 +2301,6 @@ const List = () => {
               fullWidth
             />
 
-            <TextField
-              select
-              label="حالة المراجعة"
-              value={reviewStatus}
-              onChange={(event) =>
-                setReviewStatus(
-                  event.target.value
-                )
-              }
-              fullWidth
-            >
-              <MenuItem value="">
-                كل الحالات
-              </MenuItem>
-
-              {REVIEW_STATUS_OPTIONS.map(
-                (option) => (
-                  <MenuItem
-                    key={option.id}
-                    value={option.id}
-                  >
-                    {option.name}
-                  </MenuItem>
-                )
-              )}
-            </TextField>
 
             <TextField
               type="date"
@@ -2718,58 +2578,11 @@ const List = () => {
                     ? handleDelete
                     : undefined
                 }
-                renderActions={(item) => {
-                  if (
-                    !canReviewPreparations ||
-                    item.preparationStatus !== "pending"
-                  ) {
-                    return null;
-                  }
-
-                  return (
-                    <>
-                      <Tooltip title="اعتماد التحضير" arrow>
-                        <IconButton
-                          type="button"
-                          onClick={() => openReviewDialog(item, "approved")}
-                          aria-label="اعتماد التحضير"
-                          sx={{
-                            width: 34,
-                            height: 34,
-                            borderRadius: "10px",
-                            color: "#238f55",
-                            bgcolor: "rgba(35,143,85,.09)",
-                            border: "1px solid rgba(35,143,85,.14)",
-                          }}
-                        >
-                          <CheckCircleRounded sx={{ fontSize: 19 }} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="طلب تعديل" arrow>
-                        <IconButton
-                          type="button"
-                          onClick={() => openReviewDialog(item, "needs_revision")}
-                          aria-label="طلب تعديل"
-                          sx={{
-                            width: 34,
-                            height: 34,
-                            borderRadius: "10px",
-                            color: "var(--color-gold-dark)",
-                            bgcolor: "rgba(211,164,79,.10)",
-                            border: "1px solid rgba(211,164,79,.16)",
-                          }}
-                        >
-                          <EditNoteRounded sx={{ fontSize: 19 }} />
-                        </IconButton>
-                      </Tooltip>
-                    </>
-                  );
-                }}
                 renderCell={({ item, keyName }) => {
                   if (keyName === "statusDisplay") {
                     const meta =
                       PREPARATION_STATUS_META[item.preparationStatus] ||
-                      PREPARATION_STATUS_META.draft;
+                      PREPARATION_STATUS_META.incomplete;
                     return (
                       <Chip
                         size="small"
@@ -2834,64 +2647,6 @@ const List = () => {
         </Paper>
       </Box>
 
-      <Dialog
-        open={reviewDialog.open}
-        onClose={closeReviewDialog}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle sx={{ fontWeight: 900 }}>
-          {reviewDialog.action === "approved"
-            ? "اعتماد التحضير"
-            : "طلب تعديل التحضير"}
-        </DialogTitle>
-        <DialogContent dividers>
-          {reviewDialog.action === "approved" ? (
-            <Typography sx={{ lineHeight: 1.8 }}>
-              هل تريد اعتماد هذا التحضير؟
-            </Typography>
-          ) : (
-            <TextField
-              autoFocus
-              fullWidth
-              multiline
-              minRows={4}
-              label="ملاحظة للمعلم"
-              placeholder="مثال: يرجى توضيح الأهداف وإضافة نشاط مناسب للدرس"
-              value={reviewNote}
-              onChange={(event) => setReviewNote(event.target.value)}
-              inputProps={{ maxLength: 1000 }}
-            />
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 2, py: 1.3 }}>
-          <Button
-            onClick={closeReviewDialog}
-            disabled={reviewing}
-            sx={{ fontWeight: 800 }}
-          >
-            إلغاء
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleReview}
-            disabled={reviewing}
-            sx={{
-              fontWeight: 900,
-              bgcolor:
-                reviewDialog.action === "approved"
-                  ? "#238f55"
-                  : "var(--color-gold-dark)",
-            }}
-          >
-            {reviewing
-              ? "جاري الحفظ..."
-              : reviewDialog.action === "approved"
-                ? "اعتماد"
-                : "إرسال طلب التعديل"}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Container>
   );
 };
