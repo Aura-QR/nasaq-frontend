@@ -31,8 +31,28 @@
     const base = teacher ? '/teacher/preparations' : '/school/preparation';
     return preparationId ? `${base}/${teacher && edit ? 'edit/' : ''}${encodeURIComponent(preparationId)}` : base;
   };
-  const status = (slot) => slot.preparation?.reviewStatus || (slot.preparation ? 'unknown' : 'none');
-  const editable = (slot) => ['none', 'draft', 'needs_revision'].includes(status(slot));
+  /*
+   * A period is in one of three states, and none of them is a review state.
+   *
+   * This school runs no review: nobody sends a preparation to a manager and
+   * waits. The server settled that — `isComplete` is the one definition of
+   * finished, and submitting stopped closing the door — but the extension
+   * went on reading `reviewStatus`, which it sets to `pending` itself every
+   * time it submits. One run over a teacher's week therefore locked the very
+   * periods it had just prepared, labelled them "قيد المراجعة", and left the
+   * teacher no way back through the panel.
+   */
+  const status = (slot) => {
+    if (!slot.preparation) return 'none';
+    return slot.preparation.isComplete ? 'complete' : 'incomplete';
+  };
+
+  /**
+   * A teacher owns their preparation and may rework any of it. The server
+   * checks that ownership and nothing else; the panel must not invent a lock
+   * the server does not keep.
+   */
+  const editable = () => true;
   const pairKey = (slot) => {
     const subject = id(slot.subject?.subjectId);
     const grade = id(slot.subject?.gradeLevel?._id);
@@ -150,10 +170,11 @@
         const current = await api(`/preparation/${row.preparationId}`);
         if (!current.ok) { problem(row, 'قراءة المسودة', current); continue; }
         if (cancelled()) break;
-        if (!['draft', 'needs_revision'].includes(current.data?.reviewStatus)) {
-          problem(row, 'قراءة المسودة', { message: 'تغيّرت حالة التحضير. افتحه للمراجعة وحدّث الأسبوع.' });
-          continue;
-        }
+        // A submitted preparation used to be refused here, which meant the
+        // run could not touch what a previous run had submitted. The server
+        // dropped that rule — a teacher owns their work and may redo it — and
+        // guards a stale write by matching the status it read a moment ago,
+        // not by demanding the row still be a draft.
         const currentLesson = id(current.data.lessonId);
         if (currentLesson !== row.originalLessonId) {
           problem(row, 'اختيار الدرس', { message: 'تغيّر درس المسودة. حدّث الأسبوع قبل المتابعة.' });

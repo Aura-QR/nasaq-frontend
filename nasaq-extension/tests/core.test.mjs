@@ -28,10 +28,24 @@ test('old saved production origins resolve to the new HTTPS API without changing
   }
   assert.equal(C.apiBase('http://localhost:3000/'), 'http://localhost:3000');
 });
-test('pending, approved and unknown preparation states are never editable', () => {
-  for (const reviewStatus of ['pending', 'approved', 'unexpected']) assert.equal(C.editable({ preparation: { reviewStatus } }), false);
-  assert.equal(C.editable({ preparation: {} }), false);
-  assert.equal(C.editable({ preparation: { reviewStatus: 'needs_revision' } }), true);
+// The panel used to lock a period once it had been submitted — including the
+// periods it had just submitted itself — because it read `reviewStatus`. This
+// school runs no review, the teacher owns the work, and the server stopped
+// closing that door; the panel follows it now.
+test('every period stays editable, whatever review state it carries', () => {
+  for (const reviewStatus of ['pending', 'approved', 'needs_revision', 'draft', 'unexpected'])
+    assert.equal(C.editable({ preparation: { reviewStatus } }), true);
+  assert.equal(C.editable({ preparation: {} }), true);
+  assert.equal(C.editable({}), true);
+});
+
+test('a period reads as complete or incomplete, never as a review state', () => {
+  assert.equal(C.status({}), 'none');
+  assert.equal(C.status({ preparation: { isComplete: true } }), 'complete');
+  assert.equal(C.status({ preparation: { isComplete: false } }), 'incomplete');
+  // A submitted-but-unfinished preparation is incomplete, not "قيد المراجعة".
+  assert.equal(C.status({ preparation: { reviewStatus: 'pending', isComplete: false } }), 'incomplete');
+  assert.equal(C.status({ preparation: { reviewStatus: 'approved', isComplete: true } }), 'complete');
 });
 test('81 new periods are split into 40/40/1 while preserving target week', async () => {
   const sizes = [];
@@ -116,12 +130,18 @@ test('expired sessions and rate limits stop subsequent generation requests', asy
     assert.equal(calls, 2); assert.equal(result.stopped, true);
   }
 });
-test('draft changed to pending or changed lesson is not overwritten', async () => {
-  for (const data of [{ reviewStatus: 'pending', lessonId: 'lesson1' }, { reviewStatus: 'draft', lessonId: 'other' }]) {
-    let calls = 0;
-    const result = await run([draft()], async () => { calls++; return ok(data); });
-    assert.equal(calls, 1); assert.equal(result.problems.length, 1);
-  }
+test('a preparation whose lesson changed under us is not overwritten', async () => {
+  let calls = 0;
+  const result = await run([draft()], async () => { calls++; return ok({ reviewStatus: 'draft', lessonId: 'other' }); });
+  assert.equal(calls, 1); assert.equal(result.problems.length, 1);
+});
+
+test('a preparation submitted since the week was loaded is still worked on', async () => {
+  // It used to be refused as "تغيّرت حالة التحضير", which is how one run over
+  // a week left the next run with nothing it was allowed to touch.
+  const result = await run([draft()], async (path) =>
+    path === '/preparation/p1' ? ok({ reviewStatus: 'pending', lessonId: 'lesson1' }) : ok({}));
+  assert.equal(result.problems.length, 0);
 });
 test('transport normalizes validation arrays and treats HTML writes as uncertain', async () => {
   const fetchOriginal = globalThis.fetch;

@@ -51,13 +51,21 @@ test('busy batch locks controls, ignores duplicate start, and retains errors aft
   assert.equal(p.find('.nq-check').checked, false);
   assert.equal(p.find('.nq-week').disabled, false);
 });
-test('submitted and approved rows are locked; revision rows require explicit selection', async () => {
-  const periods = ['pending', 'approved', 'needs_revision'].map((reviewStatus, i) => ({ ...slot({ _id: `p${i}`, reviewStatus, lessonId: 'lesson1' }), lectureId: `l${i}` }));
+test('no row is locked, and rows read as complete or incomplete', async () => {
+  // Every row stays selectable whatever it has been through, and the words on
+  // it describe the work, not a review queue this school never runs.
+  const periods = [
+    { ...slot({ _id: 'p0', reviewStatus: 'pending', lessonId: 'lesson1', isComplete: true }), lectureId: 'l0' },
+    { ...slot({ _id: 'p1', reviewStatus: 'approved', lessonId: 'lesson1', isComplete: true }), lectureId: 'l1' },
+    { ...slot({ _id: 'p2', reviewStatus: 'needs_revision', lessonId: 'lesson1', isComplete: false }), lectureId: 'l2' },
+  ];
   const p = await panel(async () => ok(week(periods)));
   const boxes = p.body.all().filter((node) => node.className === 'nq-check');
-  assert.equal(boxes[0].disabled, true); assert.equal(boxes[1].disabled, true);
-  assert.equal(boxes[2].disabled, false); assert.equal(boxes[2].checked, false);
-  assert.match(p.body.textContent, /قيد المراجعة/); assert.match(p.body.textContent, /معتمدة/);
+  for (const box of boxes) assert.equal(box.disabled, false);
+  assert.match(p.body.textContent, /مكتملة/);
+  assert.match(p.body.textContent, /غير مكتملة/);
+  assert.doesNotMatch(p.body.textContent, /قيد المراجعة/);
+  assert.doesNotMatch(p.body.textContent, /معتمدة/);
 });
 test('changing session before a batch prevents all mutations', async () => {
   let writes = 0;

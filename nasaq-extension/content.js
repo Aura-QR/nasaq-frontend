@@ -5,7 +5,7 @@
   const C = globalThis.NasaqPrep;
   const DAYS = { sunday: 'الأحد', monday: 'الاثنين', tuesday: 'الثلاثاء', wednesday: 'الأربعاء',
     thursday: 'الخميس', friday: 'الجمعة', saturday: 'السبت' };
-  const LABELS = { draft: 'مسودة', needs_revision: 'تحتاج تعديل', pending: 'قيد المراجعة', approved: 'معتمدة', unknown: 'حالة غير معروفة' };
+  const LABELS = { incomplete: 'غير مكتملة', complete: 'مكتملة' };
   const today = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -93,7 +93,7 @@
       const lesson = C.id(slot.preparation?.lessonId);
       if (lesson) state.chosen.set(slot.lectureId, lesson);
       if (!state.additions.has(slot.lectureId)) state.additions.set(slot.lectureId, slot.preparation ? new Set() : new Set(['homework']));
-      if (!preserve && eligible(slot) && C.status(slot) !== 'needs_revision') state.ticked.add(slot.lectureId);
+      if (!preserve && eligible(slot)) state.ticked.add(slot.lectureId);
     }
     render();
     void loadLessons(version, current);
@@ -168,7 +168,7 @@
     meta.appendChild(el('div', 'nq-sub', [slot.class?.name, slot.subject?.gradeLevel?.name].filter(Boolean).join(' · ')));
     row.appendChild(meta);
     if (slot.preparation) {
-      row.appendChild(el('span', C.editable(slot) ? 'nq-tag nq-tag-warn' : 'nq-tag nq-tag-done', LABELS[status] || LABELS.unknown));
+      row.appendChild(el('span', status === 'complete' ? 'nq-tag nq-tag-done' : 'nq-tag nq-tag-warn', LABELS[status] || LABELS.incomplete));
       preparationLink(row, 'فتح التحضير', C.id(slot.preparation), C.editable(slot));
     }
     if (!C.editable(slot)) return row;
@@ -199,8 +199,8 @@
       }
       row.appendChild(select);
     }
-    if (status === 'needs_revision') row.appendChild(el('div', 'nq-row-help',
-      'راجع ملاحظات المراجع وعدّل التحضير قبل تحديده للإرسال. التوليد يملأ الفراغات فقط.'));
+    if (status === 'incomplete') row.appendChild(el('div', 'nq-row-help',
+      'التحضير محفوظ وينقصه استكمال. التوليد يملأ الفراغات فقط ولا يستبدل ما كتبته.'));
     const choices = state.additions.get(slot.lectureId) || new Set();
     const resources = el('fieldset', 'nq-resources');
     resources.appendChild(el('legend', null, 'إضافات تُولّد لهذه الحصة'));
@@ -285,9 +285,9 @@
     const body = el('div', 'nq-body');
     const guide = el('details', 'nq-guide'); guide.appendChild(el('summary', null, 'طريقة الاستخدام وحل المشكلات'));
     guide.open = guideOpen;
-    guide.appendChild(el('p', null, '١. اختر الأسبوع والمعلم. ٢. حدّد الحصص واختر درس كل حصة وإضافاته: إثراء أو واجب أو امتحان أو نشاط. ٣. اختر التوليد والإرسال حسب حاجتك. لحفظ مسودات فقط ألغِ الإضافات والتوليد والإرسال. التحاضير المعتمدة والمُرسلة لا تُعدّل هنا.'));
-    guide.appendChild(el('p', null, 'الإرسال يحتاج درسًا من المنهج، وهدفًا، ومحتوى رقميًا، وتكليفًا واحدًا على الأقل. افتح التحضير لإكمال النواقص أو مراجعة ملاحظات التعديل.'));
-    guide.appendChild(el('p', null, 'التوليد يملأ الفراغات فقط، ويتطلب تفعيل خدمة التوليد على الخادم. افحص المحتوى قبل الإرسال. أوقف خيار الإرسال إذا أردت مراجعته أولًا.'));
+    guide.appendChild(el('p', null, '١. اختر الأسبوع والمعلم. ٢. حدّد الحصص واختر درس كل حصة وإضافاته: إثراء أو واجب أو امتحان أو نشاط. ٣. اختر التوليد والإرسال حسب حاجتك. لحفظ مسودات فقط ألغِ الإضافات والتوليد والإرسال. يمكنك إعادة العمل على أي حصة، حتى المكتملة.'));
+    guide.appendChild(el('p', null, 'الإرسال يحتاج درسًا من المنهج، وهدفًا، ومحتوى رقميًا، وتكليفًا واحدًا على الأقل. افتح التحضير لإكمال النواقص.'));
+    guide.appendChild(el('p', null, 'التوليد يملأ الفراغات فقط، ويتطلب تفعيل خدمة التوليد على الخادم. افحص المحتوى قبل الإرسال. أوقف خيار الإرسال إذا أردت مراجعته بنفسك أولًا.'));
     guide.appendChild(el('p', null, 'أبقِ صفحة نسق مفتوحة أثناء التنفيذ. إغلاق اللوحة لا يوقف العمل. الإيقاف ينتظر الطلب الجاري، والدفعات السابقة تظل محفوظة. عند انقطاع الاتصال حدّث الأسبوع قبل إعادة المحاولة.'));
     if (['OWNER', 'MANAGER'].includes(state.session?.role)) guide.appendChild(link('المناهج والدروس', '/school/curriculum'));
     else guide.appendChild(el('p', null, 'استيراد المنهج وإدارته متاحان للمالك والمدير. اطلب منهما إعداد دروس المادة والصف.'));
@@ -321,10 +321,10 @@
     else if (state.week) {
       const all = slots(); const counts = {};
       for (const slot of all) counts[C.status(slot)] = (counts[C.status(slot)] || 0) + 1;
-      body.appendChild(el('div', 'nq-stats', `${all.length} حصة · ${counts.none || 0} بلا تحضير · ${counts.draft || 0} مسودة · ${counts.needs_revision || 0} تحتاج تعديل · ${counts.pending || 0} قيد المراجعة · ${counts.approved || 0} معتمدة`));
+      body.appendChild(el('div', 'nq-stats', `${all.length} حصة · ${counts.none || 0} بلا تحضير · ${counts.incomplete || 0} غير مكتملة · ${counts.complete || 0} مكتملة`));
       const actions = el('div', 'nq-actions');
       actions.append(button('تحديد الحصص المتاحة', () => {
-        for (const slot of all.filter(eligible)) if (C.status(slot) !== 'needs_revision') state.ticked.add(slot.lectureId);
+        for (const slot of all.filter(eligible)) state.ticked.add(slot.lectureId);
         render();
       }, busy), button('إلغاء التحديد', () => { state.ticked.clear(); render(); }, busy)); body.appendChild(actions);
       for (const day of state.week.days) {
