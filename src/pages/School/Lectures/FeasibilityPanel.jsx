@@ -99,6 +99,12 @@ const getProblemText = (problem = {}) => {
       ? required - capacity
       : 0;
 
+  const count = asNumber(problem?.count);
+
+  const terms = Array.isArray(problem?.terms)
+    ? problem.terms.join("، ")
+    : "";
+
   switch (type) {
     case "no_working_days":
       return "لا توجد أيام عمل مفعلة في جدول دوام المدرسة. فعّل يوم عمل واحدًا على الأقل من إعدادات المدرسة.";
@@ -144,8 +150,31 @@ const getProblemText = (problem = {}) => {
     case "assignment_shared":
       return `${className}: يوجد أكثر من معلم على نفس الصف بدون تحديد الفصول لكل معلم. راجع الإسنادات لتجنب تقسيم غير مقصود.`;
 
+    // The four below used to fall through to the default, which said a note
+    // needed review and never said what it was. The phone named them, this
+    // panel did not, so the same school read differently on each screen.
+    case "assignment_wrong_term":
+      return `${count} مادة معلمها مُسنَد على ${terms || "ترم آخر"} وليس على هذا الترم. أعد الإسناد للترم الحالي.`;
+
+    case "assignment_pinned_elsewhere":
+      return `${count} إسناد مثبَّت على فصل لا ينتمي لصف المادة، ولن يُطبَّق رغم أن المعلم يبدو مُسنَدًا.`;
+
+    case "assignment_pin_conflict":
+      return `${count} فصل به أكثر من معلم مثبَّت على المادة نفسها، ويُعتد بالأخير فقط. احذف أحدهما.`;
+
+    case "no_slot_left":
+      return `${className} — ${subjectName}: لا توجد خانة شاغرة مناسبة.`;
+
+    case "search_exhausted":
+      return "انتهت محاولات التوزيع قبل جدولة جميع الحصص، والخطة على الأرجح ضيقة.";
+
+    // A type this build has no wording for. The server writes `message` in
+    // English, which is still a great deal more use than "توجد ملاحظة".
     default:
-      return "توجد ملاحظة تحتاج مراجعة قبل اعتماد الجدول.";
+      return (
+        problem?.message ||
+        "توجد ملاحظة تحتاج مراجعة قبل اعتماد الجدول."
+      );
   }
 };
 

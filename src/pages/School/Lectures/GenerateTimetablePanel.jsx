@@ -150,6 +150,17 @@ const getGenerationProblemText = (problem = {}) => {
       }.`;
     case "search_exhausted":
       return "الخطة مزدحمة جدًا ولم يكتمل البحث عن توزيع مناسب لكل الحصص.";
+    // Assignment problems reach this panel too, and used to arrive as the
+    // server's English. Worded here the way the readiness panel and the
+    // phone word them, so one problem reads the same wherever it is shown.
+    case "assignment_shared":
+      return `${className}: يوجد أكثر من معلم على نفس الصف بدون تحديد الفصول لكل معلم. راجع الإسنادات لتجنب تقسيم غير مقصود.`;
+    case "assignment_wrong_term":
+      return `${numberOf(problem?.count)} مادة معلمها مُسنَد على ترم آخر وليس على هذا الترم. أعد الإسناد للترم الحالي.`;
+    case "assignment_pinned_elsewhere":
+      return `${numberOf(problem?.count)} إسناد مثبَّت على فصل لا ينتمي لصف المادة، ولن يُطبَّق رغم أن المعلم يبدو مُسنَدًا.`;
+    case "assignment_pin_conflict":
+      return `${numberOf(problem?.count)} فصل به أكثر من معلم مثبَّت على المادة نفسها، ويُعتد بالأخير فقط. احذف أحدهما.`;
     default:
       return problem?.message || "ظهرت ملاحظة أثناء إنشاء الجدول. راجع الإعدادات والخطة.";
   }
