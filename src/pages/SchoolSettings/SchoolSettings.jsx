@@ -43,6 +43,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
+import WhatsappSection from "./WhatsappSection";
 import Back from "@/components/Back/Back";
 import Input from "@/components/Input/Input";
 import Loading from "@/components/Loading";
@@ -2663,6 +2664,14 @@ const SchoolSettings = () => {
                 "rgba(36,74,112,0.07)",
             }}
           />
+
+          {/* Whoever scans this code decides which number every parent
+              receives their child's password from, so it is the owner's and
+              the director's to do — the same pair who own the rest of this
+              page. */}
+          {canEditAttendanceSettings && (
+            <WhatsappSection />
+          )}
 
           <Box
             sx={{
