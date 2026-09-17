@@ -1265,7 +1265,10 @@ const List = () => {
         const mapped = mapPreparations(hydrated);
 
         if (currentRole === "TEACHER") {
-          const priority = { draft: 0, needs_revision: 1, pending: 2, approved: 3 };
+          // What still needs work comes first. This used to rank the four
+          // review states, so once the status became completeness every row
+          // scored the same and the ordering quietly stopped happening.
+          const priority = { incomplete: 0, complete: 1 };
           mapped.sort(
             (a, b) =>
               (priority[a.preparationStatus] ?? 9) -
