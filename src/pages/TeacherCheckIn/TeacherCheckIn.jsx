@@ -38,6 +38,7 @@ import {
 } from "@/APIs/school/teacherAttendance";
 
 import NotificationBell from "@/components/Notifications/NotificationBell";
+import { LATE_REASON_EVENT } from "@/components/Notifications/AttendanceAlerts";
 import { requestBrowserLocation } from "@/utils/geolocation";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
@@ -298,6 +299,14 @@ const TeacherCheckIn = () => {
       }
 
       toast.success("تم تسجيل حضورك بنجاح");
+
+      // Ask for the reason now, while the teacher is still on this screen —
+      // AttendanceAlerts would otherwise get there on its next poll, up to a
+      // minute after they have walked away from the phone.
+      if (response?.data?.lateReasonRequired) {
+        window.dispatchEvent(new Event(LATE_REASON_EVENT));
+      }
+
       await loadHistory({ silent: true });
     } catch (locationError) {
       setLocationState("error");

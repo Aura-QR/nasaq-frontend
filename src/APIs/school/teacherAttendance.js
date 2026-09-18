@@ -246,6 +246,59 @@ export const fetchMyTeacherAttendance = async (
 };
 
 /* =========================================================
+   Late Reason
+
+   دقائق التأخير هي رواية الساعة، وسبب التأخير هو رواية المعلم.
+   الإدارة تقرأ الاثنين معًا: عشرون دقيقة بسبب عطل في الحافلة
+   وعشرون دقيقة بلا سبب رقمٌ واحد ولكنهما ليسا الشيء نفسه.
+========================================================= */
+
+/**
+ * GET /teacher-attendance/me/late-reason/pending
+ *
+ * ما لم يوضّحه المعلم بعد عن تأخير اليوم. الاعتماد على رد تسجيل الحضور
+ * وحده لا يكفي: من أغلق النافذة، أو نفدت بطارية هاتفه، أو سجّلت الإدارة
+ * تأخيره نيابة عنه، لن يُسأل أبدًا.
+ */
+export const fetchPendingLateReason = async () => {
+  try {
+    const response = await api.get(
+      `${ENDPOINT}/me/late-reason/pending`
+    );
+
+    return response.data;
+  } catch (error) {
+    return getErrorResult(
+      error,
+      "تعذر التحقق من تأخير اليوم"
+    );
+  }
+};
+
+/** POST /teacher-attendance/me/late-reason — يُكتب مرة واحدة ولا يُعدّل. */
+export const submitLateReason = async ({
+  reason,
+  date,
+} = {}) => {
+  try {
+    const response = await api.post(
+      `${ENDPOINT}/me/late-reason`,
+      {
+        reason: String(reason || "").trim(),
+        ...(date ? { date } : {}),
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    return getErrorResult(
+      error,
+      "تعذر إرسال سبب التأخير"
+    );
+  }
+};
+
+/* =========================================================
    Admin Attendance List
 ========================================================= */
 
@@ -450,6 +503,8 @@ export default {
   checkInTeacherAttendance,
   checkOutTeacherAttendance,
   fetchMyTeacherAttendance,
+  fetchPendingLateReason,
+  submitLateReason,
   fetchTeacherAttendanceAdmin,
   fetchAbsentTeachers,
   createManualTeacherAttendance,

@@ -20,6 +20,8 @@ import {
 
 import AppRouter from "@/app/AppRouter";
 
+import AttendanceAlerts from "@/components/Notifications/AttendanceAlerts";
+
 import store from "@/store";
 
 import {
@@ -54,6 +56,13 @@ function App() {
             }}
           >
             <AppRouter />
+
+            {/*
+              Above the router on purpose: one poller for the whole app that
+              survives navigation, instead of one per screen — and a lateness
+              or an absence reaches the user wherever they happen to be.
+            */}
+            <AttendanceAlerts />
 
             <ToastContainer
               position="top-left"

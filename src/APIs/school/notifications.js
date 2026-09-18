@@ -33,6 +33,10 @@ export const NOTIFICATION_ICONS = {
   cover_removed: "undo",
   duty_assigned: "shield",
   duty_removed: "undo",
+  teacher_late: "schedule",
+  late_reason_required: "schedule",
+  late_reason_submitted: "note",
+  student_absent: "eventBusy",
 };
 
 export const NOTIFICATION_COLORS = {
@@ -42,6 +46,10 @@ export const NOTIFICATION_COLORS = {
   cover_removed: "warning",
   duty_assigned: "info",
   duty_removed: "warning",
+  teacher_late: "warning",
+  late_reason_required: "warning",
+  late_reason_submitted: "info",
+  student_absent: "error",
 };
 
 /**
