@@ -52,6 +52,12 @@ import usePermissions from "@/utils/hooks/usePermissions";
 
 import { api } from "@/APIs/Axios";
 import {
+  SLOT_PREFERENCES,
+  normalizePreference,
+  planRowChanged,
+  preferenceMeta,
+} from "@/shared/timetable/slotPreference";
+import {
   addSubjectOffering,
   copySubjectOfferingsFromYear,
   deleteSubjectOffering,
@@ -1150,6 +1156,18 @@ const SubjectOfferings = () => {
   const [gradeLevels, setGradeLevels] = useState([]);
   const [offerings, setOfferings] = useState([]);
   const [planDraft, setPlanDraft] = useState({});
+
+  /*
+   * موضع المادة المفضّل في اليوم.
+   *
+   * المولّد يزن هذا الحقل منذ كُتب، غير أنه لم تكن هناك وسيلة لضبطه، فظلت
+   * كل مادة في كل مدرسة على «عادي». وجدول يضع التربية الفنية أول اليوم
+   * واللغة العربية آخره جدول صحيح وعديم الفائدة.
+   *
+   * مفصول عن planDraft لأن الحقلين يُعدَّلان ويُحفظان معًا لكن لكل منهما
+   * تحققه الخاص: عدد الحصص رقم له حدود، والتفضيل قيمة من ثلاث.
+   */
+  const [preferenceDraft, setPreferenceDraft] = useState({});
   const [slotsPerWeek, setSlotsPerWeek] = useState(null);
 
   const [selectedYearId, setSelectedYearId] = useState("");
@@ -1287,6 +1305,7 @@ const SubjectOfferings = () => {
     if (!selectedTermId) {
       setOfferings([]);
       setPlanDraft({});
+      setPreferenceDraft({});
       return;
     }
 
@@ -1317,6 +1336,18 @@ const SubjectOfferings = () => {
             const periodsPerWeek = Number.isFinite(rawValue) ? rawValue : 0;
 
             return offeringId ? [offeringId, periodsPerWeek] : null;
+          })
+          .filter(Boolean)
+      )
+    );
+    setPreferenceDraft(
+      Object.fromEntries(
+        loadedOfferings
+          .map((item) => {
+            const offeringId = idOf(item);
+            return offeringId
+              ? [offeringId, normalizePreference(item?.slotPreference)]
+              : null;
           })
           .filter(Boolean)
       )
@@ -1398,6 +1429,7 @@ const SubjectOfferings = () => {
             periodsPerWeek: Number.isFinite(Number(item?.periodsPerWeek))
               ? Number(item?.periodsPerWeek)
               : 0,
+            slotPreference: normalizePreference(item?.slotPreference),
           };
         })
         .filter((item) => item.id),
@@ -1429,6 +1461,13 @@ const SubjectOfferings = () => {
     });
   }, [normalizedOfferings, search, selectedGradeId]);
 
+  /*
+   * الصفوف التي تغيّر فيها شيء — العدد أو التفضيل أو كلاهما.
+   *
+   * يُرسل الحقلان معًا في كل صف متغيّر: الخادم يكتب ما يصله فقط، غير أن
+   * إرسال نصف الصف يعني أن تعديل التفضيل وحده يضيع عدد الحصص من الحساب
+   * الذي يعتمد عليه فحص الجاهزية.
+   */
   const changedPlanEntries = useMemo(
     () =>
       normalizedOfferings
@@ -1439,13 +1478,18 @@ const SubjectOfferings = () => {
             return false;
           }
 
-          return Number(draftValue) !== Number(item.periodsPerWeek || 0);
+          return planRowChanged(
+            item,
+            draftValue,
+            preferenceDraft[item.id]
+          );
         })
         .map((item) => ({
           subjectOfferingId: item.id,
           periodsPerWeek: Number(planDraft[item.id]),
+          slotPreference: normalizePreference(preferenceDraft[item.id]),
         })),
-    [normalizedOfferings, planDraft]
+    [normalizedOfferings, planDraft, preferenceDraft]
   );
 
   const hasInvalidPlanValue = useMemo(
@@ -1510,6 +1554,13 @@ const SubjectOfferings = () => {
     }));
   };
 
+  const updatePreference = (offeringId, value) => {
+    setPreferenceDraft((current) => ({
+      ...current,
+      [offeringId]: normalizePreference(value),
+    }));
+  };
+
   const savePlan = async () => {
     if (!changedPlanEntries.length) {
       toast.info("لا توجد تغييرات في خطة التدريس لحفظها");
@@ -1534,19 +1585,21 @@ const SubjectOfferings = () => {
       const changedMap = new Map(
         changedPlanEntries.map((entry) => [
           entry.subjectOfferingId,
-          entry.periodsPerWeek,
+          entry,
         ])
       );
 
       setOfferings((current) =>
         current.map((offering) => {
           const offeringId = idOf(offering);
+          const saved = changedMap.get(offeringId);
 
-          if (!changedMap.has(offeringId)) return offering;
+          if (!saved) return offering;
 
           return {
             ...offering,
-            periodsPerWeek: changedMap.get(offeringId),
+            periodsPerWeek: saved.periodsPerWeek,
+            slotPreference: saved.slotPreference,
           };
         })
       );
@@ -1579,6 +1632,7 @@ const SubjectOfferings = () => {
     setSelectedGradeId("");
     setOfferings([]);
     setPlanDraft({});
+    setPreferenceDraft({});
     setSlotsPerWeek(null);
 
     try {
@@ -1699,6 +1753,11 @@ const SubjectOfferings = () => {
       current.filter((offering) => idOf(offering) !== item.id)
     );
     setPlanDraft((current) => {
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
+    setPreferenceDraft((current) => {
       const next = { ...current };
       delete next[item.id];
       return next;
@@ -2479,6 +2538,57 @@ const SubjectOfferings = () => {
                     }}
                   />
 
+                  {/*
+                    موضع المادة في اليوم. المولّد يرجّحه ولا يلتزم به: مادة
+                    أساسية لم يتسع لها الصباح تُجدول متأخرة بدلًا من ألا
+                    تُجدول، فلا يمكن لهذا الاختيار أن يجعل الجدول مستحيلًا.
+                  */}
+                  <TextField
+                    select
+                    size="small"
+                    label="موضعها في اليوم"
+                    value={normalizePreference(
+                      preferenceDraft[item.id] ?? item.slotPreference
+                    )}
+                    onChange={(event) =>
+                      updatePreference(item.id, event.target.value)
+                    }
+                    sx={{
+                      width: { xs: 132, sm: 148 },
+                      flexShrink: 0,
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: "10px",
+                        bgcolor: preferenceMeta(
+                          preferenceDraft[item.id] ?? item.slotPreference
+                        ).background,
+                      },
+                      "& .MuiSelect-select": {
+                        fontWeight: 900,
+                        fontSize: 11.5,
+                        py: 1,
+                        color: preferenceMeta(
+                          preferenceDraft[item.id] ?? item.slotPreference
+                        ).color,
+                      },
+                      "& .MuiInputLabel-root": { fontSize: 11 },
+                    }}
+                  >
+                    {SLOT_PREFERENCES.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        <Box>
+                          <Typography
+                            sx={{ fontWeight: 900, fontSize: 12, color: option.color }}
+                          >
+                            {option.label}
+                          </Typography>
+                          <Typography sx={{ fontSize: 9.5, color: COLORS.muted }}>
+                            {option.hint}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </TextField>
+
                   {permissions.delete && (
                     <Tooltip title="حذف العرض">
                       <span>
@@ -2520,6 +2630,7 @@ const SubjectOfferings = () => {
             setSelectedGradeId(gradeLevelId);
             setSearch("");
             setPlanDraft({});
+            setPreferenceDraft({});
             await loadOfferings();
           }}
         />

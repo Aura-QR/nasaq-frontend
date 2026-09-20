@@ -51,6 +51,7 @@ import SchoolManagerAdd from "@/pages/SchoolManagers/Add";
 import SchoolPermissions from "@/pages/SchoolPermissions/SchoolPermissions";
 
 import SubjectOfferings from "@/pages/SubjectOfferings/SubjectOfferings";
+import TeacherConstraints from "@/pages/TeacherConstraints/TeacherConstraints";
 import SchoolSettings from "@/pages/SchoolSettings/SchoolSettings";
 import SchoolDashboard from "@/pages/SchoolDashboard/SchoolDashboard";
 import Terms from "@/pages/School/Terms/Terms";
@@ -289,6 +290,11 @@ const AppRouter = () => {
           <Route
             path="/subject-offerings"
             element={<SubjectOfferings />}
+          />
+
+          <Route
+            path="/school/teacher-constraints"
+            element={<TeacherConstraints />}
           />
 
           <Route

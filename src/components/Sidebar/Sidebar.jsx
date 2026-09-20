@@ -344,6 +344,15 @@ const Sidebar = ({ active, setActive }) => {
             to: "/school/lectures",
             show: lecturesPermissions.read,
           },
+          {
+            name: "أوقات المعلمين",
+            Icon: EventBusyRounded,
+            iconType: "mui",
+            to: "/school/teacher-constraints",
+            show:
+              lecturesPermissions.read &&
+              teachersPermissions.read,
+          },
         ],
       },
       {

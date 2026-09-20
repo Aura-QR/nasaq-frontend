@@ -266,11 +266,18 @@ export const updateSubjectOffering = async (
  *   entries: [
  *     {
  *       subjectOfferingId: "...",
- *       periodsPerWeek: 6
+ *       periodsPerWeek: 6,
+ *       slotPreference: "early"   // اختياري
  *     }
  *   ]
  * }
+ *
+ * `slotPreference` تحدد موضع المادة المفضّل في اليوم، والمولّد يرجّحها
+ * ثلاثة أضعاف الميل الافتراضي. لا تُرسل إلا عند وجود قيمة فعلية: الحقل
+ * الغائب يترك ما هو محفوظ كما هو، ولو أرسلنا قيمة افتراضية لأعاد أول
+ * تعديل لعدد الحصص ضبط كل مواد الصف إلى «عادي».
  */
+const SLOT_PREFERENCES = ["early", "any", "late"];
 export const saveTeachingPlan = async (
   entries = []
 ) => {
@@ -289,16 +296,27 @@ export const saveTeachingPlan = async (
   }
 
   const normalizedEntries = entries.map(
-    (entry) => ({
-      subjectOfferingId: cleanId(
-        entry?.subjectOfferingId ||
-          entry?._id ||
-          entry?.id
-      ),
-      periodsPerWeek: Number(
-        entry?.periodsPerWeek
-      ),
-    })
+    (entry) => {
+      const preference = String(
+        entry?.slotPreference || ""
+      ).trim();
+
+      return {
+        subjectOfferingId: cleanId(
+          entry?.subjectOfferingId ||
+            entry?._id ||
+            entry?.id
+        ),
+        periodsPerWeek: Number(
+          entry?.periodsPerWeek
+        ),
+        ...(SLOT_PREFERENCES.includes(
+          preference
+        )
+          ? { slotPreference: preference }
+          : {}),
+      };
+    }
   );
 
   const hasInvalidEntry =
