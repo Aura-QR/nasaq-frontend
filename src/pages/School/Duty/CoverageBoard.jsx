@@ -578,7 +578,7 @@ const SummaryRow = ({ board, stats, coveredRatio, onEditSupervisors }) => {
                   <Chip key={`${name}-${index}`} size="small" label={name} sx={{ fontWeight: 800 }} />
                 ))
               ) : (
-                <Typography sx={{ color: "var(--color-muted)", fontSize: "10px" }}>مفيش مناوب متحدد</Typography>
+                <Typography sx={{ color: "var(--color-muted)", fontSize: "10px" }}>لا يوجد مناوبة</Typography>
               )}
             </Stack>
           </Box>
