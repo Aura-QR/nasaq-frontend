@@ -6,7 +6,6 @@ import {
 
 import {
   Avatar,
-  Badge,
   Box,
   Button,
   IconButton,
@@ -18,7 +17,6 @@ import {
 import {
   HomeRounded,
   LogoutRounded,
-  NotificationsNoneRounded,
 } from "@mui/icons-material";
 
 import {
@@ -34,6 +32,7 @@ import {
 import { toast } from "react-toastify";
 
 import wadqLogo from "@/images/wadq-logo.png";
+import NotificationBell from "@/components/Notifications/NotificationBell";
 
 import {
   getStudentMe,
@@ -409,36 +408,29 @@ const StudentLayout = () => {
               </IconButton>
             </Tooltip>
 
-            <Tooltip title="الإشعارات">
-              <IconButton
-                sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: "12px",
-                  color: "#244a70",
-                  backgroundColor:
-                    "#f3f7fb",
-                  border:
-                    "1px solid rgba(36,74,112,.06)",
-                  "&:hover": {
-                    backgroundColor:
-                      "#eaf1f7",
-                  },
-                }}
-              >
-                <Badge
-                  variant="dot"
-                  color="warning"
-                  overlap="circular"
-                >
-                  <NotificationsNoneRounded
-                    sx={{
-                      fontSize: 20,
-                    }}
-                  />
-                </Badge>
-              </IconButton>
-            </Tooltip>
+            {/*
+              The real bell, not the shape of one.
+
+              What stood here was an IconButton with no onClick and a dot that
+              was always lit — so a parent tapped it, nothing happened, and the
+              dot said "unread" forever. It mattered less when the only notice
+              was the absence pop-up. It matters now: a family sends an excuse
+              and waits for the school's answer, and the answer arrived
+              nowhere they could look.
+            */}
+            <NotificationBell
+              anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+              transformOrigin={{ vertical: "top", horizontal: "left" }}
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: "12px",
+                color: "#244a70",
+                backgroundColor: "#f3f7fb",
+                border: "1px solid rgba(36,74,112,.06)",
+                "&:hover": { backgroundColor: "#eaf1f7" },
+              }}
+            />
 
             {/* STUDENT */}
 
