@@ -408,9 +408,9 @@ const CoverageBoard = () => {
               }}
             >
               <Section
-                title="محتاجة بديل"
+                title=" بديل"
                 count={board.uncovered?.length ?? 0}
-                emptyText="مفيش حصة محتاجة بديل — كل حاجة متغطية."
+                emptyText="لا توجد حصة محتاجة بديل"
               >
                 {(board.uncovered ?? []).map((item) => (
                   <UncoveredCard
@@ -422,9 +422,9 @@ const CoverageBoard = () => {
               </Section>
 
               <Section
-                title="اتغطّت"
+                title="تمت التغطيه"
                 count={board.covered?.length ?? 0}
-                emptyText="لسه مفيش تكليفات."
+                emptyText="لا يوجد تكليفات."
               >
                 {(board.covered ?? []).map((item) => (
                   <CoveredCard
