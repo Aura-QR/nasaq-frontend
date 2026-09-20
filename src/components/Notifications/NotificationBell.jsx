@@ -30,6 +30,54 @@ import {
 } from "@/APIs/school/notifications";
 import { fetchPreparations } from "@/APIs/school/preparation";
 
+/**
+ * Where a notice takes you when you tap it.
+ *
+ * A bell that only marks things read is a list of sentences: the manager
+ * reads "عذر غياب: سارة" and then has to remember which screen holds it and
+ * go find it. The notice knows; it should carry you there.
+ *
+ * Per role, because the same event is two different errands. A lateness sent
+ * to a manager belongs in the review queue; the ruling sent back to the
+ * teacher belongs on their own attendance page, and sending them to an admin
+ * route would only earn them a 403.
+ */
+const DESTINATIONS = {
+  SCHOOL_ADMIN: {
+    teacher_late: "/school/late-reasons",
+    late_reason_submitted: "/school/late-reasons",
+    absence_excuse_submitted: "/school/absence-excuses",
+    student_absent: "/school/attendance",
+    cover_assigned: "/school/duty",
+    cover_removed: "/school/duty",
+    duty_assigned: "/school/duty",
+    duty_removed: "/school/duty",
+    leave_approved: "/school/duty",
+    leave_rejected: "/school/duty",
+  },
+  TEACHER: {
+    late_reason_required: "/teacher/check-in",
+    late_reason_reviewed: "/teacher/attendance",
+    cover_assigned: "/teacher/duty",
+    cover_removed: "/teacher/duty",
+    duty_assigned: "/teacher/duty",
+    duty_removed: "/teacher/duty",
+    leave_approved: "/teacher/duty",
+    leave_rejected: "/teacher/duty",
+  },
+  STUDENT: {
+    student_absent: "/student-dashboard/attendance",
+    absence_excuse_reviewed: "/student-dashboard/attendance",
+  },
+};
+
+/** Null when this notice has nowhere useful to send this person. */
+const destinationFor = (type, role) => {
+  if (role === "STUDENT") return DESTINATIONS.STUDENT[type] ?? null;
+  if (role === "TEACHER") return DESTINATIONS.TEACHER[type] ?? null;
+  return DESTINATIONS.SCHOOL_ADMIN[type] ?? null;
+};
+
 const POLL_MS = 60_000;
 const REVIEW_READ_PREFIX = "nasaq:preparation-review-read:";
 
@@ -258,6 +306,14 @@ const NotificationBell = ({
     if (wasUnread) {
       const response = await markNotificationRead(item._id);
       if (!response?.status) refreshCount();
+    }
+
+    // Marking it read is not, on its own, something the user can see happen.
+    // Where the notice points is.
+    const destination = destinationFor(item.type, role);
+    if (destination) {
+      setAnchor(null);
+      navigate(destination);
     }
   };
 
