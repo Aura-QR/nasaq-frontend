@@ -378,27 +378,7 @@ const CoverageBoard = () => {
               onEditSupervisors={() => setSupervisorDialog(true)}
             />
 
-            {!board.checkInInUse && (
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 1.4,
-                  mb: 1.25,
-                  border: "1px solid rgba(36,74,112,0.08)",
-                  borderRadius: "14px",
-                  bgcolor: "rgba(36,74,112,0.045)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                }}
-              >
-                <ErrorOutlineRounded sx={{ color: "var(--color-navy-deep)" }} />
-                <Typography sx={{ color: "var(--color-muted)", fontSize: "11px" }}>
-                  محدش سجّل حضور لليوم ده لسه، فمفيش غياب يتحسب. الاستئذانات
-                  المعتمدة بتظهر عادي.
-                </Typography>
-              </Paper>
-            )}
+        
 
             <Box
               sx={{
