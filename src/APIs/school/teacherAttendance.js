@@ -512,3 +512,75 @@ export default {
   fetchTeacherAttendanceSummary,
   deleteTeacherAttendance,
 };
+
+
+/* =========================================================
+   Reviewing a lateness
+
+   الشرح كان يُكتب في حقل لا تعرضه شاشة ولا يُعلَّق عليه قرار،
+   فالمعلم يكتب في فراغ — ثم يتوقف عن الكتابة.
+========================================================= */
+
+/**
+ * GET /teacher-attendance/late-reasons
+ *
+ * `missing` حالة قائمة بذاتها: تأخير بلا شرح أصلًا، وهو غير التأخير المشروح
+ * المنتظر قرارًا — وهو غالبًا ما يبحث عنه المدير.
+ */
+export const fetchLateReasons = async ({
+  status = "pending",
+  teacherId,
+  dateFrom,
+  dateTo,
+  page = 1,
+  limit = 50,
+} = {}) => {
+  try {
+    const response = await api.get(`${ENDPOINT}/late-reasons`, {
+      params: {
+        status,
+        ...(teacherId ? { teacherId } : {}),
+        ...(dateFrom ? { dateFrom } : {}),
+        ...(dateTo ? { dateTo } : {}),
+        page,
+        limit,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تحميل أعذار التأخير");
+  }
+};
+
+/**
+ * PATCH /teacher-attendance/late-reasons/:id/review
+ *
+ * الرفض يلزمه سبب: رفض الشرح يترك أثرًا في سجل المعلم، ورفضه صامتًا يتركه
+ * بلا شيء يردّ عليه.
+ */
+export const reviewLateReason = async (attendanceId, verdict, note) => {
+  const id = String(attendanceId || "").trim();
+
+  if (!id) {
+    return { status: false, message: "السجل غير محدد", data: null };
+  }
+
+  if (verdict === "rejected" && !String(note || "").trim()) {
+    return { status: false, message: "اذكر سبب رفض العذر", data: null };
+  }
+
+  try {
+    const response = await api.patch(
+      `${ENDPOINT}/late-reasons/${id}/review`,
+      {
+        verdict,
+        ...(String(note || "").trim()
+          ? { note: String(note).trim().slice(0, 500) }
+          : {}),
+      }
+    );
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر حفظ القرار");
+  }
+};

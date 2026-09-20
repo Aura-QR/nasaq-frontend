@@ -52,6 +52,8 @@ import SchoolPermissions from "@/pages/SchoolPermissions/SchoolPermissions";
 
 import SubjectOfferings from "@/pages/SubjectOfferings/SubjectOfferings";
 import TeacherConstraints from "@/pages/TeacherConstraints/TeacherConstraints";
+import AbsenceExcuses from "@/pages/AbsenceExcuses/AbsenceExcuses";
+import LateReasons from "@/pages/LateReasons/LateReasons";
 import SchoolSettings from "@/pages/SchoolSettings/SchoolSettings";
 import SchoolDashboard from "@/pages/SchoolDashboard/SchoolDashboard";
 import Terms from "@/pages/School/Terms/Terms";
@@ -295,6 +297,16 @@ const AppRouter = () => {
           <Route
             path="/school/teacher-constraints"
             element={<TeacherConstraints />}
+          />
+
+          <Route
+            path="/school/absence-excuses"
+            element={<AbsenceExcuses />}
+          />
+
+          <Route
+            path="/school/late-reasons"
+            element={<LateReasons />}
           />
 
           <Route

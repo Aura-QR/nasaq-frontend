@@ -20,6 +20,8 @@ import {
 } from "@mui/material";
 
 import {
+  AttachFileRounded,
+  CheckCircleRounded,
   EventBusyRounded,
   ScheduleRounded,
 } from "@mui/icons-material";
@@ -35,6 +37,12 @@ import {
   fetchPendingLateReason,
   submitLateReason,
 } from "@/APIs/school/teacherAttendance";
+
+import {
+  fetchPendingExcuses,
+  submitAbsenceExcuse,
+  uploadExcuseAttachment,
+} from "@/APIs/school/absenceExcuses";
 
 import {
   ROLES,
@@ -131,6 +139,17 @@ const AttendanceAlerts = () => {
   // The absence a parent has not been shown yet.
   const [absence, setAbsence] = useState(null);
 
+  // The family's answer, written in the same dialog that asks for it.
+  //
+  // Asking on one screen and answering on another is how a question goes
+  // unanswered: the parent reads the notice on the way to work, and the form
+  // they were meant to find later is never found.
+  const [excuse, setExcuse] = useState("");
+  const [excuseError, setExcuseError] = useState("");
+  const [attachment, setAttachment] = useState(null); // { name, path }
+  const [uploading, setUploading] = useState(false);
+  const [sendingExcuse, setSendingExcuse] = useState(false);
+
   // Cleared only on a fresh mount, so a dismissed dialog stays dismissed for
   // this visit without being written down as answered.
   const dismissed = useRef(new Set());
@@ -146,6 +165,38 @@ const AttendanceAlerts = () => {
 
     if (dismissed.current.has(data.attendanceId)) return;
     setLateness(data);
+  }, []);
+
+  /**
+   * Absences the school is still waiting on, straight from the server.
+   *
+   * The notification alone cannot carry this. A parent who taps «لاحقًا» once
+   * would never be asked again — the notice is read, and a read notice is
+   * gone. The record, on the other hand, keeps saying no answer arrived.
+   */
+  const checkOwedExcuses = useCallback(async () => {
+    const response = await fetchPendingExcuses();
+    const data = response?.data;
+    if (response?.status === false || !data?.pending) return null;
+
+    const owed = (data.items ?? []).find(
+      (item) => !dismissed.current.has(item.attendanceId)
+    );
+    if (!owed) return null;
+
+    // Shaped like a notice so the dialog needs no second code path.
+    return {
+      _id: `owed-${owed.attendanceId}`,
+      title: "غياب بانتظار العذر",
+      body:
+        "نأمل إيضاح سبب غياب ابنكم/ابنتكم عن المدرسة، " +
+        "مع إرفاق العذر الطبي في حال وجوده.\n\nشاكرين لكم تعاونكم 🌷",
+      data: {
+        attendanceId: owed.attendanceId,
+        date: owed.date,
+        className: owed.className,
+      },
+    };
   }, []);
 
   const checkNotices = useCallback(async () => {
@@ -165,7 +216,15 @@ const AttendanceAlerts = () => {
       const pending = items.find(
         (item) => item.type === "student_absent" && !seen.has(idOf(item))
       );
-      if (pending) setAbsence(pending);
+      if (pending && !dismissed.current.has(pending?.data?.attendanceId)) {
+        setAbsence(pending);
+        return;
+      }
+
+      // Nothing unread, which does not mean nothing is owed: yesterday's
+      // notice was read and its absence is still unexplained.
+      const owed = await checkOwedExcuses();
+      if (owed) setAbsence(owed);
       return;
     }
 
@@ -196,7 +255,7 @@ const AttendanceAlerts = () => {
     // Deliberately not marked read: the admin has been shown it, and it still
     // belongs in the bell for when they come back to it.
     if (changed) saveSeen(seenKey, seen);
-  }, [isStudent, seenKey]);
+  }, [isStudent, seenKey, checkOwedExcuses]);
 
   useEffect(() => {
     if (!signedIn) return undefined;
@@ -258,16 +317,106 @@ const AttendanceAlerts = () => {
     setLateness(null);
   };
 
+  const clearAbsenceForm = () => {
+    setAbsence(null);
+    setExcuse("");
+    setExcuseError("");
+    setAttachment(null);
+  };
+
+  /**
+   * «لاحقًا» — put the question down without answering it.
+   *
+   * Nothing is written. Marking it read here is what silenced the question
+   * for good: the notice would be gone and the absence would stay unexplained
+   * with no way left to explain it. The record is asked again on the next
+   * visit, exactly as the teacher's lateness is.
+   */
+  const postponeAbsence = () => {
+    const pendingId = absence?.data?.attendanceId;
+    if (pendingId) dismissed.current.add(pendingId);
+    clearAbsenceForm();
+  };
+
+  /**
+   * Close a notice there is nothing to answer — an older one, sent before
+   * excuses existed. That one is filed away for good.
+   */
   const closeAbsence = async () => {
     const id = idOf(absence);
     const seen = loadSeen(seenKey);
     seen.add(id);
     saveSeen(seenKey, seen);
-    setAbsence(null);
+    clearAbsenceForm();
 
     // Read here means seen here. Without it the same dialog returns on the
     // next device the parent signs in from.
     if (id) await markNotificationRead(id);
+  };
+
+  /** The absence this notice is about, or null for an older notice. */
+  const absenceId = absence?.data?.attendanceId ?? null;
+
+  const pickAttachment = async (event) => {
+    const file = event.target.files?.[0];
+    // Clear the input either way, or picking the same file twice is silent.
+    event.target.value = "";
+    if (!file) return;
+
+    setUploading(true);
+    const result = await uploadExcuseAttachment(file);
+    setUploading(false);
+
+    if (!result.status) {
+      toast.error(result.message);
+      return;
+    }
+
+    setAttachment({ name: file.name, path: result.data?.attachment });
+  };
+
+  const sendExcuse = async () => {
+    const text = excuse.trim();
+
+    if (text.length < 3) {
+      setExcuseError("اكتب سبب الغياب");
+      return;
+    }
+
+    setSendingExcuse(true);
+    const result = await submitAbsenceExcuse({
+      attendanceId: absenceId,
+      reason: text,
+      attachment: attachment?.path,
+    });
+    setSendingExcuse(false);
+
+    if (!result.status) {
+      // A conflict means somebody in the family already answered. Nothing is
+      // wrong, and a red error would suggest otherwise.
+      toast.info(result.message);
+      const id = idOf(absence);
+      if (id && !String(id).startsWith("owed-")) {
+        const seen = loadSeen(seenKey);
+        seen.add(id);
+        saveSeen(seenKey, seen);
+        await markNotificationRead(id);
+      }
+      clearAbsenceForm();
+      return;
+    }
+
+    toast.success(result.message);
+
+    // Answered, so the notice is finished with — unlike «لاحقًا».
+    const id = idOf(absence);
+    if (id && !String(id).startsWith("owed-")) {
+      const seen = loadSeen(seenKey);
+      seen.add(id);
+      saveSeen(seenKey, seen);
+      await markNotificationRead(id);
+    }
+    clearAbsenceForm();
   };
 
   return (
@@ -340,7 +489,7 @@ const AttendanceAlerts = () => {
 
       <Dialog
         open={Boolean(absence)}
-        onClose={closeAbsence}
+        onClose={absenceId ? postponeAbsence : closeAbsence}
         dir="rtl"
         fullWidth
         maxWidth="xs"
@@ -368,25 +517,108 @@ const AttendanceAlerts = () => {
         </DialogTitle>
 
         <DialogContent>
-          <Alert severity="warning" sx={{ fontSize: 13.5 }}>
+          <Alert severity="warning" sx={{ fontSize: 13.5, whiteSpace: "pre-line" }}>
             {absence?.body}
           </Alert>
 
-          <Typography
-            sx={{ fontSize: 12.5, color: "#6b7785", mt: 1.4, lineHeight: 1.9 }}
-          >
-            في حال وجود عذر، يُرجى التواصل مع إدارة المدرسة.
-          </Typography>
+          {absence?.data?.date ? (
+            <Typography
+              sx={{ fontSize: 12.5, color: "#6b7785", mt: 1.2 }}
+            >
+              تاريخ الغياب: {absence.data.date}
+              {absence.data.className ? ` · ${absence.data.className}` : ""}
+            </Typography>
+          ) : null}
+
+          {absenceId ? (
+            <>
+              <TextField
+                fullWidth
+                multiline
+                minRows={3}
+                value={excuse}
+                onChange={(event) => {
+                  setExcuse(event.target.value);
+                  if (excuseError) setExcuseError("");
+                }}
+                placeholder="مثال: وعكة صحية، ومرفق التقرير الطبي"
+                inputProps={{ maxLength: 1000 }}
+                error={Boolean(excuseError)}
+                helperText={
+                  excuseError || "يُرسل مرة واحدة ولا يمكن تعديله بعد ذلك."
+                }
+                sx={{ mt: 1.6 }}
+              />
+
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                sx={{ mt: 0.5 }}
+              >
+                <Button
+                  component="label"
+                  size="small"
+                  startIcon={
+                    attachment ? <CheckCircleRounded /> : <AttachFileRounded />
+                  }
+                  color={attachment ? "success" : "primary"}
+                  disabled={uploading || sendingExcuse}
+                  sx={{ fontWeight: 800 }}
+                >
+                  {uploading
+                    ? "جارٍ الرفع..."
+                    : attachment
+                      ? "تم إرفاق الملف"
+                      : "إرفاق العذر الطبي"}
+                  <input
+                    hidden
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={pickAttachment}
+                  />
+                </Button>
+
+                {attachment ? (
+                  <Typography
+                    noWrap
+                    sx={{ fontSize: 11.5, color: "#6b7785", maxWidth: 160 }}
+                  >
+                    {attachment.name}
+                  </Typography>
+                ) : null}
+              </Stack>
+            </>
+          ) : (
+            // An older notice, sent before excuses existed, carries no record
+            // to attach an answer to.
+            <Typography
+              sx={{ fontSize: 12.5, color: "#6b7785", mt: 1.4, lineHeight: 1.9 }}
+            >
+              في حال وجود عذر، يُرجى التواصل مع إدارة المدرسة.
+            </Typography>
+          )}
         </DialogContent>
 
         <DialogActions sx={{ px: 3, pb: 2.2 }}>
           <Button
-            variant="contained"
-            onClick={closeAbsence}
-            sx={{ fontWeight: 900 }}
+            onClick={absenceId ? postponeAbsence : closeAbsence}
+            disabled={sendingExcuse}
+            sx={{ fontWeight: 800 }}
           >
-            حسنًا
+            {absenceId ? "لاحقًا" : "حسنًا"}
           </Button>
+
+          {absenceId ? (
+            <Button
+              variant="contained"
+              onClick={sendExcuse}
+              disabled={sendingExcuse || uploading}
+              sx={{ fontWeight: 900 }}
+            >
+              {sendingExcuse ? "جارٍ الإرسال..." : "إرسال العذر"}
+            </Button>
+          ) : null}
         </DialogActions>
       </Dialog>
     </>

@@ -1054,6 +1054,7 @@ const TeacherAttendanceAdmin = () => {
                   <TableCell align="right">الحضور</TableCell>
                   <TableCell align="right">الانصراف</TableCell>
                   <TableCell align="right">التأخير</TableCell>
+                  <TableCell align="right">سبب التأخير</TableCell>
                   <TableCell align="right">مدة العمل</TableCell>
                   <TableCell align="right">طريقة الانصراف</TableCell>
                   <TableCell align="right">طريقة الحضور</TableCell>
@@ -1067,7 +1068,7 @@ const TeacherAttendanceAdmin = () => {
               <TableBody>
                 {!visibleRecords.length ? (
                   <TableRow>
-                    <TableCell colSpan={13} align="center" sx={{ py: 6, color: "#708198" }}>
+                    <TableCell colSpan={14} align="center" sx={{ py: 6, color: "#708198" }}>
                       لا توجد سجلات مطابقة للفلتر الحالي.
                     </TableCell>
                   </TableRow>
@@ -1108,6 +1109,44 @@ const TeacherAttendanceAdmin = () => {
                           {record?.lateMinutes === null || record?.lateMinutes === undefined
                             ? "غير مقاس"
                             : formatMinutes(record.lateMinutes)}
+                        </TableCell>
+                        {/*
+                          The teacher's own account of the lateness. It was
+                          being stored and shown nowhere: a director saw "20
+                          minutes" and an explanation existed one table away
+                          that nothing displayed.
+                        */}
+                        <TableCell align="right" sx={{ maxWidth: 220 }}>
+                          {record?.lateReason ? (
+                            <Tooltip title={record.lateReason} arrow>
+                              <Typography
+                                sx={{
+                                  fontSize: 10,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {record.lateReason}
+                              </Typography>
+                            </Tooltip>
+                          ) : (record?.lateMinutes ?? 0) > 0 ? (
+                            <Chip
+                              size="small"
+                              label="لم يُذكر بعد"
+                              sx={{
+                                fontSize: 8.5,
+                                height: 18,
+                                color: "#9A6B12",
+                                backgroundColor: "#FFF3D8",
+                                fontWeight: 800,
+                              }}
+                            />
+                          ) : (
+                            <Typography sx={{ color: "#B6C0CC", fontSize: 10 }}>
+                              —
+                            </Typography>
+                          )}
                         </TableCell>
                         <TableCell align="right">
                           {formatMinutes(record?.workMinutes, { duration: true })}

@@ -21,6 +21,7 @@ import {
   EventBusyRounded,
   InsightsRounded,
   FactCheckRounded,
+  ScheduleRounded,
   AssignmentTurnedInRounded,
   AccountCircleRounded,
   DirectionsBus,
@@ -402,6 +403,15 @@ const Sidebar = ({ active, setActive }) => {
             show: attendancePermissions.read,
           },
           {
+            // الطرف الآخر من إشعار الغياب. بدونها تسأل المدرسة ولا تسمع،
+            // وتكتب الأسرة ولا تُجاب.
+            name: "أعذار الغياب",
+            Icon: FactCheckRounded,
+            iconType: "mui",
+            to: "/school/absence-excuses",
+            show: attendancePermissions.read,
+          },
+          {
             name: "حضور المعلمين",
             Icon: HowToRegRounded,
             iconType: "mui",
@@ -409,6 +419,14 @@ const Sidebar = ({ active, setActive }) => {
             show:
               canManageSchoolSettings &&
               teacherAttendancePermissions.read,
+          },
+          {
+            // الشرح كان يُخزَّن ولا يُعرض في أي شاشة، فلا قرار يُبنى عليه.
+            name: "أعذار التأخير",
+            Icon: ScheduleRounded,
+            iconType: "mui",
+            to: "/school/late-reasons",
+            show: teacherAttendancePermissions.read,
           },
           {
             name: "حضور الإداريين والمشرفين",
