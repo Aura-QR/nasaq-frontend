@@ -20,7 +20,6 @@ import {
 
 import Navbar from "../Navbar/Navbar";
 import Sidebar from "../Sidebar/Sidebar";
-import NotificationBell from "../Notifications/NotificationBell";
 import Footer from "../Footer/Footer";
 
 const Container = ({
@@ -238,43 +237,6 @@ const Container = ({
             <MenuRounded />
           </IconButton>
         )}
-
-        {/* ===============================================
-            NOTIFICATIONS
-
-            Admin pages have no top bar — the layout that carries one
-            (SchoolLayout) was built and never routed to, so the bell it holds
-            has never been on screen for an owner or a manager. Every notice
-            they were sent lived in a toast that lasted eight seconds: a
-            teacher's lateness, the reason that followed it, a family's excuse.
-
-            Floating, on the opposite corner from the mobile menu button, so it
-            sits in the same place on every page without a header to live in.
-        =============================================== */}
-
-        <NotificationBell
-          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-          transformOrigin={{ vertical: "top", horizontal: "right" }}
-          sx={{
-            position: "fixed",
-            top: 14,
-            left: 14,
-            zIndex: 950,
-            width: 44,
-            height: 44,
-            color: "var(--color-navy)",
-            backgroundColor: "rgba(255, 252, 247, 0.96)",
-            border: "1px solid rgba(36, 74, 112, 0.10)",
-            borderRadius: "14px",
-            boxShadow: "0 10px 26px rgba(18, 47, 77, 0.14)",
-            backdropFilter: "blur(14px)",
-            WebkitBackdropFilter: "blur(14px)",
-            "&:hover": {
-              color: "var(--color-gold-dark)",
-              backgroundColor: "var(--color-gold-soft)",
-            },
-          }}
-        />
 
         {/* ===============================================
             ADMIN CONTENT

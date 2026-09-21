@@ -30,6 +30,7 @@ const ok = (response) => {
 
 const fail = (error, fallback) => ({
   status: false,
+  statusCode: error?.response?.status ?? null,
   message:
     error?.response?.data?.message ||
     error?.response?.data?.error ||

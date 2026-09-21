@@ -163,6 +163,7 @@ const saveReadKeys = (storageKey, keys) => {
 
 const NotificationBell = ({
   sx,
+  variant = "icon",
   anchorOrigin = {
     vertical: "bottom",
     horizontal: "left",
@@ -334,19 +335,79 @@ const NotificationBell = ({
     if (!response?.status) refreshCount();
   };
 
+  const sidebarTrigger = variant === "sidebar";
+
   return (
     <>
-      <Tooltip title="الإشعارات">
-        <IconButton
+      {sidebarTrigger ? (
+        <Box
+          component="button"
+          type="button"
           onClick={open}
           aria-label="الإشعارات"
-          sx={{ width: 40, height: 40, color: "#244a70", ...sx }}
+          sx={{
+            width: "100%",
+            minHeight: 48,
+            px: 1.25,
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            color: "var(--color-text)",
+            backgroundColor: "rgba(255,255,255,0.68)",
+            border: "1px solid rgba(36,74,112,0.06)",
+            borderRadius: "14px",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            textAlign: "right",
+            transition: "color .2s ease, background-color .2s ease, border-color .2s ease, transform .2s ease",
+            "&:hover": {
+              color: "var(--color-navy-deep)",
+              backgroundColor: "var(--color-gold-soft)",
+              borderColor: "rgba(211,164,79,0.22)",
+              transform: "translateX(-2px)",
+            },
+            ...sx,
+          }}
         >
-          <Badge badgeContent={unread} color="error" max={99}>
-            <NotificationsRounded />
-          </Badge>
-        </IconButton>
-      </Tooltip>
+          <Box
+            component="span"
+            sx={{
+              width: 34,
+              height: 34,
+              display: "grid",
+              placeItems: "center",
+              flexShrink: 0,
+              color: "var(--color-navy)",
+              backgroundColor: "var(--color-white)",
+              border: "1px solid rgba(36,74,112,0.08)",
+              borderRadius: "11px",
+            }}
+          >
+            <Badge badgeContent={unread} color="error" max={99}>
+              <NotificationsRounded sx={{ fontSize: 19 }} />
+            </Badge>
+          </Box>
+
+          <Typography
+            component="span"
+            sx={{ fontSize: 12.5, fontWeight: 700 }}
+          >
+            الإشعارات
+          </Typography>
+        </Box>
+      ) : (
+        <Tooltip title="الإشعارات">
+          <IconButton
+            onClick={open}
+            aria-label="الإشعارات"
+            sx={{ width: 40, height: 40, color: "#244a70", ...sx }}
+          >
+            <Badge badgeContent={unread} color="error" max={99}>
+              <NotificationsRounded />
+            </Badge>
+          </IconButton>
+        </Tooltip>
+      )}
 
       <Popover
         open={Boolean(anchor)}

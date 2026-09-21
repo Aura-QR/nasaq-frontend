@@ -78,6 +78,7 @@ import scheduleIcon from "@/icons/schedule.json";
 import preparationIcon from "@/icons/preparation.json";
 
 import HoverLottie from "../HoverLottie";
+import NotificationBell from "../Notifications/NotificationBell";
 import usePermissions from "@/utils/hooks/usePermissions";
 
 const normalizeRole = (role) =>
@@ -786,6 +787,16 @@ const Sidebar = ({ active, setActive }) => {
             </small>
           </div>
         </div>
+
+        {!isTeacher && (
+          <div className="sidebar-notifications">
+            <NotificationBell
+              variant="sidebar"
+              anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+              transformOrigin={{ vertical: "top", horizontal: "right" }}
+            />
+          </div>
+        )}
 
         <div className="sidebar-content">
           <Stack spacing={1.2}>

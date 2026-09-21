@@ -304,12 +304,20 @@ const AppRouter = () => {
 
           <Route
             path="/school/absence-excuses"
-            element={<AbsenceExcuses />}
+            element={
+              <RequirePermission module="attendance" operation="read">
+                <AbsenceExcuses />
+              </RequirePermission>
+            }
           />
 
           <Route
             path="/school/late-reasons"
-            element={<LateReasons />}
+            element={
+              <RequirePermission module="teacherAttendance" operation="read">
+                <LateReasons />
+              </RequirePermission>
+            }
           />
 
           <Route

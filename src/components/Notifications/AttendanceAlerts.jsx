@@ -204,7 +204,6 @@ const AttendanceAlerts = () => {
     if (response?.status === false) return;
 
     const items = response?.data?.items ?? [];
-    if (items.length === 0) return;
 
     const seen = loadSeen(seenKey);
     let changed = false;
@@ -392,17 +391,23 @@ const AttendanceAlerts = () => {
     setSendingExcuse(false);
 
     if (!result.status) {
-      // A conflict means somebody in the family already answered. Nothing is
-      // wrong, and a red error would suggest otherwise.
-      toast.info(result.message);
-      const id = idOf(absence);
-      if (id && !String(id).startsWith("owed-")) {
-        const seen = loadSeen(seenKey);
-        seen.add(id);
-        saveSeen(seenKey, seen);
-        await markNotificationRead(id);
+      // Only a 409 means another parent already answered. Other failures
+      // (network, validation, permission, server error) must keep the form
+      // open so the family can retry instead of silently losing their answer.
+      if (result.statusCode === 409) {
+        toast.info(result.message);
+        const id = idOf(absence);
+        if (id && !String(id).startsWith("owed-")) {
+          const seen = loadSeen(seenKey);
+          seen.add(id);
+          saveSeen(seenKey, seen);
+          await markNotificationRead(id);
+        }
+        clearAbsenceForm();
+        return;
       }
-      clearAbsenceForm();
+
+      toast.error(result.message);
       return;
     }
 
