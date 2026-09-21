@@ -70,7 +70,6 @@ import PlatformSchools from "@/pages/PlatformSchools/PlatformSchools";
 import PlatformSchoolDetails from "@/pages/PlatformSchoolDetails/PlatformSchoolDetails";
 
 import PlatformLayout from "@/layouts/PlatformLayout/PlatformLayout";
-import TeacherLayout from "@/layouts/TeacherLayout/TeacherLayout";
 
 // =========================
 // Guards
@@ -305,12 +304,20 @@ const AppRouter = () => {
 
           <Route
             path="/school/absence-excuses"
-            element={<AbsenceExcuses />}
+            element={
+              <RequirePermission module="attendance" operation="read">
+                <AbsenceExcuses />
+              </RequirePermission>
+            }
           />
 
           <Route
             path="/school/late-reasons"
-            element={<LateReasons />}
+            element={
+              <RequirePermission module="teacherAttendance" operation="read">
+                <LateReasons />
+              </RequirePermission>
+            }
           />
 
           <Route
@@ -385,7 +392,6 @@ const AppRouter = () => {
 
         {/* =====================================================
             TEACHER ROUTES
-            All teacher pages share one teacher-only layout.
         ===================================================== */}
 
         <Route
@@ -397,47 +403,135 @@ const AppRouter = () => {
             />
           }
         >
-          <Route element={<TeacherLayout />}>
-            <Route
-              path="/teacher"
-              element={
-                <Navigate
-                  to="/teacher/dashboard"
-                  replace
-                />
-              }
-            />
+          <Route
+            path="/teacher"
+            element={
+              <Navigate
+                to="/teacher/dashboard"
+                replace
+              />
+            }
+          />
 
-            <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
-            <Route path="/teacher/schedule" element={<TeacherSchedule />} />
-            <Route path="/teacher/classes" element={<TeacherClasses />} />
+          <Route
+            path="/teacher/dashboard"
+            element={<TeacherDashboard />}
+          />
 
-            {/* Compatibility for earlier teacher links. */}
-            <Route path="/teacher/students" element={<Navigate to="/teacher/classes" replace />} />
-            <Route path="/teacher/lectures" element={<Navigate to="/teacher/schedule" replace />} />
+          <Route
+            path="/teacher/schedule"
+            element={<TeacherSchedule />}
+          />
 
-            <Route path="/teacher/observations" element={<MyObservations />} />
-            <Route path="/teacher/attendance" element={<TeacherAttendance />} />
-            <Route path="/teacher/duty" element={<TeacherDuty />} />
-            <Route path="/teacher/check-in" element={<TeacherCheckIn />} />
+          <Route
+            path="/teacher/classes"
+            element={<TeacherClasses />}
+          />
 
-            <Route path="/teacher/exams" element={<TeacherExams />} />
-            <Route path="/teacher/exams/add" element={<TeacherExamAdd />} />
-            <Route path="/teacher/exams/edit/:id" element={<TeacherExamAdd />} />
-            <Route path="/teacher/grading/exams" element={<TeacherExamGrading />} />
+          {/* Compatibility for earlier teacher sidebar links. */}
+          <Route path="/teacher/students" element={<Navigate to="/teacher/classes" replace />} />
+          <Route path="/teacher/lectures" element={<Navigate to="/teacher/schedule" replace />} />
 
-            <Route path="/teacher/projects" element={<TeacherProjects />} />
-            <Route path="/teacher/grading/projects" element={<TeacherProjectGrading />} />
+          <Route
+            path="/teacher/observations"
+            element={<MyObservations />}
+          />
 
-            <Route path="/teacher/preparations" element={<TeacherPreparations />} />
-            <Route path="/teacher/preparations/add" element={<PreparationAdd />} />
-            <Route path="/teacher/preparation/add" element={<PreparationAdd />} />
-            <Route path="/teacher/preparations/edit/:id" element={<PreparationEdit />} />
-            <Route path="/teacher/preparations/:id" element={<PreparationProfile />} />
+          <Route
+            path="/teacher/attendance"
+            element={<TeacherAttendance />}
+          />
 
-            <Route path="/teacher/library" element={<TeacherLibrary />} />
-            <Route path="/teacher/profile" element={<TeacherProfile />} />
-          </Route>
+          <Route
+            path="/teacher/duty"
+            element={<TeacherDuty />}
+          />
+
+          <Route
+            path="/teacher/check-in"
+            element={<TeacherCheckIn />}
+          />
+
+          {/* =========================
+              Exams
+          ========================= */}
+
+          <Route
+            path="/teacher/exams"
+            element={<TeacherExams />}
+          />
+
+          <Route
+            path="/teacher/exams/add"
+            element={<TeacherExamAdd />}
+          />
+
+          <Route
+            path="/teacher/exams/edit/:id"
+            element={<TeacherExamAdd />}
+          />
+
+          <Route
+            path="/teacher/grading/exams"
+            element={<TeacherExamGrading />}
+          />
+
+          {/* =========================
+              Projects
+          ========================= */}
+
+          <Route
+            path="/teacher/projects"
+            element={<TeacherProjects />}
+          />
+
+          <Route
+            path="/teacher/grading/projects"
+            element={<TeacherProjectGrading />}
+          />
+
+          {/* =========================
+              Preparations
+          ========================= */}
+
+          <Route
+            path="/teacher/preparations"
+            element={<TeacherPreparations />}
+          />
+
+          <Route
+            path="/teacher/preparations/add"
+            element={<PreparationAdd />}
+          />
+
+          <Route
+            path="/teacher/preparation/add"
+            element={<PreparationAdd />}
+          />
+
+          <Route
+            path="/teacher/preparations/edit/:id"
+            element={<PreparationEdit />}
+          />
+
+          <Route
+            path="/teacher/preparations/:id"
+            element={<PreparationProfile />}
+          />
+
+          {/* =========================
+              Library / Profile
+          ========================= */}
+
+          <Route
+            path="/teacher/library"
+            element={<TeacherLibrary />}
+          />
+
+          <Route
+            path="/teacher/profile"
+            element={<TeacherProfile />}
+          />
         </Route>
 
         {/* =====================================================
