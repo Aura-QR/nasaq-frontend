@@ -45,8 +45,16 @@ import {
  * تفتح على «قيد المراجعة» لأنها قائمة تُفرَّغ لا تُتصفَّح.
  */
 
+/*
+ * أربع حالات لا ثلاث.
+ *
+ * «بلا عذر» غياب لم تُرسل عنه الأسرة شيئًا. مشكلة أخرى غير المنتظر قرارًا،
+ * وهي التي لم تكن تُرى في أي مكان: الفلترة على عذر غير موجود لا تُرجع شيئًا،
+ * فبقيت تلك الغيابات خارج كل شاشة تملكها المدرسة.
+ */
 const STATUSES = [
   { value: "pending", label: "قيد المراجعة", color: "warning" },
+  { value: "missing", label: "بلا عذر", color: "error" },
   { value: "accepted", label: "مقبولة", color: "success" },
   { value: "rejected", label: "مرفوضة", color: "error" },
 ];
@@ -213,9 +221,11 @@ const AbsenceExcuses = () => {
             sx={{ p: 5, borderRadius: "14px", textAlign: "center" }}
           >
             <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
-              {status === "pending"
-                ? "لا توجد أعذار تنتظر المراجعة."
-                : "لا توجد أعذار بهذه الحالة."}
+              {status === "missing"
+                ? "كل غياب في هذه الفترة أرسلت عنه الأسرة عذرًا."
+                : status === "pending"
+                  ? "لا توجد أعذار تنتظر المراجعة."
+                  : "لا توجد أعذار بهذه الحالة."}
             </Typography>
           </Paper>
         ) : (
@@ -251,17 +261,25 @@ const AbsenceExcuses = () => {
                       <Box sx={{ flexGrow: 1 }} />
                       <Chip
                         size="small"
-                        color={meta.color}
-                        label={meta.label}
+                        color={row.excuse ? meta.color : "error"}
+                        label={row.excuse ? meta.label : "بلا عذر"}
                         sx={{ fontWeight: 800 }}
                       />
                     </Stack>
 
-                    <Typography sx={{ fontSize: 14, whiteSpace: "pre-wrap" }}>
-                      {row.excuse}
-                    </Typography>
+                    {row.excuse ? (
+                      <Typography sx={{ fontSize: 14, whiteSpace: "pre-wrap" }}>
+                        {row.excuse}
+                      </Typography>
+                    ) : (
+                      <Typography
+                        sx={{ fontSize: 13, color: "text.secondary" }}
+                      >
+                        لم تُرسل الأسرة عذرًا عن هذا الغياب.
+                      </Typography>
+                    )}
 
-                    {row.excuseAttachment ? (
+                    {row.excuse && row.excuseAttachment ? (
                       <Link
                         href={row.excuseAttachment}
                         target="_blank"
@@ -277,15 +295,15 @@ const AbsenceExcuses = () => {
                         <AttachFileRounded sx={{ fontSize: 14 }} />
                         فتح العذر الطبي
                       </Link>
-                    ) : (
+                    ) : row.excuse ? (
                       <Typography
                         sx={{ fontSize: 12, color: "text.secondary" }}
                       >
                         بلا مرفق
                       </Typography>
-                    )}
+                    ) : null}
 
-                    {row.excuseStatus === "pending" ? (
+                    {row.excuse && row.excuseStatus === "pending" ? (
                       <>
                         <Divider />
                         <Stack direction="row" spacing={1}>
@@ -311,7 +329,7 @@ const AbsenceExcuses = () => {
                           </Button>
                         </Stack>
                       </>
-                    ) : (
+                    ) : row.excuse ? (
                       <Typography
                         sx={{ fontSize: 12, color: "text.secondary" }}
                       >
@@ -322,7 +340,7 @@ const AbsenceExcuses = () => {
                           ? ` — ${row.excuseReviewNote}`
                           : ""}
                       </Typography>
-                    )}
+                    ) : null}
                   </Stack>
                 </Paper>
               );
