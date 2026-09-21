@@ -14,6 +14,8 @@ import {
   CalendarMonthRounded,
   CheckCircleRounded,
   EventBusyRounded,
+  FactCheckRounded,
+  HourglassEmptyRounded,
   SchoolRounded,
 } from "@mui/icons-material";
 
@@ -64,6 +66,8 @@ const COLORS = {
   redLight: "#fff0ef",
 
   gold: "#d3a44f",
+  amber: "#9a6a1e",
+  amberLight: "#fbf0d8",
 
   gray: "#8c98a3",
   grayLight: "#f7f9fb",
@@ -418,6 +422,38 @@ const Attendance = () => {
   // STATS
   // ===================================================
 
+  /*
+   * نفس أيام الشهر، موزَّعة على ما قررته المدرسة فيها.
+   *
+   * لا يمسّ أي عدّاد. المدرسة سُئلت وأجابت صراحة: العذر المقبول يظل غيابًا
+   * ولا يصير حضورًا — فـ`stats.absent` ونسبة الحضور تبقى كما هي، وهذا يقف
+   * إلى جانبها لا داخلها.
+   *
+   * لكن إجراءً لا يترك أثرًا مرئيًا إجراء يتوقف الناس عن أدائه. ولي الأمر
+   * يكتب السبب ويرفع التقرير ويقبله المدير، وإن لم يتغيّر شيء في أي شاشة
+   * كتب التالي بعناية أقل، والذي بعده لم يكتبه.
+   */
+  const excuseSplit = useMemo(() => {
+    const counts = {
+      excused: 0,
+      refused: 0,
+      awaiting: 0,
+      unanswered: 0,
+    };
+
+    (Array.isArray(attendance) ? attendance : []).forEach((item) => {
+      const normalized = normalizeAttendanceDate(item?.date);
+      if (!normalized || !monthAbsenceDates.has(normalized)) return;
+
+      if (item?.excuseStatus === "accepted") counts.excused += 1;
+      else if (item?.excuseStatus === "rejected") counts.refused += 1;
+      else if (item?.excuseStatus === "pending") counts.awaiting += 1;
+      else counts.unanswered += 1;
+    });
+
+    return counts;
+  }, [attendance, monthAbsenceDates]);
+
   const stats =
     useMemo(() => {
       const absent =
@@ -698,6 +734,33 @@ const Attendance = () => {
                 COLORS.redLight
               }
             />
+
+            {/* بجانب العدّاد لا داخله: العذر المقبول يظل غيابًا. */}
+            {excuseSplit.excused > 0 ? (
+              <HeaderBadge
+                icon={
+                  FactCheckRounded
+                }
+                label={`${excuseSplit.excused} بعذر مقبول`}
+                color={
+                  COLORS.green
+                }
+                background={
+                  COLORS.greenLight
+                }
+              />
+            ) : null}
+
+            {excuseSplit.awaiting > 0 ? (
+              <HeaderBadge
+                icon={
+                  HourglassEmptyRounded
+                }
+                label={`${excuseSplit.awaiting} عذر قيد المراجعة`}
+                color={COLORS.amber}
+                background={COLORS.amberLight}
+              />
+            ) : null}
 
             <HeaderBadge
               icon={
