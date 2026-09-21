@@ -773,30 +773,44 @@ const Sidebar = ({ active, setActive }) => {
     >
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <img
-            src={nasaqLogo}
-            alt="شعار منصة نَسّق"
-          />
+          <div className="sidebar-brand__identity">
+            <img
+              src={nasaqLogo}
+              alt="شعار منصة نَسّق"
+            />
 
-          <div>
-            <strong>{isTeacher ? "بوابة المعلم" : "لوحة الإدارة"}</strong>
-            <small>
-              {isTeacher
-                ? "لوحتك التعليمية بصلاحيات المعلم"
-                : "نَسّق لإدارة المنصة"}
-            </small>
+            <div className="sidebar-brand__copy">
+              <strong>{isTeacher ? "بوابة المعلم" : "لوحة الإدارة"}</strong>
+              <small>
+                {isTeacher
+                  ? "لوحتك التعليمية بصلاحيات المعلم"
+                  : "نَسّق لإدارة المنصة"}
+              </small>
+            </div>
           </div>
-        </div>
 
-        {!isTeacher && (
-          <div className="sidebar-notifications">
+          {!isTeacher && (
             <NotificationBell
-              variant="sidebar"
               anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
               transformOrigin={{ vertical: "top", horizontal: "right" }}
+              sx={{
+                flexShrink: 0,
+                width: 40,
+                height: 40,
+                color: "var(--color-navy)",
+                backgroundColor: "rgba(255,255,255,0.78)",
+                border: "1px solid rgba(36,74,112,0.10)",
+                borderRadius: "12px",
+                boxShadow: "0 7px 18px rgba(18,47,77,0.07)",
+                "&:hover": {
+                  color: "var(--color-gold-dark)",
+                  backgroundColor: "var(--color-gold-soft)",
+                  borderColor: "rgba(211,164,79,0.28)",
+                },
+              }}
             />
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="sidebar-content">
           <Stack spacing={1.2}>
