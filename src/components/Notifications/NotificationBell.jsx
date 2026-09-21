@@ -29,6 +29,7 @@ import {
   markNotificationRead,
 } from "@/APIs/school/notifications";
 import { fetchPreparations } from "@/APIs/school/preparation";
+import { ABSENCE_EXCUSE_EVENT } from "./AttendanceAlerts";
 
 /**
  * Where a notice takes you when you tap it.
@@ -304,6 +305,27 @@ const NotificationBell = ({
       markLocalReviewRead(item);
       setAnchor(null);
       if (item.href) navigate(item.href);
+      return;
+    }
+
+    // For the student/parent, an absence notice is not just information — it
+    // is a question that needs an answer. Open the excuse form immediately
+    // instead of navigating to the attendance history and making them search
+    // for somewhere to type the reason.
+    if (role === "STUDENT" && item.type === "student_absent") {
+      setAnchor(null);
+
+      window.dispatchEvent(
+        new CustomEvent(ABSENCE_EXCUSE_EVENT, {
+          detail: item,
+        })
+      );
+
+      if (wasUnread) {
+        const response = await markNotificationRead(item._id);
+        if (!response?.status) refreshCount();
+      }
+
       return;
     }
 

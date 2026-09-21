@@ -84,6 +84,15 @@ import {
  * the phone away.
  */
 export const LATE_REASON_EVENT = "nasaq:late-reason-check";
+/**
+ * Fired when a student/parent taps an absence notification in the bell.
+ *
+ * The bell used to mark the notice read and send the family to the attendance
+ * page. That showed them *that* an absence happened, but not the question the
+ * school is waiting for them to answer. Keep the response flow in the same
+ * place as the alert instead: tapping the notice opens this dialog immediately.
+ */
+export const ABSENCE_EXCUSE_EVENT = "nasaq:absence-excuse-open";
 
 const POLL_MS = 60_000;
 const SEEN_PREFIX = "nasaq:attendance-alert-seen:";
@@ -280,6 +289,36 @@ const AttendanceAlerts = () => {
       window.removeEventListener(LATE_REASON_EVENT, onCheckIn);
     };
   }, [signedIn, isTeacher, isStudent, isAdmin, checkTeacher, checkNotices]);
+
+  useEffect(() => {
+    if (!isStudent) return undefined;
+
+    const openAbsenceExcuse = async (event) => {
+      // A deliberate tap means the family wants to deal with the absence now,
+      // even if they previously chose «لاحقًا» during this visit.
+      dismissed.current.clear();
+
+      const notice = event?.detail;
+
+      // New notifications already carry the attendance record they belong to,
+      // so opening the form is instant and does not need another request.
+      if (notice?.data?.attendanceId) {
+        setAbsence(notice);
+        return;
+      }
+
+      // Backward compatibility for older notifications that did not include
+      // attendanceId. Ask the server which absence still needs an answer.
+      const owed = await checkOwedExcuses();
+      if (owed) setAbsence(owed);
+    };
+
+    window.addEventListener(ABSENCE_EXCUSE_EVENT, openAbsenceExcuse);
+
+    return () => {
+      window.removeEventListener(ABSENCE_EXCUSE_EVENT, openAbsenceExcuse);
+    };
+  }, [isStudent, checkOwedExcuses]);
 
   const sendReason = async () => {
     const text = reason.trim();
