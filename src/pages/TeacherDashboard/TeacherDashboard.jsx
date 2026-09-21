@@ -33,6 +33,7 @@ import {
   MenuBookRounded,
   QuizRounded,
   RefreshRounded,
+  RateReviewRounded,
   ScheduleRounded,
   SchoolRounded,
   TaskAltRounded,
@@ -82,6 +83,14 @@ import {
   fetchTeacherProjects,
   fetchProjectSubmissions,
 } from "@/APIs/school/projects";
+
+import {
+  fetchPendingLateReason,
+} from "@/APIs/school/teacherAttendance";
+
+import {
+  fetchMyObservations,
+} from "@/APIs/school/lessonObservations";
 
 import nasaqLogo from "../../images/wadq-logo.png";
 import NotificationBell from "@/components/Notifications/NotificationBell";
@@ -764,6 +773,10 @@ const TeacherDashboard = () => {
     useState([]);
   const [projectSubmissions, setProjectSubmissions] =
     useState([]);
+  const [pendingLateness, setPendingLateness] =
+    useState(null);
+  const [pendingObservations, setPendingObservations] =
+    useState([]);
   const [loading, setLoading] =
     useState(true);
   const [refreshing, setRefreshing] =
@@ -808,6 +821,8 @@ const TeacherDashboard = () => {
         setExams([]);
         setProjects([]);
         setProjectSubmissions([]);
+        setPendingLateness(null);
+        setPendingObservations([]);
         setError(
           "تعذر تحديد حساب المعلم الحالي. سجّل الدخول مرة أخرى أو تأكد من وجود معرّف المعلم في بيانات الجلسة."
         );
@@ -831,6 +846,8 @@ const TeacherDashboard = () => {
           classesResponse,
           examsResponse,
           projectsResponse,
+          pendingLateReasonResponse,
+          observationsResponse,
         ] = await Promise.all([
           fetchMyTeacherProfile(),
           fetchLectures(
@@ -851,6 +868,8 @@ const TeacherDashboard = () => {
             page: 1,
             limit: 100,
           }),
+          fetchPendingLateReason(),
+          fetchMyObservations(),
         ]);
 
         const profile =
@@ -921,6 +940,19 @@ const TeacherDashboard = () => {
                 "projects",
               ]);
 
+        const pendingLateReason =
+          pendingLateReasonResponse?.status === false ||
+          !pendingLateReasonResponse?.data?.pending
+            ? null
+            : pendingLateReasonResponse.data;
+
+        const observationList =
+          observationsResponse?.status === false
+            ? []
+            : Array.isArray(observationsResponse?.data?.items)
+              ? observationsResponse.data.items
+              : [];
+
         const [
           preparationList,
           submissionList,
@@ -940,6 +972,8 @@ const TeacherDashboard = () => {
         setExams(examList);
         setProjects(projectList);
         setProjectSubmissions(submissionList);
+        setPendingLateness(pendingLateReason);
+        setPendingObservations(observationList);
       } catch (requestError) {
         setLectures([]);
         setClasses([]);
@@ -947,6 +981,8 @@ const TeacherDashboard = () => {
         setExams([]);
         setProjects([]);
         setProjectSubmissions([]);
+        setPendingLateness(null);
+        setPendingObservations([]);
         setError(
           requestError?.message ||
             requestError?.response?.data?.message ||
@@ -1356,11 +1392,33 @@ const TeacherDashboard = () => {
       },
       {
         title: "تسجيل حضوري",
-        description:
-          "سجل حضورك الشخصي باستخدام الموقع الجغرافي وشبكة المدرسة",
-        icon: <LocationOnRounded />,
+        description: pendingLateness
+          ? `لديك تأخير اليوم${
+              Number.isFinite(Number(pendingLateness?.lateMinutes))
+                ? ` (${pendingLateness.lateMinutes} دقيقة)`
+                : ""
+            } ويحتاج توضيح السبب`
+          : "سجل حضورك الشخصي باستخدام الموقع الجغرافي وشبكة المدرسة",
+        icon: pendingLateness
+          ? <WarningAmberRounded />
+          : <LocationOnRounded />,
+        badge: pendingLateness ? "سبب التأخير مطلوب" : "",
+        urgent: Boolean(pendingLateness),
         onClick: () =>
           navigate("/teacher/check-in"),
+      },
+      {
+        title: "ملاحظات على حصصي",
+        description: pendingObservations.length
+          ? `${pendingObservations.length} ملاحظة من الإدارة تنتظر ردك`
+          : "راجع ملاحظات الإدارة المسجلة أثناء جولات الفصول",
+        icon: <RateReviewRounded />,
+        badge: pendingObservations.length
+          ? `${pendingObservations.length} بانتظار الرد`
+          : "",
+        urgent: pendingObservations.length > 0,
+        onClick: () =>
+          navigate("/teacher/observations"),
       },
       {
         title: "الاستئذان والاحتياطي",
@@ -1422,6 +1480,8 @@ const TeacherDashboard = () => {
       navigate,
       nextUnpreparedLecture,
       todayLectures,
+      pendingLateness,
+      pendingObservations.length,
       exams.length,
       projects.length,
       pendingProjectCorrections.length,
@@ -2150,13 +2210,15 @@ const TeacherDashboard = () => {
                         "flex-start",
                       gap: 1.5,
                       textAlign: "right",
-                      border:
-                        "1px solid rgba(36,74,112,0.08)",
+                      border: tool.urgent
+                        ? "1px solid rgba(211,164,79,0.50)"
+                        : "1px solid rgba(36,74,112,0.08)",
                       borderRadius: "16px",
                       color:
                         "var(--color-navy-deep)",
-                      backgroundColor:
-                        "var(--color-white)",
+                      backgroundColor: tool.urgent
+                        ? "rgba(255,248,230,0.78)"
+                        : "var(--color-white)",
                       textTransform: "none",
                       transition: "all .2s ease",
                       "&:hover": {
@@ -2191,14 +2253,36 @@ const TeacherDashboard = () => {
                     </Box>
 
                     <Box sx={{ minWidth: 0 }}>
-                      <Typography
-                        sx={{
-                          fontSize: "14.5px",
-                          fontWeight: 800,
-                        }}
+                      <Stack
+                        direction="row"
+                        spacing={0.8}
+                        alignItems="center"
+                        flexWrap="wrap"
+                        useFlexGap
                       >
-                        {tool.title}
-                      </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: "14.5px",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {tool.title}
+                        </Typography>
+                        {tool.badge ? (
+                          <Chip
+                            size="small"
+                            label={tool.badge}
+                            sx={{
+                              height: 22,
+                              fontSize: "10.5px",
+                              fontWeight: 800,
+                              color: "var(--color-gold-dark)",
+                              backgroundColor: "var(--color-gold-soft)",
+                              border: "1px solid rgba(211,164,79,0.28)",
+                            }}
+                          />
+                        ) : null}
+                      </Stack>
                       <Typography
                         sx={{
                           mt: 0.4,
