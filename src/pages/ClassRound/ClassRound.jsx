@@ -281,6 +281,21 @@ const ClassRound = () => {
                             {item.coveredBy ? ` · يغطيها ${item.coveredBy}` : ""}
                           </Typography>
 
+                          {/*
+                            المشرف يمشي في ممر ولا يعرف من بصم. من غير هذا
+                            يسجّل تأخرًا على معلم لم يأتِ المدرسة أصلًا،
+                            فيصل الإشعار إلى بيته.
+                          */}
+                          {item.teacherCheckedIn === false ? (
+                            <Chip
+                              size="small"
+                              color="error"
+                              variant="outlined"
+                              label="لم يسجّل حضوره اليوم"
+                              sx={{ mt: 0.5, height: 20, fontSize: 10.5, fontWeight: 800 }}
+                            />
+                          ) : null}
+
                           {item.observation ? (
                             <Typography
                               sx={{ fontSize: 12, color: "text.secondary", mt: 0.4 }}
@@ -374,6 +389,19 @@ const ClassRound = () => {
               {form?.item?.slot}
               {form?.item?.teacherName ? ` · ${form.item.teacherName}` : ""}
             </Typography>
+
+            {/*
+              تنبيه لا منع: عين المشرف الواقف أمام الفصل دليل أقوى من صفٍّ
+              ناقص في جدول. معلمة نسيت البصمة أو فشل جهازها ما زالت تُدرّس.
+            */}
+            {form?.item?.teacherCheckedIn === false ? (
+              <Alert severity="warning" sx={{ fontSize: 12 }}>
+                {form.item.teacherName || "هذا المعلم"} لم يسجّل حضوره اليوم.
+                {form.status === "late"
+                  ? " هل تقصد «غائب»؟"
+                  : ""}
+              </Alert>
+            ) : null}
 
             <Alert severity="info" sx={{ fontSize: 12 }}>
               يصل الإشعار إلى المعلم فور الحفظ، ويمكنه بيان السبب.
