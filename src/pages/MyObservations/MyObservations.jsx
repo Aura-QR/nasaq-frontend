@@ -13,9 +13,9 @@ import {
 } from "@mui/material";
 
 import { RefreshRounded, RateReviewRounded } from "@mui/icons-material";
+import { TEACHER_UI } from "@/shared/ui/teacherUi";
 import { toast } from "react-toastify";
 
-import Container from "@/components/Container/Container";
 import {
   explainObservation,
   fetchMyObservations,
@@ -77,31 +77,63 @@ const MyObservations = () => {
   };
 
   return (
-    <Container>
-      <Stack spacing={2} sx={{ py: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-          <Stack direction="row" spacing={1} alignItems="center">
-            <RateReviewRounded sx={{ color: "var(--color-navy, #244A70)" }} />
-            <Box>
-              <Typography sx={{ fontWeight: 900, fontSize: 18 }}>
-                ملاحظات على حصصي
-              </Typography>
-              <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
-                ما سجّلته الإدارة أثناء جولة الفصول، ولم تردّ عليه بعد
-              </Typography>
-            </Box>
-          </Stack>
-
-          <Button
-            size="small"
-            startIcon={<RefreshRounded />}
-            onClick={load}
-            sx={{ borderRadius: "10px" }}
+    <Box dir="rtl" sx={{ ...TEACHER_UI.page }}>
+      <Box sx={{ ...TEACHER_UI.container }}>
+        <Paper
+          elevation={0}
+          sx={{
+            ...TEACHER_UI.hero,
+            mb: 1.5,
+            color: "#fff",
+            background: "linear-gradient(115deg, #173f65 0%, #285f8d 100%)",
+          }}
+        >
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1}
+            alignItems={{ xs: "stretch", sm: "center" }}
+            justifyContent="space-between"
           >
-            تحديث
-          </Button>
-        </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Box
+                sx={{
+                  width: 42,
+                  height: 42,
+                  display: "grid",
+                  placeItems: "center",
+                  borderRadius: 2,
+                  bgcolor: "rgba(255,255,255,.10)",
+                  border: "1px solid rgba(255,255,255,.16)",
+                }}
+              >
+                <RateReviewRounded />
+              </Box>
+              <Box>
+                <Typography sx={{ ...TEACHER_UI.heroTitle }}>
+                  ملاحظات على حصصي
+                </Typography>
+                <Typography sx={{ ...TEACHER_UI.heroSubtitle, color: "rgba(255,255,255,.72)" }}>
+                  راجع ملاحظات الإدارة على حصصك وأرسل ردك من نفس المكان
+                </Typography>
+              </Box>
+            </Stack>
 
+            <Button
+              size="small"
+              startIcon={<RefreshRounded />}
+              onClick={load}
+              sx={{
+                color: "#fff",
+                border: "1px solid rgba(255,255,255,.25)",
+                borderRadius: "10px",
+              }}
+            >
+              تحديث
+            </Button>
+          </Stack>
+        </Paper>
+
+        <Stack spacing={2}>
         {error ? <Alert severity="error">{error}</Alert> : null}
 
         {loading ? (
@@ -189,8 +221,9 @@ const MyObservations = () => {
             ))}
           </Stack>
         )}
-      </Stack>
-    </Container>
+        </Stack>
+      </Box>
+    </Box>
   );
 };
 

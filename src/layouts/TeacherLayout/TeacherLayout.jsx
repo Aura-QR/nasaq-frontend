@@ -10,12 +10,19 @@ import {
 } from "@mui/material";
 
 import {
+  AssignmentRounded,
   CloseRounded,
   DashboardRounded,
+  EventAvailableRounded,
+  FactCheckRounded,
+  GroupsRounded,
+  HowToRegRounded,
   LibraryBooksRounded,
   LogoutRounded,
   MenuBookRounded,
   MenuRounded,
+  QuizRounded,
+  RateReviewRounded,
   ScheduleRounded,
 } from "@mui/icons-material";
 
@@ -45,27 +52,17 @@ import nasaqLogo from "../../images/wadq-logo.png";
 import NotificationBell from "@/components/Notifications/NotificationBell";
 
 const NAV_ITEMS = [
-  {
-    label: "لوحة التحكم",
-    path: "/teacher/dashboard",
-    icon: <DashboardRounded />,
-  },
-  {
-    label: "جدول اليوم",
-    path: "/teacher/dashboard",
-    hash: "#today-schedule",
-    icon: <ScheduleRounded />,
-  },
-  {
-    label: "تحضيراتي",
-    path: "/school/preparation",
-    icon: <MenuBookRounded />,
-  },
-  {
-    label: "المكتبة",
-    path: "/school/library",
-    icon: <LibraryBooksRounded />,
-  },
+  { label: "لوحة التحكم", path: "/teacher/dashboard", icon: <DashboardRounded /> },
+  { label: "الجدول", path: "/teacher/schedule", icon: <ScheduleRounded /> },
+  { label: "فصولي", path: "/teacher/classes", icon: <GroupsRounded /> },
+  { label: "حضور الطلاب", path: "/teacher/attendance", icon: <HowToRegRounded /> },
+  { label: "تسجيل حضوري", path: "/teacher/check-in", icon: <EventAvailableRounded /> },
+  { label: "تحضيراتي", path: "/teacher/preparations", icon: <MenuBookRounded /> },
+  { label: "الاختبارات", path: "/teacher/exams", icon: <QuizRounded /> },
+  { label: "المشروعات", path: "/teacher/projects", icon: <AssignmentRounded /> },
+  { label: "ملاحظات حصصي", path: "/teacher/observations", icon: <RateReviewRounded /> },
+  { label: "الاستئذان والاحتياطي", path: "/teacher/duty", icon: <FactCheckRounded /> },
+  { label: "المكتبة", path: "/teacher/library", icon: <LibraryBooksRounded /> },
 ];
 
 const extractEntity = (response) => {
@@ -138,23 +135,21 @@ const TeacherNavigation = ({ mobile = false, onNavigate }) => {
       direction={mobile ? "column" : "row"}
       alignItems={mobile ? "stretch" : "center"}
       gap={mobile ? 0.75 : 0.35}
-      sx={{ width: mobile ? "100%" : "auto" }}
+      sx={{
+        width: mobile ? "100%" : "max-content",
+        minWidth: mobile ? 0 : "max-content",
+      }}
     >
       {NAV_ITEMS.map((item) => {
-        const active = item.hash
-          ? location.pathname === item.path &&
-            location.hash === item.hash
-          : item.path === "/teacher/dashboard"
-            ? location.pathname === item.path &&
-              location.hash !== "#today-schedule"
-            : location.pathname === item.path ||
-              location.pathname.startsWith(`${item.path}/`);
+        const active =
+          location.pathname === item.path ||
+          location.pathname.startsWith(`${item.path}/`);
 
         return (
           <Button
-            key={`${item.path}${item.hash || ""}`}
+            key={item.path}
             component={NavLink}
-            to={`${item.path}${item.hash || ""}`}
+            to={item.path}
             onClick={onNavigate}
             startIcon={item.icon}
             sx={{
@@ -166,7 +161,7 @@ const TeacherNavigation = ({ mobile = false, onNavigate }) => {
                 ? "#ffffff"
                 : "var(--color-navy-deep)",
               backgroundColor: active
-                ? "var(--color-primary, #0e7a5e)"
+                ? "var(--color-navy, #244a70)"
                 : "transparent",
               fontSize: mobile ? "12px" : "11px",
               fontWeight: 800,
@@ -182,10 +177,10 @@ const TeacherNavigation = ({ mobile = false, onNavigate }) => {
               "&:hover": {
                 color: active
                   ? "#ffffff"
-                  : "var(--color-primary, #0e7a5e)",
+                  : "var(--color-navy, #244a70)",
                 backgroundColor: active
-                  ? "var(--color-primary, #0e7a5e)"
-                  : "rgba(14,122,94,0.06)",
+                  ? "var(--color-navy, #244a70)"
+                  : "rgba(36,74,112,0.06)",
               },
             }}
           >
@@ -310,10 +305,14 @@ const TeacherLayout = () => {
               display: { xs: "none", lg: "flex" },
               justifyContent: "center",
               minWidth: 0,
-              width: "fit-content",
+              width: "100%",
+              maxWidth: "100%",
               mx: "auto",
               px: 0.55,
               py: 0.45,
+              overflowX: "auto",
+              scrollbarWidth: "none",
+              "&::-webkit-scrollbar": { display: "none" },
               border: "1px solid rgba(36,74,112,0.08)",
               borderRadius: "13px",
               backgroundColor: "rgba(255,255,255,0.72)",
@@ -420,7 +419,15 @@ const TeacherLayout = () => {
         </Box>
       </Box>
 
-      <Box component="main">
+      <Box
+        component="main"
+        sx={{
+          minWidth: 0,
+          minHeight: "calc(100vh - 68px)",
+          background:
+            "radial-gradient(circle at 8% 8%, rgba(211,164,79,0.045), transparent 24%), #f8f5ef",
+        }}
+      >
         <Outlet
           context={{
             teacherName,
