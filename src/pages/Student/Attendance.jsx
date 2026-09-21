@@ -145,6 +145,7 @@ const normalizeAttendanceDate = (
 const getDayStatus = ({
   day,
   absenceDates,
+  excuseStatusByDate,
   today,
 }) => {
   const key = format(
@@ -155,10 +156,28 @@ const getDayStatus = ({
   /*
    * API contract:
    * وجود record = غياب.
+   *
+   * قبول العذر لا يحوّل اليوم إلى حضور؛ هو يغيّر وصف الغياب فقط،
+   * لذلك نظهر حالة العذر داخل نفس يوم الغياب مع بقاء الإحصائيات كما هي.
    */
   if (
     absenceDates.has(key)
   ) {
+    const excuseStatus =
+      excuseStatusByDate.get(key);
+
+    if (excuseStatus === "accepted") {
+      return "excused";
+    }
+
+    if (excuseStatus === "pending") {
+      return "excuse-pending";
+    }
+
+    if (excuseStatus === "rejected") {
+      return "excuse-rejected";
+    }
+
     return "absent";
   }
 
@@ -185,10 +204,49 @@ const getDayTheme = (
   status
 ) => {
   if (
+    status === "excused"
+  ) {
+    return {
+      label: "غياب بعذر مقبول",
+      color: COLORS.blue,
+      background:
+        COLORS.blueLight,
+      border:
+        "rgba(78,141,204,.24)",
+    };
+  }
+
+  if (
+    status === "excuse-pending"
+  ) {
+    return {
+      label: "عذر قيد المراجعة",
+      color: COLORS.amber,
+      background:
+        COLORS.amberLight,
+      border:
+        "rgba(211,164,79,.30)",
+    };
+  }
+
+  if (
+    status === "excuse-rejected"
+  ) {
+    return {
+      label: "غياب بعذر مرفوض",
+      color: "#b5473f",
+      background:
+        "#fde7e5",
+      border:
+        "rgba(181,71,63,.25)",
+    };
+  }
+
+  if (
     status === "absent"
   ) {
     return {
-      label: "غياب",
+      label: "غياب بدون عذر",
       color: COLORS.red,
       background:
         COLORS.redLight,
@@ -275,6 +333,47 @@ const Attendance = () => {
           )
           .filter(Boolean)
       );
+    }, [attendance]);
+
+  /*
+   * حالة العذر لكل يوم غياب.
+   * منفصلة عن absenceDates لأن العذر لا يلغي سجل الغياب نفسه.
+   */
+  const excuseStatusByDate =
+    useMemo(() => {
+      const map =
+        new Map();
+
+      (
+        Array.isArray(
+          attendance
+        )
+          ? attendance
+          : []
+      ).forEach((item) => {
+        const key =
+          normalizeAttendanceDate(
+            item?.date
+          );
+
+        if (!key) {
+          return;
+        }
+
+        const status = String(
+          item?.excuseStatus ||
+            ""
+        )
+          .trim()
+          .toLowerCase();
+
+        map.set(
+          key,
+          status
+        );
+      });
+
+      return map;
     }, [attendance]);
 
   // ===================================================
@@ -1005,13 +1104,39 @@ const Attendance = () => {
             }}
           >
             <Legend
-              label="غياب مسجل"
+              label="غياب بدون عذر"
               color={
                 COLORS.red
               }
               background={
                 COLORS.redLight
               }
+            />
+
+            <Legend
+              label="غياب بعذر مقبول"
+              color={
+                COLORS.blue
+              }
+              background={
+                COLORS.blueLight
+              }
+            />
+
+            <Legend
+              label="عذر قيد المراجعة"
+              color={
+                COLORS.amber
+              }
+              background={
+                COLORS.amberLight
+              }
+            />
+
+            <Legend
+              label="غياب بعذر مرفوض"
+              color="#b5473f"
+              background="#fde7e5"
             />
 
             <Legend
@@ -1144,6 +1269,7 @@ const Attendance = () => {
                     getDayStatus({
                       day,
                       absenceDates,
+                      excuseStatusByDate,
                       today,
                     });
 
@@ -1257,6 +1383,9 @@ const Attendance = () => {
 
                           fontSize:
                             "6.5px",
+
+                          lineHeight:
+                            1.35,
 
                           fontWeight:
                             800,
