@@ -98,6 +98,25 @@ export const recordObservation = async ({
   }
 };
 
+/**
+ * DELETE /lesson-observations/:id
+ *
+ * الجولة تُمشى بالهاتف في ممر، والغرفة الخطأ تُضغط. الكتابة فوق الملاحظة
+ * تصحّح الحكم لا الغرفة: تحويلها إلى «حاضر» يترك مرورًا لم يحدث، وليس في
+ * الحالات ما يعني «هذا لم يقع». والخادم يرفض الحذف بعد رد المعلم.
+ */
+export const withdrawObservation = async (observationId) => {
+  const id = String(observationId || "").trim();
+
+  if (!id) return { status: false, message: "الملاحظة غير محددة", data: null };
+
+  try {
+    return ok(await api.delete(`${ENDPOINT}/${id}`));
+  } catch (error) {
+    return fail(error, "تعذر حذف الملاحظة");
+  }
+};
+
 /** GET /lesson-observations — السجل. */
 export const fetchObservations = async ({
   status = "",
@@ -184,6 +203,7 @@ export const reviewObservation = async (observationId, verdict, note) => {
 export default {
   fetchRound,
   recordObservation,
+  withdrawObservation,
   fetchObservations,
   fetchMyObservations,
   explainObservation,

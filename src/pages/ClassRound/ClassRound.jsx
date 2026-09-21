@@ -13,6 +13,8 @@ import {
   Paper,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 
@@ -27,7 +29,11 @@ import {
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
-import { fetchRound, recordObservation } from "@/APIs/school/lessonObservations";
+import {
+  fetchRound,
+  recordObservation,
+  withdrawObservation,
+} from "@/APIs/school/lessonObservations";
 
 /*
  * جولة الفصول.
@@ -69,6 +75,10 @@ const ClassRound = () => {
   const [lateMinutes, setLateMinutes] = useState("");
   const [observedAt, setObservedAt] = useState("");
   const [note, setNote] = useState("");
+
+  // الحذف لا يُدَس في ضغطة واحدة: الملاحظة أُبلغ بها المعلم، وسحبها يرسل له
+  // إشعارًا ثانيًا. تأكيد واحد أرخص من اعتذار.
+  const [pendingWithdraw, setPendingWithdraw] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,11 +133,44 @@ const ClassRound = () => {
     return true;
   };
 
-  const openForm = (item, status) => {
-    setForm({ item, status });
-    setLateMinutes(status === "late" ? "5" : "");
-    setObservedAt(clockNow());
-    setNote("");
+  /*
+   * `existing` يعني تصحيحًا لا تسجيلًا جديدًا.
+   *
+   * كان زر «تعديل» يفتح النموذج فارغًا وبحالة «متأخر» دائمًا، فمشرف أراد
+   * إصلاح عدد الدقائق وجد نفسه يكتب الملاحظة من الصفر — ويحوّل غيابًا إلى
+   * تأخير من غير أن يقصد.
+   */
+  const openForm = (item, status, existing = null) => {
+    setForm({ item, status, editing: Boolean(existing) });
+    setLateMinutes(
+      status === "late"
+        ? String(existing?.lateMinutes ?? 5)
+        : ""
+    );
+    setObservedAt(
+      existing?.observedAt
+        ? new Date(existing.observedAt).toISOString().slice(11, 16)
+        : clockNow()
+    );
+    setNote(existing?.note ?? "");
+  };
+
+  const confirmWithdraw = async () => {
+    const target = pendingWithdraw;
+    if (!target) return;
+
+    setSaving(target.lectureId);
+    const result = await withdrawObservation(target.observation.id);
+    setSaving("");
+    setPendingWithdraw(null);
+
+    if (!result.status) {
+      toast.error(result.message);
+      return;
+    }
+
+    toast.success(result.message);
+    load();
   };
 
   const confirmForm = async () => {
@@ -312,7 +355,7 @@ const ClassRound = () => {
                         </Box>
 
                         {meta ? (
-                          <Stack direction="row" spacing={0.8} alignItems="center">
+                          <Stack direction="row" spacing={0.6} alignItems="center">
                             <Chip
                               size="small"
                               color={meta.color}
@@ -320,13 +363,48 @@ const ClassRound = () => {
                               label={meta.label}
                               sx={{ fontWeight: 800 }}
                             />
-                            <Button
-                              size="small"
-                              onClick={() => openForm(item, "late")}
-                              sx={{ fontSize: 11 }}
-                            >
-                              تعديل
-                            </Button>
+
+                            {/*
+                              الملاحظة التي ردّ عليها المعلم مُجمّدة على
+                              الخادم. عرض الزرّين هنا يعني أن المشرف يتعلّم
+                              القاعدة من رسالة خطأ.
+                            */}
+                            {item.observation?.answered ? (
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label="ردّ عليها المعلم"
+                                sx={{ height: 20, fontSize: 10.5, fontWeight: 800 }}
+                              />
+                            ) : (
+                              <>
+                                <Button
+                                  size="small"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    openForm(
+                                      item,
+                                      item.observation.status === "present"
+                                        ? "late"
+                                        : item.observation.status,
+                                      item.observation
+                                    )
+                                  }
+                                  sx={{ fontSize: 11, minWidth: 54 }}
+                                >
+                                  تعديل
+                                </Button>
+                                <Button
+                                  size="small"
+                                  color="error"
+                                  disabled={busy}
+                                  onClick={() => setPendingWithdraw(item)}
+                                  sx={{ fontSize: 11, minWidth: 54 }}
+                                >
+                                  حذف
+                                </Button>
+                              </>
+                            )}
                           </Stack>
                         ) : (
                           <Stack direction="row" spacing={0.7}>
@@ -373,13 +451,63 @@ const ClassRound = () => {
       </Stack>
 
       <Dialog
+        open={Boolean(pendingWithdraw)}
+        onClose={() => setPendingWithdraw(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>
+          حذف الملاحظة
+        </DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={1.2} sx={{ pt: 0.5 }}>
+            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
+              {pendingWithdraw?.className} · {pendingWithdraw?.subjectName} ·
+              الحصة {pendingWithdraw?.slot}
+              {pendingWithdraw?.teacherName
+                ? ` · ${pendingWithdraw.teacherName}`
+                : ""}
+            </Typography>
+
+            {/*
+              المعلم أُبلغ بالملاحظة ساعة كُتبت. حذفها صامتًا يترك عنده
+              إشعارًا يشير إلى لا شيء، فيفتحه ولا يعرف أسُحبت أم أخطأ القراءة.
+            */}
+            {pendingWithdraw?.observation?.status !== "present" ? (
+              <Alert severity="info" sx={{ fontSize: 12 }}>
+                سيصل المعلم إشعار بأن الملاحظة حُذفت، وبأنه غير مطالب ببيان سبب.
+              </Alert>
+            ) : null}
+          </Stack>
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setPendingWithdraw(null)}>إلغاء</Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={Boolean(saving)}
+            onClick={confirmWithdraw}
+            sx={{ borderRadius: "10px", fontWeight: 800 }}
+          >
+            حذف الملاحظة
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
         open={Boolean(form)}
         onClose={() => setForm(null)}
         fullWidth
         maxWidth="xs"
       >
         <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>
-          {form?.status === "late" ? "تسجيل تأخر" : "تسجيل عدم حضور"}
+          {form?.editing
+            ? "تصحيح الملاحظة"
+            : form?.status === "late"
+              ? "تسجيل تأخر"
+              : "تسجيل عدم حضور"}
         </DialogTitle>
 
         <DialogContent>
@@ -389,6 +517,28 @@ const ClassRound = () => {
               {form?.item?.slot}
               {form?.item?.teacherName ? ` · ${form.item.teacherName}` : ""}
             </Typography>
+
+            {/*
+              التصحيح يشمل الحالة نفسها. مشرف سجّل غيابًا ثم رأى المعلم داخل
+              الفصل يحتاج أن يحوّلها، لا أن يحذفها ويكتبها من جديد.
+            */}
+            {form?.editing ? (
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                fullWidth
+                value={form.status}
+                onChange={(event, next) => {
+                  if (!next) return;
+                  setForm((current) => ({ ...current, status: next }));
+                  if (next === "late" && !lateMinutes) setLateMinutes("5");
+                }}
+              >
+                <ToggleButton value="present">حاضر</ToggleButton>
+                <ToggleButton value="late">متأخر</ToggleButton>
+                <ToggleButton value="absent">غائب</ToggleButton>
+              </ToggleButtonGroup>
+            ) : null}
 
             {/*
               تنبيه لا منع: عين المشرف الواقف أمام الفصل دليل أقوى من صفٍّ
