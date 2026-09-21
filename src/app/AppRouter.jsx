@@ -54,6 +54,9 @@ import SubjectOfferings from "@/pages/SubjectOfferings/SubjectOfferings";
 import TeacherConstraints from "@/pages/TeacherConstraints/TeacherConstraints";
 import AbsenceExcuses from "@/pages/AbsenceExcuses/AbsenceExcuses";
 import LateReasons from "@/pages/LateReasons/LateReasons";
+import ClassRound from "@/pages/ClassRound/ClassRound";
+import LessonObservations from "@/pages/LessonObservations/LessonObservations";
+import MyObservations from "@/pages/MyObservations/MyObservations";
 import SchoolSettings from "@/pages/SchoolSettings/SchoolSettings";
 import SchoolDashboard from "@/pages/SchoolDashboard/SchoolDashboard";
 import Terms from "@/pages/School/Terms/Terms";
@@ -310,6 +313,16 @@ const AppRouter = () => {
           />
 
           <Route
+            path="/school/class-round"
+            element={<ClassRound />}
+          />
+
+          <Route
+            path="/school/lesson-observations"
+            element={<LessonObservations />}
+          />
+
+          <Route
             path="/school/terms"
             element={<Terms />}
           />
@@ -410,6 +423,11 @@ const AppRouter = () => {
           {/* Compatibility for earlier teacher sidebar links. */}
           <Route path="/teacher/students" element={<Navigate to="/teacher/classes" replace />} />
           <Route path="/teacher/lectures" element={<Navigate to="/teacher/schedule" replace />} />
+
+          <Route
+            path="/teacher/observations"
+            element={<MyObservations />}
+          />
 
           <Route
             path="/teacher/attendance"

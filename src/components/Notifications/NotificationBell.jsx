@@ -47,6 +47,7 @@ const DESTINATIONS = {
     teacher_late: "/school/late-reasons",
     late_reason_submitted: "/school/late-reasons",
     absence_excuse_submitted: "/school/absence-excuses",
+    lesson_observation_explained: "/school/lesson-observations",
     student_absent: "/school/attendance",
     cover_assigned: "/school/duty",
     cover_removed: "/school/duty",
@@ -58,6 +59,8 @@ const DESTINATIONS = {
   TEACHER: {
     late_reason_required: "/teacher/check-in",
     late_reason_reviewed: "/teacher/attendance",
+    lesson_observation_recorded: "/teacher/observations",
+    lesson_observation_reviewed: "/teacher/observations",
     cover_assigned: "/teacher/duty",
     cover_removed: "/teacher/duty",
     duty_assigned: "/teacher/duty",

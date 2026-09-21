@@ -21,6 +21,8 @@ import {
   EventBusyRounded,
   InsightsRounded,
   FactCheckRounded,
+  TourRounded,
+  RateReviewRounded,
   ScheduleRounded,
   AssignmentTurnedInRounded,
   AccountCircleRounded,
@@ -429,6 +431,22 @@ const Sidebar = ({ active, setActive }) => {
             show: teacherAttendancePermissions.read,
           },
           {
+            // ما يراه المشرف حين ينظر داخل الفصل. الحصة، لا اليوم: معلمة
+            // تبصم في موعدها وتصل الحصة الرابعة متأخرة.
+            name: "جولة الفصول",
+            Icon: TourRounded,
+            iconType: "mui",
+            to: "/school/class-round",
+            show: dutyPermissions.read,
+          },
+          {
+            name: "سجل ملاحظات الحصص",
+            Icon: FactCheckRounded,
+            iconType: "mui",
+            to: "/school/lesson-observations",
+            show: dutyPermissions.read,
+          },
+          {
             name: "حضور الإداريين والمشرفين",
             Icon: HowToRegRounded,
             iconType: "mui",
@@ -642,6 +660,15 @@ const Sidebar = ({ active, setActive }) => {
               Icon: HowToRegRounded,
               iconType: "mui",
               to: "/teacher/check-in",
+              show: true,
+            },
+            {
+              // ما كُتب عن حصصه في جولة الفصول. من غير هذا يصله إشعار يقول
+              // إن شيئًا سُجّل عليه ولا يملك موضعًا يقول فيه ما حدث.
+              name: "ملاحظات على حصصي",
+              Icon: RateReviewRounded,
+              iconType: "mui",
+              to: "/teacher/observations",
               show: true,
             },
             {
