@@ -44,6 +44,7 @@ import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
 import WhatsappSection from "./WhatsappSection";
+import HolidaysSection from "./HolidaysSection";
 import Back from "@/components/Back/Back";
 import Input from "@/components/Input/Input";
 import Loading from "@/components/Loading";
@@ -2663,6 +2664,15 @@ const SchoolSettings = () => {
               borderColor:
                 "rgba(36,74,112,0.07)",
             }}
+          />
+
+          {/* Straight after the week, because it is the same question asked
+              about the dates the week cannot answer for: the schedule says
+              which weekdays are worked, this says which of them are not. */}
+          <HolidaysSection
+            canEdit={
+              canEditAttendanceSettings
+            }
           />
 
           {/* Whoever scans this code decides which number every parent

@@ -24,6 +24,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   Tabs,
   TextField,
   Tooltip,
@@ -39,6 +40,7 @@ import {
   PersonOffRounded,
   RefreshRounded,
   SaveRounded,
+  FileDownloadOutlined,
   SettingsRounded,
 } from "@mui/icons-material";
 
@@ -47,6 +49,7 @@ import usePermissions from "@/utils/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
+import { CSVLink } from "react-csv";
 
 
 import Container from "@/components/Container/Container";
@@ -236,6 +239,9 @@ const extractAttendanceSummary = (response) => {
     ) || 0,
     dateFrom: payload?.dateFrom || "",
     dateTo: payload?.dateTo || "",
+    // What absence is measured against. 3 out of 5 reads very differently
+    // from 3 out of 22, and the column is meaningless without it.
+    workingDays: Number(payload?.workingDays) || 0,
   };
 };
 
@@ -458,6 +464,16 @@ const TeacherAttendanceAdmin = () => {
   const [summaryLoaded, setSummaryLoaded] = useState(false);
   const [summaryRows, setSummaryRows] = useState([]);
   const [summaryTotalTeachers, setSummaryTotalTeachers] = useState(0);
+  const [summaryWorkingDays, setSummaryWorkingDays] = useState(0);
+  /*
+   * A monthly review is a search for outliers, and the server answers in
+   * alphabetical order — which buries them. Sorting is the difference between
+   * reading the report and scanning it.
+   */
+  const [summarySort, setSummarySort] = useState({
+    key: "teacherName",
+    direction: "asc",
+  });
   const [summaryRange, setSummaryRange] = useState({
     dateFrom: monthStartKey(),
     dateTo: todayKey(),
@@ -579,6 +595,7 @@ const TeacherAttendanceAdmin = () => {
     if (isFailed(response)) {
       setSummaryRows([]);
       setSummaryTotalTeachers(0);
+      setSummaryWorkingDays(0);
       toast.error(response?.message || "تعذر تحميل تقرير حضور المعلمين");
       return;
     }
@@ -586,6 +603,7 @@ const TeacherAttendanceAdmin = () => {
     const summary = extractAttendanceSummary(response);
     setSummaryRows(summary.rows);
     setSummaryTotalTeachers(summary.totalTeachers);
+    setSummaryWorkingDays(summary.workingDays);
   }, [summaryRange]);
 
   useEffect(() => {
@@ -631,6 +649,10 @@ const TeacherAttendanceAdmin = () => {
         (totals, row) => ({
           daysPresent:
             totals.daysPresent + (Number(row?.daysPresent) || 0),
+          daysAbsent:
+            totals.daysAbsent + (Number(row?.daysAbsent) || 0),
+          totalLateMinutes:
+            totals.totalLateMinutes + (Number(row?.totalLateMinutes) || 0),
           daysLate:
             totals.daysLate + (Number(row?.daysLate) || 0),
           daysLeftEarly:
@@ -641,12 +663,80 @@ const TeacherAttendanceAdmin = () => {
         }),
         {
           daysPresent: 0,
+          daysAbsent: 0,
+          totalLateMinutes: 0,
           daysLate: 0,
           daysLeftEarly: 0,
           daysMissingCheckOut: 0,
         }
       ),
     [summaryRows]
+  );
+
+  const sortedSummaryRows = useMemo(() => {
+    const { key, direction } = summarySort;
+    const sign = direction === "desc" ? -1 : 1;
+
+    return [...summaryRows].sort((a, b) => {
+      if (key === "teacherName") {
+        return (
+          sign *
+          String(a?.teacherName || "").localeCompare(
+            String(b?.teacherName || ""),
+            "ar"
+          )
+        );
+      }
+      return sign * ((Number(a?.[key]) || 0) - (Number(b?.[key]) || 0));
+    });
+  }, [summaryRows, summarySort]);
+
+  const toggleSummarySort = useCallback((key) => {
+    setSummarySort((current) =>
+      current.key === key
+        ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
+        // A name reads best from alif down; every other column is a count
+        // somebody is looking for the largest of, so start those at the top.
+        : { key, direction: key === "teacherName" ? "asc" : "desc" }
+    );
+  }, []);
+
+  /*
+   * The report as a spreadsheet.
+   *
+   * Arabic headers survive Excel only with the byte-order mark CSVLink writes
+   * by default — without it every column title opens as mojibake, which is
+   * how an export gets reported as broken.
+   */
+  const summaryCsv = useMemo(
+    () =>
+      sortedSummaryRows.map((row) => ({
+        "المعلم": row?.teacherName || "معلم",
+        "الحالة": row?.teacherDeleted ? "محذوف" : "حالي",
+        "أيام الدوام في الفترة": summaryWorkingDays,
+        "أيام الحضور": Number(row?.daysPresent) || 0,
+        "أيام الغياب": Number(row?.daysAbsent) || 0,
+        "أيام التأخير": Number(row?.daysLate) || 0,
+        "إجمالي دقائق التأخير": Number(row?.totalLateMinutes) || 0,
+        "أيام الخروج المبكر": Number(row?.daysLeftEarly) || 0,
+        "إجمالي دقائق الخروج المبكر":
+          Number(row?.totalEarlyLeaveMinutes) || 0,
+        "دقائق العمل": Number(row?.totalWorkMinutes) || 0,
+        "دقائق العمل المتوقعة": Number(row?.totalExpectedWorkMinutes) || 0,
+        "أيام بدون انصراف": Number(row?.daysMissingCheckOut) || 0,
+        "أيام تأخير غير مقاس": Number(row?.daysLatenessNotTracked) || 0,
+        "أيام خروج غير مقاس": Number(row?.daysEarlyLeaveNotTracked) || 0,
+        "دوام في إجازة": Number(row?.daysOnDayOff) || 0,
+      })),
+    [sortedSummaryRows, summaryWorkingDays]
+  );
+
+  const summaryFileName = useMemo(
+    () =>
+      `تقرير-حضور-المعلمين-${summaryRange.dateFrom || "بداية"}-${
+        summaryRange.dateTo || "نهاية"
+      }.csv`,
+    [summaryRange.dateFrom, summaryRange.dateTo]
   );
 
   const saveSettings = async () => {
@@ -1345,6 +1435,25 @@ const TeacherAttendanceAdmin = () => {
             عرض التقرير
           </Button>
         </Box>
+
+        {summaryLoaded && summaryRows.length > 0 ? (
+          <Box sx={{ mt: 1.2, display: "flex", justifyContent: "flex-start" }}>
+            <Box
+              component={CSVLink}
+              data={summaryCsv}
+              filename={summaryFileName}
+              sx={{ display: "inline-flex", textDecoration: "none" }}
+            >
+              <Button
+                variant="outlined"
+                startIcon={<FileDownloadOutlined />}
+                sx={{ minHeight: 40, px: 2.2, borderRadius: "11px", fontWeight: 800 }}
+              >
+                {`تصدير التقرير (${summaryRows.length} معلم)`}
+              </Button>
+            </Box>
+          </Box>
+        ) : null}
       </Paper>
 
       <Box
@@ -1352,17 +1461,18 @@ const TeacherAttendanceAdmin = () => {
           display: "grid",
           gridTemplateColumns: {
             xs: "1fr 1fr",
-            lg: "repeat(5,minmax(0,1fr))",
+            lg: "repeat(6,minmax(0,1fr))",
           },
           gap: 1,
         }}
       >
         {[
           ["المعلمين في التقرير", summaryTotalTeachers],
+          ["أيام الدوام في الفترة", summaryWorkingDays],
           ["أيام الحضور", summaryTotals.daysPresent],
+          ["أيام الغياب", summaryTotals.daysAbsent],
           ["أيام التأخير", summaryTotals.daysLate],
-          ["أيام الخروج المبكر", summaryTotals.daysLeftEarly],
-          ["بدون انصراف", summaryTotals.daysMissingCheckOut],
+          ["إجمالي التأخير", formatMinutes(summaryTotals.totalLateMinutes, { duration: true })],
         ].map(([label, value]) => (
           <Paper
             key={label}
@@ -1402,39 +1512,58 @@ const TeacherAttendanceAdmin = () => {
           </Box>
         ) : (
           <TableContainer>
-            <Table size="small" sx={{ minWidth: 1380 }}>
+            <Table size="small" sx={{ minWidth: 1520 }}>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "rgba(36,74,112,.035)" }}>
-                  <TableCell align="right">المعلم</TableCell>
-                  <TableCell align="center">الحالة</TableCell>
-                  <TableCell align="center">أيام الحضور</TableCell>
-                  <TableCell align="center">أيام التأخير</TableCell>
-                  <TableCell align="center">إجمالي التأخير</TableCell>
-                  <TableCell align="center">الخروج المبكر</TableCell>
-                  <TableCell align="center">إجمالي الخروج المبكر</TableCell>
-                  <TableCell align="right">العمل / المتوقع</TableCell>
-                  <TableCell align="center">بدون انصراف</TableCell>
-                  <TableCell align="center">تأخير غير مقاس</TableCell>
-                  <TableCell align="center">خروج غير مقاس</TableCell>
-                  <TableCell align="center">دوام في إجازة</TableCell>
+                  {[
+                    ["teacherName", "المعلم", "right"],
+                    [null, "الحالة", "center"],
+                    ["daysPresent", "أيام الحضور", "center"],
+                    ["daysAbsent", "أيام الغياب", "center"],
+                    ["daysLate", "أيام التأخير", "center"],
+                    ["totalLateMinutes", "إجمالي التأخير", "center"],
+                    ["daysLeftEarly", "الخروج المبكر", "center"],
+                    ["totalEarlyLeaveMinutes", "إجمالي الخروج المبكر", "center"],
+                    [null, "العمل / المتوقع", "right"],
+                    ["daysMissingCheckOut", "بدون انصراف", "center"],
+                    [null, "تأخير غير مقاس", "center"],
+                    [null, "خروج غير مقاس", "center"],
+                    [null, "دوام في إجازة", "center"],
+                  ].map(([key, title, align]) => (
+                    <TableCell key={title} align={align}>
+                      {key ? (
+                        <TableSortLabel
+                          active={summarySort.key === key}
+                          direction={
+                            summarySort.key === key ? summarySort.direction : "desc"
+                          }
+                          onClick={() => toggleSummarySort(key)}
+                        >
+                          {title}
+                        </TableSortLabel>
+                      ) : (
+                        title
+                      )}
+                    </TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
 
               <TableBody>
                 {!summaryLoaded ? (
                   <TableRow>
-                    <TableCell colSpan={12} align="center" sx={{ py: 7, color: "#708198" }}>
+                    <TableCell colSpan={13} align="center" sx={{ py: 7, color: "#708198" }}>
                       اختر الفترة ثم اضغط «عرض التقرير».
                     </TableCell>
                   </TableRow>
                 ) : !summaryRows.length ? (
                   <TableRow>
-                    <TableCell colSpan={12} align="center" sx={{ py: 7, color: "#708198" }}>
+                    <TableCell colSpan={13} align="center" sx={{ py: 7, color: "#708198" }}>
                       لا توجد بيانات حضور في الفترة المحددة.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  summaryRows.map((row, index) => (
+                  sortedSummaryRows.map((row, index) => (
                     <TableRow
                       key={normalizeId(row?.teacherId) || `${row?.teacherName || "teacher"}-${index}`}
                       hover
@@ -1462,6 +1591,21 @@ const TeacherAttendanceAdmin = () => {
                       <TableCell align="center">
                         {Number(row?.daysPresent) || 0}
                       </TableCell>
+
+                      <TableCell align="center">
+                        <Chip
+                          size="small"
+                          label={Number(row?.daysAbsent) || 0}
+                          sx={{
+                            color: Number(row?.daysAbsent) > 0 ? "#A44343" : "#237449",
+                            backgroundColor: Number(row?.daysAbsent) > 0
+                              ? "rgba(201,79,79,.12)"
+                              : "rgba(116,201,154,.12)",
+                            fontWeight: 800,
+                          }}
+                        />
+                      </TableCell>
+
                       <TableCell align="center">
                         {Number(row?.daysLate) || 0}
                       </TableCell>

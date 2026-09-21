@@ -237,6 +237,49 @@ const buildSchoolSettingsPayload = (
       );
   }
 
+  /*
+   * أيام لا يعبّر عنها جدول الأسبوع: العيد، إجازة منتصف الفصل، اليوم الوطني.
+   * الباك يستبدل المصفوفة بالكامل، فتُرسل كاملة في كل حفظ.
+   *
+   * الصف بلا اسم أو بلا تاريخ بداية يُسقَط هنا لا هناك: صفّ فارغ تركه المستخدم
+   * في الشاشة يُفشل الحفظ كله، فيبدو أن الإجازات لا تُحفظ.
+   */
+  if (
+    Object.prototype.hasOwnProperty.call(
+      payload,
+      "holidays"
+    )
+  ) {
+    payload.holidays = Array.isArray(
+      payload.holidays
+    )
+      ? payload.holidays
+          .map((holiday) => {
+            const name = String(
+              holiday?.name || ""
+            ).trim();
+            const startDate = String(
+              holiday?.startDate || ""
+            ).trim();
+            const endDate =
+              String(
+                holiday?.endDate || ""
+              ).trim() || startDate;
+
+            return {
+              name,
+              startDate,
+              endDate,
+            };
+          })
+          .filter(
+            (holiday) =>
+              holiday.name &&
+              holiday.startDate
+          )
+      : [];
+  }
+
   return payload;
 };
 
