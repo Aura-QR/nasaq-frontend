@@ -291,8 +291,6 @@ const AttendanceAlerts = () => {
   }, [signedIn, isTeacher, isStudent, isAdmin, checkTeacher, checkNotices]);
 
   useEffect(() => {
-    if (!isStudent) return undefined;
-
     const openAbsenceExcuse = async (event) => {
       // A deliberate tap means the family wants to deal with the absence now,
       // even if they previously chose «لاحقًا» during this visit.
@@ -318,7 +316,7 @@ const AttendanceAlerts = () => {
     return () => {
       window.removeEventListener(ABSENCE_EXCUSE_EVENT, openAbsenceExcuse);
     };
-  }, [isStudent, checkOwedExcuses]);
+  }, [checkOwedExcuses]);
 
   const sendReason = async () => {
     const text = reason.trim();
