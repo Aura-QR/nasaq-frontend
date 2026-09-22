@@ -29,6 +29,7 @@ import { useAuthUser } from "react-auth-kit";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
+import { fetchManagers } from "@/APIs/school/managers";
 import {
   fetchStaffDirectory,
   fetchStaffLateReasons,
@@ -99,19 +100,88 @@ const staffName = (item) => {
     (item?.admin && typeof item.admin === "object" && item.admin) ||
     (item?.userId && typeof item.userId === "object" && item.userId) ||
     {};
+  const profile = item?._directoryProfile || {};
+  const firstLast = [
+    item?.firstName || profile?.firstName,
+    item?.lastName || profile?.lastName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
 
   return (
     item?.staffName ||
+    item?.adminName ||
+    item?.displayName ||
     item?.name ||
     item?.fullName ||
+    firstLast ||
     item?.username ||
     item?.email ||
     nested?.name ||
     nested?.fullName ||
     nested?.username ||
     nested?.email ||
+    profile?.name ||
+    profile?.fullName ||
+    profile?.username ||
+    profile?.email ||
     "إداري / مشرف"
   );
+};
+
+const extractManagers = (response) => {
+  const candidates = [
+    response?.data?.docs,
+    response?.data?.items,
+    response?.data,
+    response?.docs,
+    response?.items,
+    response,
+  ];
+  return candidates.find(Array.isArray) || [];
+};
+
+const staffRole = (item) =>
+  String(
+    item?.role ||
+      item?.staffId?.role ||
+      item?.staff?.role ||
+      item?.adminId?.role ||
+      item?.admin?.role ||
+      item?.userId?.role ||
+      item?._directoryProfile?.role ||
+      ""
+  )
+    .trim()
+    .toUpperCase();
+
+const staffRoleLabel = (item) => {
+  const role = staffRole(item);
+  if (role === "SUPERVISOR") return "مشرف";
+  if (role === "MANAGER") return "إداري";
+  return "";
+};
+
+const mergeStaffWithManagerProfiles = (staffRows, managerRows) => {
+  const allowedManagers = managerRows.filter((item) =>
+    ["MANAGER", "SUPERVISOR"].includes(
+      String(item?.role || "").trim().toUpperCase()
+    )
+  );
+
+  const managerById = new Map(
+    allowedManagers
+      .map((item) => [normalizeId(item?._id || item?.id || item?.userId), item])
+      .filter(([id]) => id)
+  );
+
+  const source = staffRows.length ? staffRows : allowedManagers;
+  return source.map((item) => {
+    const id = staffOptionId(item);
+    const profile = managerById.get(id);
+    return profile ? { ...item, _directoryProfile: profile } : item;
+  });
 };
 
 const StaffLateReasons = () => {
@@ -139,15 +209,29 @@ const StaffLateReasons = () => {
 
   useEffect(() => {
     let active = true;
-    fetchStaffDirectory().then((response) => {
-      if (!active) return;
-      if (response?.status === false) {
-        setStaff([]);
-        toast.error(response?.message || "تعذر تحميل قائمة الإداريين والمشرفين");
-        return;
+
+    Promise.all([fetchStaffDirectory(), fetchManagers()]).then(
+      ([staffResponse, managersResponse]) => {
+        if (!active) return;
+
+        const attendanceStaff =
+          staffResponse?.status === false ? [] : extractStaff(staffResponse);
+        const managerRows =
+          managersResponse?.status === false ? [] : extractManagers(managersResponse);
+
+        const merged = mergeStaffWithManagerProfiles(attendanceStaff, managerRows);
+        setStaff(merged);
+
+        if (!merged.length && staffResponse?.status === false && managersResponse?.status === false) {
+          toast.error(
+            staffResponse?.message ||
+              managersResponse?.message ||
+              "تعذر تحميل قائمة الإداريين والمشرفين"
+          );
+        }
       }
-      setStaff(extractStaff(response));
-    });
+    );
+
     return () => {
       active = false;
     };
@@ -199,14 +283,24 @@ const StaffLateReasons = () => {
   }, [load]);
 
 
-  const staffOptions = useMemo(
-    () =>
-      [...staff]
-        .map((item) => ({ id: staffOptionId(item), name: staffName(item) }))
-        .filter((item) => item.id)
-        .sort((a, b) => a.name.localeCompare(b.name, "ar")),
-    [staff]
-  );
+  const staffOptions = useMemo(() => {
+    const unique = new Map();
+
+    staff.forEach((item) => {
+      const id = staffOptionId(item);
+      if (!id || unique.has(id)) return;
+      const name = staffName(item);
+      const roleLabel = staffRoleLabel(item);
+      unique.set(id, {
+        id,
+        name: roleLabel ? `${name} — ${roleLabel}` : name,
+      });
+    });
+
+    return [...unique.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, "ar")
+    );
+  }, [staff]);
 
   const confirmVerdict = async () => {
     if (!verdict) return;

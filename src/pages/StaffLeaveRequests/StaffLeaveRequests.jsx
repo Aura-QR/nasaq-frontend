@@ -30,6 +30,7 @@ import { useAuthUser } from "react-auth-kit";
 import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
+import { fetchManagers } from "@/APIs/school/managers";
 import usePermissions from "@/utils/hooks/usePermissions";
 import {
   createStaffLeaveRequest,
@@ -106,19 +107,85 @@ const extractRows = (response) => {
 
 const displayStaffName = (row) => {
   const staff = row?.staffId || row?.staff || row?.adminId || row?.admin || row?.userId || {};
-  if (typeof staff === "string") return row?.staffName || "إداري / مشرف";
+  const profile = row?._directoryProfile || {};
+  const firstLast = [
+    row?.firstName || profile?.firstName,
+    row?.lastName || profile?.lastName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  if (typeof staff === "string") {
+    return (
+      row?.staffName ||
+      row?.adminName ||
+      row?.displayName ||
+      row?.name ||
+      row?.fullName ||
+      firstLast ||
+      row?.username ||
+      row?.email ||
+      profile?.name ||
+      profile?.fullName ||
+      profile?.username ||
+      profile?.email ||
+      "إداري / مشرف"
+    );
+  }
+
   return (
     row?.staffName ||
+    row?.adminName ||
+    row?.displayName ||
     row?.name ||
     row?.fullName ||
+    firstLast ||
     row?.username ||
     row?.email ||
     staff?.name ||
     staff?.fullName ||
     staff?.username ||
     staff?.email ||
+    profile?.name ||
+    profile?.fullName ||
+    profile?.username ||
+    profile?.email ||
     "إداري / مشرف"
   );
+};
+
+const extractManagers = (response) => {
+  const candidates = [
+    response?.data?.docs,
+    response?.data?.items,
+    response?.data,
+    response?.docs,
+    response?.items,
+    response,
+  ];
+  return candidates.find(Array.isArray) || [];
+};
+
+const mergeStaffWithManagerProfiles = (staffRows, managerRows) => {
+  const allowedManagers = managerRows.filter((item) =>
+    ["MANAGER", "SUPERVISOR"].includes(
+      String(item?.role || "").trim().toUpperCase()
+    )
+  );
+
+  const managerById = new Map(
+    allowedManagers
+      .map((item) => [normalizeId(item?._id || item?.id || item?.userId), item])
+      .filter(([id]) => id)
+  );
+
+  const source = staffRows.length ? staffRows : allowedManagers;
+  return source.map((item) => {
+    const id = staffOptionId(item);
+    const profile = managerById.get(id);
+    return profile ? { ...item, _directoryProfile: profile } : item;
+  });
 };
 
 const displayStaffRole = (row) => {
@@ -129,6 +196,7 @@ const displayStaffRole = (row) => {
       row?.adminId?.role ||
       row?.admin?.role ||
       row?.userId?.role ||
+      row?._directoryProfile?.role ||
       ""
   ).toUpperCase();
   if (role === "SUPERVISOR") return "مشرف";
@@ -173,15 +241,29 @@ const StaffLeaveRequests = ({ personal = false }) => {
   useEffect(() => {
     if (ownOnly) return undefined;
     let active = true;
-    fetchStaffDirectory().then((response) => {
-      if (!active) return;
-      if (response?.status === false) {
-        setStaff([]);
-        toast.error(response?.message || "تعذر تحميل قائمة الإداريين والمشرفين");
-        return;
+
+    Promise.all([fetchStaffDirectory(), fetchManagers()]).then(
+      ([staffResponse, managersResponse]) => {
+        if (!active) return;
+
+        const attendanceStaff =
+          staffResponse?.status === false ? [] : extractRows(staffResponse);
+        const managerRows =
+          managersResponse?.status === false ? [] : extractManagers(managersResponse);
+
+        const merged = mergeStaffWithManagerProfiles(attendanceStaff, managerRows);
+        setStaff(merged);
+
+        if (!merged.length && staffResponse?.status === false && managersResponse?.status === false) {
+          toast.error(
+            staffResponse?.message ||
+              managersResponse?.message ||
+              "تعذر تحميل قائمة الإداريين والمشرفين"
+          );
+        }
       }
-      setStaff(extractRows(response));
-    });
+    );
+
     return () => {
       active = false;
     };
@@ -221,14 +303,24 @@ const StaffLeaveRequests = ({ personal = false }) => {
     load();
   }, [load]);
 
-  const staffOptions = useMemo(
-    () =>
-      staff
-        .map((item) => ({ id: staffOptionId(item), name: displayStaffName(item) }))
-        .filter((item) => item.id)
-        .sort((a, b) => a.name.localeCompare(b.name, "ar")),
-    [staff]
-  );
+  const staffOptions = useMemo(() => {
+    const unique = new Map();
+
+    staff.forEach((item) => {
+      const id = staffOptionId(item);
+      if (!id || unique.has(id)) return;
+      const name = displayStaffName(item);
+      const roleLabel = displayStaffRole(item);
+      unique.set(id, {
+        id,
+        name: roleLabel ? `${name} — ${roleLabel}` : name,
+      });
+    });
+
+    return [...unique.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, "ar")
+    );
+  }, [staff]);
 
   const stats = useMemo(
     () => ({
