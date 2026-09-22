@@ -455,10 +455,31 @@ const Sidebar = ({ active, setActive }) => {
             show: staffAttendancePermissions.read,
           },
           {
+            name: "أعذار تأخير الموظفين",
+            Icon: ScheduleRounded,
+            iconType: "mui",
+            to: "/school/staff-late-reasons",
+            show: staffAttendancePermissions.read,
+          },
+          {
+            name: "استئذانات الموظفين",
+            Icon: EventBusyRounded,
+            iconType: "mui",
+            to: "/school/staff-leave-requests",
+            show: staffAttendancePermissions.read,
+          },
+          {
             name: "حضوري",
             Icon: HowToRegRounded,
             iconType: "mui",
             to: "/staff-attendance",
+            show: role === "MANAGER" || role === "SUPERVISOR",
+          },
+          {
+            name: "استئذاناتي",
+            Icon: EventBusyRounded,
+            iconType: "mui",
+            to: "/staff-leave-requests",
             show: role === "MANAGER" || role === "SUPERVISOR",
           },
           {

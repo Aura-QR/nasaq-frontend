@@ -16,8 +16,14 @@ import {
 } from "@mui/material";
 import {
   CheckCircleRounded,
+  CloseRounded,
   EditNoteRounded,
+  EventBusyRounded,
   NotificationsRounded,
+  PersonRounded,
+  ScheduleRounded,
+  ShieldRounded,
+  UndoRounded,
 } from "@mui/icons-material";
 import { useAuthUser } from "react-auth-kit";
 import { useNavigate } from "react-router-dom";
@@ -27,6 +33,8 @@ import {
   fetchUnreadCount,
   markAllNotificationsRead,
   markNotificationRead,
+  NOTIFICATION_COLORS,
+  NOTIFICATION_ICONS,
 } from "@/APIs/school/notifications";
 import { fetchPreparations } from "@/APIs/school/preparation";
 import { ABSENCE_EXCUSE_EVENT } from "./AttendanceAlerts";
@@ -47,6 +55,11 @@ const DESTINATIONS = {
   SCHOOL_ADMIN: {
     teacher_late: "/school/late-reasons",
     late_reason_submitted: "/school/late-reasons",
+    staff_late_reason_submitted: "/school/staff-late-reasons",
+    staff_late_reason_reviewed: "/staff-attendance",
+    staff_leave_requested: "/school/staff-leave-requests",
+    staff_leave_approved: "/staff-leave-requests",
+    staff_leave_rejected: "/staff-leave-requests",
     absence_excuse_submitted: "/school/absence-excuses",
     lesson_observation_explained: "/school/lesson-observations",
     student_absent: "/school/attendance",
@@ -80,6 +93,33 @@ const destinationFor = (type, role) => {
   if (role === "STUDENT") return DESTINATIONS.STUDENT[type] ?? null;
   if (role === "TEACHER") return DESTINATIONS.TEACHER[type] ?? null;
   return DESTINATIONS.SCHOOL_ADMIN[type] ?? null;
+};
+
+const ICON_COMPONENTS = {
+  check: CheckCircleRounded,
+  close: CloseRounded,
+  eventBusy: EventBusyRounded,
+  note: EditNoteRounded,
+  person: PersonRounded,
+  schedule: ScheduleRounded,
+  shield: ShieldRounded,
+  undo: UndoRounded,
+};
+
+const COLOR_STYLES = {
+  success: { bgcolor: "#eaf7f1", color: "#18865d" },
+  error: { bgcolor: "#fff0f0", color: "#d14343" },
+  warning: { bgcolor: "#fff3d8", color: "#c89224" },
+  info: { bgcolor: "#eef6fb", color: "#2d6f9f" },
+};
+
+const noticeVisual = (type) => {
+  const iconKey = NOTIFICATION_ICONS[type] || "note";
+  const colorKey = NOTIFICATION_COLORS[type] || "info";
+  return {
+    Icon: ICON_COMPONENTS[iconKey] || EditNoteRounded,
+    style: COLOR_STYLES[colorKey] || COLOR_STYLES.info,
+  };
 };
 
 const POLL_MS = 60_000;
@@ -480,6 +520,8 @@ const NotificationBell = ({
             <List dense disablePadding>
               {items.map((item) => {
                 const reviewNotification = item.source === "preparation_review";
+                const visual = noticeVisual(item.type);
+                const BackendIcon = visual.Icon;
                 return (
                   <ListItemButton
                     key={item._id}
@@ -491,27 +533,33 @@ const NotificationBell = ({
                       bgcolor: item.read ? "transparent" : "rgba(36,74,112,0.06)",
                     }}
                   >
-                    {reviewNotification ? (
-                      <Box
-                        sx={{
-                          width: 30,
-                          height: 30,
-                          borderRadius: 1.5,
-                          display: "grid",
-                          placeItems: "center",
-                          mt: 0.25,
-                          flexShrink: 0,
-                          bgcolor: item.status === "needs_revision" ? "#fff3d8" : "#eaf7f1",
-                          color: item.status === "needs_revision" ? "#c89224" : "#18865d",
-                        }}
-                      >
-                        {item.status === "needs_revision" ? (
+                    <Box
+                      sx={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 1.5,
+                        display: "grid",
+                        placeItems: "center",
+                        mt: 0.25,
+                        flexShrink: 0,
+                        ...(reviewNotification
+                          ? {
+                              bgcolor: item.status === "needs_revision" ? "#fff3d8" : "#eaf7f1",
+                              color: item.status === "needs_revision" ? "#c89224" : "#18865d",
+                            }
+                          : visual.style),
+                      }}
+                    >
+                      {reviewNotification ? (
+                        item.status === "needs_revision" ? (
                           <EditNoteRounded sx={{ fontSize: 18 }} />
                         ) : (
                           <CheckCircleRounded sx={{ fontSize: 18 }} />
-                        )}
-                      </Box>
-                    ) : null}
+                        )
+                      ) : (
+                        <BackendIcon sx={{ fontSize: 18 }} />
+                      )}
+                    </Box>
                     <ListItemText
                       primary={
                         <Typography variant="body2" fontWeight={item.read ? 500 : 800}>

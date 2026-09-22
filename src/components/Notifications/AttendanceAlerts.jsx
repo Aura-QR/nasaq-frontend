@@ -39,6 +39,11 @@ import {
 } from "@/APIs/school/teacherAttendance";
 
 import {
+  fetchPendingStaffLateReason,
+  submitStaffLateReason,
+} from "@/APIs/school/staffAttendance";
+
+import {
   fetchPendingExcuses,
   submitAbsenceExcuse,
   uploadExcuseAttachment,
@@ -99,7 +104,12 @@ const SEEN_PREFIX = "nasaq:attendance-alert-seen:";
 const SEEN_LIMIT = 200;
 
 /** Interrupts the admin as a toast. */
-const ADMIN_ALERT_TYPES = ["teacher_late", "late_reason_submitted"];
+const ADMIN_ALERT_TYPES = [
+  "teacher_late",
+  "late_reason_submitted",
+  "staff_late_reason_submitted",
+  "staff_leave_requested",
+];
 
 const ADMIN_ROLES = [ROLES.OWNER, ROLES.MANAGER, ROLES.SUPERVISOR];
 
@@ -131,6 +141,7 @@ const AttendanceAlerts = () => {
   const signedIn = Boolean(getAuthToken());
 
   const isTeacher = signedIn && role === ROLES.TEACHER;
+  const isStaffSelf = signedIn && [ROLES.MANAGER, ROLES.SUPERVISOR].includes(role);
   const isStudent = signedIn && role === ROLES.STUDENT;
   const isAdmin = signedIn && ADMIN_ROLES.includes(role);
 
@@ -173,8 +184,21 @@ const AttendanceAlerts = () => {
     }
 
     if (dismissed.current.has(data.attendanceId)) return;
-    setLateness(data);
+    setLateness({ ...data, source: "teacher" });
   }, []);
+
+  const checkStaff = useCallback(async () => {
+    const response = await fetchPendingStaffLateReason();
+    const data = response?.data;
+
+    if (response?.status === false || !data?.pending) {
+      if (lateness?.source === "staff") setLateness(null);
+      return;
+    }
+
+    if (dismissed.current.has(data.attendanceId)) return;
+    setLateness({ ...data, source: "staff" });
+  }, [lateness?.source]);
 
   /**
    * Absences the school is still waiting on, straight from the server.
@@ -270,7 +294,8 @@ const AttendanceAlerts = () => {
 
     const run = () => {
       if (isTeacher) checkTeacher();
-      else if (isStudent || isAdmin) checkNotices();
+      if (isStaffSelf) checkStaff();
+      if (isStudent || isAdmin) checkNotices();
     };
 
     run();
@@ -281,6 +306,7 @@ const AttendanceAlerts = () => {
     const onCheckIn = () => {
       dismissed.current.clear();
       if (isTeacher) checkTeacher();
+      if (isStaffSelf) checkStaff();
     };
     window.addEventListener(LATE_REASON_EVENT, onCheckIn);
 
@@ -288,7 +314,7 @@ const AttendanceAlerts = () => {
       clearInterval(timer);
       window.removeEventListener(LATE_REASON_EVENT, onCheckIn);
     };
-  }, [signedIn, isTeacher, isStudent, isAdmin, checkTeacher, checkNotices]);
+  }, [signedIn, isTeacher, isStaffSelf, isStudent, isAdmin, checkTeacher, checkStaff, checkNotices]);
 
   useEffect(() => {
     const openAbsenceExcuse = async (event) => {
@@ -329,7 +355,11 @@ const AttendanceAlerts = () => {
     setSending(true);
     setReasonError("");
 
-    const response = await submitLateReason({
+    const submitReason = lateness?.source === "staff"
+      ? submitStaffLateReason
+      : submitLateReason;
+
+    const response = await submitReason({
       reason: text,
       date: lateness?.date,
     });

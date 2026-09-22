@@ -28,6 +28,13 @@ const compactParams = (params = {}) =>
     )
   );
 
+const normalizeRequestId = (value) => {
+  if (value && typeof value === "object") {
+    return String(value?._id || value?.id || "").trim();
+  }
+  return String(value || "").trim();
+};
+
 export const fetchStaffAttendanceSettings = async () => {
   try {
     const response = await api.get(SCHOOL_SETTINGS_ENDPOINT);
@@ -278,6 +285,171 @@ export const deleteStaffAttendance = async (id) => {
   }
 };
 
+
+
+/* =========================================================
+   Staff lateness reasons
+========================================================= */
+
+export const fetchPendingStaffLateReason = async () => {
+  try {
+    const response = await api.get(`${ENDPOINT}/me/late-reason/pending`);
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر التحقق من تأخير اليوم");
+  }
+};
+
+export const submitStaffLateReason = async ({ reason, date } = {}) => {
+  const text = String(reason || "").trim();
+  if (text.length < 3) {
+    return {
+      status: false,
+      statusCode: 400,
+      message: "يُرجى كتابة سبب التأخير (3 أحرف على الأقل)",
+      data: null,
+    };
+  }
+
+  try {
+    const response = await api.post(`${ENDPOINT}/me/late-reason`, {
+      reason: text.slice(0, 500),
+      ...(date ? { date } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر إرسال سبب التأخير");
+  }
+};
+
+export const fetchStaffLateReasons = async ({
+  status = "pending",
+  dateFrom,
+  dateTo,
+  staffId,
+  page = 1,
+  limit = 20,
+} = {}) => {
+  try {
+    const response = await api.get(`${ENDPOINT}/late-reasons`, {
+      params: compactParams({
+        status,
+        dateFrom,
+        dateTo,
+        staffId,
+        page,
+        limit: Math.min(100, Math.max(1, Number(limit) || 20)),
+      }),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تحميل أعذار تأخير الإداريين والمشرفين");
+  }
+};
+
+export const reviewStaffLateReason = async (attendanceId, verdict, note) => {
+  const id = String(attendanceId || "").trim();
+  const reviewNote = String(note || "").trim();
+
+  if (!id) {
+    return { status: false, statusCode: 400, message: "سجل التأخير غير محدد", data: null };
+  }
+
+  if (!['accepted', 'rejected'].includes(verdict)) {
+    return { status: false, statusCode: 400, message: "قرار المراجعة غير صحيح", data: null };
+  }
+
+  if (verdict === "rejected" && !reviewNote) {
+    return { status: false, statusCode: 400, message: "اذكر سبب رفض العذر", data: null };
+  }
+
+  try {
+    const response = await api.patch(`${ENDPOINT}/late-reasons/${id}/review`, {
+      verdict,
+      ...(reviewNote ? { note: reviewNote.slice(0, 500) } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر حفظ قرار مراجعة التأخير");
+  }
+};
+
+/* =========================================================
+   Staff leave requests
+========================================================= */
+
+export const createStaffLeaveRequest = async ({ date, leaveAt, reason, staffId } = {}) => {
+  if (!date || !leaveAt) {
+    return { status: false, statusCode: 400, message: "التاريخ ووقت الاستئذان مطلوبان", data: null };
+  }
+
+  try {
+    const response = await api.post(`${ENDPOINT}/leave-requests`, {
+      date,
+      leaveAt: String(leaveAt).slice(0, 5),
+      ...(String(reason || "").trim() ? { reason: String(reason).trim() } : {}),
+      ...(staffId ? { staffId: normalizeRequestId(staffId) } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر إرسال طلب الاستئذان");
+  }
+};
+
+export const fetchStaffLeaveRequests = async ({ status, date, from, to, staffId } = {}) => {
+  try {
+    const response = await api.get(`${ENDPOINT}/leave-requests`, {
+      params: compactParams({
+        status,
+        date,
+        from,
+        to,
+        staffId: staffId ? normalizeRequestId(staffId) : undefined,
+      }),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تحميل طلبات الاستئذان");
+  }
+};
+
+export const reviewStaffLeaveRequest = async (id, { status, reviewNote } = {}) => {
+  const requestId = normalizeRequestId(id);
+  const note = String(reviewNote || "").trim();
+
+  if (!requestId || !['approved', 'rejected'].includes(status)) {
+    return { status: false, statusCode: 400, message: "معرّف الطلب والحالة مطلوبان", data: null };
+  }
+
+  if (status === "rejected" && !note) {
+    return { status: false, statusCode: 400, message: "سبب الرفض مطلوب", data: null };
+  }
+
+  try {
+    const response = await api.patch(`${ENDPOINT}/leave-requests/${requestId}/review`, {
+      status,
+      ...(note ? { reviewNote: note.slice(0, 500) } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر حفظ نتيجة مراجعة الاستئذان");
+  }
+};
+
+export const deleteStaffLeaveRequest = async (id) => {
+  const requestId = normalizeRequestId(id);
+  if (!requestId) {
+    return { status: false, statusCode: 400, message: "معرّف الطلب غير موجود", data: null };
+  }
+
+  try {
+    const response = await api.delete(`${ENDPOINT}/leave-requests/${requestId}`);
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر سحب طلب الاستئذان");
+  }
+};
+
 export default {
   fetchStaffAttendanceSettings,
   updateStaffAttendanceSettings,
@@ -292,4 +464,12 @@ export default {
   createManualStaffAttendance,
   updateStaffAttendance,
   deleteStaffAttendance,
+  fetchPendingStaffLateReason,
+  submitStaffLateReason,
+  fetchStaffLateReasons,
+  reviewStaffLateReason,
+  createStaffLeaveRequest,
+  fetchStaffLeaveRequests,
+  reviewStaffLeaveRequest,
+  deleteStaffLeaveRequest,
 };

@@ -154,8 +154,29 @@ const NAVIGATION_SECTIONS = [
         module: "staffAttendance",
       },
       {
+        label: "أعذار تأخير الموظفين",
+        path: "/school/staff-late-reasons",
+        icon: <AssignmentRounded />,
+        module: "staffAttendance",
+      },
+      {
+        label: "استئذانات الموظفين",
+        path: "/school/staff-leave-requests",
+        icon: <AssignmentRounded />,
+        module: "staffAttendance",
+      },
+      {
         label: "حضوري",
         path: "/staff-attendance",
+        icon: <AssignmentRounded />,
+        allowedRoles: [
+          ROLES.MANAGER,
+          ROLES.SUPERVISOR,
+        ],
+      },
+      {
+        label: "استئذاناتي",
+        path: "/staff-leave-requests",
         icon: <AssignmentRounded />,
         allowedRoles: [
           ROLES.MANAGER,

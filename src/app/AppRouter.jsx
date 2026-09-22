@@ -41,6 +41,8 @@ import TeacherCheckIn from "@/pages/TeacherCheckIn/TeacherCheckIn";
 import TeacherAttendanceAdmin from "@/pages/School/TeacherAttendance/TeacherAttendanceAdmin";
 import StaffAttendanceAdmin from "@/pages/School/StaffAttendance/StaffAttendanceAdmin";
 import StaffAttendance from "@/pages/StaffAttendance/StaffAttendance";
+import StaffLateReasons from "@/pages/StaffLateReasons/StaffLateReasons";
+import StaffLeaveRequests from "@/pages/StaffLeaveRequests/StaffLeaveRequests";
 import CoverageBoard from "@/pages/School/Duty/CoverageBoard";
 import LeaveRequests from "@/pages/School/Duty/LeaveRequests";
 import CoverReport from "@/pages/School/Duty/CoverReport";
@@ -355,6 +357,24 @@ const AppRouter = () => {
           />
 
           <Route
+            path="/school/staff-late-reasons"
+            element={
+              <RequirePermission module="staffAttendance" operation="read">
+                <StaffLateReasons />
+              </RequirePermission>
+            }
+          />
+
+          <Route
+            path="/school/staff-leave-requests"
+            element={
+              <RequirePermission module="staffAttendance" operation="read">
+                <StaffLeaveRequests />
+              </RequirePermission>
+            }
+          />
+
+          <Route
             path="/school/duty"
             element={<CoverageBoard />}
           />
@@ -387,6 +407,10 @@ const AppRouter = () => {
           <Route
             path="/staff-attendance"
             element={<StaffAttendance />}
+          />
+          <Route
+            path="/staff-leave-requests"
+            element={<StaffLeaveRequests personal />}
           />
         </Route>
 

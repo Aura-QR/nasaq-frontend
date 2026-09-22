@@ -39,6 +39,7 @@ import {
 } from "@/APIs/school/staffAttendance";
 
 import Container from "@/components/Container/Container";
+import { LATE_REASON_EVENT } from "@/components/Notifications/AttendanceAlerts";
 import { requestBrowserLocation } from "@/utils/geolocation";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
@@ -90,7 +91,13 @@ const extractRecord = (response) => {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return null;
   }
-  return payload;
+  const record = payload?.record ?? payload?.attendance ?? payload;
+  return record && typeof record === "object" && !Array.isArray(record) ? record : null;
+};
+
+const lateReasonRequiredFrom = (response) => {
+  const payload = response?.data ?? response;
+  return payload?.lateReasonRequired === true || payload?.record?.lateReasonRequired === true;
 };
 
 const normalizeDate = (record) => {
@@ -177,6 +184,12 @@ const verificationLabel = (value) => {
   if (network) return "شبكة فقط";
   return "غير متحقق";
 };
+
+const lateReasonStatusLabel = (value) => ({
+  pending: "بانتظار القرار",
+  accepted: "مقبول",
+  rejected: "مرفوض",
+}[String(value || "").toLowerCase()] || "—");
 
 const StatusBox = ({ icon, title, passed, waiting, details }) => (
   <Paper
@@ -341,6 +354,13 @@ const StaffAttendance = () => {
       }
 
       toast.success("تم تسجيل حضورك بنجاح");
+
+      if (lateReasonRequiredFrom(response)) {
+        window.dispatchEvent(
+          new CustomEvent(LATE_REASON_EVENT, { detail: { source: "staff" } })
+        );
+      }
+
       await loadHistory({ silent: true });
     } catch (locationError) {
       setLocationState("error");
@@ -733,7 +753,30 @@ const StaffAttendance = () => {
                   </Alert>
                 )}
 
-                {hasCheckedOut && hasMeasuredValue(currentRecord?.earlyLeaveMinutes) && (
+                {currentRecord?.lateReason ? (
+                  <Alert
+                    severity={
+                      currentRecord?.lateReasonStatus === "rejected"
+                        ? "error"
+                        : currentRecord?.lateReasonStatus === "accepted"
+                          ? "success"
+                          : "warning"
+                    }
+                    sx={{ mt: 1.1, borderRadius: "12px" }}
+                  >
+                    سبب التأخير: {currentRecord.lateReason} · {lateReasonStatusLabel(currentRecord?.lateReasonStatus)}
+                    {currentRecord?.lateReasonReviewNote ? ` — ${currentRecord.lateReasonReviewNote}` : ""}
+                  </Alert>
+                ) : null}
+
+                {hasCheckedOut && currentRecord?.earlyLeaveApproved ? (
+                  <Alert severity="success" sx={{ mt: 1.1, borderRadius: "12px" }}>
+                    الانصراف المبكر مغطى باستئذان معتمد
+                    {currentRecord?.approvedLeaveAt
+                      ? ` · وقت الاستئذان ${displayTime(currentRecord.approvedLeaveAt)}`
+                      : ""}
+                  </Alert>
+                ) : hasCheckedOut && hasMeasuredValue(currentRecord?.earlyLeaveMinutes) ? (
                   <Alert
                     severity={Number(currentRecord.earlyLeaveMinutes) > 0 ? "warning" : "success"}
                     sx={{ mt: 1.1, borderRadius: "12px" }}
@@ -742,7 +785,7 @@ const StaffAttendance = () => {
                       ? `الخروج المبكر: ${formatMinutes(currentRecord.earlyLeaveMinutes)}`
                       : "تم تسجيل الانصراف في الموعد المحدد أو بعده."}
                   </Alert>
-                )}
+                ) : null}
 
                 {hasCheckedOut && hasMeasuredValue(currentRecord?.workMinutes) && (
                   <Stack
@@ -808,6 +851,8 @@ const StaffAttendance = () => {
                     <TableCell align="right">الحضور</TableCell>
                     <TableCell align="right">الانصراف</TableCell>
                     <TableCell align="right">التأخير</TableCell>
+                    <TableCell align="right">سبب التأخير</TableCell>
+                    <TableCell align="right">قرار العذر</TableCell>
                     <TableCell align="right">خروج مبكر</TableCell>
                     <TableCell align="right">مدة العمل</TableCell>
                     <TableCell align="right">الطريقة</TableCell>
@@ -820,7 +865,7 @@ const StaffAttendance = () => {
                 <TableBody>
                   {!history.length ? (
                     <TableRow>
-                      <TableCell colSpan={11} align="center" sx={{ py: 6, color: "#708198" }}>
+                      <TableCell colSpan={13} align="center" sx={{ py: 6, color: "#708198" }}>
                         لا توجد سجلات حضور حتى الآن.
                       </TableCell>
                     </TableRow>
@@ -845,22 +890,22 @@ const StaffAttendance = () => {
                           <TableCell align="right">
                             {hasMeasuredValue(record?.lateMinutes)
                               ? formatMinutes(record.lateMinutes)
+                              : "غير مقاس"}
+                          </TableCell>
+                          <TableCell align="right" sx={{ minWidth: 180 }}>
+                            {record?.lateReason || (Number(record?.lateMinutes) > 0 ? "لم يُكتب بعد" : "—")}
+                          </TableCell>
+                          <TableCell align="right">
+                            {record?.lateReason
+                              ? lateReasonStatusLabel(record?.lateReasonStatus)
                               : "—"}
                           </TableCell>
                           <TableCell align="right">
-                            {hasMeasuredValue(record?.earlyLeaveMinutes) ? (
-                              <Stack
-                                direction="row"
-                                alignItems="center"
-                                spacing={0.75}
-                                sx={{ whiteSpace: "nowrap" }}
-                              >
-                                <span>{formatMinutes(record.earlyLeaveMinutes)}</span>
-
-                              </Stack>
-                            ) : (
-                              "—"
-                            )}
+                            {record?.earlyLeaveApproved
+                              ? "استئذان معتمد"
+                              : hasMeasuredValue(record?.earlyLeaveMinutes)
+                                ? formatMinutes(record.earlyLeaveMinutes)
+                                : "غير مقاس"}
                           </TableCell>
                           <TableCell align="right">
                             {hasMeasuredValue(record?.workMinutes)

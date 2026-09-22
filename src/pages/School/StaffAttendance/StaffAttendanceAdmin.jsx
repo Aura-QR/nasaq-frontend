@@ -202,6 +202,7 @@ const extractAttendanceSummary = (response) => {
     return {
       rows: [],
       totalStaff: 0,
+      workingDays: 0,
       dateFrom: "",
       dateTo: "",
     };
@@ -243,6 +244,7 @@ const extractAttendanceSummary = (response) => {
         payload?.meta?.totalStaff ??
         rows.length
     ) || 0,
+    workingDays: Number(payload?.workingDays) || 0,
     dateFrom: payload?.dateFrom || "",
     dateTo: payload?.dateTo || "",
   };
@@ -445,6 +447,7 @@ const StaffAttendanceAdmin = () => {
   const [summaryLoaded, setSummaryLoaded] = useState(false);
   const [summaryRows, setSummaryRows] = useState([]);
   const [summaryTotalStaff, setSummaryTotalStaff] = useState(0);
+  const [summaryWorkingDays, setSummaryWorkingDays] = useState(0);
   const [summaryRange, setSummaryRange] = useState({
     dateFrom: monthStartKey("Asia/Riyadh"),
     dateTo: todayKey("Asia/Riyadh"),
@@ -581,6 +584,7 @@ const StaffAttendanceAdmin = () => {
     if (isFailed(response)) {
       setSummaryRows([]);
       setSummaryTotalStaff(0);
+      setSummaryWorkingDays(0);
       toast.error(response?.message || "تعذر تحميل تقرير حضور الإداريين والمشرفين");
       return;
     }
@@ -588,6 +592,7 @@ const StaffAttendanceAdmin = () => {
     const summary = extractAttendanceSummary(response);
     setSummaryRows(summary.rows);
     setSummaryTotalStaff(summary.totalStaff);
+    setSummaryWorkingDays(summary.workingDays);
   }, [summaryRange]);
 
   useEffect(() => {
@@ -633,6 +638,8 @@ const StaffAttendanceAdmin = () => {
         (totals, row) => ({
           daysPresent:
             totals.daysPresent + (Number(row?.daysPresent) || 0),
+          daysAbsent:
+            totals.daysAbsent + (Number(row?.daysAbsent) || 0),
           daysLate:
             totals.daysLate + (Number(row?.daysLate) || 0),
           daysLeftEarly:
@@ -643,6 +650,7 @@ const StaffAttendanceAdmin = () => {
         }),
         {
           daysPresent: 0,
+          daysAbsent: 0,
           daysLate: 0,
           daysLeftEarly: 0,
           daysMissingCheckOut: 0,
@@ -1246,7 +1254,7 @@ const StaffAttendanceAdmin = () => {
               تقرير حضور الإداريين والمشرفين
             </Typography>
             <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10 }}>
-              ملخص الحضور والتأخير والخروج المبكر وساعات العمل خلال فترة محددة.
+              ملخص الحضور والغياب والتأخير والخروج المبكر وساعات العمل خلال فترة محددة.
             </Typography>
           </Box>
 
@@ -1383,16 +1391,17 @@ const StaffAttendanceAdmin = () => {
           display: "grid",
           gridTemplateColumns: {
             xs: "1fr 1fr",
-            lg: "repeat(5,minmax(0,1fr))",
+            lg: "repeat(6,minmax(0,1fr))",
           },
           gap: 1,
         }}
       >
         {[
           ["الإداريين والمشرفين في التقرير", summaryTotalStaff],
+          ["أيام العمل بالفترة", summaryWorkingDays],
+          ["إجمالي أيام الغياب", summaryTotals.daysAbsent],
           ["أيام الحضور", summaryTotals.daysPresent],
           ["أيام التأخير", summaryTotals.daysLate],
-          ["أيام الخروج المبكر", summaryTotals.daysLeftEarly],
           ["بدون انصراف", summaryTotals.daysMissingCheckOut],
         ].map(([label, value]) => (
           <Paper
@@ -1433,11 +1442,12 @@ const StaffAttendanceAdmin = () => {
           </Box>
         ) : (
           <TableContainer>
-            <Table size="small" sx={{ minWidth: 1380 }}>
+            <Table size="small" sx={{ minWidth: 1480 }}>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "rgba(36,74,112,.035)" }}>
                   <TableCell align="right">الإداري / المشرف</TableCell>
                   <TableCell align="center">الحالة</TableCell>
+                  <TableCell align="center">الغياب / أيام العمل</TableCell>
                   <TableCell align="center">أيام الحضور</TableCell>
                   <TableCell align="center">أيام التأخير</TableCell>
                   <TableCell align="center">إجمالي التأخير</TableCell>
@@ -1454,13 +1464,13 @@ const StaffAttendanceAdmin = () => {
               <TableBody>
                 {!summaryLoaded ? (
                   <TableRow>
-                    <TableCell colSpan={12} align="center" sx={{ py: 7, color: "#708198" }}>
+                    <TableCell colSpan={13} align="center" sx={{ py: 7, color: "#708198" }}>
                       اختر الفترة ثم اضغط «عرض التقرير».
                     </TableCell>
                   </TableRow>
                 ) : !summaryRows.length ? (
                   <TableRow>
-                    <TableCell colSpan={12} align="center" sx={{ py: 7, color: "#708198" }}>
+                    <TableCell colSpan={13} align="center" sx={{ py: 7, color: "#708198" }}>
                       لا توجد بيانات حضور في الفترة المحددة.
                     </TableCell>
                   </TableRow>
@@ -1486,6 +1496,12 @@ const StaffAttendanceAdmin = () => {
                             fontWeight: 800,
                           }}
                         />
+                      </TableCell>
+
+                      <TableCell align="center">
+                        <Typography sx={{ fontSize: 10.5, fontWeight: 900, whiteSpace: "nowrap" }}>
+                          {Number(row?.daysAbsent) || 0} من {Number(row?.workingDays ?? summaryWorkingDays) || 0}
+                        </Typography>
                       </TableCell>
 
                       <TableCell align="center">
@@ -1528,10 +1544,14 @@ const StaffAttendanceAdmin = () => {
                       </TableCell>
 
                       <TableCell align="center">
-                        {Number(row?.daysLatenessNotTracked) || 0}
+                        {row?.daysLatenessNotTracked === null || row?.daysLatenessNotTracked === undefined
+                          ? "غير مقاس"
+                          : Number(row.daysLatenessNotTracked) || 0}
                       </TableCell>
                       <TableCell align="center">
-                        {Number(row?.daysEarlyLeaveNotTracked) || 0}
+                        {row?.daysEarlyLeaveNotTracked === null || row?.daysEarlyLeaveNotTracked === undefined
+                          ? "غير مقاس"
+                          : Number(row.daysEarlyLeaveNotTracked) || 0}
                       </TableCell>
                       <TableCell align="center">
                         {Number(row?.daysOnDayOff) || 0}

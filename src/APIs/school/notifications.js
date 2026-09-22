@@ -36,6 +36,11 @@ export const NOTIFICATION_ICONS = {
   teacher_late: "schedule",
   late_reason_required: "schedule",
   late_reason_submitted: "note",
+  staff_late_reason_submitted: "note",
+  staff_late_reason_reviewed: "schedule",
+  staff_leave_requested: "eventBusy",
+  staff_leave_approved: "check",
+  staff_leave_rejected: "close",
   student_absent: "eventBusy",
 };
 
@@ -49,6 +54,11 @@ export const NOTIFICATION_COLORS = {
   teacher_late: "warning",
   late_reason_required: "warning",
   late_reason_submitted: "info",
+  staff_late_reason_submitted: "info",
+  staff_late_reason_reviewed: "info",
+  staff_leave_requested: "warning",
+  staff_leave_approved: "success",
+  staff_leave_rejected: "error",
   student_absent: "error",
 };
 
