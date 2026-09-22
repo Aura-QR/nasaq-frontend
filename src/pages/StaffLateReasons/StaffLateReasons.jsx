@@ -12,7 +12,6 @@ import {
   DialogTitle,
   Divider,
   MenuItem,
-  Pagination,
   Paper,
   Stack,
   TextField,
@@ -36,7 +35,6 @@ import {
   reviewStaffLateReason,
 } from "@/APIs/school/staffAttendance";
 
-const PAGE_LIMIT = 20;
 
 const STATUSES = [
   { value: "pending", label: "بانتظار القرار", color: "warning" },
@@ -87,7 +85,6 @@ const StaffLateReasons = () => {
   const [dateTo, setDateTo] = useState("");
   const [staffId, setStaffId] = useState("");
   const [staff, setStaff] = useState([]);
-  const [page, setPage] = useState(1);
 
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -125,8 +122,6 @@ const StaffLateReasons = () => {
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       staffId: staffId || undefined,
-      page,
-      limit: PAGE_LIMIT,
     });
 
     if (result?.status === false) {
@@ -150,17 +145,12 @@ const StaffLateReasons = () => {
     }
 
     setLoading(false);
-  }, [status, dateFrom, dateTo, staffId, page]);
+  }, [status, dateFrom, dateTo, staffId]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [status, dateFrom, dateTo, staffId]);
-
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_LIMIT));
 
   const staffOptions = useMemo(
     () =>
@@ -416,16 +406,6 @@ const StaffLateReasons = () => {
           </Stack>
         )}
 
-        {totalPages > 1 ? (
-          <Stack alignItems="center">
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={(_, value) => setPage(value)}
-              color="primary"
-            />
-          </Stack>
-        ) : null}
       </Stack>
 
       <Dialog
