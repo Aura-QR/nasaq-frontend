@@ -56,6 +56,18 @@ const normalizeId = (value) => {
   return String(value || "").trim();
 };
 
+const staffOptionId = (item) =>
+  normalizeId(
+    item?.staffId ||
+      item?.staff ||
+      item?.adminId ||
+      item?.admin ||
+      item?.userId ||
+      item?._id ||
+      item?.id ||
+      ""
+  );
+
 const todayKey = () => {
   const date = new Date();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -69,7 +81,18 @@ const extractRows = (response) => {
   for (let index = 0; index < 4; index += 1) {
     if (Array.isArray(payload)) return payload;
     if (!payload || typeof payload !== "object") return [];
-    for (const key of ["items", "docs", "results", "requests", "staffMembers", "data"]) {
+    for (const key of [
+      "items",
+      "docs",
+      "results",
+      "requests",
+      "staffMembers",
+      "staff",
+      "admins",
+      "members",
+      "users",
+      "data",
+    ]) {
       if (Array.isArray(payload?.[key])) return payload[key];
     }
     if (payload?.data && typeof payload.data === "object") {
@@ -82,7 +105,7 @@ const extractRows = (response) => {
 };
 
 const displayStaffName = (row) => {
-  const staff = row?.staffId || row?.staff || row?.admin || {};
+  const staff = row?.staffId || row?.staff || row?.adminId || row?.admin || row?.userId || {};
   if (typeof staff === "string") return row?.staffName || "إداري / مشرف";
   return (
     row?.staffName ||
@@ -99,7 +122,15 @@ const displayStaffName = (row) => {
 };
 
 const displayStaffRole = (row) => {
-  const role = String(row?.role || row?.staffId?.role || row?.staff?.role || "").toUpperCase();
+  const role = String(
+    row?.role ||
+      row?.staffId?.role ||
+      row?.staff?.role ||
+      row?.adminId?.role ||
+      row?.admin?.role ||
+      row?.userId?.role ||
+      ""
+  ).toUpperCase();
   if (role === "SUPERVISOR") return "مشرف";
   if (role === "MANAGER") return "مدير / إداري";
   return "إداري / مشرف";
@@ -144,6 +175,11 @@ const StaffLeaveRequests = ({ personal = false }) => {
     let active = true;
     fetchStaffDirectory().then((response) => {
       if (!active) return;
+      if (response?.status === false) {
+        setStaff([]);
+        toast.error(response?.message || "تعذر تحميل قائمة الإداريين والمشرفين");
+        return;
+      }
       setStaff(extractRows(response));
     });
     return () => {
@@ -188,7 +224,7 @@ const StaffLeaveRequests = ({ personal = false }) => {
   const staffOptions = useMemo(
     () =>
       staff
-        .map((item) => ({ id: normalizeId(item), name: displayStaffName(item) }))
+        .map((item) => ({ id: staffOptionId(item), name: displayStaffName(item) }))
         .filter((item) => item.id)
         .sort((a, b) => a.name.localeCompare(b.name, "ar")),
     [staff]

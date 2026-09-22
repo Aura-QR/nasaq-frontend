@@ -57,7 +57,17 @@ const extractStaff = (response) => {
   for (let index = 0; index < 4; index += 1) {
     if (Array.isArray(payload)) return payload;
     if (!payload || typeof payload !== "object") return [];
-    for (const key of ["items", "docs", "results", "staffMembers", "data"]) {
+    for (const key of [
+      "items",
+      "docs",
+      "results",
+      "staffMembers",
+      "staff",
+      "admins",
+      "members",
+      "users",
+      "data",
+    ]) {
       if (Array.isArray(payload?.[key])) return payload[key];
     }
     if (payload?.data && typeof payload.data === "object") {
@@ -69,8 +79,40 @@ const extractStaff = (response) => {
   return [];
 };
 
-const staffName = (item) =>
-  item?.name || item?.fullName || item?.username || item?.email || "إداري / مشرف";
+const staffOptionId = (item) =>
+  normalizeId(
+    item?.staffId ||
+      item?.staff ||
+      item?.adminId ||
+      item?.admin ||
+      item?.userId ||
+      item?._id ||
+      item?.id ||
+      ""
+  );
+
+const staffName = (item) => {
+  const nested =
+    (item?.staffId && typeof item.staffId === "object" && item.staffId) ||
+    (item?.staff && typeof item.staff === "object" && item.staff) ||
+    (item?.adminId && typeof item.adminId === "object" && item.adminId) ||
+    (item?.admin && typeof item.admin === "object" && item.admin) ||
+    (item?.userId && typeof item.userId === "object" && item.userId) ||
+    {};
+
+  return (
+    item?.staffName ||
+    item?.name ||
+    item?.fullName ||
+    item?.username ||
+    item?.email ||
+    nested?.name ||
+    nested?.fullName ||
+    nested?.username ||
+    nested?.email ||
+    "إداري / مشرف"
+  );
+};
 
 const StaffLateReasons = () => {
   const getAuthUser = useAuthUser();
@@ -99,6 +141,11 @@ const StaffLateReasons = () => {
     let active = true;
     fetchStaffDirectory().then((response) => {
       if (!active) return;
+      if (response?.status === false) {
+        setStaff([]);
+        toast.error(response?.message || "تعذر تحميل قائمة الإداريين والمشرفين");
+        return;
+      }
       setStaff(extractStaff(response));
     });
     return () => {
@@ -155,7 +202,7 @@ const StaffLateReasons = () => {
   const staffOptions = useMemo(
     () =>
       [...staff]
-        .map((item) => ({ id: normalizeId(item), name: staffName(item) }))
+        .map((item) => ({ id: staffOptionId(item), name: staffName(item) }))
         .filter((item) => item.id)
         .sort((a, b) => a.name.localeCompare(b.name, "ar")),
     [staff]
