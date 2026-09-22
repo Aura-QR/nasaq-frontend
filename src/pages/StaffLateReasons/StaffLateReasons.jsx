@@ -135,8 +135,18 @@ const StaffLateReasons = () => {
       setTotal(0);
     } else {
       const payload = result?.data ?? result;
-      setRows(Array.isArray(payload?.items) ? payload.items : []);
-      setTotal(Number(payload?.total) || 0);
+      const items = Array.isArray(payload?.items)
+        ? payload.items
+        : Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : [];
+
+      setRows(items);
+
+      const responseTotal = Number(payload?.total);
+      setTotal(Number.isFinite(responseTotal) && responseTotal >= 0 ? responseTotal : items.length);
     }
 
     setLoading(false);

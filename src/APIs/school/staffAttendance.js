@@ -330,19 +330,49 @@ export const fetchStaffLateReasons = async ({
   page = 1,
   limit = 20,
 } = {}) => {
+  const baseParams = compactParams({
+    status,
+    dateFrom,
+    dateTo,
+    staffId,
+  });
+
+  const paginatedParams = compactParams({
+    ...baseParams,
+    page,
+    limit: Math.min(100, Math.max(1, Number(limit) || 20)),
+  });
+
   try {
     const response = await api.get(`${ENDPOINT}/late-reasons`, {
-      params: compactParams({
-        status,
-        dateFrom,
-        dateTo,
-        staffId,
-        page,
-        limit: Math.min(100, Math.max(1, Number(limit) || 20)),
-      }),
+      params: paginatedParams,
     });
     return response.data;
   } catch (error) {
+    const statusCode = error?.response?.status || error?.response?.data?.statusCode;
+    const rawMessage = error?.response?.data?.message || error?.response?.data?.error || "";
+    const message = Array.isArray(rawMessage) ? rawMessage.join(" ") : String(rawMessage || "");
+    const paginationRejected =
+      Number(statusCode) === 400 &&
+      /property\s+(page|limit)\s+should not exist/i.test(message);
+
+    // Some deployed backend versions expose the queue before the pagination DTO
+    // was enabled. Keep the documented paginated request as the primary path,
+    // then transparently retry without page/limit for those deployments.
+    if (paginationRejected) {
+      try {
+        const fallbackResponse = await api.get(`${ENDPOINT}/late-reasons`, {
+          params: baseParams,
+        });
+        return fallbackResponse.data;
+      } catch (fallbackError) {
+        return getErrorResult(
+          fallbackError,
+          "تعذر تحميل أعذار تأخير الإداريين والمشرفين"
+        );
+      }
+    }
+
     return getErrorResult(error, "تعذر تحميل أعذار تأخير الإداريين والمشرفين");
   }
 };
