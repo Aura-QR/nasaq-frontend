@@ -29,8 +29,58 @@ import TeacherForm from "@/components/Teachers/TeacherForm";
 import TeacherFormActions from "@/components/Teachers/TeacherFormActions";
 
 import { editTeacher } from "@/APIs/users/teachers";
+import { fetchTeacherAssignments } from "@/APIs/school/lectures";
 import { getChangedValues } from "@/utils/helpers/getChangedValues";
 import { useTeacher } from "@/utils/hooks/apis/useTeacher";
+import { getTeacherSubjectOfferingIds } from "@/utils/school/teacherData";
+
+const normalizeIds = (values = []) =>
+  Array.from(
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) =>
+          String(
+            value?._id ||
+              value?.id ||
+              value ||
+              ""
+          ).trim()
+        )
+        .filter(Boolean)
+    )
+  );
+
+const sameIds = (first = [], second = []) => {
+  const left = normalizeIds(first).sort();
+  const right = normalizeIds(second).sort();
+
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+};
+
+const extractAssignments = (response) => {
+  const data = response?.data;
+
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.assignments)) return data.assignments;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.docs)) return data.docs;
+  if (Array.isArray(data?.records)) return data.records;
+
+  return [];
+};
+
+const getAssignmentOfferingId = (assignment) => {
+  const value =
+    assignment?.subjectOfferingId ||
+    assignment?.subjectOffering;
+
+  return String(
+    value?._id || value?.id || value || ""
+  ).trim();
+};
 
 const Edit = () => {
   const {
@@ -47,6 +97,16 @@ const Edit = () => {
     defaultValues,
     setDefaultValues,
   ] = useState(null);
+
+  const [
+    selectedSubjects,
+    setSelectedSubjects,
+  ] = useState([]);
+
+  const [
+    initialSubjectOfferingIds,
+    setInitialSubjectOfferingIds,
+  ] = useState([]);
 
   const navigate = useNavigate();
   const { id } = useParams();
@@ -71,11 +131,82 @@ const Edit = () => {
         : 0,
     };
 
+    const assignedOfferingIds =
+      normalizeIds(
+        getTeacherSubjectOfferingIds(
+          teacher
+        )
+      );
+
+    setSelectedSubjects(
+      assignedOfferingIds
+    );
+    setInitialSubjectOfferingIds(
+      assignedOfferingIds
+    );
+
     reset(formattedTeacher);
     setDefaultValues(
       formattedTeacher
     );
   }, [teacher, reset]);
+
+  useEffect(() => {
+    if (
+      !teacher ||
+      !id ||
+      initialSubjectOfferingIds.length > 0
+    ) {
+      return undefined;
+    }
+
+    let active = true;
+
+    const loadAssignments = async () => {
+      const response =
+        await fetchTeacherAssignments(
+          { teacherId: id },
+          { force: true }
+        );
+
+      if (
+        !active ||
+        response?.status === false
+      ) {
+        return;
+      }
+
+      const offeringIds =
+        normalizeIds(
+          extractAssignments(response)
+            .map(
+              getAssignmentOfferingId
+            )
+            .filter(Boolean)
+        );
+
+      if (offeringIds.length === 0) {
+        return;
+      }
+
+      setSelectedSubjects(
+        offeringIds
+      );
+      setInitialSubjectOfferingIds(
+        offeringIds
+      );
+    };
+
+    loadAssignments();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    teacher,
+    id,
+    initialSubjectOfferingIds.length,
+  ]);
 
   const onSubmit = async (
     formData
@@ -92,8 +223,26 @@ const Edit = () => {
           [
             "subjects",
             "subject",
+            "subjectOfferings",
+            "subjectOfferingIds",
+            "subjectIds",
           ]
         );
+
+      const normalizedSelectedSubjects =
+        normalizeIds(
+          selectedSubjects
+        );
+
+      if (
+        !sameIds(
+          normalizedSelectedSubjects,
+          initialSubjectOfferingIds
+        )
+      ) {
+        changedData.subjectOfferingIds =
+          normalizedSelectedSubjects;
+      }
 
       if (
         Object.keys(changedData)
@@ -311,6 +460,13 @@ const Edit = () => {
                 defaultValues={
                   defaultValues
                 }
+                selectedSubjects={
+                  selectedSubjects
+                }
+                setSelectedSubjects={
+                  setSelectedSubjects
+                }
+                showSubjects
               />
 
               <TeacherFormActions
