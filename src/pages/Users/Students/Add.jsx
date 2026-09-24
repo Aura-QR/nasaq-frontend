@@ -69,18 +69,36 @@ const serviceTypeLabel = (value) =>
     both: "ذهاب وعودة",
   }[value] || "خدمة باص");
 
+const getWarning = (response, key) =>
+  response?.data?.[key] ||
+  response?.data?.student?.[key] ||
+  response?.data?.data?.[key] ||
+  response?.student?.[key] ||
+  response?.[key] ||
+  "";
+
 const getBusEnrollmentWarning = (
   response
 ) =>
-  response?.data?.busEnrollmentWarning ||
-  response?.data?.student
-    ?.busEnrollmentWarning ||
-  response?.data?.data
-    ?.busEnrollmentWarning ||
-  response?.student
-    ?.busEnrollmentWarning ||
-  response?.busEnrollmentWarning ||
-  "";
+  getWarning(
+    response,
+    "busEnrollmentWarning"
+  );
+
+/*
+ * The student is saved even when her financial record could not be built —
+ * a missing fee configuration is a finance setup gap, not a failed
+ * enrolment. The server used to delete the student instead, so this warning
+ * had nothing to report; now it is the only thing telling the office that
+ * the record still needs creating.
+ */
+const getFinancialRecordWarning = (
+  response
+) =>
+  getWarning(
+    response,
+    "financialRecordWarning"
+  );
 
 const Add = () => {
   const {
@@ -312,6 +330,11 @@ const Add = () => {
           response
         );
 
+      const financialWarning =
+        getFinancialRecordWarning(
+          response
+        );
+
       toast.success(
         selectedClassId
           ? "تمت إضافة الطالب وربطه بالفصل وإنشاء بيانات الدخول"
@@ -321,6 +344,15 @@ const Add = () => {
       if (busWarning) {
         toast.warning(
           busWarning
+        );
+      }
+
+      // Kept open until dismissed: this one needs somebody to act on it, and
+      // a notice that disappears by itself is found later at invoicing time.
+      if (financialWarning) {
+        toast.warning(
+          `لم يتم إنشاء السجل المالي للطالب. ${financialWarning}`,
+          { autoClose: false }
         );
       }
     } catch (error) {
