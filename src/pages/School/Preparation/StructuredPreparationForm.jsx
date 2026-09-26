@@ -35,6 +35,8 @@ import {
   Paper,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -94,6 +96,91 @@ import {
 } from "@/APIs/school/projects";
 
 const DRAFT_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
+
+/*
+ * أي أسبوع يُحفظ فيه التحضير.
+ *
+ * لم تكن هذه الشاشة تعرف شيئًا عن الأسابيع: كانت ترسل `lecture` وحده، فيُسند
+ * الخادم التحضير إلى الأسبوع الجاري دائمًا. والمعلمات يُحضّرن يوم الخميس أو
+ * الجمعة للأسبوع التالي، فكان عملهن يُقيَّد على الأسبوع الحالي، ويبقى الأسبوع
+ * الذي حضّرن له فارغًا في الجدول.
+ *
+ * الأسبوع الدراسي يبدأ السبت، وهو التاريخ الذي يُسمّى به الأسبوع في الخادم.
+ */
+const SATURDAY = 6;
+
+const toDateOnly = (date) => {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+/** سبت الأسبوع الذي يقع فيه هذا التاريخ. */
+const startOfWeek = (value) => {
+  const parsed =
+    value instanceof Date ? value : new Date(`${value}T00:00:00.000Z`);
+
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  const anchor = new Date(
+    Date.UTC(
+      parsed.getUTCFullYear(),
+      parsed.getUTCMonth(),
+      parsed.getUTCDate(),
+    ),
+  );
+
+  anchor.setUTCDate(
+    anchor.getUTCDate() - ((anchor.getUTCDay() - SATURDAY + 7) % 7),
+  );
+
+  return toDateOnly(anchor);
+};
+
+/*
+ * اليوم بتوقيت المدرسة لا بتوقيت المتصفح.
+ *
+ * الفارق يهمّ هنا تحديدًا: بين منتصف الليل والثالثة فجرًا في الرياض يكون
+ * المتصفح خارج المملكة على يوم آخر، وإن صادف ذلك ليلة السبت اختلف الأسبوع
+ * كله. الخادم يحسبها بتوقيت الرياض، وهذه الشاشة تفعل المثل.
+ */
+const SCHOOL_TIME_ZONE = "Asia/Riyadh";
+
+const todayAtSchool = () =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: SCHOOL_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+
+const addWeeks = (weekOf, count) => {
+  const anchor = new Date(`${weekOf}T00:00:00.000Z`);
+  anchor.setUTCDate(anchor.getUTCDate() + count * 7);
+  return toDateOnly(anchor);
+};
+
+const ARABIC_MONTHS = [
+  "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+  "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+];
+
+/** «٢٦ سبتمبر – ٢ أكتوبر» — الأسبوع كما تقرؤه المعلمة، لا تاريخ مفرد. */
+const formatWeekRange = (weekOf) => {
+  if (!weekOf) return "";
+
+  const start = new Date(`${weekOf}T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime())) return "";
+
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 6);
+
+  const startLabel = `${start.getUTCDate()} ${ARABIC_MONTHS[start.getUTCMonth()]}`;
+  const endLabel = `${end.getUTCDate()} ${ARABIC_MONTHS[end.getUTCMonth()]}`;
+
+  return `${startLabel} – ${endLabel}`;
+};
 
 const getDraftCacheKey = (lectureId) => {
   const id = normalizeId(lectureId);
@@ -1228,6 +1315,15 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
     mode === "create" ? "" : normalizeId(params?.id);
   const preselectedLectureId = String(searchParams.get("lectureId") || "").trim();
   const requestedReturnTo = String(searchParams.get("returnTo") || "").trim();
+
+  /*
+   * الأسبوع الافتراضي هو الجاري، وهو ما كان الخادم يفترضه ضمنًا من قبل، فلا
+   * يتغيّر شيء على من يُحضّر لأسبوعه. الجديد أن بالإمكان اختيار غيره.
+   */
+  const currentWeek = useMemo(() => startOfWeek(todayAtSchool()), []);
+  const requestedWeek = startOfWeek(
+    String(searchParams.get("weekOf") || "").trim() || currentWeek,
+  );
   const safeReturnTo =
     requestedReturnTo.startsWith("/teacher/") || requestedReturnTo.startsWith("/school/")
       ? requestedReturnTo
@@ -1235,6 +1331,7 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
         ? "/teacher/preparations"
         : "/school/preparation";
 
+  const [weekOf, setWeekOf] = useState(requestedWeek);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -1966,6 +2063,13 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
         const response =
           await addPreparation({
             lecture: lectureId,
+            /*
+             * كان هذا السطر ناقصًا، فيُسند الخادم كل تحضير إلى الأسبوع
+             * الجاري. المعلمة التي تُحضّر يوم الجمعة للأسبوع التالي كان
+             * عملها يُقيَّد على الأسبوع الذي هي فيه، ويظل الأسبوع الذي
+             * حضّرت له فارغًا.
+             */
+            weekOf,
           });
 
         if (!response?.status) {
@@ -3152,6 +3256,91 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
             </Stack>
           </Stack>
         </Paper>
+
+        {/*
+          * اختيار الأسبوع متاح قبل الحفظ فقط.
+          *
+          * بعد إنشاء التحضير يصبح الأسبوع جزءًا من هويته: الجدول يبحث عنه به،
+          * وتغييره بعد ذلك ينقل العمل من أسبوع إلى آخر بلا أثر ظاهر. أما قبل
+          * الحفظ فلا شيء قد قُيِّد بعد.
+          */}
+        {mode === "create" && !preparationId && (
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 1.1,
+              p: 1.2,
+              border: "1px solid rgba(36,74,112,.09)",
+              borderRadius: "14px",
+            }}
+          >
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              gap={1.2}
+            >
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography sx={{ fontWeight: 900, fontSize: 13 }}>
+                  أسبوع التحضير
+                </Typography>
+                <Typography
+                  sx={{ color: "text.secondary", fontSize: 11, mt: 0.2 }}
+                >
+                  {formatWeekRange(weekOf)}
+                  {weekOf === currentWeek
+                    ? " — الأسبوع الحالي"
+                    : weekOf === addWeeks(currentWeek, 1)
+                      ? " — الأسبوع القادم"
+                      : ""}
+                </Typography>
+              </Box>
+
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={
+                  weekOf === currentWeek
+                    ? "current"
+                    : weekOf === addWeeks(currentWeek, 1)
+                      ? "next"
+                      : "other"
+                }
+                onChange={(event, value) => {
+                  if (!value || value === "other") return;
+                  setWeekOf(
+                    value === "next"
+                      ? addWeeks(currentWeek, 1)
+                      : currentWeek,
+                  );
+                }}
+              >
+                <ToggleButton value="current" sx={{ fontWeight: 800 }}>
+                  الأسبوع الحالي
+                </ToggleButton>
+                <ToggleButton value="next" sx={{ fontWeight: 800 }}>
+                  الأسبوع القادم
+                </ToggleButton>
+              </ToggleButtonGroup>
+
+              {/*
+                * حقل التاريخ يقبل أي يوم، ويُردّ إلى سبت أسبوعه — فالمعلمة
+                * تفكّر في «الأحد القادم» لا في تاريخ بداية الأسبوع.
+                */}
+              <TextField
+                type="date"
+                size="small"
+                label="أو اختر يومًا"
+                value={weekOf}
+                onChange={(event) => {
+                  const picked = startOfWeek(event.target.value);
+                  if (picked) setWeekOf(picked);
+                }}
+                InputLabelProps={{ shrink: true }}
+                sx={{ minWidth: 165 }}
+              />
+            </Stack>
+          </Paper>
+        )}
 
         {!teacherPortal && reviewNote && preparationStatus === "needs_revision" && (
           <Alert severity="warning" icon={<WarningAmberRounded />} sx={{ mb: 1.1, borderRadius: "14px", fontWeight: 800 }}>
