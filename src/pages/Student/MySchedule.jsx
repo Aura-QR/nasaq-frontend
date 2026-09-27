@@ -173,7 +173,9 @@ const getSubjectName = (
 const getPreparationId = (lecture) => {
   const candidates = [
     lecture?.preparationId,
-    lecture?.preparation,
+    Array.isArray(lecture?.preparation)
+      ? lecture.preparation[0]
+      : lecture?.preparation,
     Array.isArray(lecture?.preparations)
       ? lecture.preparations[0]
       : null,
