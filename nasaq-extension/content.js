@@ -93,7 +93,9 @@
       const lesson = C.id(slot.preparation?.lessonId);
       if (lesson) state.chosen.set(slot.lectureId, lesson);
       if (!state.additions.has(slot.lectureId)) state.additions.set(slot.lectureId, slot.preparation ? new Set() : new Set(['homework']));
-      if (!preserve && eligible(slot)) state.ticked.add(slot.lectureId);
+      // لا تُحدَّد الحصص تلقائيًا: كانت تُفتح اللوحة وكل حصة متاحة مؤشَّرة،
+      // فأول ما تفعله المعلمة هو «إلغاء التحديد». والتحديد هنا اختيار
+      // يُتخذ لا افتراض يُلغى، و«تحديد الحصص المتاحة» بجواره لمن أرادت الكل.
     }
     render();
     void loadLessons(version, current);

@@ -32,7 +32,14 @@ export async function panel(request, initialSession = { ok: true, base: 'http://
   const find = (selector) => body.querySelector(selector);
   const textButton = (text) => body.all().find((n) => n.tagName === 'button' && n.textContent.includes(text));
   find('.nq-fab').fire('click'); await settle();
-  return { body, find, textButton, context, initialSession };
+  /*
+   * Periods start unticked, so a test about what happens to a *selected*
+   * period says so itself. The panel used to tick every eligible period on
+   * load, which made selection invisible in these tests and meant the first
+   * thing a teacher did on opening it was press «إلغاء التحديد».
+   */
+  const selectAll = () => { textButton('تحديد الحصص المتاحة')?.fire('click'); };
+  return { body, find, textButton, selectAll, context, initialSession };
 }
 export const slot = (preparation = null) => ({ lectureId: 'l1', slot: 1, subject: {
   subjectId: 's1', name: 'الرياضيات', gradeLevel: { _id: 'g1', name: 'الأول' } }, class: { name: 'أ' }, preparation });

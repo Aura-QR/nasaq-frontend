@@ -4,6 +4,7 @@ import { panel, deferred, settle, week, slot, ok, curriculum } from './dom.mjs';
 
 test('missing lesson blocks generation until the user selects a curriculum lesson', async () => {
   const p = await panel(async (base, token, path) => path.startsWith('/preparation/weekly') ? ok(week()) : curriculum(path));
+  p.selectAll();
   assert.equal(p.find('.nq-btn-main').disabled, true);
   const select = p.find('.nq-row').querySelector('select'); select.value = 'lesson1'; select.fire('change');
   assert.equal(p.find('.nq-btn-main').disabled, false);
@@ -41,6 +42,7 @@ test('busy batch locks controls, ignores duplicate start, and retains errors aft
     if (path.endsWith('/submit')) return { ok: false, status: 400, message: 'يجب إضافة محتوى رقمي واحد على الأقل' };
     return ok(prep);
   });
+  p.selectAll();
   const start = p.find('.nq-btn-main'); const first = start.fire('click'); await settle();
   assert.equal(p.find('.nq-week').disabled, true); assert.equal(p.find('.nq-check').disabled, true);
   assert.equal(p.find('.nq-toggle').querySelector('input').disabled, true);
@@ -75,6 +77,7 @@ test('changing session before a batch prevents all mutations', async () => {
     return path.startsWith('/preparation/weekly') ? ok(week([slot(prep)])) : ok(prep);
   });
   p.initialSession.token = 'new-account';
+  p.selectAll();
   await p.find('.nq-btn-main').fire('click'); await settle();
   assert.equal(writes, 0);
   assert.match(p.body.textContent, /تغيّر الحساب أو الخادم/);
@@ -84,6 +87,7 @@ test('week refresh failure removes stale rows and blocks preparation', async () 
   const p = await panel(async (base, token, path) => path.startsWith('/preparation/weekly') ?
     (fail ? { ok: false, status: 0, message: 'offline' } : ok(week())) : curriculum(path));
   fail = true; p.textButton('تحديث').fire('click'); await settle();
+  p.selectAll();
   assert.equal(p.find('.nq-row'), undefined); assert.equal(p.find('.nq-btn-main').disabled, true);
   assert.match(p.body.textContent, /offline/);
 });
@@ -120,6 +124,7 @@ test('missing curriculum permits draft-only saving after additions and both opti
   toggles[0].checked = false; toggles[0].fire('change');
   const submit = p.body.all().filter((n) => n.className === 'nq-toggle')[1].querySelector('input');
   submit.checked = false; submit.fire('change');
+  p.selectAll();
   assert.equal(p.find('.nq-btn-main').disabled, false);
   await p.find('.nq-btn-main').fire('click'); await settle();
   assert.match(p.body.textContent, /تم إنشاء 1/);
@@ -138,6 +143,7 @@ test('teacher row and failure links open the teacher editor and hide curriculum 
   assert.equal(rowLink.href, '/teacher/preparations/edit/p1');
   assert.equal(p.body.all().some((node) => node.href === '/school/curriculum'), false);
   assert.ok(p.body.all().some((node) => node.href === '/teacher/preparations'));
+  p.selectAll();
   await p.find('.nq-btn-main').fire('click'); await settle();
   const failureLink = p.body.all().find((node) => node.tagName === 'a' && node.textContent === 'فتح لإكمال التحضير');
   assert.equal(failureLink.href, '/teacher/preparations/edit/p1');
@@ -160,11 +166,27 @@ test('each lecture has independent additions and selecting exam requires its set
   let quiz = p.body.all().find(n => n.attributes['aria-label'] === 'امتحان للحصة 1');
   quiz.checked = true; quiz.fire('change');
   assert.equal(p.body.all().find(n => n.attributes['aria-label'] === 'امتحان للحصة 2').checked, false);
+  p.selectAll();
   assert.equal(p.find('.nq-btn-main').disabled, true);
   const first = p.body.all().find(n => n.attributes['aria-label'] === 'تاريخ البداية للحصة 1');
   first.value = '2026-10-01'; first.fire('input');
   const last = p.body.all().find(n => n.attributes['aria-label'] === 'تاريخ النهاية للحصة 1');
   last.value = '2026-10-02'; last.fire('input');
+  p.selectAll();
   assert.equal(p.find('.nq-btn-main').disabled, false);
   assert.match(p.body.textContent, /اختباراتي/);
+});
+
+test('periods start unticked, and «تحديد الحصص المتاحة» selects them', async () => {
+  // Opening the panel used to tick every eligible period, so the first thing
+  // a teacher did was press «إلغاء التحديد» to undo a choice she had not
+  // made. Selection is now hers to make, with one button for "all".
+  const p = await panel(async (base, token, path) =>
+    path.startsWith('/preparation/weekly') ? ok(week()) : curriculum(path));
+
+  assert.equal(p.find('.nq-check').checked, false);
+  assert.equal(p.find('.nq-btn-main').disabled, true);
+
+  p.selectAll();
+  assert.equal(p.find('.nq-check').checked, true);
 });
