@@ -1,4 +1,4 @@
-﻿import { api } from "../Axios";
+import { api } from "../Axios";
 
 const ENDPOINT =
   "/preparation";
@@ -676,7 +676,7 @@ export const fetchPreparationStudentView =
     try {
       const response =
         await api.get(
-          `${ENDPOINT}/${preparationId}/student-view`
+          `${ENDPOINT}/${preparationId}`
         );
 
       return normalizeSuccess(
