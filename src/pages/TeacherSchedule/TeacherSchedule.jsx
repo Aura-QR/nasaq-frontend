@@ -932,10 +932,18 @@ const TeacherSchedule = () => {
       return;
     }
 
+    /*
+     * الأسبوع المعروض ينتقل مع الحصة.
+     *
+     * كان الرابط يحمل رقم الحصة وحده، فتفتح شاشة التحضير على الأسبوع الجاري
+     * مهما كان الأسبوع الذي تنظر إليه المعلمة. من يتصفّح أسبوع ٤ أكتوبر
+     * ويضغط «إضافة تحضير» على حصة الثلاثاء كان تحضيره يُقيَّد على ثلاثاء
+     * الأسبوع الجاري — الحصة صحيحة والأسبوع خطأ.
+     */
     navigate(
-      `/teacher/preparations/add?lectureId=${requestedPreparationLectureId}&returnTo=${encodeURIComponent(
-        returnTo
-      )}`,
+      `/teacher/preparations/add?lectureId=${requestedPreparationLectureId}` +
+        `&weekOf=${formatLocalDate(weekStart)}` +
+        `&returnTo=${encodeURIComponent(returnTo)}`,
       { replace: true }
     );
   }, [
@@ -944,6 +952,7 @@ const TeacherSchedule = () => {
     enrichedLectures,
     selectedLecture,
     navigate,
+    weekStart,
   ]);
 
 
@@ -1261,10 +1270,11 @@ const TeacherSchedule = () => {
       return;
     }
 
+    // الأسبوع المعروض ينتقل مع الحصة، وإلا فُتحت الشاشة على الأسبوع الجاري.
     navigate(
-      `/teacher/preparations/add?lectureId=${lectureId}&returnTo=${encodeURIComponent(
-        returnTo
-      )}`
+      `/teacher/preparations/add?lectureId=${lectureId}` +
+        `&weekOf=${formatLocalDate(weekStart)}` +
+        `&returnTo=${encodeURIComponent(returnTo)}`
     );
   };
 
