@@ -1,0 +1,433 @@
+{
+  "v": "5.12.1",
+  "fr": 60,
+  "ip": 0,
+  "op": 89,
+  "w": 430,
+  "h": 430,
+  "nm": "lecture-icon",
+  "ddd": 0,
+  "assets": [],
+  "layers": [
+    {
+      "ddd": 0,
+      "ind": 1,
+      "ty": 3,
+      "nm": "control",
+      "sr": 1,
+      "ks": {
+        "o": { "a": 0, "k": 0, "ix": 11 },
+        "r": { "a": 0, "k": 0, "ix": 10 },
+        "p": { "a": 0, "k": [0, 0], "ix": 2, "l": 2 },
+        "a": { "a": 0, "k": [0, 0, 0], "ix": 1, "l": 2 },
+        "s": { "a": 0, "k": [100, 100, 100], "ix": 6, "l": 2 }
+      },
+      "ao": 0,
+      "ef": [
+        {
+          "ty": 5,
+          "nm": "stroke",
+          "np": 3,
+          "mn": "Pseudo/stroke",
+          "ix": 1,
+          "en": 1,
+          "ef": [
+            {
+              "ty": 7,
+              "nm": "Menu",
+              "mn": "Pseudo/stroke-0001",
+              "ix": 1,
+              "v": { "a": 0, "k": 2, "ix": 1 }
+            }
+          ]
+        },
+        {
+          "ty": 5,
+          "nm": "primary",
+          "np": 3,
+          "mn": "ADBE Color Control",
+          "ix": 2,
+          "en": 1,
+          "ef": [
+            {
+              "ty": 2,
+              "nm": "Color",
+              "mn": "ADBE Color Control-0001",
+              "ix": 1,
+              "v": { "a": 0, "k": [0.071, 0.075, 0.192], "ix": 1 }
+            }
+          ]
+        },
+        {
+          "ty": 5,
+          "nm": "secondary",
+          "np": 3,
+          "mn": "ADBE Color Control",
+          "ix": 3,
+          "en": 1,
+          "ef": [
+            {
+              "ty": 2,
+              "nm": "Color",
+              "mn": "ADBE Color Control-0001",
+              "ix": 1,
+              "v": { "a": 0, "k": [0.192, 0.553, 0.808], "ix": 1 }
+            }
+          ]
+        }
+      ],
+      "ip": 0,
+      "op": 360,
+      "st": 0,
+      "bm": 0
+    },
+    {
+      "ddd": 0,
+      "ind": 2,
+      "ty": 4,
+      "nm": "Lecture Animation",
+      "sr": 1,
+      "ks": {
+        "o": { "a": 0, "k": 100, "ix": 11 },
+        "r": { "a": 0, "k": 0, "ix": 10 },
+        "p": { "a": 0, "k": [215, 215, 0], "ix": 2, "l": 2 },
+        "a": { "a": 0, "k": [215, 215, 0], "ix": 1, "l": 2 },
+        "s": { "a": 0, "k": [100, 100, 100], "ix": 6, "l": 2 }
+      },
+      "ao": 0,
+      "shapes": [
+        {
+          "ty": "gr",
+          "it": [
+            {
+              "ty": "rc",
+              "d": 1,
+              "s": { "a": 0, "k": [280, 180], "ix": 2 },
+              "p": { "a": 0, "k": [0, -30], "ix": 3 },
+              "r": { "a": 0, "k": 10, "ix": 4 },
+              "nm": "Board Shape",
+              "mn": "ADBE Vector Shape - Rect",
+              "hd": false
+            },
+            {
+              "ty": "st",
+              "c": {
+                "a": 0,
+                "k": [0.192, 0.553, 0.808, 1],
+                "ix": 3,
+                "x": "var $bm_rt;\n$bm_rt = comp('lecture-icon').layer('control').effect('secondary')('Color');"
+              },
+              "o": { "a": 0, "k": 100, "ix": 4 },
+              "w": {
+                "a": 0,
+                "k": 12,
+                "ix": 5,
+                "x": "var $bm_rt;\n$bm_rt = $bm_mul($bm_div(value, 2), comp('lecture-icon').layer('control').effect('stroke')('Menu'));"
+              },
+              "lc": 2,
+              "lj": 2,
+              "bm": 0,
+              "nm": ".secondary",
+              "mn": "ADBE Vector Graphic - Stroke",
+              "hd": false,
+              "cl": "secondary"
+            },
+            {
+              "ty": "tr",
+              "p": { "a": 0, "k": [215, 215], "ix": 2 },
+              "a": { "a": 0, "k": [0, 0], "ix": 1 },
+              "s": { "a": 0, "k": [100, 100], "ix": 3 },
+              "r": { "a": 0, "k": 0, "ix": 6 },
+              "o": { "a": 0, "k": 100, "ix": 7 },
+              "sk": { "a": 0, "k": 0, "ix": 4 },
+              "sa": { "a": 0, "k": 0, "ix": 5 },
+              "nm": "Transform"
+            }
+          ],
+          "nm": "Blackboard",
+          "np": 2,
+          "cix": 2,
+          "bm": 0,
+          "ix": 1,
+          "mn": "ADBE Vector Group",
+          "hd": false
+        },
+        {
+          "ty": "gr",
+          "it": [
+            {
+              "ty": "el",
+              "d": 1,
+              "s": { "a": 0, "k": [60, 40], "ix": 2 },
+              "p": { "a": 0, "k": [0, -30], "ix": 3 },
+              "nm": "Head Shape",
+              "mn": "ADBE Vector Shape - Ellipse",
+              "hd": false
+            },
+            {
+              "ty": "rc",
+              "d": 1,
+              "s": { "a": 0, "k": [70, 80], "ix": 2 },
+              "p": { "a": 0, "k": [0, 60], "ix": 3 },
+              "r": { "a": 0, "k": 5, "ix": 4 },
+              "nm": "Body Shape",
+              "mn": "ADBE Vector Shape - Rect",
+              "hd": false
+            },
+            {
+              "ty": "st",
+              "c": {
+                "a": 0,
+                "k": [0.071, 0.075, 0.192, 1],
+                "ix": 3,
+                "x": "var $bm_rt;\n$bm_rt = comp('lecture-icon').layer('control').effect('primary')('Color');"
+              },
+              "o": { "a": 0, "k": 100, "ix": 4 },
+              "w": {
+                "a": 0,
+                "k": 12,
+                "ix": 5,
+                "x": "var $bm_rt;\n$bm_rt = $bm_mul($bm_div(value, 2), comp('lecture-icon').layer('control').effect('stroke')('Menu'));"
+              },
+              "lc": 2,
+              "lj": 2,
+              "bm": 0,
+              "nm": ".primary",
+              "mn": "ADBE Vector Graphic - Stroke",
+              "hd": false,
+              "cl": "primary"
+            },
+            {
+              "ty": "tr",
+              "p": { "a": 0, "k": [215, 280], "ix": 2 },
+              "a": { "a": 0, "k": [0, 0], "ix": 1 },
+              "s": { "a": 0, "k": [100, 100], "ix": 3 },
+              "r": { "a": 0, "k": 0, "ix": 6 },
+              "o": { "a": 0, "k": 100, "ix": 7 },
+              "sk": { "a": 0, "k": 0, "ix": 4 },
+              "sa": { "a": 0, "k": 0, "ix": 5 },
+              "nm": "Transform"
+            }
+          ],
+          "nm": "Teacher",
+          "np": 3,
+          "cix": 2,
+          "bm": 0,
+          "ix": 2,
+          "mn": "ADBE Vector Group",
+          "hd": false
+        },
+        {
+          "ty": "gr",
+          "it": [
+            {
+              "ind": 0,
+              "ty": "sh",
+              "ix": 1,
+              "ks": {
+                "a": 1,
+                "k": [
+                  {
+                    "i": { "x": 0.19, "y": 1 },
+                    "o": { "x": 0.167, "y": 0.167 },
+                    "t": 10,
+                    "s": [
+                      {
+                        "i": [
+                          [0, 0],
+                          [0, 0]
+                        ],
+                        "o": [
+                          [0, 0],
+                          [0, 0]
+                        ],
+                        "v": [
+                          [-50, 0],
+                          [-49, 0.1]
+                        ],
+                        "c": false
+                      }
+                    ]
+                  },
+                  {
+                    "t": 40,
+                    "s": [
+                      {
+                        "i": [
+                          [0, 0],
+                          [0, 0]
+                        ],
+                        "o": [
+                          [0, 0],
+                          [0, 0]
+                        ],
+                        "v": [
+                          [-50, 0],
+                          [50, 0]
+                        ],
+                        "c": false
+                      }
+                    ]
+                  }
+                ],
+                "ix": 2
+              },
+              "nm": "Line 1",
+              "mn": "ADBE Vector Shape - Group",
+              "hd": false
+            },
+            {
+              "ty": "st",
+              "c": {
+                "a": 0,
+                "k": [0.192, 0.553, 0.808, 1],
+                "ix": 3,
+                "x": "var $bm_rt;\n$bm_rt = comp('lecture-icon').layer('control').effect('secondary')('Color');"
+              },
+              "o": { "a": 0, "k": 100, "ix": 4 },
+              "w": {
+                "a": 0,
+                "k": 12,
+                "ix": 5,
+                "x": "var $bm_rt;\n$bm_rt = $bm_mul($bm_div(value, 2), comp('lecture-icon').layer('control').effect('stroke')('Menu'));"
+              },
+              "lc": 2,
+              "lj": 2,
+              "bm": 0,
+              "nm": ".secondary",
+              "mn": "ADBE Vector Graphic - Stroke",
+              "hd": false,
+              "cl": "secondary"
+            },
+            {
+              "ty": "tr",
+              "p": { "a": 0, "k": [215, 190], "ix": 2 },
+              "a": { "a": 0, "k": [0, 0], "ix": 1 },
+              "s": { "a": 0, "k": [100, 100], "ix": 3 },
+              "r": { "a": 0, "k": 0, "ix": 6 },
+              "o": { "a": 0, "k": 100, "ix": 7 },
+              "sk": { "a": 0, "k": 0, "ix": 4 },
+              "sa": { "a": 0, "k": 0, "ix": 5 },
+              "nm": "Transform"
+            }
+          ],
+          "nm": "Board Line 1",
+          "np": 2,
+          "cix": 2,
+          "bm": 0,
+          "ix": 3,
+          "mn": "ADBE Vector Group",
+          "hd": false
+        },
+        {
+          "ty": "gr",
+          "it": [
+            {
+              "ind": 0,
+              "ty": "sh",
+              "ix": 1,
+              "ks": {
+                "a": 1,
+                "k": [
+                  {
+                    "i": { "x": 0.19, "y": 1 },
+                    "o": { "x": 0.167, "y": 0.167 },
+                    "t": 20,
+                    "s": [
+                      {
+                        "i": [
+                          [0, 0],
+                          [0, 0]
+                        ],
+                        "o": [
+                          [0, 0],
+                          [0, 0]
+                        ],
+                        "v": [
+                          [-60, 0],
+                          [-59, 0.2]
+                        ],
+                        "c": false
+                      }
+                    ]
+                  },
+                  {
+                    "t": 50,
+                    "s": [
+                      {
+                        "i": [
+                          [0, 0],
+                          [0, 0]
+                        ],
+                        "o": [
+                          [0, 0],
+                          [0, 0]
+                        ],
+                        "v": [
+                          [-60, 0],
+                          [60, 0]
+                        ],
+                        "c": false
+                      }
+                    ]
+                  }
+                ],
+                "ix": 2
+              },
+              "nm": "Line 2",
+              "mn": "ADBE Vector Shape - Group",
+              "hd": false
+            },
+            {
+              "ty": "st",
+              "c": {
+                "a": 0,
+                "k": [0.192, 0.553, 0.808, 1],
+                "ix": 3,
+                "x": "var $bm_rt;\n$bm_rt = comp('lecture-icon').layer('control').effect('secondary')('Color');"
+              },
+              "o": { "a": 0, "k": 100, "ix": 4 },
+              "w": {
+                "a": 0,
+                "k": 12,
+                "ix": 5,
+                "x": "var $bm_rt;\n$bm_rt = $bm_mul($bm_div(value, 2), comp('lecture-icon').layer('control').effect('stroke')('Menu'));"
+              },
+              "lc": 2,
+              "lj": 2,
+              "bm": 0,
+              "nm": ".secondary",
+              "mn": "ADBE Vector Graphic - Stroke",
+              "hd": false,
+              "cl": "secondary"
+            },
+            {
+              "ty": "tr",
+              "p": { "a": 0, "k": [215, 230], "ix": 2 },
+              "a": { "a": 0, "k": [0, 0], "ix": 1 },
+              "s": { "a": 0, "k": [100, 100], "ix": 3 },
+              "r": { "a": 0, "k": 0, "ix": 6 },
+              "o": { "a": 0, "k": 100, "ix": 7 },
+              "sk": { "a": 0, "k": 0, "ix": 4 },
+              "sa": { "a": 0, "k": 0, "ix": 5 },
+              "nm": "Transform"
+            }
+          ],
+          "nm": "Board Line 2",
+          "np": 2,
+          "cix": 2,
+          "bm": 0,
+          "ix": 4,
+          "mn": "ADBE Vector Group",
+          "hd": false
+        }
+      ],
+      "ip": 0,
+      "op": 89,
+      "st": 0,
+      "ct": 1,
+      "bm": 0
+    }
+  ],
+  "markers": []
+}

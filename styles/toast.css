@@ -1,0 +1,137 @@
+.nasaq-toast-container {
+  width: min(390px, calc(100vw - 32px)) !important;
+  padding: 0 !important;
+  font-family: "Tajawal", sans-serif !important;
+}
+
+.nasaq-toast {
+  --toast-accent: #244a70;
+  --toast-soft: #f4f7fa;
+
+  min-height: 70px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+
+  direction: rtl !important;
+
+  color: #122f4d !important;
+  background:
+    linear-gradient(
+      135deg,
+      #ffffff 0%,
+      var(--toast-soft) 100%
+    ) !important;
+
+  border:
+    1px solid
+    rgba(36, 74, 112, 0.1) !important;
+
+  border-inline-start:
+    5px solid
+    var(--toast-accent) !important;
+
+  border-radius: 16px !important;
+
+  box-shadow:
+    0 16px 35px
+    rgba(18, 47, 77, 0.16) !important;
+}
+
+.nasaq-toast-body {
+  margin: 0 !important;
+  padding: 14px 15px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 11px !important;
+
+  color: #122f4d !important;
+  font-family: "Tajawal", sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1.6 !important;
+}
+
+.nasaq-toast .Toastify__toast-icon {
+  width: 24px !important;
+  margin-inline-end: 0 !important;
+  color: var(--toast-accent) !important;
+}
+
+.nasaq-toast .Toastify__toast-icon svg {
+  fill: currentColor !important;
+}
+
+.nasaq-toast .Toastify__close-button {
+  align-self: flex-start !important;
+  margin-top: 8px !important;
+  margin-inline-start: 4px !important;
+
+  color: #7e8791 !important;
+  opacity: 0.75 !important;
+
+  transition:
+    color 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease !important;
+}
+
+.nasaq-toast .Toastify__close-button:hover {
+  color: var(--toast-accent) !important;
+  opacity: 1 !important;
+  transform: scale(1.08) !important;
+}
+
+.nasaq-toast-progress {
+  height: 4px !important;
+  background:
+    linear-gradient(
+      90deg,
+      var(--toast-accent),
+      #d3a44f
+    ) !important;
+}
+
+.nasaq-toast.Toastify__toast--success {
+  --toast-accent: #2f8f62;
+  --toast-soft: #eef9f3;
+}
+
+.nasaq-toast.Toastify__toast--error {
+  --toast-accent: #c94f4f;
+  --toast-soft: #fff3f2;
+}
+
+.nasaq-toast.Toastify__toast--warning {
+  --toast-accent: #b78430;
+  --toast-soft: #fff8e8;
+}
+
+.nasaq-toast.Toastify__toast--info {
+  --toast-accent: #315e88;
+  --toast-soft: #f1f6fb;
+}
+
+.nasaq-toast.Toastify__toast--default {
+  --toast-accent: #244a70;
+  --toast-soft: #f4f7fa;
+}
+
+@media (max-width: 600px) {
+  .nasaq-toast-container {
+    top: 12px !important;
+    right: 12px !important;
+    left: 12px !important;
+    width: auto !important;
+  }
+
+  .nasaq-toast {
+    min-height: 64px !important;
+    border-radius: 14px !important;
+  }
+
+  .nasaq-toast-body {
+    padding: 12px 13px !important;
+    font-size: 13px !important;
+  }
+}
