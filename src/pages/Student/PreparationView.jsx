@@ -2,6 +2,7 @@ import {
   ArrowBackRounded,
   AutoStoriesRounded,
   CheckCircleOutlineRounded,
+  AssignmentRounded,
   LinkRounded,
   MenuBookRounded,
 } from "@mui/icons-material";
@@ -59,6 +60,24 @@ const resolveFileUrl = (item) => {
   return `${origin}${path.startsWith("/") ? "" : "/"}${path}`;
 };
 
+const RESOURCE_LABELS = {
+  enrichment: "إثراء",
+  homework: "واجب",
+  quiz: "اختبار",
+  activity: "نشاط",
+};
+
+/** «٤ أكتوبر» — التاريخ كما يقرؤه الطالب، لا سلسلة ISO. */
+const formatDueDate = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("ar-EG", {
+    day: "numeric",
+    month: "long",
+  }).format(date);
+};
+
 const TextSection = ({ title, value, icon }) => {
   if (!String(value || "").trim()) return null;
 
@@ -91,6 +110,12 @@ const PreparationView = () => {
   const [error, setError] = useState("");
   const [preparation, setPreparation] = useState(null);
   const [digitalItems, setDigitalItems] = useState([]);
+
+  // يصلها الخادم مع التحضير؛ والافتراض مصفوفة فارغة حتى تحمَّل الصفحة أو
+  // يردّ خادم أقدم لا يرسل هذا الحقل.
+  const resourceItems = Array.isArray(preparation?.resources)
+    ? preparation.resources
+    : [];
 
   useEffect(() => {
     let active = true;
@@ -242,6 +267,71 @@ const PreparationView = () => {
                       {url && (
                         <Button component="a" href={url} target="_blank" rel="noreferrer" variant="outlined" size="small">
                           فتح المحتوى
+                        </Button>
+                      )}
+                    </Stack>
+                  </Paper>
+                );
+              })}
+            </Stack>
+          </Paper>
+        )}
+
+        {/*
+          * الواجبات والاختبارات المرفقة بالحصة.
+          *
+          * كانت تصل الطالب على صفحتَي «اختباراتي» و«واجباتي» فقط، فيفتح الدرس
+          * ولا يجد ما أرفقته المعلمة به. وهي مرفقة بالتحضير نفسه، فمكانها هنا
+          * أيضًا — والصفحة لا تعرض أسئلة ولا إجابات، إنما عنوانًا وموعدًا
+          * ورابطًا يفتح الاختبار من مكانه الذي يتحقق من الموعد.
+          */}
+        {resourceItems.length > 0 && (
+          <Paper variant="outlined" sx={{ p: 1.2, borderRadius: "14px" }}>
+            <Stack direction="row" alignItems="center" gap={0.7} sx={{ mb: 0.8 }}>
+              <AssignmentRounded fontSize="small" />
+              <Typography sx={{ fontWeight: 900, color: "var(--color-navy-deep)" }}>
+                الواجبات والاختبارات
+              </Typography>
+            </Stack>
+            <Stack spacing={0.7}>
+              {resourceItems.map((item) => {
+                // الاختبار يُفتح على صفحة بدايته، وهي التي تتحقق من الموعد
+                // قبل أن تعرض أي سؤال — لا يوجد مسار لتفاصيل اختبار بغيرها.
+                const target = item.examId
+                  ? `/student-dashboard/exams/${item.examId}/quiz`
+                  : item.projectId
+                    ? `/student-dashboard/projects/${item.projectId}`
+                    : "";
+
+                return (
+                  <Paper key={item._id} variant="outlined" sx={{ p: 1, borderRadius: "12px" }}>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      alignItems={{ xs: "stretch", sm: "center" }}
+                      justifyContent="space-between"
+                      gap={0.8}
+                    >
+                      <Box>
+                        <Typography sx={{ fontWeight: 900, fontSize: 12.5 }}>
+                          {item.title || RESOURCE_LABELS[item.type] || "مرفق"}
+                        </Typography>
+                        <Stack direction="row" gap={0.5} sx={{ mt: 0.5, flexWrap: "wrap" }}>
+                          <Chip size="small" label={RESOURCE_LABELS[item.type] || item.type} />
+                          {item.dueAt && (
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={`يُسلَّم ${formatDueDate(item.dueAt)}`}
+                            />
+                          )}
+                          {item.totalGrade != null && (
+                            <Chip size="small" variant="outlined" label={`${item.totalGrade} درجة`} />
+                          )}
+                        </Stack>
+                      </Box>
+                      {target && (
+                        <Button onClick={() => navigate(target)} variant="outlined" size="small">
+                          فتح
                         </Button>
                       )}
                     </Stack>
