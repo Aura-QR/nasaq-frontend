@@ -673,10 +673,20 @@ export const fetchPreparationStudentView =
       };
     }
 
+    /*
+     * المسار المخصّص للطالب، لا المسار العام.
+     *
+     * كانت الدالة تنادي `/preparation/:id` رغم اسمها، وذلك المسار محميّ
+     * بصلاحية `read Preparation` — والطالب لا يملك صلاحيات أصلًا، فكان يُردّ
+     * بـ«ليس لديك صلاحية للقيام بهذا الإجراء» عند فتح أي درس.
+     *
+     * أما `/student-view` فمحميّ بالدور لا بالصلاحية، ويذكر الطالب صراحةً،
+     * ويُرجع نسخة مختصرة لا تحمل إجابات الاختبارات ولا اقتراحات الدروس.
+     */
     try {
       const response =
         await api.get(
-          `${ENDPOINT}/${preparationId}`
+          `${ENDPOINT}/${preparationId}/student-view`
         );
 
       return normalizeSuccess(
