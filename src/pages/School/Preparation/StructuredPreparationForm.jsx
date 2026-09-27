@@ -3038,8 +3038,23 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
       setValidationErrors([]);
       clearDraftCache(form.lecture);
 
+      /*
+       * «حفظ التحضير» يُنهي التحضير فعلًا، لا يحفظه مسودة.
+       *
+       * كانت بوابة المعلم تخرج من هنا قبل استدعاء submitPreparation، فتقول
+       * «تم حفظ التحضير» ويبقى reviewStatus على draft — والطالب لا يرى إلا
+       * pending أو approved، فكان يفتح الدرس فيجد «التحضير غير موجود» مهما
+       * حفظت المعلمة. وزرّ «حفظ كمسودة» موجود بجانبه لمن أرادت المسودة.
+       */
+      const response = await submitPreparation(id);
+      if (!response?.status) {
+        toast.error(response?.message || "تعذر تأكيد اكتمال التحضير");
+        return;
+      }
+      setPreparationStatus("pending");
+
       if (teacherPortal) {
-        toast.success("تم حفظ التحضير");
+        toast.success("تم حفظ التحضير وأصبح ظاهرًا للطالبات");
         navigate(
           `/teacher/preparations/${id}?returnTo=${encodeURIComponent(safeReturnTo)}`,
           { replace: true }
@@ -3047,12 +3062,6 @@ const StructuredPreparationForm = ({ mode = "create" }) => {
         return;
       }
 
-      const response = await submitPreparation(id);
-      if (!response?.status) {
-        toast.error(response?.message || "تعذر تأكيد اكتمال التحضير");
-        return;
-      }
-      setPreparationStatus("pending");
       toast.success("تم اكتمال التحضير");
     } finally {
       setSubmitting(false);
