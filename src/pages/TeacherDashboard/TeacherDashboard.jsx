@@ -1491,10 +1491,15 @@ const TeacherDashboard = () => {
 
   const openAttendance = (lecture) => {
     const classId = getClassId(lecture);
+    const lectureId = getLectureId(lecture);
     const params = new URLSearchParams();
 
     if (classId) {
       params.set("classId", classId);
+    }
+
+    if (lectureId) {
+      params.set("lectureId", lectureId);
     }
 
     params.set("date", formatLocalDate());
