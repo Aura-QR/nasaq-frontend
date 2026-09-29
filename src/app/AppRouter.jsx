@@ -63,6 +63,7 @@ import SchoolSettings from "@/pages/SchoolSettings/SchoolSettings";
 import SchoolDashboard from "@/pages/SchoolDashboard/SchoolDashboard";
 import Terms from "@/pages/School/Terms/Terms";
 import CurriculumManagement from "@/pages/School/Curriculum/CurriculumManagement";
+import DailyTrackingReport from "@/pages/DailyTrackingReport/DailyTrackingReport";
 
 // =========================
 // Platform Pages
@@ -348,6 +349,15 @@ const AppRouter = () => {
           />
 
           <Route
+            path="/school/daily-tracking"
+            element={
+              <RequirePermission module="dailyTracking" operation="read">
+                <DailyTrackingReport />
+              </RequirePermission>
+            }
+          />
+
+          <Route
             path="/school/staff-attendance"
             element={
               <RequirePermission module="staffAttendance" operation="read">
@@ -464,6 +474,11 @@ const AppRouter = () => {
           <Route
             path="/teacher/attendance"
             element={<TeacherAttendance />}
+          />
+
+          <Route
+            path="/teacher/daily-tracking"
+            element={<DailyTrackingReport />}
           />
 
           <Route

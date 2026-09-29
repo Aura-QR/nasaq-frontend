@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import {
   ArrowBackRounded,
+  AssessmentRounded,
   GroupsRounded,
   RefreshRounded,
   SaveRounded,
@@ -438,6 +439,9 @@ const TeacherAttendance = () => {
               </Box>
             </Stack>
             <Stack direction="row" gap={.8}>
+              <Button variant="outlined" startIcon={<AssessmentRounded />} onClick={() => confirmDiscard() && navigate("/teacher/daily-tracking")} sx={{ color: "#fff", borderColor: "rgba(255,255,255,.3)", borderRadius: "12px", fontSize: "10px", fontWeight: 800 }}>
+                التقرير الشهري
+              </Button>
               <Button variant="outlined" startIcon={<ArrowBackRounded />} onClick={() => confirmDiscard() && navigate("/teacher/dashboard")} sx={{ color: "#fff", borderColor: "rgba(255,255,255,.3)", borderRadius: "12px", fontSize: "10px", fontWeight: 800 }}>
                 لوحة التحكم
               </Button>

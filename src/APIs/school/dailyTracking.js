@@ -21,6 +21,18 @@ export const saveDailyTrackingBulk = async (data) => {
   }
 };
 
+export const fetchDailyTrackingSummary = async (filters = {}) => {
+  try {
+    const response = await api.get(`${ENDPOINT}/reports/summary`, {
+      params: filters,
+    });
+    return response.data;
+  } catch (error) {
+    return normalizeFailure(error, "تعذر تحميل تقرير المتابعة");
+  }
+};
+
 export default {
   saveDailyTrackingBulk,
+  fetchDailyTrackingSummary,
 };

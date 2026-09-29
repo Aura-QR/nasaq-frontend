@@ -190,6 +190,12 @@ const NAVIGATION_SECTIONS = [
         module: "attendance",
       },
       {
+        label: "سجل المتابعة اليومي",
+        path: "/school/daily-tracking",
+        icon: <AssessmentRounded />,
+        module: "dailyTracking",
+      },
+      {
         label: "التحضير",
         path: "/school/preparation",
         icon: <AutoStoriesRounded />,
@@ -349,6 +355,11 @@ const SchoolSidebar = ({
     attendance:
       usePermissions(
         "attendance"
+      ),
+
+    dailyTracking:
+      usePermissions(
+        "dailyTracking"
       ),
 
     staffAttendance:
