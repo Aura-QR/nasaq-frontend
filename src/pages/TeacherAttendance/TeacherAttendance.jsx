@@ -482,9 +482,7 @@ const TeacherAttendance = () => {
           <Box sx={{ minHeight: 300, display: "grid", placeItems: "center", textAlign: "center" }}><Stack alignItems="center" spacing={1}><GroupsRounded sx={{ fontSize: 44, color: "#214E78" }} /><Typography sx={{ fontWeight: 900 }}>لا يوجد طلاب في كشف هذه الحصة</Typography></Stack></Box>
         ) : (
           <>
-            <Alert severity="info" sx={{ mt: 1.15, borderRadius: "13px", fontSize: "9.5px" }}>
-              «حلّت الواجب» رصد يومي لا يؤثر في الدرجات. في الاختبار: فارغ = لا يوجد اختبار، علامة صح = اجتازت، علامة ناقص = لم تجتز.
-            </Alert>
+        
 
             <Box sx={{ mt: 1.1, overflowX: "auto", pb: .4 }}>
               <Box sx={{ minWidth: { xs: 470, md: 720 } }}>
