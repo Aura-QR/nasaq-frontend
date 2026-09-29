@@ -482,7 +482,7 @@ const TeacherAttendance = () => {
           <Box sx={{ minHeight: 300, display: "grid", placeItems: "center", textAlign: "center" }}><Stack alignItems="center" spacing={1}><GroupsRounded sx={{ fontSize: 44, color: "#214E78" }} /><Typography sx={{ fontWeight: 900 }}>لا يوجد طلاب في كشف هذه الحصة</Typography></Stack></Box>
         ) : (
           <>
-        
+          
 
             <Box sx={{ mt: 1.1, overflowX: "auto", pb: .4 }}>
               <Box sx={{ minWidth: { xs: 470, md: 720 } }}>

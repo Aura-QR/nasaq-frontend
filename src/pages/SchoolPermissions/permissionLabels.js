@@ -11,6 +11,7 @@ export const ENTITY_LABELS = {
   lectures: "الحصص",
   library: "المكتبة",
   attendance: "حضور الطلاب",
+  dailyTracking: "سجل المتابعة اليومي",
   gradesCriteria: "معايير الدرجات",
   exams: "الاختبارات",
   projects: "المشاريع",
