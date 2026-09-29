@@ -395,14 +395,23 @@ const SchoolSidebar = ({
 
         items:
           section.items.filter(
-            (item) =>
-              item.allowedRoles
-                ? item.allowedRoles.includes(
-                    role
-                  )
-                : modulePermissions[
-                    item.module
-                  ]?.read
+            (item) => {
+              if (item.allowedRoles) {
+                return item.allowedRoles.includes(role);
+              }
+
+              // OWNER / SUPERVISOR must always be able to reach the daily
+              // tracking report. Their backend access is full/read-enabled,
+              // but older JWTs may not expose the new module key yet.
+              if (
+                item.module === "dailyTracking" &&
+                [ROLES.OWNER, ROLES.SUPERVISOR].includes(role)
+              ) {
+                return true;
+              }
+
+              return modulePermissions[item.module]?.read;
+            }
           ),
       }))
       .filter(

@@ -25,9 +25,9 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useAuthUser } from "react-auth-kit";
 import { fetchDailyTrackingSummary } from "@/APIs/school/dailyTracking";
-import { getSchoolClassesList } from "@/APIs/school/classes";
+import { fetchMyClasses, getSchoolClassesList } from "@/APIs/school/classes";
 import { fetchSubjectOfferings } from "@/APIs/school/subjectOfferings";
-import { fetchTeacherMyClasses } from "@/APIs/school/lectures";
+
 
 const pad = (value) => String(value).padStart(2, "0");
 const toLocalDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -106,7 +106,7 @@ const DailyTrackingReport = () => {
     const loadOptions = async () => {
       setLoadingOptions(true);
       const [classesResponse, offeringsResponse] = await Promise.all([
-        isTeacher ? fetchTeacherMyClasses({}, { force: true }) : getSchoolClassesList(),
+        isTeacher ? fetchMyClasses() : getSchoolClassesList(),
         isTeacher
           ? Promise.resolve({ status: true, data: [] })
           : fetchSubjectOfferings({}, { forceListEndpoint: true }),
@@ -116,7 +116,13 @@ const DailyTrackingReport = () => {
       const offeringRows = offeringsResponse?.status === false ? [] : extractList(offeringsResponse);
       setClasses(classRows);
       setOfferings(offeringRows);
-      if (classRows.length) setClassId((current) => current || classKey(classRows[0]));
+      if (classRows.length) {
+        setClassId((current) => current || classKey(classRows[0]));
+      } else if (classesResponse?.status === false) {
+        setError(classesResponse?.message || "تعذر تحميل فصول المعلم");
+      } else if (isTeacher) {
+        setError("لا توجد فصول مرتبطة بهذا المعلم حاليًا");
+      }
       setLoadingOptions(false);
     };
     loadOptions();
