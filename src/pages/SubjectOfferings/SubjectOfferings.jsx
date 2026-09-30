@@ -64,7 +64,8 @@ import {
   fetchSubjectOfferings,
   saveTeachingPlan,
 } from "@/APIs/school/subjectOfferings";
-import { fetchClassesList } from "@/APIs/school/classes";
+import { fetchStages } from "@/APIs/school/stages";
+import { fetchSchoolSettings } from "@/APIs/school/schoolSettings";
 
 const COLORS = {
   navy: "#122f4d",
@@ -115,6 +116,7 @@ const LIST_KEYS = [
   "grades",
   "offerings",
   "subjectOfferings",
+  "classes",
 ];
 
 const extractList = (value) => {
@@ -152,6 +154,67 @@ const extractEntity = (value) => {
       (item) => item && typeof item === "object" && idOf(item)
     ) || null
   );
+};
+
+
+const stageIdOfGrade = (grade) =>
+  idOf(
+    grade?.stageId && typeof grade.stageId === "object"
+      ? grade.stageId
+      : grade?.stage && typeof grade.stage === "object"
+      ? grade.stage
+      : grade?.stageId || grade?.stage
+  );
+
+const schoolSettingsOf = (value) => {
+  const root = unwrap(value);
+  return root?.settings || root || {};
+};
+
+const calculateWeeklyCapacityForStage = ({ stage, schoolSettings }) => {
+  const schoolBase = Number(schoolSettings?.periodsPerDay);
+  const validSchoolBase =
+    Number.isFinite(schoolBase) && schoolBase > 0 ? schoolBase : null;
+
+  const rawStagePeriods = Number(stage?.periodsPerDay);
+  const stagePeriods =
+    stage?.periodsPerDay !== null &&
+    stage?.periodsPerDay !== undefined &&
+    Number.isFinite(rawStagePeriods) &&
+    rawStagePeriods > 0
+      ? rawStagePeriods
+      : null;
+
+  const workSchedule = Array.isArray(schoolSettings?.workSchedule)
+    ? schoolSettings.workSchedule
+    : [];
+
+  if (!workSchedule.length) return null;
+
+  const total = workSchedule.reduce((sum, day) => {
+    if (day?.isWorkingDay === false) return sum;
+
+    const rawSchoolDay = Number(day?.periodsPerDay);
+    const schoolDay =
+      Number.isFinite(rawSchoolDay) && rawSchoolDay > 0
+        ? rawSchoolDay
+        : validSchoolBase;
+
+    if (!schoolDay) return sum;
+
+    // لو المرحلة لا تحمل عدد حصص خاصًا بها فهي تتبع المدرسة كما هي.
+    if (!stagePeriods) return sum + schoolDay;
+
+    // اليوم الكامل يأخذ عدد حصص المرحلة، واليوم المختصر يُقاس بنفس النسبة.
+    if (!validSchoolBase || schoolDay === validSchoolBase) {
+      return sum + stagePeriods;
+    }
+
+    const scaled = Math.floor((stagePeriods * schoolDay) / validSchoolBase);
+    return sum + Math.max(1, Math.min(stagePeriods, scaled));
+  }, 0);
+
+  return total > 0 ? total : null;
 };
 
 const getMessage = (error, fallback) =>
@@ -1365,52 +1428,69 @@ const SubjectOfferings = () => {
     }
 
     try {
-      const [response, classesResponse] = await Promise.all([
-        api.get("/lectures/feasibility", {
-          params: { termId: selectedTermId },
-        }),
-        fetchClassesList(),
+      /*
+       * عروض المواد تخص الصف الدراسي، وليست فصلًا بعينه.
+       * لذلك نحدد مرحلة الصف ثم نحسب سعتها الأسبوعية من إعداد المرحلة،
+       * مع الرجوع لإعداد المدرسة فقط عندما تكون periodsPerDay للمرحلة null.
+       */
+      const [stagesResult, settingsResult] = await Promise.all([
+        fetchStages(),
+        fetchSchoolSettings(),
       ]);
 
-      const payload = unwrap(response?.data);
-      const capacity = Number(payload?.slotsPerWeek);
-      const classPlans = Array.isArray(payload?.classPlans) ? payload.classPlans : [];
-      const classRows = extractList(classesResponse);
-      const classById = new Map(classRows.map((item) => [idOf(item), item]));
+      const stages = extractList(stagesResult?.data ?? stagesResult);
+      const schoolSettings = schoolSettingsOf(settingsResult);
       const nextCapacityByGrade = {};
 
-      classPlans.forEach((plan) => {
-        const classId = idOf(plan?.classId);
-        const classRow = classById.get(classId);
-        const gradeLevelId = idOf(
-          classRow?.gradeLevelId ||
-            classRow?.gradeLevel ||
-            plan?.gradeLevelId ||
-            plan?.gradeLevel
-        );
-        const classCapacity = Number(plan?.capacity);
+      gradeLevels.forEach((grade) => {
+        const gradeId = idOf(grade);
+        const stageId = stageIdOfGrade(grade);
+        if (!gradeId || !stageId) return;
 
-        if (!gradeLevelId || !Number.isFinite(classCapacity) || classCapacity <= 0) {
-          return;
+        const stage = stages.find((item) => idOf(item) === stageId);
+        if (!stage) return;
+
+        const weeklyCapacity = calculateWeeklyCapacityForStage({
+          stage,
+          schoolSettings,
+        });
+
+        if (Number.isFinite(weeklyCapacity) && weeklyCapacity > 0) {
+          nextCapacityByGrade[gradeId] = weeklyCapacity;
         }
-
-        // كل فصول الصف الواحد تتبع نفس المرحلة وبالتالي نفس سعة الأسبوع.
-        // لو رجعت أكثر من قيمة لأي سبب نحتفظ بالأقل حتى لا نعرض خطة مكتملة وهي متجاوزة لفصل فعلي.
-        const current = Number(nextCapacityByGrade[gradeLevelId]);
-        nextCapacityByGrade[gradeLevelId] =
-          Number.isFinite(current) && current > 0
-            ? Math.min(current, classCapacity)
-            : classCapacity;
       });
 
       setCapacityByGrade(nextCapacityByGrade);
-      setSlotsPerWeek(Number.isFinite(capacity) ? capacity : null);
+
+      // fallback فقط للشاشات القديمة/البيانات التي لا تحمل ربط الصف بالمرحلة.
+      const selectedGradeCapacity = Number(
+        nextCapacityByGrade[selectedGradeId]
+      );
+
+      if (
+        Number.isFinite(selectedGradeCapacity) &&
+        selectedGradeCapacity > 0
+      ) {
+        setSlotsPerWeek(selectedGradeCapacity);
+        return;
+      }
+
+      const response = await api.get("/lectures/feasibility", {
+        params: { termId: selectedTermId },
+      });
+      const payload = unwrap(response?.data);
+      const fallbackCapacity = Number(payload?.slotsPerWeek);
+      setSlotsPerWeek(
+        Number.isFinite(fallbackCapacity) && fallbackCapacity > 0
+          ? fallbackCapacity
+          : null
+      );
     } catch {
       // السعة مساعدة لعرض الخطة فقط، وفشلها لا يمنع إدارة عروض المواد.
       setSlotsPerWeek(null);
       setCapacityByGrade({});
     }
-  }, [selectedTermId]);
+  }, [selectedTermId, selectedGradeId, gradeLevels]);
 
   useEffect(() => {
     loadInitial();
