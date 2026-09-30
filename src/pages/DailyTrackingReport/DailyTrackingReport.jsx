@@ -27,6 +27,9 @@ import { useAuthUser } from "react-auth-kit";
 import { fetchDailyTrackingSummary } from "@/APIs/school/dailyTracking";
 import { fetchMyClasses, getSchoolClassesList } from "@/APIs/school/classes";
 import { fetchSubjectOfferings } from "@/APIs/school/subjectOfferings";
+import { getSchoolTeachersList } from "@/APIs/school/teachers";
+import { fetchTeacherAssignments } from "@/APIs/school/lectures";
+import Container from "@/components/Container/Container";
 
 
 const pad = (value) => String(value).padStart(2, "0");
@@ -71,6 +74,15 @@ const offeringName = (item) => {
 };
 const rateLabel = (value) => value === null || value === undefined ? "—" : `${Number(value).toFixed(1).replace(".0", "")}%`;
 const safeNumber = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+const teacherName = (item) => item?.name || item?.fullName || item?.teacherName || item?.username || `معلم ${normalizeId(item).slice(-5)}`;
+const assignmentClassId = (item) => normalizeId(item?.classId || item?.class);
+const assignmentOfferingId = (item) => normalizeId(item?.subjectOfferingId || item?.subjectOffering);
+
+const COLORS = {
+  navyDark: "var(--color-navy-dark, #1b3d61)",
+  gold: "var(--color-gold, #d3a44f)",
+  muted: "var(--color-muted, #7b8794)",
+};
 
 const RateCell = ({ value }) => {
   if (value === null || value === undefined) {
@@ -92,6 +104,9 @@ const DailyTrackingReport = () => {
   const isTeacher = role === "TEACHER";
   const [classes, setClasses] = useState([]);
   const [offerings, setOfferings] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [teacherAssignments, setTeacherAssignments] = useState([]);
+  const [teacherId, setTeacherId] = useState("");
   const [classId, setClassId] = useState("");
   const [subjectOfferingId, setSubjectOfferingId] = useState("");
   const [startDate, setStartDate] = useState(startOfMonth());
@@ -105,18 +120,23 @@ const DailyTrackingReport = () => {
     let active = true;
     const loadOptions = async () => {
       setLoadingOptions(true);
-      const [classesResponse, offeringsResponse] = await Promise.all([
+      const [classesResponse, offeringsResponse, teachersResponse] = await Promise.all([
         isTeacher ? fetchMyClasses() : getSchoolClassesList(),
         isTeacher
           ? Promise.resolve({ status: true, data: [] })
           : fetchSubjectOfferings({}, { forceListEndpoint: true }),
+        isTeacher
+          ? Promise.resolve({ status: true, data: [] })
+          : getSchoolTeachersList({ force: true }),
       ]);
       if (!active) return;
       const classRows = classesResponse?.status === false ? [] : extractList(classesResponse);
       const offeringRows = offeringsResponse?.status === false ? [] : extractList(offeringsResponse);
+      const teacherRows = teachersResponse?.status === false ? [] : extractList(teachersResponse);
       setClasses(classRows);
       setOfferings(offeringRows);
-      if (classRows.length) {
+      setTeachers(teacherRows);
+      if (isTeacher && classRows.length) {
         setClassId((current) => current || classKey(classRows[0]));
       } else if (classesResponse?.status === false) {
         setError(classesResponse?.message || "تعذر تحميل فصول المعلم");
@@ -129,17 +149,65 @@ const DailyTrackingReport = () => {
     return () => { active = false; };
   }, [isTeacher]);
 
+
+  useEffect(() => {
+    if (isTeacher || !teacherId) {
+      setTeacherAssignments([]);
+      return undefined;
+    }
+
+    let active = true;
+    const loadAssignments = async () => {
+      const response = await fetchTeacherAssignments(
+        { teacherId, page: 1, limit: 500 },
+        { force: true }
+      );
+      if (!active) return;
+      setTeacherAssignments(response?.status === false ? [] : extractList(response));
+    };
+    loadAssignments();
+    return () => { active = false; };
+  }, [isTeacher, teacherId]);
+
+  const visibleClasses = useMemo(() => {
+    if (isTeacher || !teacherId) return classes;
+    const allowed = new Set(teacherAssignments.map(assignmentClassId).filter(Boolean));
+    return classes.filter((item) => allowed.has(classKey(item)));
+  }, [classes, isTeacher, teacherAssignments, teacherId]);
+
+  useEffect(() => {
+    if (!visibleClasses.length) {
+      setClassId("");
+      return;
+    }
+    if (!visibleClasses.some((item) => classKey(item) === classId)) {
+      setClassId(classKey(visibleClasses[0]));
+    }
+  }, [visibleClasses, classId]);
+
   const selectedClass = useMemo(
-    () => classes.find((item) => classKey(item) === classId) || null,
-    [classes, classId]
+    () => visibleClasses.find((item) => classKey(item) === classId) || null,
+    [visibleClasses, classId]
   );
 
   const filteredOfferings = useMemo(() => {
+    let rows = offerings;
+    if (!isTeacher && teacherId) {
+      const relevantAssignments = classId
+        ? teacherAssignments.filter((item) => !assignmentClassId(item) || assignmentClassId(item) === classId)
+        : teacherAssignments;
+      const assignedOfferingIds = new Set(relevantAssignments.map(assignmentOfferingId).filter(Boolean));
+      if (assignedOfferingIds.size) {
+        rows = rows.filter((item) => assignedOfferingIds.has(normalizeId(item)));
+      } else {
+        rows = [];
+      }
+    }
     const gradeId = normalizeId(selectedClass?.gradeLevelId || selectedClass?.gradeLevel);
-    if (!gradeId) return offerings;
-    const matching = offerings.filter((item) => normalizeId(item?.gradeLevelId || item?.gradeLevel) === gradeId);
-    return matching.length ? matching : offerings;
-  }, [offerings, selectedClass]);
+    if (!gradeId) return rows;
+    const matching = rows.filter((item) => normalizeId(item?.gradeLevelId || item?.gradeLevel) === gradeId);
+    return matching.length ? matching : rows;
+  }, [offerings, selectedClass, isTeacher, teacherId, teacherAssignments, classId]);
 
   useEffect(() => {
     if (subjectOfferingId && !filteredOfferings.some((item) => normalizeId(item) === subjectOfferingId)) {
@@ -186,34 +254,60 @@ const DailyTrackingReport = () => {
   const students = Array.isArray(report?.students) ? report.students : [];
 
   return (
-    <Box dir="rtl">
-      <Paper elevation={0} sx={{ p: { xs: 1.6, md: 2.2 }, borderRadius: "22px", background: "linear-gradient(120deg, #173B5E 0%, #244F78 100%)", color: "#fff" }}>
-        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1.2}>
-          <Box>
-            <Chip label="سجل المتابعة اليومي" size="small" sx={{ mb: .75, color: "#F2D792", bgcolor: "rgba(242,215,146,.12)", fontWeight: 900 }} />
-            <Typography sx={{ fontSize: { xs: "22px", md: "28px" }, fontWeight: 900 }}>تقرير المتابعة الشهري</Typography>
-            <Typography sx={{ mt: .35, color: "rgba(255,255,255,.72)", fontSize: "10px" }}>رصد سلوكي للحضور والمشاركة وحلّ الواجب والاختبارات القصيرة — لا يؤثر في الدرجات.</Typography>
-          </Box>
-          <AssessmentRounded sx={{ fontSize: 42, color: "#F2D792" }} />
-        </Stack>
-      </Paper>
+    <Container>
+      <Box dir="rtl" sx={{ pb: 4 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            px: { xs: 1.5, md: 2.2 },
+            py: 1.8,
+            borderRadius: "20px",
+            border: "1px solid rgba(36,74,112,0.075)",
+            background: "linear-gradient(135deg,#fffdf8,rgba(251,240,216,0.34))",
+            boxShadow: "0 12px 28px rgba(18,47,77,0.045)",
+          }}
+        >
+          <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "flex-start", md: "center" }} justifyContent="space-between" gap={1.5}>
+            <Box>
+              <Stack direction="row" gap={0.8} alignItems="center" flexWrap="wrap">
+                <Typography sx={{ color: COLORS.navyDark, fontWeight: 900, fontSize: { xs: "23px", md: "29px" } }}>
+                  سجل المتابعة اليومي
+                </Typography>
+                <Chip label="تقرير شهري" size="small" sx={{ backgroundColor: "rgba(211,164,79,0.12)", color: COLORS.navyDark, fontWeight: 800 }} />
+              </Stack>
+              <Typography sx={{ mt: 0.45, color: COLORS.muted, fontSize: "10.5px" }}>
+                رصد سلوكي للحضور والمشاركة وحلّ الواجب والاختبارات القصيرة — لا يؤثر في الدرجات.
+              </Typography>
+            </Box>
+            <AssessmentRounded sx={{ fontSize: 40, color: COLORS.gold }} />
+          </Stack>
+        </Paper>
 
-      <Paper elevation={0} sx={{ mt: 1.2, p: 1.4, borderRadius: "18px", border: "1px solid rgba(36,74,112,.09)" }}>
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1.2fr 1.2fr .9fr .9fr auto" }, gap: 1 }}>
-          <TextField select size="small" label="الفصل" value={classId} disabled={loadingOptions} onChange={(event) => setClassId(event.target.value)}>
-            {classes.map((item) => <MenuItem key={classKey(item)} value={classKey(item)}>{className(item)}</MenuItem>)}
-          </TextField>
-          <TextField select size="small" label="المادة" value={subjectOfferingId} disabled={loadingOptions || isTeacher} onChange={(event) => setSubjectOfferingId(event.target.value)}>
-            <MenuItem value="">{isTeacher ? "كل المواد المتاحة" : "كل المواد"}</MenuItem>
-            {filteredOfferings.map((item) => <MenuItem key={normalizeId(item)} value={normalizeId(item)}>{offeringName(item)}</MenuItem>)}
-          </TextField>
-          <TextField type="date" size="small" label="من" value={startDate} onChange={(event) => setStartDate(event.target.value)} InputLabelProps={{ shrink: true }} />
-          <TextField type="date" size="small" label="إلى" value={endDate} onChange={(event) => setEndDate(event.target.value)} InputLabelProps={{ shrink: true }} />
-          <Button variant="contained" onClick={loadReport} disabled={loading || loadingOptions || !classId} startIcon={loading ? <CircularProgress size={15} color="inherit" /> : <SearchRounded />} sx={{ minHeight: 40, borderRadius: "11px", bgcolor: "#0E7A5E", fontWeight: 900, whiteSpace: "nowrap" }}>
-            عرض التقرير
-          </Button>
-        </Box>
-      </Paper>
+        <Paper elevation={0} sx={{ mt: 1.3, p: 1.4, borderRadius: "18px", border: "1px solid rgba(36,74,112,.08)", background: "#fff", boxShadow: "0 10px 24px rgba(18,47,77,0.04)" }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: isTeacher ? "1.2fr 1.2fr .9fr .9fr auto" : "1.1fr 1.1fr 1.1fr .9fr .9fr auto" }, gap: 1 }}>
+            {!isTeacher && (
+              <TextField select size="small" label="المعلم" value={teacherId} disabled={loadingOptions} onChange={(event) => { setTeacherId(event.target.value); setTeacherAssignments([]); setClassId(""); setSubjectOfferingId(""); setReport(null); }}>
+                <MenuItem value="">كل المعلمين</MenuItem>
+                {teachers.map((item) => <MenuItem key={normalizeId(item)} value={normalizeId(item)}>{teacherName(item)}</MenuItem>)}
+              </TextField>
+            )}
+            <TextField select size="small" label="الفصل" value={classId} disabled={loadingOptions || (!isTeacher && teacherId && !teacherAssignments.length)} onChange={(event) => setClassId(event.target.value)}>
+              {visibleClasses.map((item) => <MenuItem key={classKey(item)} value={classKey(item)}>{className(item)}</MenuItem>)}
+            </TextField>
+            <TextField select size="small" label="المادة" value={subjectOfferingId} disabled={loadingOptions || isTeacher} onChange={(event) => setSubjectOfferingId(event.target.value)}>
+              <MenuItem value="">{isTeacher ? "كل المواد المتاحة" : "كل المواد"}</MenuItem>
+              {filteredOfferings.map((item) => <MenuItem key={normalizeId(item)} value={normalizeId(item)}>{offeringName(item)}</MenuItem>)}
+            </TextField>
+            <TextField type="date" size="small" label="من" value={startDate} onChange={(event) => setStartDate(event.target.value)} InputLabelProps={{ shrink: true }} />
+            <TextField type="date" size="small" label="إلى" value={endDate} onChange={(event) => setEndDate(event.target.value)} InputLabelProps={{ shrink: true }} />
+            <Button variant="contained" onClick={loadReport} disabled={loading || loadingOptions || !classId} startIcon={loading ? <CircularProgress size={15} color="inherit" /> : <SearchRounded />} sx={{ minHeight: 40, borderRadius: "11px", bgcolor: COLORS.navyDark, "&:hover": { bgcolor: "#15324f" }, fontWeight: 900, whiteSpace: "nowrap" }}>
+              عرض التقرير
+            </Button>
+          </Box>
+          {!isTeacher && teacherId && !teacherAssignments.length && !loadingOptions && (
+            <Typography sx={{ mt: 1, color: COLORS.muted, fontSize: "10px" }}>لا توجد إسنادات دراسية لهذا المعلم حاليًا.</Typography>
+          )}
+        </Paper>
 
       {error && <Alert severity="warning" sx={{ mt: 1.1, borderRadius: "13px" }}>{error}</Alert>}
 
@@ -261,7 +355,8 @@ const DailyTrackingReport = () => {
           </Stack>
         </>
       )}
-    </Box>
+      </Box>
+    </Container>
   );
 };
 
