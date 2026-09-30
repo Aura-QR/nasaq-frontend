@@ -28,7 +28,7 @@ import { fetchDailyTrackingSummary } from "@/APIs/school/dailyTracking";
 import { fetchMyClasses, getSchoolClassesList } from "@/APIs/school/classes";
 import { fetchSubjectOfferings } from "@/APIs/school/subjectOfferings";
 import { getSchoolTeachersList } from "@/APIs/school/teachers";
-import { fetchTeacherAssignments } from "@/APIs/school/lectures";
+import { fetchTeacherAssignments, fetchLectures } from "@/APIs/school/lectures";
 import Container from "@/components/Container/Container";
 
 
@@ -106,6 +106,7 @@ const DailyTrackingReport = () => {
   const [offerings, setOfferings] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [teacherAssignments, setTeacherAssignments] = useState([]);
+  const [teacherLectures, setTeacherLectures] = useState([]);
   const [teacherId, setTeacherId] = useState("");
   const [classId, setClassId] = useState("");
   const [subjectOfferingId, setSubjectOfferingId] = useState("");
@@ -153,27 +154,38 @@ const DailyTrackingReport = () => {
   useEffect(() => {
     if (isTeacher || !teacherId) {
       setTeacherAssignments([]);
+      setTeacherLectures([]);
       return undefined;
     }
 
     let active = true;
-    const loadAssignments = async () => {
-      const response = await fetchTeacherAssignments(
-        { teacherId, page: 1, limit: 500 },
-        { force: true }
-      );
+    const loadTeacherScope = async () => {
+      const [assignmentsResponse, lecturesResponse] = await Promise.all([
+        fetchTeacherAssignments(
+          { teacherId, page: 1, limit: 500 },
+          { force: true }
+        ),
+        fetchLectures(
+          { teacherId, page: 1, limit: 500 },
+          { force: true }
+        ),
+      ]);
       if (!active) return;
-      setTeacherAssignments(response?.status === false ? [] : extractList(response));
+      setTeacherAssignments(assignmentsResponse?.status === false ? [] : extractList(assignmentsResponse));
+      setTeacherLectures(lecturesResponse?.status === false ? [] : extractList(lecturesResponse));
     };
-    loadAssignments();
+    loadTeacherScope();
     return () => { active = false; };
   }, [isTeacher, teacherId]);
 
   const visibleClasses = useMemo(() => {
     if (isTeacher || !teacherId) return classes;
-    const allowed = new Set(teacherAssignments.map(assignmentClassId).filter(Boolean));
+    const allowed = new Set([
+      ...teacherAssignments.map(assignmentClassId),
+      ...teacherLectures.map(assignmentClassId),
+    ].filter(Boolean));
     return classes.filter((item) => allowed.has(classKey(item)));
-  }, [classes, isTeacher, teacherAssignments, teacherId]);
+  }, [classes, isTeacher, teacherAssignments, teacherLectures, teacherId]);
 
   useEffect(() => {
     if (!visibleClasses.length) {
@@ -193,9 +205,10 @@ const DailyTrackingReport = () => {
   const filteredOfferings = useMemo(() => {
     let rows = offerings;
     if (!isTeacher && teacherId) {
+      const teacherScopeRows = [...teacherAssignments, ...teacherLectures];
       const relevantAssignments = classId
-        ? teacherAssignments.filter((item) => !assignmentClassId(item) || assignmentClassId(item) === classId)
-        : teacherAssignments;
+        ? teacherScopeRows.filter((item) => !assignmentClassId(item) || assignmentClassId(item) === classId)
+        : teacherScopeRows;
       const assignedOfferingIds = new Set(relevantAssignments.map(assignmentOfferingId).filter(Boolean));
       if (assignedOfferingIds.size) {
         rows = rows.filter((item) => assignedOfferingIds.has(normalizeId(item)));
@@ -207,7 +220,7 @@ const DailyTrackingReport = () => {
     if (!gradeId) return rows;
     const matching = rows.filter((item) => normalizeId(item?.gradeLevelId || item?.gradeLevel) === gradeId);
     return matching.length ? matching : rows;
-  }, [offerings, selectedClass, isTeacher, teacherId, teacherAssignments, classId]);
+  }, [offerings, selectedClass, isTeacher, teacherId, teacherAssignments, teacherLectures, classId]);
 
   useEffect(() => {
     if (subjectOfferingId && !filteredOfferings.some((item) => normalizeId(item) === subjectOfferingId)) {
@@ -291,7 +304,7 @@ const DailyTrackingReport = () => {
                 {teachers.map((item) => <MenuItem key={normalizeId(item)} value={normalizeId(item)}>{teacherName(item)}</MenuItem>)}
               </TextField>
             )}
-            <TextField select size="small" label="الفصل" value={classId} disabled={loadingOptions || (!isTeacher && teacherId && !teacherAssignments.length)} onChange={(event) => setClassId(event.target.value)}>
+            <TextField select size="small" label="الفصل" value={classId} disabled={loadingOptions || (!isTeacher && teacherId && !visibleClasses.length)} onChange={(event) => setClassId(event.target.value)}>
               {visibleClasses.map((item) => <MenuItem key={classKey(item)} value={classKey(item)}>{className(item)}</MenuItem>)}
             </TextField>
             <TextField select size="small" label="المادة" value={subjectOfferingId} disabled={loadingOptions || isTeacher} onChange={(event) => setSubjectOfferingId(event.target.value)}>
