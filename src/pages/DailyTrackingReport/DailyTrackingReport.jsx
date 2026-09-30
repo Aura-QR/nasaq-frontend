@@ -266,8 +266,7 @@ const DailyTrackingReport = () => {
 
   const students = Array.isArray(report?.students) ? report.students : [];
 
-  return (
-    <Container>
+  const reportContent = (
       <Box dir="rtl" sx={{ pb: 4 }}>
         <Paper
           elevation={0}
@@ -275,24 +274,39 @@ const DailyTrackingReport = () => {
             px: { xs: 1.5, md: 2.2 },
             py: 1.8,
             borderRadius: "20px",
-            border: "1px solid rgba(36,74,112,0.075)",
-            background: "linear-gradient(135deg,#fffdf8,rgba(251,240,216,0.34))",
-            boxShadow: "0 12px 28px rgba(18,47,77,0.045)",
+            border: isTeacher ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(36,74,112,0.075)",
+            background: isTeacher
+              ? "linear-gradient(135deg, var(--color-navy-deep), var(--color-navy) 58%, var(--color-navy-light))"
+              : "linear-gradient(135deg,#fffdf8,rgba(251,240,216,0.34))",
+            boxShadow: isTeacher
+              ? "0 18px 42px rgba(18,47,77,0.18)"
+              : "0 12px 28px rgba(18,47,77,0.045)",
           }}
         >
           <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "flex-start", md: "center" }} justifyContent="space-between" gap={1.5}>
             <Box>
               <Stack direction="row" gap={0.8} alignItems="center" flexWrap="wrap">
-                <Typography sx={{ color: COLORS.navyDark, fontWeight: 900, fontSize: { xs: "23px", md: "29px" } }}>
-                  سجل المتابعة اليومي
+                <Typography sx={{ color: isTeacher ? "#fff" : COLORS.navyDark, fontWeight: 900, fontSize: { xs: "23px", md: "29px" } }}>
+                  {isTeacher ? "تقرير المتابعة" : "سجل المتابعة اليومي"}
                 </Typography>
-                <Chip label="تقرير شهري" size="small" sx={{ backgroundColor: "rgba(211,164,79,0.12)", color: COLORS.navyDark, fontWeight: 800 }} />
+                <Chip
+                  label="تقرير شهري"
+                  size="small"
+                  sx={{
+                    backgroundColor: isTeacher ? "rgba(242,215,146,0.16)" : "rgba(211,164,79,0.12)",
+                    color: isTeacher ? "var(--color-gold-light, #f2d792)" : COLORS.navyDark,
+                    border: isTeacher ? "1px solid rgba(242,215,146,0.18)" : "none",
+                    fontWeight: 800,
+                  }}
+                />
               </Stack>
-              <Typography sx={{ mt: 0.45, color: COLORS.muted, fontSize: "10.5px" }}>
-                رصد سلوكي للحضور والمشاركة وحلّ الواجب والاختبارات القصيرة — لا يؤثر في الدرجات.
+              <Typography sx={{ mt: 0.45, color: isTeacher ? "rgba(255,255,255,0.7)" : COLORS.muted, fontSize: "10.5px" }}>
+                {isTeacher
+                  ? "ملخص متابعة فصولك للحضور والمشاركة وحلّ الواجب والاختبارات القصيرة — لا يؤثر في الدرجات."
+                  : "رصد سلوكي للحضور والمشاركة وحلّ الواجب والاختبارات القصيرة — لا يؤثر في الدرجات."}
               </Typography>
             </Box>
-            <AssessmentRounded sx={{ fontSize: 40, color: COLORS.gold }} />
+            <AssessmentRounded sx={{ fontSize: 40, color: isTeacher ? "var(--color-gold-light, #f2d792)" : COLORS.gold }} />
           </Stack>
         </Paper>
 
@@ -369,8 +383,39 @@ const DailyTrackingReport = () => {
         </>
       )}
       </Box>
-    </Container>
   );
+
+  if (isTeacher) {
+    return (
+      <Box
+        dir="rtl"
+        sx={{
+          minHeight: "100vh",
+          color: "var(--color-text)",
+          backgroundColor: "var(--color-page)",
+          backgroundImage: `
+            radial-gradient(circle at 8% 8%, rgba(211,164,79,0.07), transparent 24%),
+            radial-gradient(circle at 92% 4%, rgba(36,74,112,0.08), transparent 25%)
+          `,
+        }}
+      >
+        <Box
+          component="main"
+          sx={{
+            width: "100%",
+            maxWidth: "1680px",
+            mx: "auto",
+            px: { xs: 2, sm: 3, md: 4, lg: 5 },
+            py: { xs: 2, sm: 2.5, md: 3.5 },
+          }}
+        >
+          {reportContent}
+        </Box>
+      </Box>
+    );
+  }
+
+  return <Container>{reportContent}</Container>;
 };
 
 export default DailyTrackingReport;
