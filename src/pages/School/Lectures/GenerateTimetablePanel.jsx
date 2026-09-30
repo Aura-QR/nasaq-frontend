@@ -953,14 +953,6 @@ const GenerateTimetablePanel = ({
                   }}
                 />
 
-                <Chip
-                  size="small"
-                  label={`${preview.slotsPerWeek} خانة أسبوعيًا`}
-                  sx={{
-                    fontSize: "8px",
-                    fontWeight: 800,
-                  }}
-                />
 
                 {preview.skippedClasses > 0 && (
                   <Chip
@@ -1183,17 +1175,39 @@ const GenerateTimetablePanel = ({
                               "فصل"}
                           </Typography>
 
-                          <Chip
-                            size="small"
-                            label={`${numberOf(
-                              classItem?.periods
-                            )} حصة`}
-                            sx={{
-                              height: 24,
-                              fontSize: "7.5px",
-                              fontWeight: 800,
-                            }}
-                          />
+                          <Stack direction="row" spacing={0.7} alignItems="center">
+                            {(() => {
+                              const plan = asArray(preview?.classPlans).find(
+                                (item) =>
+                                  String(item?.classId || "") ===
+                                  String(classItem?.classId || "")
+                              );
+
+                              return plan ? (
+                                <Chip
+                                  size="small"
+                                  label={`السعة ${numberOf(plan?.capacity)} حصة`}
+                                  sx={{
+                                    height: 24,
+                                    fontSize: "7.5px",
+                                    fontWeight: 800,
+                                  }}
+                                />
+                              ) : null;
+                            })()}
+
+                            <Chip
+                              size="small"
+                              label={`${numberOf(
+                                classItem?.periods
+                              )} حصة موزعة`}
+                              sx={{
+                                height: 24,
+                                fontSize: "7.5px",
+                                fontWeight: 800,
+                              }}
+                            />
+                          </Stack>
                         </Stack>
 
                         <TableContainer>

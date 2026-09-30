@@ -64,6 +64,7 @@ import {
   fetchSubjectOfferings,
   saveTeachingPlan,
 } from "@/APIs/school/subjectOfferings";
+import { fetchClassesList } from "@/APIs/school/classes";
 
 const COLORS = {
   navy: "#122f4d",
@@ -1169,6 +1170,7 @@ const SubjectOfferings = () => {
    */
   const [preferenceDraft, setPreferenceDraft] = useState({});
   const [slotsPerWeek, setSlotsPerWeek] = useState(null);
+  const [capacityByGrade, setCapacityByGrade] = useState({});
 
   const [selectedYearId, setSelectedYearId] = useState("");
   const [selectedTermId, setSelectedTermId] = useState("");
@@ -1358,21 +1360,55 @@ const SubjectOfferings = () => {
   const loadPlanCapacity = useCallback(async () => {
     if (!selectedTermId) {
       setSlotsPerWeek(null);
+      setCapacityByGrade({});
       return;
     }
 
     try {
-      const response = await api.get("/lectures/feasibility", {
-        params: { termId: selectedTermId },
-      });
+      const [response, classesResponse] = await Promise.all([
+        api.get("/lectures/feasibility", {
+          params: { termId: selectedTermId },
+        }),
+        fetchClassesList(),
+      ]);
 
       const payload = unwrap(response?.data);
       const capacity = Number(payload?.slotsPerWeek);
+      const classPlans = Array.isArray(payload?.classPlans) ? payload.classPlans : [];
+      const classRows = extractList(classesResponse);
+      const classById = new Map(classRows.map((item) => [idOf(item), item]));
+      const nextCapacityByGrade = {};
 
+      classPlans.forEach((plan) => {
+        const classId = idOf(plan?.classId);
+        const classRow = classById.get(classId);
+        const gradeLevelId = idOf(
+          classRow?.gradeLevelId ||
+            classRow?.gradeLevel ||
+            plan?.gradeLevelId ||
+            plan?.gradeLevel
+        );
+        const classCapacity = Number(plan?.capacity);
+
+        if (!gradeLevelId || !Number.isFinite(classCapacity) || classCapacity <= 0) {
+          return;
+        }
+
+        // كل فصول الصف الواحد تتبع نفس المرحلة وبالتالي نفس سعة الأسبوع.
+        // لو رجعت أكثر من قيمة لأي سبب نحتفظ بالأقل حتى لا نعرض خطة مكتملة وهي متجاوزة لفصل فعلي.
+        const current = Number(nextCapacityByGrade[gradeLevelId]);
+        nextCapacityByGrade[gradeLevelId] =
+          Number.isFinite(current) && current > 0
+            ? Math.min(current, classCapacity)
+            : classCapacity;
+      });
+
+      setCapacityByGrade(nextCapacityByGrade);
       setSlotsPerWeek(Number.isFinite(capacity) ? capacity : null);
     } catch {
       // السعة مساعدة لعرض الخطة فقط، وفشلها لا يمنع إدارة عروض المواد.
       setSlotsPerWeek(null);
+      setCapacityByGrade({});
     }
   }, [selectedTermId]);
 
@@ -2278,13 +2314,20 @@ const SubjectOfferings = () => {
                 </Typography>
 
                 {gradePlanTotals.map((grade) => {
+                  const gradeCapacity = Number(capacityByGrade[grade.gradeLevelId]);
+                  const effectiveCapacity =
+                    Number.isFinite(gradeCapacity) && gradeCapacity > 0
+                      ? gradeCapacity
+                      : selectedGradeId && selectedGradeId === grade.gradeLevelId
+                      ? Number(slotsPerWeek)
+                      : null;
                   const capacityKnown =
-                    Number.isFinite(slotsPerWeek) && slotsPerWeek > 0;
+                    Number.isFinite(effectiveCapacity) && effectiveCapacity > 0;
                   const missing = capacityKnown
-                    ? Math.max(0, slotsPerWeek - grade.total)
+                    ? Math.max(0, effectiveCapacity - grade.total)
                     : 0;
                   const excess = capacityKnown
-                    ? Math.max(0, grade.total - slotsPerWeek)
+                    ? Math.max(0, grade.total - effectiveCapacity)
                     : 0;
                   const complete = capacityKnown && missing === 0 && excess === 0;
                   const statusColor = excess
@@ -2302,15 +2345,15 @@ const SubjectOfferings = () => {
                     ? "#fff8e8"
                     : "#eef3f7";
                   const progressValue = capacityKnown
-                    ? Math.min(100, Math.max(0, (grade.total / slotsPerWeek) * 100))
+                    ? Math.min(100, Math.max(0, (grade.total / effectiveCapacity) * 100))
                     : 0;
                   const statusText = !capacityKnown
                     ? `${grade.total} حصة أسبوعيًا`
                     : excess
                     ? `تجاوزت السعة بـ ${excess} حصة`
                     : complete
-                    ? `الخطة مكتملة (${grade.total} / ${slotsPerWeek})`
-                    : `متبقي توزيع ${missing} حصة (${grade.total} / ${slotsPerWeek})`;
+                    ? `الخطة مكتملة (${grade.total} / ${effectiveCapacity})`
+                    : `متبقي توزيع ${missing} حصة (${grade.total} / ${effectiveCapacity})`;
 
                   return (
                     <Box
