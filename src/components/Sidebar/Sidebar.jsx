@@ -174,6 +174,9 @@ const Sidebar = ({ active, setActive }) => {
   const attendancePermissions =
     usePermissions("attendance");
 
+  const dailyTrackingPermissions =
+    usePermissions("dailyTracking");
+
   const preparationPermissions =
     usePermissions("preparation");
 
@@ -510,6 +513,16 @@ const Sidebar = ({ active, setActive }) => {
               dutyPermissions.read,
           },
           {
+            name: "سجل المتابعة اليومي",
+            Icon: InsightsRounded,
+            iconType: "mui",
+            to: "/school/daily-tracking",
+            show:
+              role === "OWNER" ||
+              role === "SUPERVISOR" ||
+              dailyTrackingPermissions.read,
+          },
+          {
             name: "إدارة التحضير",
             icon: preparationIcon,
             to: "/school/preparation",
@@ -745,6 +758,7 @@ const Sidebar = ({ active, setActive }) => {
     examsPermissions.read,
     projectsPermissions.read,
     attendancePermissions.read,
+    dailyTrackingPermissions.read,
     preparationPermissions.read,
     libraryPermissions.read,
     financialPermissions.read,
