@@ -311,7 +311,7 @@ const DailyTrackingReport = () => {
         </Paper>
 
         <Paper elevation={0} sx={{ mt: 1.3, p: 1.4, borderRadius: "18px", border: "1px solid rgba(36,74,112,.08)", background: "#fff", boxShadow: "0 10px 24px rgba(18,47,77,0.04)" }}>
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: isTeacher ? "1.2fr 1.2fr .9fr .9fr auto" : "1.1fr 1.1fr 1.1fr .9fr .9fr auto" }, gap: 1 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: isTeacher ? "1.25fr .95fr .95fr auto" : "1.1fr 1.1fr 1.1fr .9fr .9fr auto" }, gap: 1 }}>
             {!isTeacher && (
               <TextField select size="small" label="المعلم" value={teacherId} disabled={loadingOptions} onChange={(event) => { setTeacherId(event.target.value); setTeacherAssignments([]); setClassId(""); setSubjectOfferingId(""); setReport(null); }}>
                 <MenuItem value="">كل المعلمين</MenuItem>
@@ -321,10 +321,12 @@ const DailyTrackingReport = () => {
             <TextField select size="small" label="الفصل" value={classId} disabled={loadingOptions || (!isTeacher && teacherId && !visibleClasses.length)} onChange={(event) => setClassId(event.target.value)}>
               {visibleClasses.map((item) => <MenuItem key={classKey(item)} value={classKey(item)}>{className(item)}</MenuItem>)}
             </TextField>
-            <TextField select size="small" label="المادة" value={subjectOfferingId} disabled={loadingOptions || isTeacher} onChange={(event) => setSubjectOfferingId(event.target.value)}>
-              <MenuItem value="">{isTeacher ? "كل المواد المتاحة" : "كل المواد"}</MenuItem>
-              {filteredOfferings.map((item) => <MenuItem key={normalizeId(item)} value={normalizeId(item)}>{offeringName(item)}</MenuItem>)}
-            </TextField>
+            {!isTeacher && (
+              <TextField select size="small" label="المادة" value={subjectOfferingId} disabled={loadingOptions} onChange={(event) => setSubjectOfferingId(event.target.value)}>
+                <MenuItem value="">كل المواد</MenuItem>
+                {filteredOfferings.map((item) => <MenuItem key={normalizeId(item)} value={normalizeId(item)}>{offeringName(item)}</MenuItem>)}
+              </TextField>
+            )}
             <TextField type="date" size="small" label="من" value={startDate} onChange={(event) => setStartDate(event.target.value)} InputLabelProps={{ shrink: true }} />
             <TextField type="date" size="small" label="إلى" value={endDate} onChange={(event) => setEndDate(event.target.value)} InputLabelProps={{ shrink: true }} />
             <Button variant="contained" onClick={loadReport} disabled={loading || loadingOptions || !classId} startIcon={loading ? <CircularProgress size={15} color="inherit" /> : <SearchRounded />} sx={{ minHeight: 40, borderRadius: "11px", bgcolor: COLORS.navyDark, "&:hover": { bgcolor: "#15324f" }, fontWeight: 900, whiteSpace: "nowrap" }}>
