@@ -54,6 +54,8 @@ import {
 
 import { fetchClassesList } from "@/APIs/school/classes";
 import { fetchAcademicYears } from "@/APIs/school/academicYears";
+import { fetchStages } from "@/APIs/school/stages";
+import { fetchSchoolSettings } from "@/APIs/school/schoolSettings";
 
 import { useLectures } from "@/utils/hooks/apis/useLectures";
 import usePermissions from "@/utils/hooks/usePermissions";
@@ -81,6 +83,40 @@ const normalizeDay = (value) =>
   String(value || "")
     .trim()
     .toLowerCase();
+
+
+const getStageIdFromClass = (item) =>
+  getId(
+    item?.stageId ||
+      item?.stage ||
+      item?.gradeLevelId?.stageId ||
+      item?.gradeLevelId?.stage ||
+      item?.gradeLevel?.stageId ||
+      item?.gradeLevel?.stage
+  );
+
+const getSchoolSettingsData = (response) => {
+  const payload = unwrapData(response);
+  return payload?.settings || payload || {};
+};
+
+const getDayPeriodCount = ({ dayId, stagePeriods, schoolSettings }) => {
+  const base = Number(schoolSettings?.periodsPerDay) || 8;
+  const schedule = Array.isArray(schoolSettings?.workSchedule)
+    ? schoolSettings.workSchedule
+    : [];
+  const daySetting = schedule.find(
+    (item) => normalizeDay(item?.dayOfWeek || item?.day) === normalizeDay(dayId)
+  );
+  const working = daySetting?.isWorkingDay !== false;
+  if (!working) return 0;
+
+  const schoolDay = Number(daySetting?.periodsPerDay) || base;
+  if (!stagePeriods) return schoolDay;
+  if (schoolDay === base) return stagePeriods;
+
+  return Math.max(1, Math.min(stagePeriods, Math.floor((stagePeriods * schoolDay) / base)));
+};
 
 const getEntityName = (value) => {
   if (!value) {
@@ -507,6 +543,9 @@ const List = () => {
     setClassesLoading,
   ] = useState(true);
 
+  const [stageRows, setStageRows] = useState([]);
+  const [schoolSettings, setSchoolSettings] = useState({});
+
   const [
     deleteOpen,
     setDeleteOpen,
@@ -599,6 +638,8 @@ const List = () => {
         const [
           classesResponse,
           activeYearResponse,
+          stagesResponse,
+          settingsResponse,
         ] = await Promise.all([
           fetchClassesList(),
           api
@@ -606,6 +647,8 @@ const List = () => {
               "/academic-years/active"
             )
             .catch(() => null),
+          fetchStages(),
+          fetchSchoolSettings().catch(() => null),
         ]);
 
         if (!mounted) {
@@ -623,6 +666,13 @@ const List = () => {
 
         const allRows =
           extractList(classesResponse);
+
+        setStageRows(
+          stagesResponse?.status === false
+            ? []
+            : extractList(stagesResponse)
+        );
+        setSchoolSettings(getSchoolSettingsData(settingsResponse));
 
         const activeYear =
           unwrapData(
@@ -726,6 +776,40 @@ const List = () => {
         ),
       [selectedClass]
     );
+
+  const selectedStage = useMemo(() => {
+    const stageId = getStageIdFromClass(selectedClass);
+    return stageRows.find((item) => getId(item) === stageId) || null;
+  }, [selectedClass, stageRows]);
+
+  const effectivePeriodsPerDay = useMemo(() => {
+    const stageValue = Number(selectedStage?.periodsPerDay);
+    if (Number.isInteger(stageValue) && stageValue >= 1 && stageValue <= 20) {
+      return stageValue;
+    }
+    const schoolValue = Number(schoolSettings?.periodsPerDay);
+    return Number.isInteger(schoolValue) && schoolValue >= 1
+      ? Math.min(20, schoolValue)
+      : 8;
+  }, [selectedStage, schoolSettings]);
+
+  const visibleSlots = useMemo(
+    () => Slots.slice(0, effectivePeriodsPerDay),
+    [effectivePeriodsPerDay]
+  );
+
+  const dayPeriodCounts = useMemo(() => {
+    const stageValue = Number(selectedStage?.periodsPerDay);
+    const stagePeriods = Number.isInteger(stageValue) && stageValue >= 1
+      ? Math.min(20, stageValue)
+      : null;
+    return Object.fromEntries(
+      Days.map((day) => [
+        normalizeDay(day.id),
+        getDayPeriodCount({ dayId: day.id, stagePeriods, schoolSettings }),
+      ])
+    );
+  }, [selectedStage, schoolSettings]);
 
   const selectedClassAcademicYearId =
     useMemo(() => {
@@ -1927,15 +2011,15 @@ const List = () => {
             <Box sx={{ width: "100%", overflowX: "auto" }}>
               <Box
                 sx={{
-                  minWidth: Math.max(960, 92 + Slots.length * 112),
+                  minWidth: Math.max(960, 92 + visibleSlots.length * 112),
                   display: "grid",
-                  gridTemplateColumns: `92px repeat(${Slots.length}, minmax(112px, 1fr))`,
+                  gridTemplateColumns: `92px repeat(${visibleSlots.length}, minmax(112px, 1fr))`,
                   direction: "rtl",
                 }}
               >
                 <ScheduleHeaderCell>اليوم</ScheduleHeaderCell>
 
-                {Slots.map((slotItem) => (
+                {visibleSlots.map((slotItem) => (
                   <ScheduleHeaderCell key={slotItem.id}>
                     {slotItem.name || `الحصة ${slotItem.id}`}
                   </ScheduleHeaderCell>
@@ -1946,6 +2030,8 @@ const List = () => {
                     key={day.id}
                     day={day}
                     scheduleMap={scheduleMap}
+                    slots={visibleSlots}
+                    availableCount={dayPeriodCounts[normalizeDay(day.id)] ?? effectivePeriodsPerDay}
                     permissions={permissions}
                     onAdd={openAddFromCell}
                     onEdit={openEditLecture}
@@ -2561,6 +2647,8 @@ const ScheduleHeaderCell = ({
 const ScheduleDayRow = ({
   day,
   scheduleMap,
+  slots,
+  availableCount,
   permissions,
   onAdd,
   onEdit,
@@ -2613,7 +2701,7 @@ const ScheduleDayRow = ({
         </Stack>
       </Box>
 
-      {Slots.map(
+      {slots.map(
         (slotItem) => {
           const slotId =
             Number(
@@ -2636,6 +2724,27 @@ const ScheduleDayRow = ({
               lecture?.id
             );
           const isHighlighted = true;
+          const isAvailable = slotId <= Number(availableCount || 0);
+
+          if (!isAvailable) {
+            return (
+              <Box
+                key={slotItem.id}
+                sx={{
+                  minHeight: 96,
+                  borderBottom: "1px solid rgba(36,74,112,0.07)",
+                  borderLeft: "1px solid rgba(36,74,112,0.07)",
+                  backgroundColor: "rgba(36,74,112,0.025)",
+                  display: "grid",
+                  placeItems: "center",
+                  color: "var(--color-muted)",
+                  fontSize: "8px",
+                }}
+              >
+                غير متاحة
+              </Box>
+            );
+          }
 
           return (
             <ScheduleCell

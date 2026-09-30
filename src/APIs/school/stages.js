@@ -297,11 +297,36 @@ export const updateStage =
                   payload.order
                 )
               : undefined,
+
+          periodsPerDay:
+            payload?.periodsPerDay !== undefined
+              ? payload.periodsPerDay === null || payload.periodsPerDay === ""
+                ? null
+                : Number(payload.periodsPerDay)
+              : undefined,
+
+          periodMinutes:
+            payload?.periodMinutes !== undefined
+              ? payload.periodMinutes === null || payload.periodMinutes === ""
+                ? null
+                : Number(payload.periodMinutes)
+              : undefined,
+
+          startTime:
+            payload?.startTime !== undefined
+              ? payload.startTime === null || payload.startTime === ""
+                ? null
+                : String(payload.startTime).trim()
+              : undefined,
+
+          endTime:
+            payload?.endTime !== undefined
+              ? payload.endTime === null || payload.endTime === ""
+                ? null
+                : String(payload.endTime).trim()
+              : undefined,
         }).filter(
-          ([, value]) =>
-            value !==
-              undefined &&
-            value !== ""
+          ([, value]) => value !== undefined
         )
       );
 

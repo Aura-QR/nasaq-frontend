@@ -1135,13 +1135,11 @@ const GenerateTimetablePanel = ({
                     );
 
                     const slotCount =
-                      preview.periodsPerDay ||
                       Math.max(
                         0,
                         ...days.map(
                           (day) =>
-                            asArray(day?.slots)
-                              .length
+                            asArray(day?.slots).length
                         )
                       );
 

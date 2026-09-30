@@ -919,7 +919,11 @@ const FeasibilityPanel = ({
               <SummaryCard
                 label="السعة الأسبوعية"
                 value={slotsPerWeek}
-                helper={`${workingDays.length} أيام × ${periodsPerDay} حصص`}
+                helper={
+                  classes.length > 1
+                    ? "تُحسب حسب سعة كل فصل ومرحلته"
+                    : `${workingDays.length} أيام × ${periodsPerDay} حصص`
+                }
                 danger={
                   slotsPerWeek <= 0
                 }

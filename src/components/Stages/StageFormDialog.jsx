@@ -101,6 +101,18 @@ const StageFormDialog = ({
       order:
         stage?.order ||
         "",
+
+      periodsPerDay:
+        stage?.periodsPerDay ?? "",
+
+      periodMinutes:
+        stage?.periodMinutes ?? "",
+
+      startTime:
+        stage?.startTime ?? "",
+
+      endTime:
+        stage?.endTime ?? "",
     });
   }, [
     open,
@@ -200,7 +212,7 @@ const StageFormDialog = ({
                   "8.5px",
               }}
             >
-              أدخل اسم المرحلة وترتيب ظهورها.
+              أدخل بيانات المرحلة، ويمكن تخصيص اليوم الدراسي أو تركه ليتبع إعداد المدرسة.
             </Typography>
           </Box>
         </Box>
@@ -300,6 +312,84 @@ const StageFormDialog = ({
             )}
             sx={FIELD_SX}
           />
+          {stage ? (
+          <Box
+            sx={{
+              mt: 0.5,
+              p: 1.2,
+              display: "grid",
+              gap: 1.15,
+              border: "1px solid rgba(36,74,112,0.10)",
+              borderRadius: "12px",
+              backgroundColor: "rgba(36,74,112,0.02)",
+            }}
+          >
+            <Typography
+              sx={{
+                color: "#122f4d",
+                fontSize: "10px",
+                fontWeight: 800,
+              }}
+            >
+              إعداد اليوم الدراسي للمرحلة
+            </Typography>
+
+            <TextField
+              fullWidth
+              type="number"
+              label="حصص اليوم"
+              placeholder="يتبع إعداد المدرسة"
+              inputProps={{ min: 1, max: 20, step: 1 }}
+              error={Boolean(errors?.periodsPerDay)}
+              helperText={errors?.periodsPerDay?.message || "اتركه فارغًا ليتبع إعداد المدرسة"}
+              {...register("periodsPerDay", {
+                setValueAs: (value) => value === "" ? null : Number(value),
+                validate: (value) => value === null || (Number.isInteger(value) && value >= 1 && value <= 20) || "عدد الحصص يجب أن يكون من 1 إلى 20",
+              })}
+              sx={FIELD_SX}
+            />
+
+            <TextField
+              fullWidth
+              type="number"
+              label="طول الحصة بالدقائق"
+              placeholder="غير محدد"
+              inputProps={{ min: 5, max: 120, step: 1 }}
+              error={Boolean(errors?.periodMinutes)}
+              helperText={errors?.periodMinutes?.message || "اختياري — للعرض فقط"}
+              {...register("periodMinutes", {
+                setValueAs: (value) => value === "" ? null : Number(value),
+                validate: (value) => value === null || (Number.isInteger(value) && value >= 5 && value <= 120) || "طول الحصة يجب أن يكون من 5 إلى 120 دقيقة",
+              })}
+              sx={FIELD_SX}
+            />
+
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+              <TextField
+                fullWidth
+                type="time"
+                label="بداية اليوم"
+                InputLabelProps={{ shrink: true }}
+                {...register("startTime", { setValueAs: (value) => value || null })}
+                sx={FIELD_SX}
+              />
+
+              <TextField
+                fullWidth
+                type="time"
+                label="نهاية اليوم"
+                InputLabelProps={{ shrink: true }}
+                {...register("endTime", { setValueAs: (value) => value || null })}
+                sx={FIELD_SX}
+              />
+            </Box>
+          </Box>
+          ) : (
+            <Typography sx={{ color: "#7e8791", fontSize: "8.5px" }}>
+              بعد إضافة المرحلة يمكنك فتح التعديل لتخصيص عدد الحصص ووقت اليوم الدراسي.
+            </Typography>
+          )}
+
         </Box>
       </DialogContent>
 
