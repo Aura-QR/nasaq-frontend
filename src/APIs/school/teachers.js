@@ -347,6 +347,34 @@ const normalizeTeacherPayload = (
         "true";
   }
 
+  /*
+   * Weekdays the teacher works. This builder keeps only the fields it
+   * lists, so without this the days were dropped before the request left
+   * and every save came back with workDays: null. null — every school day —
+   * is a real value here and is sent as such; absent means "leave it".
+   */
+  if (
+    Object.prototype.hasOwnProperty.call(
+      source,
+      "workDays"
+    )
+  ) {
+    const days = Array.isArray(
+      source.workDays
+    )
+      ? [
+          ...new Set(
+            source.workDays
+              .filter(Boolean)
+              .map(String)
+          ),
+        ]
+      : [];
+
+    result.workDays =
+      days.length ? days : null;
+  }
+
   if (
     Object.prototype.hasOwnProperty.call(
       source,
