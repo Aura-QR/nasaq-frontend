@@ -651,6 +651,10 @@ const TeacherAttendanceAdmin = () => {
             totals.daysPresent + (Number(row?.daysPresent) || 0),
           daysAbsent:
             totals.daysAbsent + (Number(row?.daysAbsent) || 0),
+          daysAbsentExcused:
+            totals.daysAbsentExcused + (Number(row?.daysAbsentExcused) || 0),
+          daysAbsentUnexcused:
+            totals.daysAbsentUnexcused + (Number(row?.daysAbsentUnexcused) || 0),
           totalLateMinutes:
             totals.totalLateMinutes + (Number(row?.totalLateMinutes) || 0),
           daysLate:
@@ -664,6 +668,8 @@ const TeacherAttendanceAdmin = () => {
         {
           daysPresent: 0,
           daysAbsent: 0,
+          daysAbsentExcused: 0,
+          daysAbsentUnexcused: 0,
           totalLateMinutes: 0,
           daysLate: 0,
           daysLeftEarly: 0,
@@ -716,6 +722,8 @@ const TeacherAttendanceAdmin = () => {
         "أيام الدوام في الفترة": summaryWorkingDays,
         "أيام الحضور": Number(row?.daysPresent) || 0,
         "أيام الغياب": Number(row?.daysAbsent) || 0,
+        "غياب بعذر": Number(row?.daysAbsentExcused) || 0,
+        "غياب بدون عذر": Number(row?.daysAbsentUnexcused) || 0,
         "أيام التأخير": Number(row?.daysLate) || 0,
         "إجمالي دقائق التأخير": Number(row?.totalLateMinutes) || 0,
         "أيام الخروج المبكر": Number(row?.daysLeftEarly) || 0,
@@ -1470,7 +1478,7 @@ const TeacherAttendanceAdmin = () => {
           ["المعلمين في التقرير", summaryTotalTeachers],
           ["أيام الدوام في الفترة", summaryWorkingDays],
           ["أيام الحضور", summaryTotals.daysPresent],
-          ["أيام الغياب", summaryTotals.daysAbsent],
+          ["أيام الغياب", `${summaryTotals.daysAbsent} · ${summaryTotals.daysAbsentExcused} بعذر · ${summaryTotals.daysAbsentUnexcused} بدون`],
           ["أيام التأخير", summaryTotals.daysLate],
           ["إجمالي التأخير", formatMinutes(summaryTotals.totalLateMinutes, { duration: true })],
         ].map(([label, value]) => (
@@ -1512,7 +1520,7 @@ const TeacherAttendanceAdmin = () => {
           </Box>
         ) : (
           <TableContainer>
-            <Table size="small" sx={{ minWidth: 1520 }}>
+            <Table size="small" sx={{ minWidth: 1680 }}>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "rgba(36,74,112,.035)" }}>
                   {[
@@ -1520,6 +1528,8 @@ const TeacherAttendanceAdmin = () => {
                     [null, "الحالة", "center"],
                     ["daysPresent", "أيام الحضور", "center"],
                     ["daysAbsent", "أيام الغياب", "center"],
+                    ["daysAbsentExcused", "بعذر", "center"],
+                    ["daysAbsentUnexcused", "بدون عذر", "center"],
                     ["daysLate", "أيام التأخير", "center"],
                     ["totalLateMinutes", "إجمالي التأخير", "center"],
                     ["daysLeftEarly", "الخروج المبكر", "center"],
@@ -1552,13 +1562,13 @@ const TeacherAttendanceAdmin = () => {
               <TableBody>
                 {!summaryLoaded ? (
                   <TableRow>
-                    <TableCell colSpan={13} align="center" sx={{ py: 7, color: "#708198" }}>
+                    <TableCell colSpan={15} align="center" sx={{ py: 7, color: "#708198" }}>
                       اختر الفترة ثم اضغط «عرض التقرير».
                     </TableCell>
                   </TableRow>
                 ) : !summaryRows.length ? (
                   <TableRow>
-                    <TableCell colSpan={13} align="center" sx={{ py: 7, color: "#708198" }}>
+                    <TableCell colSpan={15} align="center" sx={{ py: 7, color: "#708198" }}>
                       لا توجد بيانات حضور في الفترة المحددة.
                     </TableCell>
                   </TableRow>
@@ -1604,6 +1614,13 @@ const TeacherAttendanceAdmin = () => {
                             fontWeight: 800,
                           }}
                         />
+                      </TableCell>
+
+                      <TableCell align="center">
+                        {Number(row?.daysAbsentExcused) || 0}
+                      </TableCell>
+                      <TableCell align="center">
+                        {Number(row?.daysAbsentUnexcused) || 0}
                       </TableCell>
 
                       <TableCell align="center">

@@ -435,6 +435,13 @@ const Sidebar = ({ active, setActive }) => {
             show: teacherAttendancePermissions.read,
           },
           {
+            name: "أعذار غياب المعلمين",
+            Icon: EventBusyRounded,
+            iconType: "mui",
+            to: "/school/teacher-absence-excuses",
+            show: teacherAttendancePermissions.read,
+          },
+          {
             // ما يراه المشرف حين ينظر داخل الفصل. الحصة، لا اليوم: معلمة
             // تبصم في موعدها وتصل الحصة الرابعة متأخرة.
             name: "جولة الفصول",

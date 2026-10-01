@@ -36,6 +36,9 @@ import {
 import {
   fetchPendingLateReason,
   submitLateReason,
+  fetchPendingTeacherAbsenceExcuses,
+  uploadTeacherAbsenceExcuseAttachment,
+  submitTeacherAbsenceExcuse,
 } from "@/APIs/school/teacherAttendance";
 
 import {
@@ -107,6 +110,7 @@ const SEEN_LIMIT = 200;
 const ADMIN_ALERT_TYPES = [
   "teacher_late",
   "late_reason_submitted",
+  "teacher_absence_excuse_submitted",
   "staff_late_reason_submitted",
   "staff_leave_requested",
 ];
@@ -159,6 +163,14 @@ const AttendanceAlerts = () => {
   // The absence a parent has not been shown yet.
   const [absence, setAbsence] = useState(null);
 
+  // Teacher full-day absence excuse (separate from lateness and leave requests).
+  const [teacherAbsenceDay, setTeacherAbsenceDay] = useState(null);
+  const [teacherAbsenceReason, setTeacherAbsenceReason] = useState("");
+  const [teacherAbsenceError, setTeacherAbsenceError] = useState("");
+  const [teacherAbsenceAttachment, setTeacherAbsenceAttachment] = useState(null);
+  const [teacherAbsenceUploading, setTeacherAbsenceUploading] = useState(false);
+  const [teacherAbsenceSending, setTeacherAbsenceSending] = useState(false);
+
   // The family's answer, written in the same dialog that asks for it.
   //
   // Asking on one screen and answering on another is how a question goes
@@ -185,6 +197,14 @@ const AttendanceAlerts = () => {
 
     if (dismissed.current.has(data.attendanceId)) return;
     setLateness({ ...data, source: "teacher" });
+  }, []);
+
+  const checkTeacherAbsence = useCallback(async () => {
+    const response = await fetchPendingTeacherAbsenceExcuses({ days: 14 });
+    if (response?.status === false) return;
+    const items = Array.isArray(response?.data) ? response.data : [];
+    const day = items.find((item) => !dismissed.current.has(`teacher-absence-${item.date}`));
+    setTeacherAbsenceDay(day || null);
   }, []);
 
   const checkStaff = useCallback(async () => {
@@ -293,7 +313,7 @@ const AttendanceAlerts = () => {
     if (!signedIn) return undefined;
 
     const run = () => {
-      if (isTeacher) checkTeacher();
+      if (isTeacher) { checkTeacher(); checkTeacherAbsence(); }
       if (isStaffSelf) checkStaff();
       if (isStudent || isAdmin) checkNotices();
     };
@@ -314,7 +334,7 @@ const AttendanceAlerts = () => {
       clearInterval(timer);
       window.removeEventListener(LATE_REASON_EVENT, onCheckIn);
     };
-  }, [signedIn, isTeacher, isStaffSelf, isStudent, isAdmin, checkTeacher, checkStaff, checkNotices]);
+  }, [signedIn, isTeacher, isStaffSelf, isStudent, isAdmin, checkTeacher, checkTeacherAbsence, checkStaff, checkNotices]);
 
   useEffect(() => {
     const openAbsenceExcuse = async (event) => {
@@ -491,8 +511,70 @@ const AttendanceAlerts = () => {
     clearAbsenceForm();
   };
 
+  const postponeTeacherAbsence = () => {
+    if (teacherAbsenceDay?.date) dismissed.current.add(`teacher-absence-${teacherAbsenceDay.date}`);
+    setTeacherAbsenceDay(null); setTeacherAbsenceReason(""); setTeacherAbsenceError(""); setTeacherAbsenceAttachment(null);
+  };
+
+  const pickTeacherAbsenceAttachment = async (event) => {
+    const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error("حجم المرفق يجب ألا يتجاوز 10 MB"); return; }
+    setTeacherAbsenceUploading(true);
+    const result = await uploadTeacherAbsenceExcuseAttachment(file);
+    setTeacherAbsenceUploading(false);
+    if (result?.status === false) { toast.error(`${result.message} — يمكنك إرسال العذر بدون المرفق`); return; }
+    setTeacherAbsenceAttachment({ name: file.name, path: result?.data?.attachment });
+  };
+
+  const sendTeacherAbsence = async () => {
+    const text = teacherAbsenceReason.trim();
+    if (!text) { setTeacherAbsenceError("اكتب سبب الغياب"); return; }
+    setTeacherAbsenceSending(true);
+    const result = await submitTeacherAbsenceExcuse({ date: teacherAbsenceDay?.date, reason: text, attachment: teacherAbsenceAttachment?.path });
+    setTeacherAbsenceSending(false);
+    if (result?.status === false) {
+      if (result?.statusCode === 409) { toast.info(result.message); setTeacherAbsenceDay(null); setTeacherAbsenceReason(""); setTeacherAbsenceAttachment(null); checkTeacherAbsence(); return; }
+      setTeacherAbsenceError(result?.message || "تعذر إرسال عذر الغياب"); return;
+    }
+    toast.success(result?.message || "تم إرسال عذر الغياب إلى إدارة المدرسة");
+    setTeacherAbsenceDay(null); setTeacherAbsenceReason(""); setTeacherAbsenceAttachment(null); checkTeacherAbsence();
+  };
+
   return (
     <>
+      <Dialog
+        open={Boolean(teacherAbsenceDay) && !lateness}
+        onClose={postponeTeacherAbsence}
+        dir="rtl"
+        fullWidth
+        maxWidth="xs"
+        slotProps={{ paper: { sx: { borderRadius: 3 } } }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" alignItems="center" spacing={1.2}>
+            <Box sx={{ width: 38, height: 38, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "#fdeaea", color: "#c0392b" }}><EventBusyRounded /></Box>
+            <Typography sx={{ fontWeight: 900, fontSize: 16 }}>عذر غياب</Typography>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: 13.5, color: "#4a5560", lineHeight: 1.9 }}>
+            لديك غياب مسجل يوم <strong>{teacherAbsenceDay?.date}</strong>. وضّح السبب لإدارة المدرسة، ويمكنك إرفاق تقرير طبي إن وجد.
+          </Typography>
+          <TextField fullWidth multiline minRows={3} value={teacherAbsenceReason} onChange={(e) => { setTeacherAbsenceReason(e.target.value); if (teacherAbsenceError) setTeacherAbsenceError(""); }} placeholder="مثال: وعكة صحية" inputProps={{ maxLength: 1000 }} error={Boolean(teacherAbsenceError)} helperText={teacherAbsenceError || "يُرسل مرة واحدة ولا يمكن تعديله بعد ذلك."} sx={{ mt: 1.6 }} />
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.2 }}>
+            <Button component="label" size="small" variant="outlined" startIcon={<AttachFileRounded />} disabled={teacherAbsenceUploading}>
+              {teacherAbsenceUploading ? "جارٍ الرفع..." : "إرفاق ملف اختياري"}
+              <input hidden type="file" accept="image/jpeg,image/png,image/heic,image/webp,application/pdf" onChange={pickTeacherAbsenceAttachment} />
+            </Button>
+            {teacherAbsenceAttachment ? <Typography sx={{ fontSize: 11.5, color: "text.secondary" }}>{teacherAbsenceAttachment.name}</Typography> : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.2 }}>
+          <Button onClick={postponeTeacherAbsence} disabled={teacherAbsenceSending}>لاحقًا</Button>
+          <Button variant="contained" onClick={sendTeacherAbsence} disabled={teacherAbsenceSending || teacherAbsenceUploading}>{teacherAbsenceSending ? "جارٍ الإرسال..." : "إرسال"}</Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog
         open={Boolean(lateness)}
         onClose={postponeReason}

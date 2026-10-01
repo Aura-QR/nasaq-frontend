@@ -56,6 +56,7 @@ import SubjectOfferings from "@/pages/SubjectOfferings/SubjectOfferings";
 import TeacherConstraints from "@/pages/TeacherConstraints/TeacherConstraints";
 import AbsenceExcuses from "@/pages/AbsenceExcuses/AbsenceExcuses";
 import LateReasons from "@/pages/LateReasons/LateReasons";
+import TeacherAbsenceExcuses from "@/pages/TeacherAbsenceExcuses/TeacherAbsenceExcuses";
 import ClassRound from "@/pages/ClassRound/ClassRound";
 import LessonObservations from "@/pages/LessonObservations/LessonObservations";
 import MyObservations from "@/pages/MyObservations/MyObservations";
@@ -319,6 +320,15 @@ const AppRouter = () => {
             element={
               <RequirePermission module="teacherAttendance" operation="read">
                 <LateReasons />
+              </RequirePermission>
+            }
+          />
+
+          <Route
+            path="/school/teacher-absence-excuses"
+            element={
+              <RequirePermission module="teacherAttendance" operation="read">
+                <TeacherAbsenceExcuses />
               </RequirePermission>
             }
           />

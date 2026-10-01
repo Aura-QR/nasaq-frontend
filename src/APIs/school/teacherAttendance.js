@@ -492,6 +492,78 @@ export const deleteTeacherAttendance = async (
   }
 };
 
+
+/* =========================================================
+   Teacher Absence Excuses
+========================================================= */
+
+export const fetchPendingTeacherAbsenceExcuses = async ({ days = 14 } = {}) => {
+  try {
+    const response = await api.get(`${ENDPOINT}/me/absence-excuse/pending`, {
+      params: { days },
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تحميل أيام الغياب التي تحتاج عذرًا");
+  }
+};
+
+export const uploadTeacherAbsenceExcuseAttachment = async (file) => {
+  if (!file) return { status: false, statusCode: 400, message: "اختر ملفًا أولًا", data: null };
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await api.post(`${ENDPOINT}/me/absence-excuse/attachment`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر رفع المرفق");
+  }
+};
+
+export const submitTeacherAbsenceExcuse = async ({ date, reason, attachment } = {}) => {
+  try {
+    const response = await api.post(`${ENDPOINT}/me/absence-excuse`, {
+      date,
+      reason: String(reason || "").trim(),
+      ...(attachment ? { attachment } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر إرسال عذر الغياب");
+  }
+};
+
+export const fetchTeacherAbsenceExcuses = async ({
+  status = "pending", teacherId, from, to,
+} = {}) => {
+  try {
+    const response = await api.get(`${ENDPOINT}/absence-excuses`, {
+      params: { status, ...(teacherId ? { teacherId } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) },
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تحميل أعذار غياب المعلمين");
+  }
+};
+
+export const reviewTeacherAbsenceExcuse = async (id, verdict, note = "") => {
+  if (!id) return { status: false, statusCode: 400, message: "معرّف العذر غير موجود", data: null };
+  if (verdict === "rejected" && !String(note || "").trim()) {
+    return { status: false, statusCode: 400, message: "اذكر سبب رفض العذر", data: null };
+  }
+  try {
+    const response = await api.patch(`${ENDPOINT}/absence-excuses/${id}/review`, {
+      verdict,
+      ...(String(note || "").trim() ? { note: String(note).trim().slice(0, 1000) } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر حفظ قرار العذر");
+  }
+};
+
 /* =========================================================
    Default Export
 ========================================================= */
@@ -511,6 +583,11 @@ export default {
   updateTeacherAttendance,
   fetchTeacherAttendanceSummary,
   deleteTeacherAttendance,
+  fetchPendingTeacherAbsenceExcuses,
+  uploadTeacherAbsenceExcuseAttachment,
+  submitTeacherAbsenceExcuse,
+  fetchTeacherAbsenceExcuses,
+  reviewTeacherAbsenceExcuse,
 };
 
 
