@@ -7,6 +7,20 @@ import { CheckCircleRounded, CloseRounded, EventBusyRounded, RefreshRounded } fr
 import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import { fetchTeacherAbsenceExcuses, reviewTeacherAbsenceExcuse } from "@/APIs/school/teacherAttendance";
+import { API_BASE_URL } from "@/APIs/Axios";
+
+const resolveAttachmentUrl = (attachment) => {
+  if (!attachment) return "";
+
+  const value = String(attachment).trim();
+  if (/^https?:\/\//i.test(value)) return value;
+
+  try {
+    return new URL(value, `${API_BASE_URL}/`).href;
+  } catch {
+    return value;
+  }
+};
 
 const STATES = [
   { value: "pending", label: "بانتظار القرار", color: "warning" },
@@ -97,7 +111,7 @@ const TeacherAbsenceExcuses = () => {
                     <Chip size="small" color={state.color} label={state.label} sx={{ fontWeight: 800 }} />
                   </Stack>
                   <Typography sx={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{row.reason}</Typography>
-                  {row.attachment ? <Button component="a" href={row.attachment} target="_blank" rel="noreferrer" size="small" sx={{ alignSelf: "flex-start" }}>عرض المرفق</Button> : null}
+                  {row.attachment ? <Button component="a" href={resolveAttachmentUrl(row.attachment)} target="_blank" rel="noopener noreferrer" size="small" sx={{ alignSelf: "flex-start" }}>عرض المرفق</Button> : null}
                   {row.reviewNote ? <Alert severity={row.status === "rejected" ? "error" : "info"}>{row.reviewNote}</Alert> : null}
                   {row.status === "pending" ? <Stack direction="row" spacing={1}>
                     <Button size="small" variant="contained" color="success" startIcon={<CheckCircleRounded />} onClick={() => setDecision({ row, verdict: "accepted" })}>قبول</Button>
