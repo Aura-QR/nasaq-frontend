@@ -3,10 +3,10 @@ import {
   Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions,
   DialogContent, DialogTitle, MenuItem, Paper, Stack, TextField, Typography,
 } from "@mui/material";
-import { CheckCircleRounded, CloseRounded, EventBusyRounded, RefreshRounded } from "@mui/icons-material";
+import { CheckCircleRounded, CloseRounded, EventAvailableRounded, EventBusyRounded, RefreshRounded } from "@mui/icons-material";
 import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
-import { fetchTeacherAbsenceExcuses, reviewTeacherAbsenceExcuse } from "@/APIs/school/teacherAttendance";
+import { fetchTeacherAbsenceExcuses, markTeacherAbsenceExcusePresent, reviewTeacherAbsenceExcuse } from "@/APIs/school/teacherAttendance";
 import { API_BASE_URL } from "@/APIs/Axios";
 
 const resolveAttachmentUrl = (attachment) => {
@@ -26,6 +26,8 @@ const STATES = [
   { value: "pending", label: "بانتظار القرار", color: "warning" },
   { value: "accepted", label: "مقبولة", color: "success" },
   { value: "rejected", label: "مرفوضة", color: "error" },
+  // The teacher was not absent: her attendance was recorded for that day.
+  { value: "marked_present", label: "سُجّلت حاضرة", color: "info" },
 ];
 
 const TeacherAbsenceExcuses = () => {
@@ -37,7 +39,10 @@ const TeacherAbsenceExcuses = () => {
   const [error, setError] = useState("");
   const [decision, setDecision] = useState(null);
   const [note, setNote] = useState("");
+  const [checkInAt, setCheckInAt] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const close = () => { setDecision(null); setNote(""); setCheckInAt(""); };
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -59,14 +64,17 @@ const TeacherAbsenceExcuses = () => {
       toast.error("اذكر سبب رفض العذر"); return;
     }
     setSaving(true);
-    const result = await reviewTeacherAbsenceExcuse(decision.row.id, decision.verdict, note);
+    const result = decision.verdict === "present"
+      ? await markTeacherAbsenceExcusePresent(decision.row.id, { checkInAt, note })
+      : await reviewTeacherAbsenceExcuse(decision.row.id, decision.verdict, note);
     setSaving(false);
     if (result?.status === false) {
-      if (result?.statusCode === 409) { toast.info(result.message); setDecision(null); setNote(""); load(); return; }
+      // Already ruled on by someone else: not a failure, the list is stale.
+      if (result?.statusCode === 409) { toast.info(result.message); close(); load(); return; }
       toast.error(result?.message || "تعذر حفظ القرار"); return;
     }
     toast.success(result?.message || "تم حفظ القرار");
-    setDecision(null); setNote(""); load();
+    close(); load();
   };
 
   return (
@@ -116,6 +124,7 @@ const TeacherAbsenceExcuses = () => {
                   {row.status === "pending" ? <Stack direction="row" spacing={1}>
                     <Button size="small" variant="contained" color="success" startIcon={<CheckCircleRounded />} onClick={() => setDecision({ row, verdict: "accepted" })}>قبول</Button>
                     <Button size="small" variant="outlined" color="error" startIcon={<CloseRounded />} onClick={() => setDecision({ row, verdict: "rejected" })}>رفض</Button>
+                    <Button size="small" variant="outlined" color="info" startIcon={<EventAvailableRounded />} onClick={() => setDecision({ row, verdict: "present" })}>كانت حاضرة</Button>
                   </Stack> : null}
                 </Stack>
               </Paper>;
@@ -124,14 +133,30 @@ const TeacherAbsenceExcuses = () => {
         )}
       </Stack>
 
-      <Dialog open={Boolean(decision)} onClose={() => !saving && setDecision(null)} dir="rtl" fullWidth maxWidth="xs">
-        <DialogTitle>{decision?.verdict === "rejected" ? "رفض عذر الغياب" : "قبول عذر الغياب"}</DialogTitle>
+      <Dialog open={Boolean(decision)} onClose={() => !saving && close()} dir="rtl" fullWidth maxWidth="xs">
+        <DialogTitle>
+          {decision?.verdict === "rejected" ? "رفض عذر الغياب"
+            : decision?.verdict === "present" ? "تسجيل حضور المعلم"
+            : "قبول عذر الغياب"}
+        </DialogTitle>
         <DialogContent>
-          {decision?.verdict === "rejected" ? <TextField autoFocus fullWidth multiline minRows={3} value={note} onChange={(e) => setNote(e.target.value)} label="سبب الرفض" required inputProps={{ maxLength: 1000 }} sx={{ mt: 1 }} /> : <Typography>تأكيد قبول عذر {decision?.row?.teacherName} ليوم {decision?.row?.date}؟</Typography>}
+          {decision?.verdict === "rejected" ? (
+            <TextField autoFocus fullWidth multiline minRows={3} value={note} onChange={(e) => setNote(e.target.value)} label="سبب الرفض" required inputProps={{ maxLength: 1000 }} sx={{ mt: 1 }} />
+          ) : decision?.verdict === "present" ? (
+            <Stack spacing={1.5} sx={{ mt: 1 }}>
+              <Typography sx={{ fontSize: 14 }}>
+                يُسجَّل حضور {decision?.row?.teacherName} ليوم {decision?.row?.date} ويُغلق العذر، فلا يُحتسب هذا اليوم غيابًا.
+              </Typography>
+              <TextField type="time" size="small" label="وقت الحضور (اختياري)" value={checkInAt} onChange={(e) => setCheckInAt(e.target.value)} InputLabelProps={{ shrink: true }} helperText="إن تُرك فارغًا يُعتمد وقت بداية الدوام، فلا يُسجَّل تأخير." />
+              <TextField fullWidth multiline minRows={2} value={note} onChange={(e) => setNote(e.target.value)} label="ملاحظة (اختياري)" placeholder="مثال: رحلة مدرسية مع الطالبات" inputProps={{ maxLength: 1000 }} />
+            </Stack>
+          ) : (
+            <Typography>تأكيد قبول عذر {decision?.row?.teacherName} ليوم {decision?.row?.date}؟</Typography>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setDecision(null); setNote(""); }} disabled={saving}>إلغاء</Button>
-          <Button variant="contained" color={decision?.verdict === "rejected" ? "error" : "success"} onClick={confirm} disabled={saving}>{saving ? "جارٍ الحفظ..." : "تأكيد"}</Button>
+          <Button onClick={close} disabled={saving}>إلغاء</Button>
+          <Button variant="contained" color={decision?.verdict === "rejected" ? "error" : decision?.verdict === "present" ? "info" : "success"} onClick={confirm} disabled={saving}>{saving ? "جارٍ الحفظ..." : "تأكيد"}</Button>
         </DialogActions>
       </Dialog>
     </Container>

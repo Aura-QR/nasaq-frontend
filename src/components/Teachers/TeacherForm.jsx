@@ -8,6 +8,7 @@ import {
 
 import {
   ContactPhoneOutlined,
+  EventRepeatRounded,
   MenuBookRounded,
   PersonOutlineRounded,
   SchoolOutlined,
@@ -213,6 +214,20 @@ const FormSection = ({
   );
 };
 
+/*
+ * The weekdays a teacher works, for one who comes in on fewer days than the
+ * school. Left entirely unticked — the usual case — means every school day.
+ * Without it, a two-day teacher was counted absent the other three days of
+ * every week and asked to explain them.
+ */
+const WORK_DAYS = [
+  { value: "sunday", label: "الأحد" },
+  { value: "monday", label: "الإثنين" },
+  { value: "tuesday", label: "الثلاثاء" },
+  { value: "wednesday", label: "الأربعاء" },
+  { value: "thursday", label: "الخميس" },
+];
+
 const TeacherForm = ({
   register,
   errors,
@@ -341,6 +356,54 @@ const TeacherForm = ({
               isEdit ? defaultValues?.isActive : 1
             }
           />
+        </Grid>
+      </FormSection>
+
+      <FormSection
+        icon={<EventRepeatRounded />}
+        title="أيام العمل"
+        description="للمعلم الذي يعمل أيامًا أقل من أيام الدوام. اتركها كلها دون تحديد إن كان يعمل كل أيام الدوام."
+        contentSx={{
+          "& > .MuiGrid-item": {
+            minHeight: "auto",
+          },
+        }}
+      >
+        <Grid item xs={12}>
+          <Stack direction="row" flexWrap="wrap" useFlexGap gap={1}>
+            {WORK_DAYS.map((day) => (
+              <Box
+                key={day.value}
+                component="label"
+                sx={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 0.75,
+                  px: 1.4,
+                  py: 0.8,
+                  borderRadius: "12px",
+                  border: "1px solid rgba(36, 74, 112, 0.14)",
+                  backgroundColor: "var(--color-white)",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  userSelect: "none",
+                  "&:has(input:checked)": {
+                    borderColor: "var(--color-primary, #244A70)",
+                    backgroundColor: "rgba(36, 74, 112, 0.06)",
+                  },
+                }}
+              >
+                <input
+                  type="checkbox"
+                  value={day.value}
+                  {...register("workDays")}
+                  style={{ accentColor: "#244A70", width: 16, height: 16 }}
+                />
+                {day.label}
+              </Box>
+            ))}
+          </Stack>
         </Grid>
       </FormSection>
 

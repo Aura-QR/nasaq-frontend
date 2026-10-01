@@ -74,7 +74,9 @@ const DESTINATIONS = {
   TEACHER: {
     late_reason_required: "/teacher/check-in",
     late_reason_reviewed: "/teacher/attendance",
-    teacher_absence_excuse_reviewed: "/teacher/check-in",
+    // Both land where the teacher's card of days to explain lives.
+    teacher_absence_excuse_required: "/teacher/dashboard",
+    teacher_absence_excuse_reviewed: "/teacher/dashboard",
     lesson_observation_recorded: "/teacher/observations",
     lesson_observation_reviewed: "/teacher/observations",
     cover_assigned: "/teacher/duty",

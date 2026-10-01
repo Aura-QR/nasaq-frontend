@@ -25,6 +25,7 @@ import TeacherFormActions from "@/components/Teachers/TeacherFormActions";
 import GeneratedCredentialsDialog from "@/components/GeneratedCredentialsDialog/GeneratedCredentialsDialog";
 
 import { addTeacher } from "@/APIs/users/teachers";
+import { normalizeWorkDays } from "@/utils/helpers/normalizeWorkDays";
 
 import {
   extractLoginIdentifier,
@@ -104,6 +105,10 @@ const Add = () => {
           generatedPassword,
         isActive:
           formData.isActive == 1,
+
+        // null — every school day — unless specific days were ticked.
+        workDays:
+          normalizeWorkDays(formData.workDays),
 
         // IMPORTANT:
         // selectedSubjects now contains SubjectOffering IDs.

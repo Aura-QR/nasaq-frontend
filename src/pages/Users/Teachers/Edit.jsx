@@ -29,6 +29,10 @@ import TeacherForm from "@/components/Teachers/TeacherForm";
 import TeacherFormActions from "@/components/Teachers/TeacherFormActions";
 
 import { editTeacher } from "@/APIs/users/teachers";
+import {
+  normalizeWorkDays,
+  sameWorkDays,
+} from "@/utils/helpers/normalizeWorkDays";
 import { fetchTeacherAssignments } from "@/APIs/school/lectures";
 import { getChangedValues } from "@/utils/helpers/getChangedValues";
 import { useTeacher } from "@/utils/hooks/apis/useTeacher";
@@ -129,6 +133,10 @@ const Edit = () => {
       isActive: teacher.isActive
         ? 1
         : 0,
+      // The checkbox group needs an array to tick the right boxes.
+      workDays: Array.isArray(teacher.workDays)
+        ? teacher.workDays
+        : [],
     };
 
     const assignedOfferingIds =
@@ -228,6 +236,22 @@ const Edit = () => {
             "subjectIds",
           ]
         );
+
+      // getChangedValues compares by reference, so the day array always
+      // looks changed. Compare the days themselves, and send null to clear.
+      if (
+        sameWorkDays(
+          formData.workDays,
+          defaultValues.workDays
+        )
+      ) {
+        delete changedData.workDays;
+      } else {
+        changedData.workDays =
+          normalizeWorkDays(
+            formData.workDays
+          );
+      }
 
       const normalizedSelectedSubjects =
         normalizeIds(

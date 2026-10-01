@@ -548,6 +548,24 @@ export const fetchTeacherAbsenceExcuses = async ({
   }
 };
 
+/*
+ * The teacher was not absent — on a school trip, or present without a
+ * check-in. Records her attendance for that day and closes the excuse.
+ * Accepting it instead would record an excused absence for a day she worked.
+ */
+export const markTeacherAbsenceExcusePresent = async (id, { checkInAt = "", note = "" } = {}) => {
+  if (!id) return { status: false, statusCode: 400, message: "معرّف العذر غير موجود", data: null };
+  try {
+    const response = await api.patch(`${ENDPOINT}/absence-excuses/${id}/mark-present`, {
+      ...(String(checkInAt || "").trim() ? { checkInAt: String(checkInAt).trim() } : {}),
+      ...(String(note || "").trim() ? { note: String(note).trim().slice(0, 1000) } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تسجيل الحضور");
+  }
+};
+
 export const reviewTeacherAbsenceExcuse = async (id, verdict, note = "") => {
   if (!id) return { status: false, statusCode: 400, message: "معرّف العذر غير موجود", data: null };
   if (verdict === "rejected" && !String(note || "").trim()) {
@@ -588,6 +606,7 @@ export default {
   submitTeacherAbsenceExcuse,
   fetchTeacherAbsenceExcuses,
   reviewTeacherAbsenceExcuse,
+  markTeacherAbsenceExcusePresent,
 };
 
 
