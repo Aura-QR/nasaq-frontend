@@ -91,10 +91,6 @@ import {
 } from "@/APIs/school/teacherAttendance";
 
 import {
-  TEACHER_ABSENCE_EXCUSE_EVENT,
-} from "@/components/Notifications/AttendanceAlerts";
-
-import {
   fetchMyObservations,
 } from "@/APIs/school/lessonObservations";
 
@@ -1436,11 +1432,7 @@ const TeacherDashboard = () => {
           ? `${pendingAbsenceDays.length} بانتظار العذر`
           : "",
         urgent: pendingAbsenceDays.length > 0,
-        onClick: () => {
-          window.dispatchEvent(
-            new CustomEvent(TEACHER_ABSENCE_EXCUSE_EVENT)
-          );
-        },
+        onClick: () => navigate("/teacher/absence-excuses"),
       },
       {
         title: "ملاحظات على حصصي",

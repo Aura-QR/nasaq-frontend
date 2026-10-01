@@ -34,6 +34,7 @@ import TeacherLibrary from "@/pages/TeacherLibrary/TeacherLibrary";
 import TeacherProfile from "@/pages/TeacherProfile/TeacherProfile";
 import TeacherProjects from "@/pages/TeacherProjects/TeacherProjects";
 import TeacherCheckIn from "@/pages/TeacherCheckIn/TeacherCheckIn";
+import MyTeacherAbsenceExcuses from "@/pages/TeacherAbsenceExcuses/MyTeacherAbsenceExcuses";
 
 // =========================
 // School Pages
@@ -499,6 +500,11 @@ const AppRouter = () => {
           <Route
             path="/teacher/check-in"
             element={<TeacherCheckIn />}
+          />
+
+          <Route
+            path="/teacher/absence-excuses"
+            element={<MyTeacherAbsenceExcuses />}
           />
 
           {/* =========================
