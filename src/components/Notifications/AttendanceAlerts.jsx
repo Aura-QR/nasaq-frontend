@@ -101,6 +101,7 @@ export const LATE_REASON_EVENT = "nasaq:late-reason-check";
  * place as the alert instead: tapping the notice opens this dialog immediately.
  */
 export const ABSENCE_EXCUSE_EVENT = "nasaq:absence-excuse-open";
+export const TEACHER_ABSENCE_EXCUSE_EVENT = "nasaq:teacher-absence-excuse-open";
 
 const POLL_MS = 60_000;
 const SEEN_PREFIX = "nasaq:attendance-alert-seen:";
@@ -335,6 +336,21 @@ const AttendanceAlerts = () => {
       window.removeEventListener(LATE_REASON_EVENT, onCheckIn);
     };
   }, [signedIn, isTeacher, isStaffSelf, isStudent, isAdmin, checkTeacher, checkTeacherAbsence, checkStaff, checkNotices]);
+
+  useEffect(() => {
+    const openTeacherAbsenceExcuse = async () => {
+      // Explicit dashboard action: reopen the current pending teacher absence
+      // even when the teacher previously chose «لاحقًا» during this visit.
+      dismissed.current.clear();
+      await checkTeacherAbsence();
+    };
+
+    window.addEventListener(TEACHER_ABSENCE_EXCUSE_EVENT, openTeacherAbsenceExcuse);
+
+    return () => {
+      window.removeEventListener(TEACHER_ABSENCE_EXCUSE_EVENT, openTeacherAbsenceExcuse);
+    };
+  }, [checkTeacherAbsence]);
 
   useEffect(() => {
     const openAbsenceExcuse = async (event) => {

@@ -23,6 +23,7 @@ import {
   CheckCircleRounded,
   AssignmentRounded,
   EventAvailableRounded,
+  EventBusyRounded,
   FactCheckRounded,
   GradeRounded,
   GroupsRounded,
@@ -86,7 +87,12 @@ import {
 
 import {
   fetchPendingLateReason,
+  fetchPendingTeacherAbsenceExcuses,
 } from "@/APIs/school/teacherAttendance";
+
+import {
+  TEACHER_ABSENCE_EXCUSE_EVENT,
+} from "@/components/Notifications/AttendanceAlerts";
 
 import {
   fetchMyObservations,
@@ -775,6 +781,8 @@ const TeacherDashboard = () => {
     useState([]);
   const [pendingLateness, setPendingLateness] =
     useState(null);
+  const [pendingAbsenceDays, setPendingAbsenceDays] =
+    useState([]);
   const [pendingObservations, setPendingObservations] =
     useState([]);
   const [loading, setLoading] =
@@ -822,6 +830,7 @@ const TeacherDashboard = () => {
         setProjects([]);
         setProjectSubmissions([]);
         setPendingLateness(null);
+        setPendingAbsenceDays([]);
         setPendingObservations([]);
         setError(
           "تعذر تحديد حساب المعلم الحالي. سجّل الدخول مرة أخرى أو تأكد من وجود معرّف المعلم في بيانات الجلسة."
@@ -847,6 +856,7 @@ const TeacherDashboard = () => {
           examsResponse,
           projectsResponse,
           pendingLateReasonResponse,
+          pendingAbsenceResponse,
           observationsResponse,
         ] = await Promise.all([
           fetchMyTeacherProfile(),
@@ -869,6 +879,7 @@ const TeacherDashboard = () => {
             limit: 100,
           }),
           fetchPendingLateReason(),
+          fetchPendingTeacherAbsenceExcuses({ days: 14 }),
           fetchMyObservations(),
         ]);
 
@@ -946,6 +957,12 @@ const TeacherDashboard = () => {
             ? null
             : pendingLateReasonResponse.data;
 
+        const pendingAbsences =
+          pendingAbsenceResponse?.status === false ||
+          !Array.isArray(pendingAbsenceResponse?.data)
+            ? []
+            : pendingAbsenceResponse.data;
+
         const observationList =
           observationsResponse?.status === false
             ? []
@@ -973,6 +990,7 @@ const TeacherDashboard = () => {
         setProjects(projectList);
         setProjectSubmissions(submissionList);
         setPendingLateness(pendingLateReason);
+        setPendingAbsenceDays(pendingAbsences);
         setPendingObservations(observationList);
       } catch (requestError) {
         setLectures([]);
@@ -982,6 +1000,7 @@ const TeacherDashboard = () => {
         setProjects([]);
         setProjectSubmissions([]);
         setPendingLateness(null);
+        setPendingAbsenceDays([]);
         setPendingObservations([]);
         setError(
           requestError?.message ||
@@ -1408,6 +1427,22 @@ const TeacherDashboard = () => {
           navigate("/teacher/check-in"),
       },
       {
+        title: "غيابي وأعذاري",
+        description: pendingAbsenceDays.length
+          ? `لديك ${pendingAbsenceDays.length} ${pendingAbsenceDays.length === 1 ? "يوم غياب يحتاج عذرًا" : "أيام غياب تحتاج عذرًا"}`
+          : "لا توجد أيام غياب تحتاج عذرًا حاليًا",
+        icon: <EventBusyRounded />,
+        badge: pendingAbsenceDays.length
+          ? `${pendingAbsenceDays.length} بانتظار العذر`
+          : "",
+        urgent: pendingAbsenceDays.length > 0,
+        onClick: () => {
+          window.dispatchEvent(
+            new CustomEvent(TEACHER_ABSENCE_EXCUSE_EVENT)
+          );
+        },
+      },
+      {
         title: "ملاحظات على حصصي",
         description: pendingObservations.length
           ? `${pendingObservations.length} ملاحظة من الإدارة تنتظر ردك`
@@ -1481,6 +1516,7 @@ const TeacherDashboard = () => {
       nextUnpreparedLecture,
       todayLectures,
       pendingLateness,
+      pendingAbsenceDays.length,
       pendingObservations.length,
       exams.length,
       projects.length,
