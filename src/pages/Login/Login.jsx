@@ -69,6 +69,10 @@ const ROLE_HOME_PATHS = {
   TEACHER:
     "/teacher/dashboard",
 
+  // Service staff — a guard — have one screen: their own check-in.
+  STAFF:
+    "/staff-attendance",
+
   STUDENT:
     "/student-dashboard",
 };

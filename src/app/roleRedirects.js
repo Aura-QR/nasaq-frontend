@@ -25,6 +25,10 @@ const ROLE_HOME_PATHS = Object.freeze({
 
   [ROLES.STUDENT]:
     ROUTES.STUDENT_DASHBOARD,
+
+  // Service staff have one screen: their own check-in.
+  [ROLES.STAFF]:
+    ROUTES.STAFF_ATTENDANCE,
 });
 
 export const getRoleHomePath = (

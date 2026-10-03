@@ -268,8 +268,13 @@ const getStaffId = (item) =>
       ""
   );
 
-const roleLabel = (role) =>
-  String(role || "").toUpperCase() === "SUPERVISOR" ? "مشرف" : "مدير / إداري";
+const roleLabel = (role, jobLabel) => {
+  const value = String(role || "").toUpperCase();
+  if (value === "SUPERVISOR") return "مشرف";
+  // Service staff — a guard — read as their job when the school entered one.
+  if (value === "STAFF") return jobLabel || "موظف خدمات";
+  return "مدير / إداري";
+};
 
 const getRecordedByName = (record) => {
   const actor = record?.recordedBy;
@@ -1151,7 +1156,7 @@ const StaffAttendanceAdmin = () => {
                               {getStaffName(staff)}
                             </Typography>
                             <Typography sx={{ color: "#708198", fontSize: 8.5 }}>
-                              {roleLabel(record?.role)}
+                              {roleLabel(record?.role, record?.jobLabel)}
                             </Typography>
                           </Box>
                         </TableCell>
@@ -1489,7 +1494,7 @@ const StaffAttendanceAdmin = () => {
                       <TableCell align="center">
                         <Chip
                           size="small"
-                          label={roleLabel(row?.role)}
+                          label={roleLabel(row?.role, row?.jobLabel)}
                           sx={{
                             color: "#244A70",
                             backgroundColor: "rgba(36,74,112,.08)",

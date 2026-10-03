@@ -201,6 +201,8 @@ const displayStaffRole = (row) => {
   ).toUpperCase();
   if (role === "SUPERVISOR") return "مشرف";
   if (role === "MANAGER") return "مدير / إداري";
+  // A guard reads as «حارس» when the school entered one.
+  if (role === "STAFF") return row?.jobLabel || row?._directoryProfile?.jobLabel || "موظف خدمات";
   return "إداري / مشرف";
 };
 

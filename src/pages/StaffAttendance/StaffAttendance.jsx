@@ -240,6 +240,10 @@ const StatusBox = ({ icon, title, passed, waiting, details }) => (
 
 const StaffAttendance = () => {
   const getAuthUser = useAuthUser();
+  // Service staff — a guard — use this same screen; its wording must not
+  // address them as an administrator.
+  const isServiceStaff =
+    String(getAuthUser?.()?.role || getAuthUser?.()?.user?.role || "").toUpperCase() === "STAFF";
   const authState = getAuthUser?.();
   const currentUser = authState?.user || authState || {};
 
@@ -490,7 +494,7 @@ const StaffAttendance = () => {
             <Box>
               <Chip
                 icon={<MyLocationRounded />}
-                label="بوابة الإدارة"
+                label={isServiceStaff ? "بوابة الموظف" : "بوابة الإدارة"}
                 size="small"
                 sx={{
                   mb: 1,
@@ -540,7 +544,9 @@ const StaffAttendance = () => {
 
         {!loading && !selfEnabled && (
           <Alert severity="info" sx={{ mt: 1.5, borderRadius: "14px" }}>
-            التسجيل الذاتي للإداريين والمشرفين غير مفعّل حاليًا. يمكنك مراجعة سجلك، ولإضافة أو تصحيح حضور تواصل مع إدارة المدرسة.
+            {isServiceStaff
+              ? "التسجيل الذاتي غير مفعّل حاليًا. يمكنك مراجعة سجلك، ولإضافة أو تصحيح حضور تواصل مع إدارة المدرسة."
+              : "التسجيل الذاتي للإداريين والمشرفين غير مفعّل حاليًا. يمكنك مراجعة سجلك، ولإضافة أو تصحيح حضور تواصل مع إدارة المدرسة."}
           </Alert>
         )}
 
@@ -837,7 +843,7 @@ const StaffAttendance = () => {
                   سجل حضوري
                 </Typography>
                 <Typography sx={{ mt: 0.2, color: "#708198", fontSize: 10 }}>
-                  سجل حضور حسابك الإداري فقط.
+                  {isServiceStaff ? "سجل حضورك فقط." : "سجل حضور حسابك الإداري فقط."}
                 </Typography>
               </Box>
               <Chip label={`${history.length} سجل`} size="small" />

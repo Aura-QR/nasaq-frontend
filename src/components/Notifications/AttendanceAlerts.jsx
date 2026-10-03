@@ -146,7 +146,8 @@ const AttendanceAlerts = () => {
   const signedIn = Boolean(getAuthToken());
 
   const isTeacher = signedIn && role === ROLES.TEACHER;
-  const isStaffSelf = signedIn && [ROLES.MANAGER, ROLES.SUPERVISOR].includes(role);
+  // Service staff are late the same way and answer the same prompt.
+  const isStaffSelf = signedIn && [ROLES.MANAGER, ROLES.SUPERVISOR, ROLES.STAFF].includes(role);
   const isStudent = signedIn && role === ROLES.STUDENT;
   const isAdmin = signedIn && ADMIN_ROLES.includes(role);
 

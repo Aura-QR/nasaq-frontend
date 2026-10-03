@@ -1,4 +1,5 @@
 import {
+  BadgeRounded,
   AccountBalanceWalletRounded,
   AccountTreeRounded,
   AssessmentRounded,
@@ -616,6 +617,23 @@ const SchoolSidebar = ({
                       "/school/managers",
                     icon:
                       <SupervisorAccountRounded />,
+                  }}
+                  mobile={
+                    mobile
+                  }
+                  onClose={
+                    onClose
+                  }
+                />
+
+                <SidebarLink
+                  item={{
+                    label:
+                      "موظفو الخدمات",
+                    path:
+                      "/school/staff-members",
+                    icon:
+                      <BadgeRounded />,
                   }}
                   mobile={
                     mobile

@@ -5,6 +5,9 @@ export const ROLES = Object.freeze({
   MANAGER: "MANAGER",
   TEACHER: "TEACHER",
   STUDENT: "STUDENT",
+  // موظف خدمات — a guard, a cleaner, a driver. Signs in only to record their
+  // own attendance; every other screen answers 403 for them.
+  STAFF: "STAFF",
 });
 
 export const PLATFORM_ROLES = Object.freeze([

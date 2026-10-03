@@ -50,6 +50,7 @@ import CoverReport from "@/pages/School/Duty/CoverReport";
 import TeacherDuty from "@/pages/TeacherDuty/TeacherDuty";
 
 import SchoolManagersList from "@/pages/SchoolManagers/List";
+import StaffMembers from "@/pages/StaffMembers/StaffMembers";
 import SchoolManagerAdd from "@/pages/SchoolManagers/Add";
 import SchoolPermissions from "@/pages/SchoolPermissions/SchoolPermissions";
 
@@ -234,6 +235,12 @@ const AppRouter = () => {
             path="/school/managers"
             element={<SchoolManagersList />}
           />
+          {/* Service staff are managed by the same people as managers, on a
+              screen of their own so they never appear in the managers list. */}
+          <Route
+            path="/school/staff-members"
+            element={<StaffMembers />}
+          />
         </Route>
 
         <Route
@@ -412,7 +419,7 @@ const AppRouter = () => {
         </Route>
 
         {/* =====================================================
-            MANAGER / SUPERVISOR — PERSONAL STAFF ATTENDANCE
+            MANAGER / SUPERVISOR / SERVICE STAFF — PERSONAL STAFF ATTENDANCE
         ===================================================== */}
 
         <Route
@@ -421,6 +428,7 @@ const AppRouter = () => {
               allowedRoles={[
                 ROLES.MANAGER,
                 ROLES.SUPERVISOR,
+                ROLES.STAFF,
               ]}
             />
           }

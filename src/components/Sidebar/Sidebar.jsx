@@ -7,6 +7,7 @@ import {
 } from "@mui/material";
 
 import {
+  BadgeRounded,
   AccountBalanceWallet,
   AddCardRounded,
   AccountTreeRounded,
@@ -116,10 +117,11 @@ const getDisplayName = (user) => {
     ? String(user.email).split("@")[0]
     : "";
 
+  // The full name first: «محمد السيد» rather than «guard01».
   return String(
-    user?.username ||
+    user?.fullName ||
       user?.name ||
-      user?.fullName ||
+      user?.username ||
       user?.ownerName ||
       user?.firstName ||
       emailName ||
@@ -134,6 +136,7 @@ const ROLE_LABELS = {
   TEACHER: "معلم",
   STUDENT: "طالب",
   SUPER_ADMIN: "مدير المنصة",
+  STAFF: "موظف خدمات",
 };
 
 const Sidebar = ({ active, setActive }) => {
@@ -219,9 +222,11 @@ const Sidebar = ({ active, setActive }) => {
 
   const displayName = getDisplayName(user);
 
-  // An assistant with a job title reads «المالية», not «مساعد إداري».
+  // An assistant with a job title reads «المالية», not «مساعد إداري»;
+  // a guard reads «حارس», not «موظف خدمات».
   const roleLabel =
     user?.jobTitle?.name ||
+    user?.jobLabel ||
     ROLE_LABELS[role] ||
     "مستخدم";
 
@@ -270,6 +275,15 @@ const Sidebar = ({ active, setActive }) => {
             Icon: ManageAccountsRounded,
             iconType: "mui",
             to: "/school/managers",
+            show:
+              role === "OWNER" ||
+              role === "SUPERVISOR",
+          },
+          {
+            name: "موظفو الخدمات",
+            Icon: BadgeRounded,
+            iconType: "mui",
+            to: "/school/staff-members",
             show:
               role === "OWNER" ||
               role === "SUPERVISOR",
@@ -625,6 +639,34 @@ const Sidebar = ({ active, setActive }) => {
       },
     ];
 
+    if (role === "STAFF") {
+      /*
+       * Service staff reach their own attendance and nothing else — every
+       * other route answers 403 for them — so the sidebar offers only that.
+       */
+      return [
+        {
+          title: "الحضور",
+          items: [
+            {
+              name: "حضوري",
+              Icon: HowToRegRounded,
+              iconType: "mui",
+              to: "/staff-attendance",
+              show: true,
+            },
+            {
+              name: "استئذاناتي",
+              Icon: EventBusyRounded,
+              iconType: "mui",
+              to: "/staff-leave-requests",
+              show: true,
+            },
+          ],
+        },
+      ];
+    }
+
     if (isTeacher) {
       /*
        * روابط المعلم تطابق مسارات بوابته. الصلاحيات المخزنة لا تتجاوز
@@ -822,7 +864,7 @@ const Sidebar = ({ active, setActive }) => {
             />
 
             <div className="sidebar-brand__copy">
-              <strong>{isTeacher ? "بوابة المعلم" : "لوحة الإدارة"}</strong>
+              <strong>{isTeacher ? "بوابة المعلم" : role === "STAFF" ? "بوابة الموظف" : "لوحة الإدارة"}</strong>
               <small>
                 {isTeacher
                   ? "لوحتك التعليمية بصلاحيات المعلم"

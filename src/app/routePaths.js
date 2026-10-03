@@ -13,4 +13,5 @@ export const ROUTES = Object.freeze({
   STUDENT_DASHBOARD: "/student/dashboard",
 
   NO_ACCESS: "/no-access",
+  STAFF_ATTENDANCE: "/staff-attendance",
 });
