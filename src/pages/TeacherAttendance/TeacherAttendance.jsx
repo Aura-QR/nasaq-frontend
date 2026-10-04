@@ -35,6 +35,7 @@ import { toast } from "react-toastify";
 import { fetchLectureAttendanceSheet } from "@/APIs/school/attendance";
 import { saveDailyTrackingBulk } from "@/APIs/school/dailyTracking";
 import { fetchLectures } from "@/APIs/school/lectures";
+import { fetchMyDay } from "@/APIs/school/notifications";
 import nasaqLogo from "../../images/wadq-logo.png";
 
 const DATE_LOCALE = "ar-SA-u-nu-latn";
@@ -124,7 +125,27 @@ const getSubjectName = (lecture) => {
   return subject?.subjectName || subject?.name || offering?.subjectName || lecture?.subjectName || "مادة غير محددة";
 };
 
+// A period covered for an absent colleague, from GET /duty/my-day. It only
+// exists for that date, so it is listed alongside the teacher's own periods
+// rather than fetched with them.
+const toCoverLecture = (slot) => ({
+  _id: slot.lectureId,
+  slot: slot.slot,
+  subjectName: slot.subjectName,
+  classId: { name: slot.className },
+  isCover: true,
+  coveringFor: slot.coveringFor,
+});
+
 const getLectureLabel = (lecture) => {
+  if (lecture?.isCover) {
+    return [
+      getSubjectName(lecture),
+      getClassName(lecture),
+      lecture.slot ? `الحصة ${lecture.slot}` : "",
+      lecture.coveringFor ? `احتياط عن ${lecture.coveringFor}` : "احتياط",
+    ].filter(Boolean).join(" · ");
+  }
   const day = DAY_LABELS[String(lecture?.dayOfWeek || lecture?.day || "").toLowerCase()] || lecture?.dayOfWeek || "";
   const slot = lecture?.slot || lecture?.period || lecture?.slotNumber;
   return [getSubjectName(lecture), getClassName(lecture), slot ? `الحصة ${slot}` : "", day]
@@ -271,7 +292,12 @@ const TeacherAttendance = () => {
       if (!teacherId) throw new Error("تعذر تحديد حساب المعلم الحالي");
       const response = await fetchLectures({ teacherId, page: 1, limit: 500 }, { force: true });
       if (isFailedResponse(response)) throw new Error(getErrorMessage(response, "تعذر تحميل حصص المعلم"));
-      const list = extractLectures(response);
+      const own = extractLectures(response);
+      const dayResponse = await fetchMyDay(selectedDate);
+      const covers = (dayResponse?.status ? dayResponse.data?.slots || [] : [])
+        .filter((slot) => slot.kind === "cover" && isMongoId(slot.lectureId))
+        .map(toCoverLecture);
+      const list = [...covers, ...own];
       setLectures(list);
 
       const requestedLectureId = searchParams.get("lectureId") || "";
@@ -293,7 +319,7 @@ const TeacherAttendance = () => {
     } finally {
       setLoadingLectures(false);
     }
-  }, [teacherId]);
+  }, [teacherId, selectedDate]);
 
   const loadSheet = useCallback(async ({ silent = false } = {}) => {
     if (!isMongoId(selectedLectureId) || !selectedDate) {
