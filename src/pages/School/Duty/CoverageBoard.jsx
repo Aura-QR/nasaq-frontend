@@ -686,6 +686,9 @@ const UncoveredCard = ({ item, onPick }) => (
   </Paper>
 );
 
+const adminRoleLabel = (role) =>
+  role === "SUPERVISOR" ? "مشرف/ة" : role === "MANAGER" ? "إداري/ة" : "إداري/ة";
+
 const CoveredCard = ({ item, busy, onRemove }) => (
   <Paper
     variant="outlined"
@@ -709,6 +712,13 @@ const CoveredCard = ({ item, busy, onRemove }) => (
         icon={<CheckCircleRounded />}
         label={item.substituteTeacherName}
       />
+      {item.substituteType === "Admin" && (
+        <Chip
+          size="small"
+          variant="outlined"
+          label={adminRoleLabel(item.substituteRole)}
+        />
+      )}
       <Tooltip title="إلغاء التكليف">
         <span>
           <IconButton size="small" color="error" onClick={onRemove} disabled={busy}>
@@ -742,42 +752,64 @@ const PickSubstituteDialog = ({ target, busy, onClose, onPick }) => (
       </Typography>
 
       <Stack spacing={1}>
-        {(target?.suggestions ?? []).map((suggestion) => (
-          <Paper
-            key={suggestion.teacherId}
-            variant="outlined"
-            sx={{
-              p: 1.5,
-              borderRadius: 2,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 2,
-            }}
-          >
-            <Box>
-              <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "12px", fontWeight: 800 }}>
-                {suggestion.name}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {suggestion.specialization || "بدون تخصص"}
-              </Typography>
-            </Box>
-            <Stack direction="row" spacing={1} alignItems="center">
-              {suggestion.sameSubject && (
-                <Chip size="small" color="success" label="نفس التخصص" />
+        {(() => {
+          const suggestions = target?.suggestions ?? [];
+          const teachers = suggestions.filter((item) => item.type !== "Admin");
+          const admins = suggestions.filter((item) => item.type === "Admin");
+
+          const renderSuggestion = (suggestion) => (
+            <Paper
+              key={suggestion.teacherId}
+              variant="outlined"
+              sx={{
+                p: 1.5,
+                borderRadius: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 2,
+              }}
+            >
+              <Box>
+                <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "12px", fontWeight: 800 }}>
+                  {suggestion.name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {suggestion.type === "Admin"
+                    ? adminRoleLabel(suggestion.role)
+                    : suggestion.specialization || "بدون تخصص"}
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={1} alignItems="center">
+                {suggestion.sameSubject && (
+                  <Chip size="small" color="success" label="نفس التخصص" />
+                )}
+                <Button
+                  size="small"
+                  variant="contained"
+                  disabled={busy}
+                  onClick={() => onPick(suggestion.teacherId)}
+                >
+                  كلّفه
+                </Button>
+              </Stack>
+            </Paper>
+          );
+
+          return (
+            <>
+              {teachers.map(renderSuggestion)}
+              {admins.length > 0 && (
+                <>
+                  <Typography sx={{ pt: teachers.length ? 1 : 0, fontSize: "12px", fontWeight: 900, color: "var(--color-navy-deep)" }}>
+                    المشرفون والإداريون
+                  </Typography>
+                  {admins.map(renderSuggestion)}
+                </>
               )}
-              <Button
-                size="small"
-                variant="contained"
-                disabled={busy}
-                onClick={() => onPick(suggestion.teacherId)}
-              >
-                كلّفه
-              </Button>
-            </Stack>
-          </Paper>
-        ))}
+            </>
+          );
+        })()}
       </Stack>
     </DialogContent>
     <DialogActions>

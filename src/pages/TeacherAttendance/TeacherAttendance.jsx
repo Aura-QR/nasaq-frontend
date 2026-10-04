@@ -35,6 +35,7 @@ import { toast } from "react-toastify";
 import { fetchLectureAttendanceSheet } from "@/APIs/school/attendance";
 import { saveDailyTrackingBulk } from "@/APIs/school/dailyTracking";
 import { fetchLectures } from "@/APIs/school/lectures";
+import { fetchMyDay } from "@/APIs/school/notifications";
 import nasaqLogo from "../../images/wadq-logo.png";
 
 const DATE_LOCALE = "ar-SA-u-nu-latn";
@@ -113,6 +114,7 @@ const getClassId = (lecture) =>
   normalizeId(lecture?.classId || lecture?.class || lecture?.classroom || lecture?.schoolClass);
 
 const getClassName = (lecture) => {
+  if (lecture?.className) return lecture.className;
   const value = lecture?.classId || lecture?.class || lecture?.classroom || lecture?.schoolClass;
   if (!value || typeof value !== "object") return "فصل غير محدد";
   return value?.name || value?.className || value?.title || value?.roomNumber || "فصل غير محدد";
@@ -230,6 +232,8 @@ const TeacherAttendance = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const authRoot = getAuthUser?.() || {};
   const currentUser = authRoot?.user || authRoot;
+  const role = String(currentUser?.role || authRoot?.role || "").trim().toUpperCase();
+  const isCoverAdmin = role === "SUPERVISOR" || role === "MANAGER";
   const teacherId = useMemo(() => resolveTeacherId(authRoot, currentUser), [authRoot, currentUser]);
 
   const [selectedDate, setSelectedDate] = useState(searchParams.get("date") || formatLocalDate());
@@ -268,10 +272,22 @@ const TeacherAttendance = () => {
     setLoadingLectures(true);
     setError("");
     try {
-      if (!teacherId) throw new Error("تعذر تحديد حساب المعلم الحالي");
-      const response = await fetchLectures({ teacherId, page: 1, limit: 500 }, { force: true });
-      if (isFailedResponse(response)) throw new Error(getErrorMessage(response, "تعذر تحميل حصص المعلم"));
-      const list = extractLectures(response);
+      if (!teacherId) throw new Error("تعذر تحديد حساب المستخدم الحالي");
+      let list = [];
+
+      if (isCoverAdmin) {
+        const response = await fetchMyDay(selectedDate);
+        if (isFailedResponse(response)) throw new Error(getErrorMessage(response, "تعذر تحميل حصص الاحتياط"));
+        const day = response?.data ?? response;
+        list = (day?.slots ?? [])
+          .filter((slot) => slot.kind === "cover")
+          .map((slot) => ({ ...slot, _id: slot.lectureId, id: slot.lectureId }));
+      } else {
+        const response = await fetchLectures({ teacherId, page: 1, limit: 500 }, { force: true });
+        if (isFailedResponse(response)) throw new Error(getErrorMessage(response, "تعذر تحميل حصص المعلم"));
+        list = extractLectures(response);
+      }
+
       setLectures(list);
 
       const requestedLectureId = searchParams.get("lectureId") || "";
@@ -293,7 +309,7 @@ const TeacherAttendance = () => {
     } finally {
       setLoadingLectures(false);
     }
-  }, [teacherId]);
+  }, [teacherId, isCoverAdmin, selectedDate]);
 
   const loadSheet = useCallback(async ({ silent = false } = {}) => {
     if (!isMongoId(selectedLectureId) || !selectedDate) {
@@ -431,7 +447,7 @@ const TeacherAttendance = () => {
                 <Box component="img" src={nasaqLogo} alt="نسق" sx={{ width: "100%", height: "100%", objectFit: "contain" }} />
               </Box>
               <Box>
-                <Chip label="بوابة المعلم" size="small" sx={{ mb: .7, height: 25, color: "#F2D792", bgcolor: "rgba(242,215,146,.12)", fontSize: "9px", fontWeight: 800 }} />
+                <Chip label={isCoverAdmin ? "بوابة الإدارة" : "بوابة المعلم"} size="small" sx={{ mb: .7, height: 25, color: "#F2D792", bgcolor: "rgba(242,215,146,.12)", fontSize: "9px", fontWeight: 800 }} />
                 <Typography sx={{ fontSize: { xs: "22px", md: "28px" }, fontWeight: 900 }}>المتابعة اليومية</Typography>
                 <Typography sx={{ mt: .35, color: "rgba(255,255,255,.72)", fontSize: "10px" }}>
                   الحضور والمشاركة وحلّ الواجب والاختبار القصير في حفظ واحد — لا تؤثر في الدرجات.
@@ -439,11 +455,13 @@ const TeacherAttendance = () => {
               </Box>
             </Stack>
             <Stack direction="row" gap={.8}>
-              <Button variant="outlined" startIcon={<AssessmentRounded />} onClick={() => confirmDiscard() && navigate("/teacher/daily-tracking")} sx={{ color: "#fff", borderColor: "rgba(255,255,255,.3)", borderRadius: "12px", fontSize: "10px", fontWeight: 800 }}>
-                التقرير الشهري
-              </Button>
-              <Button variant="outlined" startIcon={<ArrowBackRounded />} onClick={() => confirmDiscard() && navigate("/teacher/dashboard")} sx={{ color: "#fff", borderColor: "rgba(255,255,255,.3)", borderRadius: "12px", fontSize: "10px", fontWeight: 800 }}>
-                لوحة التحكم
+              {!isCoverAdmin && (
+                <Button variant="outlined" startIcon={<AssessmentRounded />} onClick={() => confirmDiscard() && navigate("/teacher/daily-tracking")} sx={{ color: "#fff", borderColor: "rgba(255,255,255,.3)", borderRadius: "12px", fontSize: "10px", fontWeight: 800 }}>
+                  التقرير الشهري
+                </Button>
+              )}
+              <Button variant="outlined" startIcon={<ArrowBackRounded />} onClick={() => confirmDiscard() && navigate(isCoverAdmin ? "/school/my-cover" : "/teacher/dashboard")} sx={{ color: "#fff", borderColor: "rgba(255,255,255,.3)", borderRadius: "12px", fontSize: "10px", fontWeight: 800 }}>
+                {isCoverAdmin ? "حصص الاحتياط" : "لوحة التحكم"}
               </Button>
               <Tooltip title="تحديث الكشف">
                 <span>
@@ -481,7 +499,7 @@ const TeacherAttendance = () => {
         {loading ? (
           <Box sx={{ minHeight: 300, display: "grid", placeItems: "center" }}><Stack alignItems="center" spacing={1}><CircularProgress size={30} /><Typography sx={{ fontSize: "10px", color: "#8B96A3" }}>جاري تحميل كشف المتابعة...</Typography></Stack></Box>
         ) : !lectures.length ? (
-          <Box sx={{ minHeight: 300, display: "grid", placeItems: "center", textAlign: "center" }}><Stack alignItems="center" spacing={1}><SchoolRounded sx={{ fontSize: 44, color: "#B9821D" }} /><Typography sx={{ fontWeight: 900 }}>لا توجد حصص مرتبطة بحسابك</Typography></Stack></Box>
+          <Box sx={{ minHeight: 300, display: "grid", placeItems: "center", textAlign: "center" }}><Stack alignItems="center" spacing={1}><SchoolRounded sx={{ fontSize: 44, color: "#B9821D" }} /><Typography sx={{ fontWeight: 900 }}>{isCoverAdmin ? "لا توجد حصص احتياط مكلّف بها في هذا اليوم" : "لا توجد حصص مرتبطة بحسابك"}</Typography></Stack></Box>
         ) : !rows.length ? (
           <Box sx={{ minHeight: 300, display: "grid", placeItems: "center", textAlign: "center" }}><Stack alignItems="center" spacing={1}><GroupsRounded sx={{ fontSize: 44, color: "#214E78" }} /><Typography sx={{ fontWeight: 900 }}>لا يوجد طلاب في كشف هذه الحصة</Typography></Stack></Box>
         ) : (

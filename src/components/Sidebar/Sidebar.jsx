@@ -507,6 +507,13 @@ const Sidebar = ({ active, setActive }) => {
             show: role === "MANAGER" || role === "SUPERVISOR",
           },
           {
+            name: "حصص الاحتياط",
+            Icon: ShieldRounded,
+            iconType: "mui",
+            to: "/school/my-cover",
+            show: role === "MANAGER" || role === "SUPERVISOR",
+          },
+          {
             name: "الاحتياطي والمناوبة",
             Icon: ShieldRounded,
             iconType: "mui",

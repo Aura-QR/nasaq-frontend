@@ -303,6 +303,14 @@ const CoverReport = () => {
                                     <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "11px", fontWeight: 800 }}>
                                       {row.name}
                                     </Typography>
+                                    {row.type === "Admin" && (
+                                      <Chip
+                                        size="small"
+                                        variant="outlined"
+                                        label={row.role === "SUPERVISOR" ? "مشرف/ة" : "إداري/ة"}
+                                        sx={{ height: 21, fontSize: "8.5px", fontWeight: 800 }}
+                                      />
+                                    )}
                                     {overloaded && (
                                       <Chip
                                         size="small"
@@ -327,9 +335,9 @@ const CoverReport = () => {
                                 {row.covered}
                               </Typography>
                             </TableCell>
-                            <TableCell align="center" sx={{ fontSize: "10.5px" }}>{row.neededCover}</TableCell>
-                            <TableCell align="center" sx={{ fontSize: "10.5px" }}>{row.approvedLeaves}</TableCell>
-                            <TableCell align="center" sx={{ fontSize: "10.5px" }}>{row.daysPresent}</TableCell>
+                            <TableCell align="center" sx={{ fontSize: "10.5px" }}>{row.type === "Admin" ? "—" : row.neededCover}</TableCell>
+                            <TableCell align="center" sx={{ fontSize: "10.5px" }}>{row.type === "Admin" ? "—" : row.approvedLeaves}</TableCell>
+                            <TableCell align="center" sx={{ fontSize: "10.5px" }}>{row.type === "Admin" ? "—" : row.daysPresent}</TableCell>
                           </TableRow>
                         );
                       })}

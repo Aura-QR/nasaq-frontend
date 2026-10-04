@@ -47,6 +47,7 @@ import StaffLeaveRequests from "@/pages/StaffLeaveRequests/StaffLeaveRequests";
 import CoverageBoard from "@/pages/School/Duty/CoverageBoard";
 import LeaveRequests from "@/pages/School/Duty/LeaveRequests";
 import CoverReport from "@/pages/School/Duty/CoverReport";
+import MyCover from "@/pages/School/Duty/MyCover";
 import TeacherDuty from "@/pages/TeacherDuty/TeacherDuty";
 
 import SchoolManagersList from "@/pages/SchoolManagers/List";
@@ -416,6 +417,21 @@ const AppRouter = () => {
             path="/school/cover-report"
             element={<CoverReport />}
           />
+        </Route>
+
+
+        {/* =====================================================
+            SUPERVISOR / MANAGER — PERSONAL COVER PERIODS
+        ===================================================== */}
+        <Route
+          element={
+            <RoleRoute
+              allowedRoles={[ROLES.SUPERVISOR, ROLES.MANAGER]}
+            />
+          }
+        >
+          <Route path="/school/my-cover" element={<MyCover />} />
+          <Route path="/school/cover-register" element={<TeacherAttendance />} />
         </Route>
 
         {/* =====================================================
