@@ -1448,9 +1448,9 @@ const TeacherDashboard = () => {
           navigate("/teacher/observations"),
       },
       {
-        title: "الاستئذان والاحتياطي",
+        title: "الاستئذان والانتظار",
         description:
-          "قدّم طلب استئذان وتابع حالته وحصص الاحتياطي المكلف بها",
+          "قدّم طلب استئذان وتابع حالته وحصص الانتظار المكلف بها",
         icon: <EventAvailableRounded />,
         onClick: () =>
           navigate("/teacher/duty"),

@@ -514,7 +514,7 @@ const Sidebar = ({ active, setActive }) => {
             show: role === "MANAGER" || role === "SUPERVISOR",
           },
           {
-            name: "الاحتياطي والمناوبة",
+            name: "الانتظار والمناوبة",
             Icon: ShieldRounded,
             iconType: "mui",
             to: "/school/duty",
@@ -532,7 +532,7 @@ const Sidebar = ({ active, setActive }) => {
               dutyPermissions.read,
           },
           {
-            name: "تقرير الاحتياطي",
+            name: "تقرير الانتظار",
             Icon: InsightsRounded,
             iconType: "mui",
             to: "/school/cover-report",

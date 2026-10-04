@@ -289,7 +289,7 @@ const CoverageBoard = () => {
                     fontWeight: 800,
                   }}
                 >
-                  الاحتياطي والمناوبة
+                  الانتظار والمناوبة
                 </Typography>
                 <Chip
                   size="small"

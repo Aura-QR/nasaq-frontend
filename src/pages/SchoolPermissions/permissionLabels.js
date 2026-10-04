@@ -21,7 +21,7 @@ export const ENTITY_LABELS = {
   financialSettings: "إعدادات المالية",
   expenses: "المصروفات",
   teacherAttendance: "حضور المعلمين",
-  duty: "الاحتياطي والمناوبة والاستئذان",
+  duty: "الانتظار والمناوبة والاستئذان",
   curriculum: "المناهج والدروس",
   academicStructure: "المراحل والصفوف والترمات",
   academicYears: "السنوات الدراسية",
