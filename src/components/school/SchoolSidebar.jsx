@@ -167,6 +167,12 @@ const NAVIGATION_SECTIONS = [
         module: "staffAttendance",
       },
       {
+        label: "أعذار غياب الموظفين",
+        path: "/school/staff-absence-excuses",
+        icon: <AssignmentRounded />,
+        module: "staffAttendance",
+      },
+      {
         label: "حضوري",
         path: "/staff-attendance",
         icon: <AssignmentRounded />,
@@ -178,6 +184,15 @@ const NAVIGATION_SECTIONS = [
       {
         label: "استئذاناتي",
         path: "/staff-leave-requests",
+        icon: <AssignmentRounded />,
+        allowedRoles: [
+          ROLES.MANAGER,
+          ROLES.SUPERVISOR,
+        ],
+      },
+      {
+        label: "أعذار الغياب",
+        path: "/staff-absence-excuses",
         icon: <AssignmentRounded />,
         allowedRoles: [
           ROLES.MANAGER,

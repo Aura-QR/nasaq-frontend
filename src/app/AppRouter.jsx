@@ -44,6 +44,8 @@ import StaffAttendanceAdmin from "@/pages/School/StaffAttendance/StaffAttendance
 import StaffAttendance from "@/pages/StaffAttendance/StaffAttendance";
 import StaffLateReasons from "@/pages/StaffLateReasons/StaffLateReasons";
 import StaffLeaveRequests from "@/pages/StaffLeaveRequests/StaffLeaveRequests";
+import MyStaffAbsenceExcuses from "@/pages/StaffAbsenceExcuses/MyStaffAbsenceExcuses";
+import StaffAbsenceExcuses from "@/pages/StaffAbsenceExcuses/StaffAbsenceExcuses";
 import CoverageBoard from "@/pages/School/Duty/CoverageBoard";
 import LeaveRequests from "@/pages/School/Duty/LeaveRequests";
 import CoverReport from "@/pages/School/Duty/CoverReport";
@@ -404,6 +406,15 @@ const AppRouter = () => {
           />
 
           <Route
+            path="/school/staff-absence-excuses"
+            element={
+              <RequirePermission module="staffAttendance" operation="read">
+                <StaffAbsenceExcuses />
+              </RequirePermission>
+            }
+          />
+
+          <Route
             path="/school/duty"
             element={<CoverageBoard />}
           />
@@ -456,6 +467,10 @@ const AppRouter = () => {
           <Route
             path="/staff-leave-requests"
             element={<StaffLeaveRequests personal />}
+          />
+          <Route
+            path="/staff-absence-excuses"
+            element={<MyStaffAbsenceExcuses />}
           />
         </Route>
 

@@ -645,6 +645,8 @@ const StaffAttendanceAdmin = () => {
             totals.daysPresent + (Number(row?.daysPresent) || 0),
           daysAbsent:
             totals.daysAbsent + (Number(row?.daysAbsent) || 0),
+          daysExcused:
+            totals.daysExcused + (Number(row?.daysExcused) || 0),
           daysLate:
             totals.daysLate + (Number(row?.daysLate) || 0),
           daysLeftEarly:
@@ -656,6 +658,7 @@ const StaffAttendanceAdmin = () => {
         {
           daysPresent: 0,
           daysAbsent: 0,
+          daysExcused: 0,
           daysLate: 0,
           daysLeftEarly: 0,
           daysMissingCheckOut: 0,
@@ -1404,7 +1407,7 @@ const StaffAttendanceAdmin = () => {
         {[
           ["الإداريين والمشرفين في التقرير", summaryTotalStaff],
           ["أيام العمل بالفترة", summaryWorkingDays],
-          ["إجمالي أيام الغياب", summaryTotals.daysAbsent],
+          ["إجمالي أيام الغياب", `غياب ${summaryTotals.daysAbsent} (منها ${summaryTotals.daysExcused} بعذر)`],
           ["أيام الحضور", summaryTotals.daysPresent],
           ["أيام التأخير", summaryTotals.daysLate],
           ["بدون انصراف", summaryTotals.daysMissingCheckOut],
@@ -1505,7 +1508,9 @@ const StaffAttendanceAdmin = () => {
 
                       <TableCell align="center">
                         <Typography sx={{ fontSize: 10.5, fontWeight: 900, whiteSpace: "nowrap" }}>
-                          {Number(row?.daysAbsent) || 0} من {Number(row?.workingDays ?? summaryWorkingDays) || 0}
+                          غياب {Number(row?.daysAbsent) || 0}
+                          {(Number(row?.daysExcused) || 0) > 0 ? ` (منها ${Number(row?.daysExcused) || 0} بعذر)` : ""}
+                          {" من "}{Number(row?.workingDays ?? summaryWorkingDays) || 0}
                         </Typography>
                       </TableCell>
 

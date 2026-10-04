@@ -449,6 +449,141 @@ export const deleteStaffLeaveRequest = async (id) => {
   }
 };
 
+
+/* =========================================================
+   Staff absence excuses
+========================================================= */
+
+export const fetchPendingStaffAbsenceExcuses = async ({ days = 14 } = {}) => {
+  try {
+    const response = await api.get(`${ENDPOINT}/me/absence-excuse/pending`, {
+      params: compactParams({ days }),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تحميل أيام الغياب التي تحتاج إلى توضيح");
+  }
+};
+
+export const fetchMyStaffAbsenceExcuses = async () => {
+  try {
+    const response = await api.get(`${ENDPOINT}/me/absence-excuses`);
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تحميل أعذار الغياب");
+  }
+};
+
+export const uploadStaffAbsenceExcuseAttachment = async (file) => {
+  if (!file) {
+    return { status: false, statusCode: 400, message: "اختر ملفًا أولًا", data: null };
+  }
+
+  try {
+    const body = new FormData();
+    body.append("file", file);
+    const response = await api.post(`${ENDPOINT}/absence-excuse/attachment`, body, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر رفع المرفق");
+  }
+};
+
+export const submitStaffAbsenceExcuse = async ({ date, reason, attachment } = {}) => {
+  const cleanReason = String(reason || "").trim();
+  if (!date || !cleanReason) {
+    return { status: false, statusCode: 400, message: "التاريخ وسبب الغياب مطلوبان", data: null };
+  }
+
+  try {
+    const response = await api.post(`${ENDPOINT}/me/absence-excuse`, {
+      date,
+      reason: cleanReason,
+      ...(attachment ? { attachment } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر إرسال عذر الغياب");
+  }
+};
+
+export const fetchStaffAbsenceExcuses = async ({ status = "pending", from, to, staffId } = {}) => {
+  try {
+    const response = await api.get(`${ENDPOINT}/absence-excuses`, {
+      params: compactParams({
+        status,
+        from,
+        to,
+        staffId: staffId ? normalizeRequestId(staffId) : undefined,
+      }),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تحميل أعذار غياب الموظفين");
+  }
+};
+
+export const createStaffAbsenceExcuse = async ({ staffId, date, reason, attachment } = {}) => {
+  const cleanReason = String(reason || "").trim();
+  const id = normalizeRequestId(staffId);
+  if (!id || !date || !cleanReason) {
+    return { status: false, statusCode: 400, message: "الموظف والتاريخ وسبب الغياب مطلوبة", data: null };
+  }
+
+  try {
+    const response = await api.post(`${ENDPOINT}/absence-excuses`, {
+      staffId: id,
+      date,
+      reason: cleanReason,
+      ...(attachment ? { attachment } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تسجيل عذر الغياب");
+  }
+};
+
+export const reviewStaffAbsenceExcuse = async (id, verdict, note) => {
+  const excuseId = normalizeRequestId(id);
+  const reviewNote = String(note || "").trim();
+
+  if (!excuseId || !["accepted", "rejected"].includes(verdict)) {
+    return { status: false, statusCode: 400, message: "بيانات القرار غير صحيحة", data: null };
+  }
+  if (verdict === "rejected" && !reviewNote) {
+    return { status: false, statusCode: 400, message: "ملاحظة الرفض مطلوبة", data: null };
+  }
+
+  try {
+    const response = await api.patch(`${ENDPOINT}/absence-excuses/${excuseId}/review`, {
+      verdict,
+      ...(reviewNote ? { note: reviewNote } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر حفظ قرار العذر");
+  }
+};
+
+export const markStaffAbsenceExcusePresent = async (id, { checkInAt, note } = {}) => {
+  const excuseId = normalizeRequestId(id);
+  if (!excuseId) {
+    return { status: false, statusCode: 400, message: "معرّف العذر غير موجود", data: null };
+  }
+
+  try {
+    const response = await api.patch(`${ENDPOINT}/absence-excuses/${excuseId}/mark-present`, {
+      ...(checkInAt ? { checkInAt: String(checkInAt).slice(0, 5) } : {}),
+      ...(String(note || "").trim() ? { note: String(note).trim() } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تسجيل الحضور لهذا اليوم");
+  }
+};
+
 export default {
   fetchStaffAttendanceSettings,
   updateStaffAttendanceSettings,
@@ -471,4 +606,12 @@ export default {
   fetchStaffLeaveRequests,
   reviewStaffLeaveRequest,
   deleteStaffLeaveRequest,
+  fetchPendingStaffAbsenceExcuses,
+  fetchMyStaffAbsenceExcuses,
+  uploadStaffAbsenceExcuseAttachment,
+  submitStaffAbsenceExcuse,
+  fetchStaffAbsenceExcuses,
+  createStaffAbsenceExcuse,
+  reviewStaffAbsenceExcuse,
+  markStaffAbsenceExcusePresent,
 };

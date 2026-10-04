@@ -493,6 +493,13 @@ const Sidebar = ({ active, setActive }) => {
             show: staffAttendancePermissions.read,
           },
           {
+            name: "أعذار غياب الموظفين",
+            Icon: EventBusyRounded,
+            iconType: "mui",
+            to: "/school/staff-absence-excuses",
+            show: staffAttendancePermissions.read,
+          },
+          {
             name: "حضوري",
             Icon: HowToRegRounded,
             iconType: "mui",
@@ -504,6 +511,13 @@ const Sidebar = ({ active, setActive }) => {
             Icon: EventBusyRounded,
             iconType: "mui",
             to: "/staff-leave-requests",
+            show: role === "MANAGER" || role === "SUPERVISOR",
+          },
+          {
+            name: "أعذار الغياب",
+            Icon: EventBusyRounded,
+            iconType: "mui",
+            to: "/staff-absence-excuses",
             show: role === "MANAGER" || role === "SUPERVISOR",
           },
           {
@@ -667,6 +681,13 @@ const Sidebar = ({ active, setActive }) => {
               Icon: EventBusyRounded,
               iconType: "mui",
               to: "/staff-leave-requests",
+              show: true,
+            },
+            {
+              name: "أعذار الغياب",
+              Icon: EventBusyRounded,
+              iconType: "mui",
+              to: "/staff-absence-excuses",
               show: true,
             },
           ],
