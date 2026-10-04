@@ -1203,6 +1203,8 @@ const TeacherDuty = () => {
  * يوم المدرس كامل — حصصه وحصص الاحتياطي على نفس الخط.
  */
 const MyDay = ({ day }) => {
+  const navigate = useNavigate();
+
   if (!day) {
     return (
       <Alert
@@ -1534,6 +1536,29 @@ const MyDay = ({ day }) => {
                       )}
                     </Box>
                   </Stack>
+
+                  {/* The covering teacher takes this period's register; the
+                      backend lets her because of the substitution row. */}
+                  {isCover && day.date && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() =>
+                        navigate(
+                          `/teacher/attendance?lectureId=${slot.lectureId}&date=${String(day.date).slice(0, 10)}`
+                        )
+                      }
+                      sx={{
+                        flexShrink: 0,
+                        borderRadius: 2,
+                        fontSize: 11.5,
+                        fontWeight: 900,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      رصد الحضور والمتابعة
+                    </Button>
+                  )}
                 </Paper>
               </Grid>
             );
