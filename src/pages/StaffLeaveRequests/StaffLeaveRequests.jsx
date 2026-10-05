@@ -199,8 +199,8 @@ const displayStaffRole = (row) => {
       row?._directoryProfile?.role ||
       ""
   ).toUpperCase();
-  if (role === "SUPERVISOR") return "مشرف";
-  if (role === "MANAGER") return "مدير / إداري";
+  if (role === "SUPERVISOR") return "مدير المدرسة";
+  if (role === "MANAGER") return "مساعد إداري";
   // A guard reads as «حارس» when the school entered one.
   if (role === "STAFF") return row?.jobLabel || row?._directoryProfile?.jobLabel || "موظف خدمات";
   return "إداري / مشرف";
@@ -214,10 +214,13 @@ const StaffLeaveRequests = ({ personal = false }) => {
   const currentUserId = normalizeId(user?.userId || user?._id || user?.id || user?.sub);
 
   const permissions = usePermissions("staffAttendance");
-  const canReview = !personal && Boolean(permissions.edit) && role !== "SUPERVISOR";
+  // SUPERVISOR is مدير المدرسة: like the owner, they decide staff leave and
+  // file it for others. Their own request still goes to somebody else — the
+  // review buttons are hidden on one's own rows below.
+  const canReview = !personal && Boolean(permissions.edit);
   const canDeleteAny = !personal && Boolean(permissions.delete);
-  const canCreateForOthers = !personal && ["OWNER", "MANAGER"].includes(role);
-  const ownOnly = personal || role === "SUPERVISOR";
+  const canCreateForOthers = !personal && ["OWNER", "SUPERVISOR", "MANAGER"].includes(role);
+  const ownOnly = personal;
 
   const [rows, setRows] = useState([]);
   const [staff, setStaff] = useState([]);
@@ -546,7 +549,7 @@ const StaffLeaveRequests = ({ personal = false }) => {
               const pending = row?.status === "pending";
               const canRemove = pending && (
                 (personal && Boolean(permissions.delete)) ||
-                (!personal && (role === "SUPERVISOR" || canDeleteAny))
+                (!personal && (canDeleteAny || isOwn))
               );
               const showReview = canReview && pending && !isOwn;
 

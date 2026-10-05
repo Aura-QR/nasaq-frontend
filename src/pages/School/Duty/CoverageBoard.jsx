@@ -687,7 +687,9 @@ const UncoveredCard = ({ item, onPick }) => (
 );
 
 const adminRoleLabel = (role) =>
-  role === "SUPERVISOR" ? "مشرف/ة" : role === "MANAGER" ? "إداري/ة" : "إداري/ة";
+  // Only assistants (MANAGER) are offered now; SUPERVISOR is مدير المدرسة and
+  // can appear only on cover assigned before that change.
+  role === "SUPERVISOR" ? "مدير المدرسة" : "إداري/ة";
 
 const CoveredCard = ({ item, busy, onRemove }) => (
   <Paper
@@ -802,7 +804,7 @@ const PickSubstituteDialog = ({ target, busy, onClose, onPick }) => (
               {admins.length > 0 && (
                 <>
                   <Typography sx={{ pt: teachers.length ? 1 : 0, fontSize: "12px", fontWeight: 900, color: "var(--color-navy-deep)" }}>
-                    المشرفون والإداريون
+                    المساعدون الإداريون
                   </Typography>
                   {admins.map(renderSuggestion)}
                 </>

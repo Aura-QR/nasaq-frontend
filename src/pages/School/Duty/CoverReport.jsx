@@ -307,7 +307,7 @@ const CoverReport = () => {
                                       <Chip
                                         size="small"
                                         variant="outlined"
-                                        label={row.role === "SUPERVISOR" ? "مشرف/ة" : "إداري/ة"}
+                                        label={row.role === "SUPERVISOR" ? "مدير المدرسة" : "إداري/ة"}
                                         sx={{ height: 21, fontSize: "8.5px", fontWeight: 800 }}
                                       />
                                     )}

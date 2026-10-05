@@ -158,8 +158,8 @@ const staffRole = (item) =>
 
 const staffRoleLabel = (item) => {
   const role = staffRole(item);
-  if (role === "SUPERVISOR") return "مشرف";
-  if (role === "MANAGER") return "إداري";
+  if (role === "SUPERVISOR") return "مدير المدرسة";
+  if (role === "MANAGER") return "مساعد إداري";
   return "";
 };
 
@@ -462,7 +462,7 @@ const StaffLateReasons = () => {
                       </Typography>
                       <Chip
                         size="small"
-                        label={row.role === "SUPERVISOR" ? "مشرف" : "مدير / إداري"}
+                        label={row.role === "SUPERVISOR" ? "مدير المدرسة" : row.role === "STAFF" ? "موظف خدمات" : "مساعد إداري"}
                       />
                       <Chip size="small" label={row.date} />
                       <Chip
