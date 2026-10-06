@@ -7,20 +7,8 @@ import { CheckCircleRounded, CloseRounded, EventAvailableRounded, EventBusyRound
 import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import { fetchTeacherAbsenceExcuses, markTeacherAbsenceExcusePresent, reviewTeacherAbsenceExcuse } from "@/APIs/school/teacherAttendance";
-import { API_BASE_URL } from "@/APIs/Axios";
+import { resolveAttachmentUrl } from "@/utils/attachmentUrl";
 
-const resolveAttachmentUrl = (attachment) => {
-  if (!attachment) return "";
-
-  const value = String(attachment).trim();
-  if (/^https?:\/\//i.test(value)) return value;
-
-  try {
-    return new URL(value, `${API_BASE_URL}/`).href;
-  } catch {
-    return value;
-  }
-};
 
 const STATES = [
   { value: "pending", label: "بانتظار القرار", color: "warning" },

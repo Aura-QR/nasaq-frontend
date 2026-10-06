@@ -34,6 +34,7 @@ import {
   fetchAbsenceExcuses,
   reviewAbsenceExcuse,
 } from "@/APIs/school/absenceExcuses";
+import { resolveAttachmentUrl } from "@/utils/attachmentUrl";
 
 /*
  * أعذار الغياب — ما ترد به الأسرة، وقرار المدرسة فيه.
@@ -281,7 +282,7 @@ const AbsenceExcuses = () => {
 
                     {row.excuse && row.excuseAttachment ? (
                       <Link
-                        href={row.excuseAttachment}
+                        href={resolveAttachmentUrl(row.excuseAttachment)}
                         target="_blank"
                         rel="noopener"
                         sx={{

@@ -21,7 +21,7 @@ import {
   RefreshRounded,
 } from "@mui/icons-material";
 import { toast } from "react-toastify";
-import { API_BASE_URL } from "@/APIs/Axios";
+import { resolveAttachmentUrl } from "@/utils/attachmentUrl";
 import {
   fetchMyStaffAbsenceExcuses,
   fetchPendingStaffAbsenceExcuses,
@@ -50,16 +50,6 @@ const formatDate = (value) => {
   }).format(date);
 };
 
-const resolveAttachmentUrl = (attachment) => {
-  if (!attachment) return "";
-  const value = String(attachment).trim();
-  if (/^https?:\/\//i.test(value)) return value;
-  try {
-    return new URL(value, `${API_BASE_URL}/`).href;
-  } catch {
-    return value;
-  }
-};
 
 const extractList = (response) => {
   const data = response?.data ?? response;
