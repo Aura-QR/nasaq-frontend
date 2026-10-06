@@ -353,7 +353,7 @@ const DailyTrackingReport = () => {
             <Table size="small" sx={{ minWidth: 980 }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: "#F7F9FB" }}>
-                  {["الطالب", "الحصص", "حضور", "غياب", "المشاركة", "حلّت الواجب", "اختبار ناجح", "اختبار غير مجتاز", "بدون اختبار"].map((label) => (
+                  {["الطالب", "الحصص", "حضور", "غياب", "المشاركة", "الواجب", "اختبار ناجح", "اختبار غير مجتاز", "بدون اختبار"].map((label) => (
                     <TableCell key={label} align={label === "الطالب" ? "right" : "center"} sx={{ fontWeight: 900, fontSize: "9px", color: "#42576B" }}>{label}</TableCell>
                   ))}
                 </TableRow>

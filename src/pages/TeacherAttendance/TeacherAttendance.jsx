@@ -1072,7 +1072,7 @@ const TeacherAttendance = () => {
 
                   <Typography align="center" sx={{ fontSize: "9px", fontWeight: 900 }}>المشاركة</Typography>
 
-                  <Box><Typography align="center" sx={{ fontSize: "9px", fontWeight: 900 }}>حلّت الواجب</Typography><Typography align="center" sx={{ fontSize: "7px", color: "#9AA6B2" }}>رصد يومي</Typography></Box>
+                  <Box><Typography align="center" sx={{ fontSize: "9px", fontWeight: 900 }}>الواجب</Typography><Typography align="center" sx={{ fontSize: "7px", color: "#9AA6B2" }}>رصد يومي</Typography></Box>
 
                   <Typography align="center" sx={{ fontSize: "9px", fontWeight: 900 }}>اختبار قصير</Typography>
 
