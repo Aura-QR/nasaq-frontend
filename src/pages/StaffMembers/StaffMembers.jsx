@@ -48,7 +48,8 @@ const copy = async (text) => {
   }
 };
 
-const EMPTY = { fullName: "", jobLabel: "", username: "", password: "", email: "" };
+const EMPTY = { fullName: "", jobLabel: "", phoneNumber: "", username: "", password: "", email: "" };
+const PHONE = /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]*$/;
 
 const StaffMembers = () => {
   const [rows, setRows] = useState([]);
@@ -93,6 +94,7 @@ const StaffMembers = () => {
       values: {
         fullName: row.fullName || "",
         jobLabel: row.jobLabel || "",
+        phoneNumber: row.phoneNumber || "",
         username: row.username || "",
         email: row.hasEmail ? row.email : "",
         password: "",
@@ -107,6 +109,8 @@ const StaffMembers = () => {
         return "اسم المستخدم من 4 إلى 20 حرفًا: حروف إنجليزية وأرقام فقط";
       if (values.password.trim().length < 6) return "كلمة المرور 6 أحرف على الأقل";
     }
+    if (values.phoneNumber.trim() && (!PHONE.test(values.phoneNumber.trim()) || values.phoneNumber.trim().length > 20))
+      return "رقم الجوال غير صحيح";
     if (values.email.trim() && !/^\S+@\S+\.\S+$/.test(values.email.trim()))
       return "البريد الإلكتروني غير صحيح";
     return "";
@@ -122,6 +126,7 @@ const StaffMembers = () => {
       : await updateStaffMember(form.id, {
           fullName: form.values.fullName,
           jobLabel: form.values.jobLabel,
+          phoneNumber: form.values.phoneNumber,
           ...(form.values.email.trim() ? { email: form.values.email } : {}),
         });
     setSaving(false);
@@ -207,6 +212,10 @@ const StaffMembers = () => {
                       اسم المستخدم: <Box component="span" dir="ltr" sx={{ fontFamily: "monospace", fontWeight: 700 }}>{row.username}</Box>
                       {" · "}
                       {row.hasEmail ? <Box component="span" dir="ltr">{row.email}</Box> : "لا يوجد بريد إلكتروني"}
+                      {" · "}
+                      {row.phoneNumber
+                        ? <Box component="a" href={`tel:${row.phoneNumber}`} dir="ltr" sx={{ color: "inherit", fontWeight: 700 }}>{row.phoneNumber}</Box>
+                        : "لا يوجد رقم جوال"}
                     </Typography>
                   </Stack>
                   <Stack direction="row" spacing={0.5}>
@@ -240,6 +249,8 @@ const StaffMembers = () => {
                   ))}
                 </Stack>
               </Box>
+              <TextField id="staff-phone" label="رقم الجوال (اختياري)" value={form.values.phoneNumber} onChange={set("phoneNumber")}
+                placeholder="05xxxxxxxx" inputProps={{ dir: "ltr", maxLength: 20, inputMode: "tel" }} />
               <TextField id="staff-username" label="اسم المستخدم" required={form.mode === "create"} disabled={form.mode === "edit"}
                 value={form.values.username} onChange={set("username")}
                 helperText={form.mode === "create" ? "يدخل به الموظف — حروف إنجليزية وأرقام، من 4 إلى 20" : "لا يمكن تغيير اسم المستخدم"}

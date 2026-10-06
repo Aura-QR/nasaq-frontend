@@ -28,12 +28,13 @@ const clean = (payload = {}, { partial = false } = {}) => {
   const result = {};
   const text = (value) => String(value ?? "").trim();
 
-  ["fullName", "username", "jobLabel", "email", "password"].forEach((key) => {
+  // A key missing from this list never reaches the server — add new fields here.
+  ["fullName", "username", "jobLabel", "phoneNumber", "email", "password"].forEach((key) => {
     if (!(key in payload)) return;
     const value = text(payload[key]);
     if (value) result[key] = key === "email" ? value.toLowerCase() : value;
-    // An edit may clear the job label; nothing else is cleared by sending "".
-    else if (partial && key === "jobLabel") result[key] = "";
+    // An edit may clear the job label or the phone; nothing else is cleared by sending "".
+    else if (partial && (key === "jobLabel" || key === "phoneNumber")) result[key] = "";
   });
 
   return result;
