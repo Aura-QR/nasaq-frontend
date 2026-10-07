@@ -395,6 +395,12 @@ const getSubjectEntity = (lecture) => {
   );
 };
 
+/** «نشاط غير دراسي» — breakfast, play: on the timetable, never prepared. */
+const isActivityLecture = (lecture) => {
+  const subject = getSubjectEntity(lecture);
+  return Boolean(subject && typeof subject === "object" && subject.isActivity === true);
+};
+
 const getSubjectData = (lecture) => {
   const subject = getSubjectEntity(lecture);
   const offering =
@@ -492,7 +498,20 @@ const PREPARATION_STATE = {
     text: "#197857",
     tint: "rgba(38, 144, 106, .035)",
   },
+  activity: {
+    key: "activity",
+    label: "نشاط — لا يحتاج تحضير",
+    dot: "#8d98a6",
+    text: "#6b7785",
+    tint: "rgba(141, 152, 166, .04)",
+  },
 };
+
+/** The state shown for a lecture: an activity is never "needs preparation". */
+const getLecturePreparationState = (lecture) =>
+  isActivityLecture(lecture)
+    ? PREPARATION_STATE.activity
+    : getPreparationState(lecture?.schedulePreparation);
 
 const getPreparationState = (preparation) => {
   if (!getPreparationId(preparation)) return PREPARATION_STATE.none;
@@ -984,7 +1003,7 @@ const TeacherSchedule = () => {
 
     return enrichedLectures.filter((lecture) => {
       const subject = lecture.scheduleSubject;
-      const prepState = getPreparationState(lecture.schedulePreparation);
+      const prepState = getLecturePreparationState(lecture);
 
       if (
         subjectFilter &&
@@ -1155,7 +1174,9 @@ const TeacherSchedule = () => {
   const preparationCounts = useMemo(() => {
     const counts = { sent: 0, draft: 0, none: 0 };
     enrichedLectures.forEach((lecture) => {
-      const key = getPreparationState(lecture.schedulePreparation).key;
+      const key = getLecturePreparationState(lecture).key;
+      // Activities are not part of the week to prepare.
+      if (key === "activity") return;
       if (key === "sent") counts.sent += 1;
       else if (key === "none") counts.none += 1;
       else counts.draft += 1;
@@ -1684,6 +1705,7 @@ const TeacherSchedule = () => {
                             : "contained"
                         }
                         startIcon={<MenuBookRounded />}
+                        disabled={isActivityLecture(lecture)}
                         onClick={() => openPreparation(lecture)}
                         sx={{
                           minHeight: 40,
@@ -2927,9 +2949,7 @@ const TeacherSchedule = () => {
                             ) : null}
 
                             {lecture ? (() => {
-                              const prepState = getPreparationState(
-                                lecture.schedulePreparation
-                              );
+                              const prepState = getLecturePreparationState(lecture);
                               const hasPreparation = Boolean(
                                 getPreparationId(
                                   lecture.schedulePreparation
@@ -3024,6 +3044,7 @@ const TeacherSchedule = () => {
                                       size="small"
                                       variant="text"
                                       startIcon={<MenuBookRounded />}
+                                      disabled={isActivityLecture(lecture)}
                                       onClick={() =>
                                         openPreparation(lecture)
                                       }

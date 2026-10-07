@@ -1539,7 +1539,7 @@ const MyDay = ({ day }) => {
 
                   {/* The covering teacher takes this period's register; the
                       backend lets her because of the substitution row. */}
-                  {isCover && day.date && (
+                  {isCover && day.date && !slot.isActivity && (
                     <Button
                       size="small"
                       variant="outlined"

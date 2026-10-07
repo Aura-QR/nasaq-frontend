@@ -278,6 +278,13 @@ const toCoverLecture = (slot) => ({
 
 
 
+/** «نشاط غير دراسي»: subject offering populated down to the subject. */
+const isActivityLecture = (lecture) => {
+  const offering = lecture?.subjectOfferingId || lecture?.subjectOffering;
+  const subject = lecture?.subjectId || lecture?.subject || offering?.subjectId || offering?.subject;
+  return Boolean(subject && typeof subject === "object" && subject.isActivity === true);
+};
+
 const getLectureLabel = (lecture) => {
 
   if (lecture?.isCover) {
@@ -602,7 +609,7 @@ const TeacherAttendance = () => {
 
         const day = dayResponse?.data ?? dayResponse;
         list = (day?.slots ?? [])
-          .filter((slot) => slot.kind === "cover" && isMongoId(slot.lectureId))
+          .filter((slot) => slot.kind === "cover" && isMongoId(slot.lectureId) && !slot.isActivity)
           .map(toCoverLecture);
       } else {
         const response = await fetchLectures(
@@ -614,11 +621,13 @@ const TeacherAttendance = () => {
           throw new Error(getErrorMessage(response, "تعذر تحميل حصص المعلم"));
         }
 
-        const own = extractLectures(response);
+        // Breakfast, play: on the timetable but nothing to record — the server
+        // refuses a save on them, so they are not offered here.
+        const own = extractLectures(response).filter((lecture) => !isActivityLecture(lecture));
 
         const dayResponse = await fetchMyDay(selectedDate);
         const covers = (dayResponse?.status ? dayResponse.data?.slots || [] : [])
-          .filter((slot) => slot.kind === "cover" && isMongoId(slot.lectureId))
+          .filter((slot) => slot.kind === "cover" && isMongoId(slot.lectureId) && !slot.isActivity)
           .map(toCoverLecture);
 
         list = [...covers, ...own];

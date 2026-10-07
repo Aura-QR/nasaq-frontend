@@ -1076,34 +1076,46 @@ const TeacherDashboard = () => {
     [enrichedLectures, today]
   );
 
+  // Activities (breakfast, play) are on the timetable but never prepared, so
+  // they are left out of every preparation count on this page.
+  const preparableLectures = useMemo(
+    () =>
+      enrichedLectures.filter((lecture) => {
+        const offering = lecture?.subjectOfferingId || lecture?.subjectOffering;
+        const subject = lecture?.subjectId || lecture?.subject || offering?.subjectId || offering?.subject;
+        return !(subject && typeof subject === "object" && subject.isActivity === true);
+      }),
+    [enrichedLectures]
+  );
+
   const preparedLectures = useMemo(
     () =>
-      enrichedLectures.filter((lecture) =>
+      preparableLectures.filter((lecture) =>
         Boolean(
           getPreparationId(
             lecture.dashboardPreparation
           )
         )
       ),
-    [enrichedLectures]
+    [preparableLectures]
   );
 
   const unpreparedLectures = useMemo(
     () =>
-      enrichedLectures.filter(
+      preparableLectures.filter(
         (lecture) =>
           !getPreparationId(
             lecture.dashboardPreparation
           )
       ),
-    [enrichedLectures]
+    [preparableLectures]
   );
 
   const completionRate =
-    enrichedLectures.length > 0
+    preparableLectures.length > 0
       ? Math.round(
           (preparedLectures.length /
-            enrichedLectures.length) *
+            preparableLectures.length) *
             100
         )
       : 0;
@@ -1114,6 +1126,7 @@ const TeacherDashboard = () => {
   const nextUnpreparedLecture =
     todayLectures.find(
       (lecture) =>
+        preparableLectures.includes(lecture) &&
         !getPreparationId(
           lecture.dashboardPreparation
         )
