@@ -12,9 +12,10 @@ import {
   BadgeOutlined,
   MenuBookRounded,
   SchoolRounded,
+  ToysRounded,
 } from "@mui/icons-material";
 
-import { Controller } from "react-hook-form";
+import { Controller, useWatch } from "react-hook-form";
 
 import Input from "@/components/Input/Input";
 
@@ -109,6 +110,9 @@ const SubjectForm = ({
   control,
   errors,
 }) => {
+  // An activity never counts towards passing; the server forces it too.
+  const isActivity = useWatch({ control, name: "isActivity" }) === true;
+
   return (
     <Paper elevation={0} sx={sectionSx}>
       <Stack
@@ -299,16 +303,17 @@ const SubjectForm = ({
               render={({ field }) => (
                 <FormControlLabel
                   sx={{ m: 0, flexShrink: 0 }}
+                  disabled={isActivity}
                   control={
                     <Switch
-                      checked={field.value !== false}
+                      checked={!isActivity && field.value !== false}
                       onChange={(_, checked) => field.onChange(checked)}
                       onBlur={field.onBlur}
                       inputRef={field.ref}
                       color="warning"
                     />
                   }
-                  label={field.value !== false ? "أساسية" : "اختيارية"}
+                  label={!isActivity && field.value !== false ? "أساسية" : "اختيارية"}
                   labelPlacement="start"
                   slotProps={{
                     typography: {
@@ -321,6 +326,74 @@ const SubjectForm = ({
                       },
                     },
                   }}
+                />
+              )}
+            />
+          </Box>
+        </Grid>
+
+        {/* «نشاط غير دراسي» — breakfast, play, circle time. On the timetable,
+            never prepared, tracked or graded. */}
+        <Grid item xs={12}>
+          <Box
+            sx={{
+              width: "100%",
+              minHeight: 64,
+              px: 1.25,
+              py: 0.9,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 1.5,
+              border: "1px solid rgba(36, 74, 112, 0.09)",
+              borderRadius: "13px",
+              backgroundColor: "var(--color-white)",
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+              <Box
+                sx={{
+                  width: 34,
+                  height: 34,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                  color: "var(--color-navy)",
+                  backgroundColor: "rgba(36, 74, 112, 0.07)",
+                  borderRadius: "10px",
+                  "& svg": { fontSize: 18 },
+                }}
+              >
+                <ToysRounded />
+              </Box>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ color: "var(--color-navy-deep)", fontSize: "11.5px", fontWeight: 800 }}>
+                  نشاط غير دراسي
+                </Typography>
+                <Typography sx={{ mt: 0.15, color: "var(--color-muted)", fontSize: "9px", lineHeight: 1.55 }}>
+                  مثل الوجبة واللعب واللقاء الصباحي: يظهر في الجدول، ولا يُطلب له تحضير ولا رصد متابعة، ولا يدخل في الدرجات أو الترحيل.
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Controller
+              name="isActivity"
+              control={control}
+              defaultValue={false}
+              render={({ field }) => (
+                <FormControlLabel
+                  sx={{ m: 0, flexShrink: 0 }}
+                  control={
+                    <Switch
+                      checked={field.value === true}
+                      onChange={(_, checked) => field.onChange(checked)}
+                      onBlur={field.onBlur}
+                      inputRef={field.ref}
+                    />
+                  }
+                  label={field.value === true ? "نشاط" : "مادة دراسية"}
+                  labelPlacement="start"
+                  slotProps={{ typography: { sx: { fontSize: "10px", fontWeight: 800, color: "var(--color-muted)" } } }}
                 />
               )}
             />

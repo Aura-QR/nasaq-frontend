@@ -59,10 +59,13 @@ const mapSubjects = (data = []) =>
       subject?.subjectCode || "بدون كود",
     isRequiredForPromotion:
       subject?.isRequiredForPromotion !== false,
+    isActivity: subject?.isActivity === true,
     promotionRequirement:
-      subject?.isRequiredForPromotion === false
-        ? "مادة اختيارية"
-        : "مادة أساسية",
+      subject?.isActivity === true
+        ? "نشاط غير دراسي"
+        : subject?.isRequiredForPromotion === false
+          ? "مادة اختيارية"
+          : "مادة أساسية",
   }));
 
 const STAT_CARDS = [

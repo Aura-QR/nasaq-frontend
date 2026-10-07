@@ -44,6 +44,7 @@ const Edit = () => {
       subjectName: "",
       subjectCode: "",
       isRequiredForPromotion: true,
+      isActivity: false,
     },
   });
 
@@ -76,6 +77,7 @@ const Edit = () => {
         "",
       isRequiredForPromotion:
         subject.isRequiredForPromotion !== false,
+      isActivity: subject.isActivity === true,
     };
 
     reset(normalizedSubject);
@@ -99,8 +101,11 @@ const Edit = () => {
         subjectCode:
           formData.subjectCode?.trim() ||
           "",
+        isActivity: formData.isActivity === true,
         isRequiredForPromotion:
-          formData.isRequiredForPromotion !== false,
+          formData.isActivity === true
+            ? false
+            : formData.isRequiredForPromotion !== false,
       };
 
       const changedData =

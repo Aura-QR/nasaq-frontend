@@ -36,6 +36,7 @@ const Add = () => {
       subjectName: "",
       subjectCode: "",
       isRequiredForPromotion: true,
+      isActivity: false,
     },
   });
 
@@ -57,8 +58,12 @@ const Add = () => {
         subjectCode:
           formData.subjectCode?.trim() ||
           undefined,
+        isActivity: formData.isActivity === true,
+        // An activity never counts towards passing.
         isRequiredForPromotion:
-          formData.isRequiredForPromotion !== false,
+          formData.isActivity === true
+            ? false
+            : formData.isRequiredForPromotion !== false,
       };
 
       const response =
