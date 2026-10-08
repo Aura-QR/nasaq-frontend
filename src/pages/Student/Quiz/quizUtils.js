@@ -204,6 +204,21 @@ export const computeInitialSeconds = (
 
 
   /*
+   * الوقت المتبقي كما يحسبه الخادم: من لحظة فتح الطالبة للاختبار أول مرة،
+   * ولا يتجاوز موعد انتهاء الاختبار، ولا يتأثر بساعة الجهاز.
+   */
+  if (
+    typeof remainingSeconds ===
+      "number" &&
+    remainingSeconds >= 0
+  ) {
+    return Math.floor(
+      remainingSeconds
+    );
+  }
+
+
+  /*
    * المصدر الأساسي للوقت:
    *
    * startedAt + duration
