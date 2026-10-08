@@ -464,11 +464,12 @@ const TeacherExamAdd = () => {
     setOptionsError("");
 
     try {
-      const [profileResult, classesResult, subjectsResult] =
+      const [profileResult, classesResult, subjectsResult, schoolClassesResult] =
         await Promise.allSettled([
           api.get("/teachers/me"),
           api.get("/classes/teacher/me"),
           api.get("/subjects/teacher/me"),
+          api.get("/classes", { params: { page: 1, limit: 1000 } }),
         ]);
 
       const profile =
@@ -570,7 +571,31 @@ const TeacherExamAdd = () => {
         ).values()
       );
 
-      setClasses(await enrichTeacherClasses(myClasses));
+      // An assignment with classId=null means all classes in its grade.
+      // Teacher-specific class lists may omit these classes, so resolve them
+      // from the school's actual class records rather than guessed identifiers.
+      const schoolClasses = schoolClassesResult.status === "fulfilled"
+        ? extractCollection(schoolClassesResult.value, ["classes"])
+        : [];
+      const allowedClassIds = new Set();
+      const allGrades = new Set();
+      assignments.forEach((assignment) => {
+        const offering = assignment?.subjectOfferingId || assignment?.subjectOffering;
+        const gradeId = getOfferingGradeId(offering);
+        const assignedClassId = normalizeId(assignment?.classId);
+        if (assignedClassId) allowedClassIds.add(assignedClassId);
+        else if (gradeId) allGrades.add(gradeId);
+      });
+      const eligibleSchoolClasses = schoolClasses.filter((item) =>
+        allowedClassIds.has(normalizeId(item)) ||
+        allGrades.has(getClassGradeId(item))
+      );
+      const classMap = new Map();
+      [...myClasses, ...eligibleSchoolClasses].forEach((item) => {
+        const classId = normalizeId(item);
+        if (classId) classMap.set(classId, { ...(classMap.get(classId) || {}), ...item });
+      });
+      setClasses(await enrichTeacherClasses([...classMap.values()]));
       setOfferings(uniqueOfferings);
 
       if (!uniqueOfferings.length) {
@@ -865,7 +890,7 @@ const TeacherExamAdd = () => {
       return true;
     });
 
-    return matched.length ? matched : classes;
+    return matched;
   }, [classes, selectedOffering, subjectOfferingId]);
 
   useEffect(() => {
@@ -978,8 +1003,8 @@ const TeacherExamAdd = () => {
         "نوع الاختبار غير مفعّل في توزيع درجات المادة";
     }
 
-    if (!classIds.length) {
-      errors.classIds = "اختر فصلًا واحدًا على الأقل";
+    if (examType === "final" ? !availableClasses.length : !classIds.length) {
+      errors.classIds = "لا توجد فصول متاحة لهذه المادة";
     }
 
     if (!examType) {
@@ -1049,7 +1074,7 @@ const TeacherExamAdd = () => {
 
     const payload = {
       subjectOfferingId,
-      classIds,
+      classIds: examType === "final" ? availableClasses.slice(0, 1).map(normalizeId) : classIds,
       examType,
       startDate,
       endDate,
@@ -1508,6 +1533,11 @@ const TeacherExamAdd = () => {
                 boxShadow: "0 12px 28px rgba(18,47,77,.05)",
               }}
             >
+              {examType === "final" ? (
+                <Alert severity="info" sx={{ borderRadius: "12px" }}>
+                  يُطبَّق الاختبار النهائي على جميع فصول الصف في هذه المادة.
+                </Alert>
+              ) : <>
               <SectionTitle
                 icon={<SchoolRounded />}
                 title="الفصول المستهدفة"
@@ -1596,6 +1626,7 @@ const TeacherExamAdd = () => {
                   )}
                 </FormControl>
               )}
+              </>}
             </Paper>
 
             <Paper
