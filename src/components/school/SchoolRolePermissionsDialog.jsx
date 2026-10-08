@@ -28,6 +28,7 @@ const ENTITY_LABELS = {
   library: "المكتبة",
   attendance: "الحضور",
   gradesCriteria: "معايير الدرجات",
+  gradeRegister: "السجل السنوي",
   exams: "الاختبارات",
   projects: "المشاريع",
   grades: "الدرجات",

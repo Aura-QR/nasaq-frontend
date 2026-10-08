@@ -1,3 +1,4 @@
+import useGradingSystem from "@/utils/hooks/useGradingSystem";
 import {
   Box,
   Button,
@@ -33,6 +34,7 @@ import { getChangedValues } from "@/utils/helpers/getChangedValues";
 import { useSubject } from "@/utils/hooks/apis/useSubject";
 
 const Edit = () => {
+  const ministry = useGradingSystem() === "ministry";
   const {
     register,
     control,
@@ -45,6 +47,8 @@ const Edit = () => {
       subjectCode: "",
       isRequiredForPromotion: true,
       isActivity: false,
+      assessmentType: null,
+      passingGrade: null,
     },
   });
 
@@ -102,6 +106,8 @@ const Edit = () => {
           formData.subjectCode?.trim() ||
           "",
         isActivity: formData.isActivity === true,
+        ...(ministry ? { assessmentType: formData.isActivity ? null : formData.assessmentType || null,
+          passingGrade: formData.passingGrade === "" || formData.passingGrade == null ? null : Number(formData.passingGrade) } : {}),
         isRequiredForPromotion:
           formData.isActivity === true
             ? false

@@ -37,6 +37,7 @@ const getPermissionLabel = (
     exams: "الاختبارات",
     gradesCriteria:
       "معايير الدرجات",
+    gradeRegister: "السجل السنوي",
     projects: "المشاريع",
     preparation: "التحضير",
     library: "المكتبة",

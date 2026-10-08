@@ -1,3 +1,5 @@
+import useGradingSystem from "@/utils/hooks/useGradingSystem";
+import { MenuItem, TextField } from "@mui/material";
 import {
   Box,
   FormControlLabel,
@@ -112,6 +114,7 @@ const SubjectForm = ({
 }) => {
   // An activity never counts towards passing; the server forces it too.
   const isActivity = useWatch({ control, name: "isActivity" }) === true;
+  const gradingSystem = useGradingSystem();
 
   return (
     <Paper elevation={0} sx={sectionSx}>
@@ -233,6 +236,10 @@ const SubjectForm = ({
           </Box>
         </Grid>
 
+        {gradingSystem === "ministry" && !isActivity && <>
+          <Grid item xs={12} md={6}><Controller name="assessmentType" control={control} render={({ field }) => <TextField select fullWidth size="small" label="نوع التقويم" value={field.value ?? ""} onChange={e => field.onChange(e.target.value || null)}><MenuItem value="">لا يدخل في السجل</MenuItem><MenuItem value="continuous">تقويم مستمر (40 + 60)</MenuItem><MenuItem value="final_exam">تقويم ختامي (40 + 20 + 40)</MenuItem></TextField>} /></Grid>
+          <Grid item xs={12} md={6}><Controller name="passingGrade" control={control} render={({ field }) => <TextField fullWidth size="small" type="number" label="درجة النجاح (اختياري)" inputProps={{ min: 0, max: 100 }} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} error={field.value != null && (field.value < 0 || field.value > 100)} helperText="اتركه فارغًا لاعتماد درجة النجاح بالمدرسة" />} /></Grid>
+        </>}
         <Grid item xs={12}>
           <Box
             sx={{

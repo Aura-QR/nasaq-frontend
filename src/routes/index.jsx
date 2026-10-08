@@ -1,3 +1,5 @@
+import { RequireAuth } from "react-auth-kit";
+import GradeRegister from "@/pages/GradeRegister/GradeRegister";
 import {
   Route,
 } from "react-router-dom";
@@ -89,6 +91,9 @@ const protectModule = (
 
 export const appRoutes = (
   <>
+    <Route path="/grade-register" element={<RequireAuth loginPath="/"><GradeRegister /></RequireAuth>} />
+    <Route path="/teacher/grade-register" element={<RequireAuth loginPath="/"><GradeRegister /></RequireAuth>} />
+    <Route path="/school/grade-register" element={<RequireAuth loginPath="/"><GradeRegister /></RequireAuth>} />
     {academicYearsRoutes}
 
     {protectModule(

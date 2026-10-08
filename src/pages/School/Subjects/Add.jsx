@@ -37,6 +37,8 @@ const Add = () => {
       subjectCode: "",
       isRequiredForPromotion: true,
       isActivity: false,
+      assessmentType: null,
+      passingGrade: null,
     },
   });
 
@@ -59,6 +61,8 @@ const Add = () => {
           formData.subjectCode?.trim() ||
           undefined,
         isActivity: formData.isActivity === true,
+        assessmentType: formData.isActivity ? null : formData.assessmentType || null,
+        passingGrade: formData.passingGrade === "" || formData.passingGrade == null ? null : Number(formData.passingGrade),
         // An activity never counts towards passing.
         isRequiredForPromotion:
           formData.isActivity === true

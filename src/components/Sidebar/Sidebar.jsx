@@ -1,3 +1,4 @@
+import useGradingSystem from "@/utils/hooks/useGradingSystem";
 import "./Sidebar.scss";
 
 import {
@@ -140,6 +141,7 @@ const ROLE_LABELS = {
 };
 
 const Sidebar = ({ active, setActive }) => {
+  const isMinistry = useGradingSystem() === "ministry";
   /*
    * نظام الصلاحيات الجديد يخزن الصلاحيات كمصفوفة:
    * ["school.students.read", ...]
@@ -397,7 +399,14 @@ const Sidebar = ({ active, setActive }) => {
             name: "توزيع الدرجات",
             icon: gradesCriteriaIcon,
             to: "/school/gradesCriteria",
-            show: gradesCriteriaPermissions.read,
+            show: !isMinistry && gradesCriteriaPermissions.read,
+          },
+          {
+            name: "السجل السنوي",
+            Icon: FactCheckRounded,
+            iconType: "mui",
+            to: "/school/grade-register",
+            show: isMinistry,
           },
           {
             name: "إدارة الاختبارات",
@@ -730,6 +739,13 @@ const Sidebar = ({ active, setActive }) => {
           title: "التقييم والاختبارات",
           items: [
             {
+              name: "السجل السنوي",
+              Icon: FactCheckRounded,
+              iconType: "mui",
+              to: "/teacher/grade-register",
+              show: isMinistry,
+            },
+            {
               name: "اختباراتي",
               icon: examsIcon,
               to: "/teacher/exams",
@@ -832,6 +848,7 @@ const Sidebar = ({ active, setActive }) => {
     classesPermissions.read,
     lecturesPermissions.read,
     gradesCriteriaPermissions.read,
+    isMinistry,
     examsPermissions.read,
     projectsPermissions.read,
     attendancePermissions.read,

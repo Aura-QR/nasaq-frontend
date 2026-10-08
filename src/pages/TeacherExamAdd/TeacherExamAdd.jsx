@@ -1,3 +1,4 @@
+import useGradingSystem from "@/utils/hooks/useGradingSystem";
 import {
   Alert,
   Box,
@@ -433,6 +434,9 @@ const TeacherExamAdd = () => {
   const [subjectOfferingId, setSubjectOfferingId] = useState("");
   const [classIds, setClassIds] = useState([]);
   const [examType, setExamType] = useState("quiz");
+  const gradingSystem = useGradingSystem();
+  const ministry = gradingSystem === "ministry";
+  const [examMaxGrade, setExamMaxGrade] = useState(10);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [duration, setDuration] = useState(30);
@@ -854,7 +858,7 @@ const TeacherExamAdd = () => {
 
   const enabledExamTypes =
     useMemo(
-      () =>
+      () => ministry ? new Set(EXAM_TYPES.filter(type => type.value !== "final" || ["final_exam"].includes(selectedOffering?.assessmentType ?? selectedOffering?.subjectId?.assessmentType ?? selectedOffering?.subject?.assessmentType)).map(type => type.value)) :
         new Set(
           EXAM_TYPES
             .filter(
@@ -868,7 +872,7 @@ const TeacherExamAdd = () => {
               (type) => type.value
             )
         ),
-      [selectedCriteria]
+      [ministry, selectedOffering, selectedCriteria]
     );
 
   const availableClasses = useMemo(() => {
@@ -986,7 +990,7 @@ const TeacherExamAdd = () => {
     if (!subjectOfferingId) {
       errors.subjectOfferingId = "اختر المادة الدراسية";
     } else if (
-      criteriaChecked &&
+      !ministry && criteriaChecked &&
       !hasGradesCriteria
     ) {
       errors.subjectOfferingId =
@@ -994,7 +998,7 @@ const TeacherExamAdd = () => {
     }
 
     if (
-      criteriaChecked &&
+      !ministry && criteriaChecked &&
       hasGradesCriteria &&
       examType &&
       !enabledExamTypes.has(examType)
@@ -1057,13 +1061,15 @@ const TeacherExamAdd = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    if (ministry && examType === "final" && !enabledExamTypes.has("final")) { toast.error("هذه المادة تقويم مستمر أو لم يُحدَّد لها نوع تقويم ختامي"); return; }
+    if (ministry && (!Number.isFinite(Number(examMaxGrade)) || Number(examMaxGrade) < 1 || Number(examMaxGrade) > 100)) { toast.error("الدرجة العظمى للاختبار يجب أن تكون بين 1 و100"); return; }
     if (!validate()) {
       toast.error("راجع البيانات المطلوبة قبل الحفظ");
       return;
     }
 
     if (
-      criteriaChecked &&
+      !ministry && criteriaChecked &&
       !hasGradesCriteria
     ) {
       toast.error(
@@ -1079,6 +1085,7 @@ const TeacherExamAdd = () => {
       startDate,
       endDate,
       duration: Number(duration),
+      ...(ministry && !isEdit ? { grade: Number(examMaxGrade) } : {}),
       questions: questions.map((question) => ({
         question: question.question.trim(),
         options: question.options.map((option) => option.trim()),
@@ -1283,7 +1290,7 @@ const TeacherExamAdd = () => {
                   loadingExam ||
                   criteriaLoading ||
                   !offerings.length ||
-                  (criteriaChecked &&
+                  (!ministry && criteriaChecked &&
                     !hasGradesCriteria)
                 }
                 variant="contained"
@@ -1406,7 +1413,8 @@ const TeacherExamAdd = () => {
                     ))}
                   </TextField>
 
-                  {subjectOfferingId &&
+                  {ministry && !isEdit && <TextField fullWidth size="small" type="number" label="الدرجة العظمى للاختبار" value={examMaxGrade} inputProps={{min:1,max:100}} onChange={e=>setExamMaxGrade(e.target.value)} helperText={examType === "final" ? "النهائي افتراضيًا من 40" : "الافتراضي للاختبارات الأخرى 10"} />}
+                  {subjectOfferingId && !ministry &&
                     criteriaLoading && (
                     <Alert
                       severity="info"
@@ -1421,7 +1429,7 @@ const TeacherExamAdd = () => {
 
                   {subjectOfferingId &&
                     !criteriaLoading &&
-                    criteriaChecked &&
+                    !ministry && criteriaChecked &&
                     !hasGradesCriteria && (
                     <Alert
                       severity="warning"
@@ -1452,7 +1460,7 @@ const TeacherExamAdd = () => {
                     select
                     label="نوع الاختبار"
                     value={examType}
-                    onChange={(event) => setExamType(event.target.value)}
+                    onChange={(event) => { setExamType(event.target.value); if(ministry && !isEdit) setExamMaxGrade(event.target.value === "final" ? 40 : 10); }}
                     error={Boolean(validationErrors.examType)}
                     helperText={validationErrors.examType}
                     sx={fieldSx}
@@ -1940,7 +1948,7 @@ const TeacherExamAdd = () => {
                   loadingExam ||
                   criteriaLoading ||
                   !offerings.length ||
-                  (criteriaChecked &&
+                  (!ministry && criteriaChecked &&
                     !hasGradesCriteria)
                 }
               variant="contained"

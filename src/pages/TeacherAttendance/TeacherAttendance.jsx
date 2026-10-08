@@ -343,7 +343,7 @@ const serializeRows = (rows) =>
 
       homework: row.homework,
 
-      quiz: row.quiz,
+      quizScore: row.quizScore,
 
     }))
 
@@ -351,7 +351,7 @@ const serializeRows = (rows) =>
 
 
 
-const TrackingRow = memo(function TrackingRow({ row, index, disabled, onChange }) {
+const TrackingRow = memo(function TrackingRow({ row, index, disabled, onChange, quizMaxScore }) {
 
   const absent = row.absent === true;
 
@@ -463,35 +463,12 @@ const TrackingRow = memo(function TrackingRow({ row, index, disabled, onChange }
 
       </Box>
 
-      <Tooltip title={`${quizTitle} — اضغط للتبديل: لا يوجد ← اجتازت ← لم تجتز`} arrow>
-
-        <Box sx={{ display: "grid", placeItems: "center" }}>
-
-          <Checkbox
-
-            checked={row.quiz === true}
-
-            indeterminate={row.quiz === false}
-
-            disabled={disabled || absent}
-
-            onChange={() => onChange(row.studentId, "quiz")}
-
-            sx={{
-
-              color: "rgba(36,74,112,.3)",
-
-              "&.Mui-checked": { color: "#25865A" },
-
-              "&.MuiCheckbox-indeterminate": { color: "#C44545" },
-
-            }}
-
-          />
-
-        </Box>
-
-      </Tooltip>
+      <Box sx={{ display: "grid", placeItems: "center", px: .5 }}>
+        <TextField size="small" type="number" value={row.quizScore ?? ""}
+          disabled={disabled || absent} onChange={(e) => onChange(row.studentId, "quizScore", e.target.value === "" ? null : Number(e.target.value))}
+          inputProps={{ min: 0, max: quizMaxScore === "" ? undefined : Number(quizMaxScore), step: "any", "aria-label": `درجة اختبار ${row.name}` }}
+          sx={{ maxWidth: 90 }} />
+      </Box>
 
     </Paper>
 
@@ -528,6 +505,8 @@ const TeacherAttendance = () => {
   const [selectedLectureId, setSelectedLectureId] = useState(searchParams.get("lectureId") || "");
 
   const [sheet, setSheet] = useState(null);
+  const [quizMaxScore, setQuizMaxScore] = useState("");
+  const initialQuizMaxRef = useRef("");
 
   const [rows, setRows] = useState([]);
 
@@ -557,7 +536,7 @@ const TeacherAttendance = () => {
 
   const currentSerialized = useMemo(() => serializeRows(rows), [rows]);
 
-  const hasChanges = currentSerialized !== initialRowsRef.current;
+  const hasChanges = currentSerialized !== initialRowsRef.current || String(quizMaxScore) !== initialQuizMaxRef.current;
 
 
 
@@ -719,13 +698,15 @@ const TeacherAttendance = () => {
 
         homework: student?.homework,
 
-        quiz: student?.quiz,
+        quizScore: student?.quizScore ?? null,
 
       }));
 
       setSheet(data);
 
       setRows(nextRows);
+      setQuizMaxScore(data?.quizMaxScore ?? "");
+      initialQuizMaxRef.current = String(data?.quizMaxScore ?? "");
 
       initialRowsRef.current = serializeRows(nextRows);
 
@@ -813,19 +794,11 @@ const TeacherAttendance = () => {
 
         if (!value) {
 
-          return { ...row, absent: true, participation: false, homework: false, quiz: null };
+          return { ...row, absent: true, participation: false, homework: false, quizScore: null };
 
         }
 
-        return { ...row, absent: false, participation: true, homework: true, quiz: null };
-
-      }
-
-      if (field === "quiz") {
-
-        const nextQuiz = row.quiz === null ? true : row.quiz === true ? false : null;
-
-        return { ...row, quiz: nextQuiz };
+        return { ...row, absent: false, participation: true, homework: true, quizScore: null };
 
       }
 
@@ -861,6 +834,12 @@ const TeacherAttendance = () => {
 
     if (!isMongoId(selectedLectureId) || !selectedDate || !rows.length) return;
 
+    if (rows.some((r) => r.quizScore !== null && r.quizScore !== "" && !r.absent) && !(Number(quizMaxScore) > 0)) {
+      toast.error("حدّد الدرجة العظمى للاختبار"); return;
+    }
+    if (rows.some((r) => r.quizScore !== null && !r.absent && (r.quizScore < 0 || r.quizScore > Number(quizMaxScore)))) {
+      toast.error("درجة الاختبار يجب أن تكون بين 0 والدرجة العظمى"); return;
+    }
     setSaving(true);
 
     try {
@@ -871,6 +850,7 @@ const TeacherAttendance = () => {
 
         date: selectedDate,
 
+        quizMaxScore: quizMaxScore === "" ? null : Number(quizMaxScore),
         records: rows.map((row) => ({
 
           studentId: row.studentId,
@@ -881,7 +861,7 @@ const TeacherAttendance = () => {
 
           homework: row.homework,
 
-          quiz: row.quiz,
+          quizScore: row.absent === true ? null : row.quizScore,
 
         })),
 
@@ -908,6 +888,7 @@ const TeacherAttendance = () => {
 
 
       initialRowsRef.current = serializeRows(rows);
+      initialQuizMaxRef.current = String(quizMaxScore);
 
       setSheet((current) => current ? { ...current, trackingRecorded: true } : current);
 
@@ -1029,6 +1010,10 @@ const TeacherAttendance = () => {
 
 
 
+        {sheet?.registerLocked && <Alert severity="info" sx={{ mt: 1 }}>اعتُمد السجل السنوي لهذه المادة؛ لا يمكن تعديل المتابعة</Alert>}
+        {rows.length > 0 && <TextField type="number" size="small" label="الدرجة العظمى للاختبار" value={quizMaxScore}
+          onChange={(e) => setQuizMaxScore(e.target.value)} disabled={sheet?.registerLocked || saving}
+          inputProps={{ min: 1, step: "any" }} InputLabelProps={{ shrink: true }} sx={{ mt: 2, width: 240 }} />}
         {error && <Alert severity="warning" sx={{ mt: 1.1, borderRadius: "13px", fontSize: "10px" }}>{error}</Alert>}
 
 
@@ -1089,7 +1074,7 @@ const TeacherAttendance = () => {
 
                 <Stack spacing={.65}>
 
-                  {filteredRows.map((row) => <TrackingRow key={row.studentId} row={row} index={rows.findIndex((item) => item.studentId === row.studentId)} disabled={saving} onChange={updateRow} />)}
+                  {filteredRows.map((row) => <TrackingRow key={row.studentId} row={row} index={rows.findIndex((item) => item.studentId === row.studentId)} disabled={saving || sheet?.registerLocked} quizMaxScore={quizMaxScore} onChange={updateRow} />)}
 
                 </Stack>
 
@@ -1109,7 +1094,7 @@ const TeacherAttendance = () => {
 
               </Box>
 
-              <Button variant="contained" disabled={saving || !rows.length} onClick={handleSave} startIcon={saving ? <CircularProgress size={15} color="inherit" /> : <SaveRounded />} sx={{ minHeight: 42, px: 2.4, borderRadius: "12px", bgcolor: "#F2D792", color: "#122F4D", boxShadow: "none", fontSize: "10px", fontWeight: 900, "&:hover": { bgcolor: "#E8C96F", boxShadow: "none" } }}>
+              <Button variant="contained" disabled={saving || !rows.length || sheet?.registerLocked} onClick={handleSave} startIcon={saving ? <CircularProgress size={15} color="inherit" /> : <SaveRounded />} sx={{ minHeight: 42, px: 2.4, borderRadius: "12px", bgcolor: "#F2D792", color: "#122F4D", boxShadow: "none", fontSize: "10px", fontWeight: 900, "&:hover": { bgcolor: "#E8C96F", boxShadow: "none" } }}>
 
                 حفظ المتابعة
 

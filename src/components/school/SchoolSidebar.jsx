@@ -1,3 +1,4 @@
+import useGradingSystem from "@/utils/hooks/useGradingSystem";
 import {
   BadgeRounded,
   AccountBalanceWalletRounded,
@@ -123,6 +124,12 @@ const NAVIGATION_SECTIONS = [
     title: "التقييم والاختبارات",
 
     items: [
+      {
+        label: "السجل السنوي",
+        path: "/school/grade-register",
+        icon: <AssessmentRounded />,
+        module: "gradeRegister",
+      },
       {
         label: "توزيع الدرجات",
         path: "/school/gradesCriteria",
@@ -299,6 +306,7 @@ const SchoolSidebar = ({
   onClose,
   mobile = false,
 }) => {
+  const isMinistry = useGradingSystem() === "ministry";
   const navigate =
     useNavigate();
 
@@ -354,9 +362,9 @@ const SchoolSidebar = ({
       ),
 
     gradesCriteria:
-      usePermissions(
-        "gradesCriteria"
-      ),
+      usePermissions("gradesCriteria"),
+    gradeRegister:
+      usePermissions("gradeRegister"),
 
     exams:
       usePermissions(
@@ -412,6 +420,9 @@ const SchoolSidebar = ({
         items:
           section.items.filter(
             (item) => {
+              if (item.module === "gradesCriteria" && isMinistry) return false;
+              if (item.module === "gradeRegister" && !isMinistry) return false;
+              if (item.module === "gradeRegister" && [ROLES.OWNER, ROLES.SUPERVISOR].includes(role)) return true;
               if (item.allowedRoles) {
                 return item.allowedRoles.includes(role);
               }

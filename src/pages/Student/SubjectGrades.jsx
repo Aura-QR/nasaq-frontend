@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { api } from "@/APIs/Axios";
+import useGradingSystem from "@/utils/hooks/useGradingSystem";
 import { useMemo } from "react";
 
 import {
@@ -179,6 +182,13 @@ const getTermLabel = (grades, selectedSubject) => {
 const SubjectGrades = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const gradingSystem = useGradingSystem();
+  const [register, setRegister] = useState(null);
+  const [registerError, setRegisterError] = useState("");
+  useEffect(() => { if (gradingSystem !== "ministry") return; let active = true;
+    api.get("/grade-register/me").then(({data})=>{if(active) setRegister(data?.data ?? data);}).catch(error=>{if(active) setRegisterError(error?.response?.data?.message || "تعذر تحميل السجل السنوي");});
+    return ()=>{active=false;};
+  }, [gradingSystem]);
 
   const { subjects } = useStudentSubjects();
   const { grades } = useGradesCriteria({ subjectId: id });
@@ -319,6 +329,23 @@ const SubjectGrades = () => {
       : sectionSummaries.filter((section) => section.entries.length > 0);
   }, [sectionSummaries]);
 
+  if (gradingSystem === "ministry") {
+    const record = (register?.subjects || []).find(subject => String(subject.subjectOfferingId) === String(id) || String(subject.subjectId) === String(id));
+    const fmt = (number) => number === null || number === undefined ? "غير مكتمل" : Number(number).toLocaleString("ar-SA", {maximumFractionDigits: 2});
+    return <Container noSidebar={true}><Box dir="rtl" sx={{p:2,maxWidth:800,mx:"auto"}}><Typography variant="h5" fontWeight="bold" gutterBottom>درجاتي — السجل السنوي</Typography>
+      {registerError && <Typography color="error">{registerError}</Typography>}
+      {!register && !registerError && <Typography>جارٍ تحميل السجل السنوي...</Typography>}
+      {register && !record && <Typography>هذه المادة غير مدرجة في السجل السنوي</Typography>}
+      {record && <Paper sx={{p:3,borderRadius:3}}><Typography variant="h6">{record.subjectName}</Typography><Typography color="text.secondary">{record.term?.name}</Typography>
+        {record.status !== "approved" ? <Typography sx={{mt:2}}>لم يُعتمد بعد</Typography> : <Stack gap={2} sx={{mt:2}}>
+          <Typography>المهام والمشاركة ({record.maxScores?.performance ?? 40}): {fmt(record.performance)}</Typography>
+          <Typography>التقويم التحريري ({record.maxScores?.written ?? 20}): {fmt(record.written)}</Typography>
+          {record.assessmentType === "final_exam" && <Typography>اختبار نهاية الفترة (40): {fmt(record.final)}</Typography>}
+          <Typography fontWeight="bold">المجموع: {fmt(record.total)} / 100</Typography>
+        </Stack>}
+      </Paper>}
+    </Box></Container>;
+  }
   return (
     <Container noSidebar={true}>
       <Box dir="rtl" sx={{ width: "100%" }}>

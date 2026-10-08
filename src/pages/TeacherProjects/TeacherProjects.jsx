@@ -1,3 +1,4 @@
+import useGradingSystem from "@/utils/hooks/useGradingSystem";
 import {
   Alert,
   Box,
@@ -104,6 +105,7 @@ const EMPTY_FORM = {
   subjectOfferingId: "",
   classIds: [],
   files: [],
+  grade: 10,
 };
 
 const normalizeId = (value) => {
@@ -690,6 +692,7 @@ const StatCard = ({ icon, title, value, subtitle, tone = "navy" }) => {
 
 const TeacherProjects = () => {
   const navigate = useNavigate();
+  const ministry = useGradingSystem() === "ministry";
   const permissions = usePermissions("projects");
   const [searchParams] = useSearchParams();
   const getAuthUser = useAuthUser();
@@ -1273,6 +1276,7 @@ const TeacherProjects = () => {
       subjectOfferingId: getOfferingId(row.project),
       classIds: row.classIds,
       files: [],
+      grade: row.project?.grade ?? 10,
     });
     setFormError("");
     setFormOpen(true);
@@ -1333,6 +1337,7 @@ const TeacherProjects = () => {
       return;
     }
 
+    if (ministry && (Number(form.grade) < 1 || Number(form.grade) > 100 || !Number.isFinite(Number(form.grade)))) { setFormError("الدرجة العظمى يجب أن تكون بين 1 و100"); return; }
     setSaving(true);
 
     try {
@@ -1342,6 +1347,7 @@ const TeacherProjects = () => {
         title: form.title.trim(),
         description: form.description.trim(),
         dueDate: dueDate.toISOString(),
+        ...(ministry ? {grade: Number(form.grade)} : {}),
       };
 
       const response = form.id
@@ -2531,6 +2537,7 @@ const TeacherProjects = () => {
               </Select>
             </FormControl>
 
+            {ministry && <TextField label="الدرجة العظمى للمشروع" type="number" value={form.grade ?? 10} inputProps={{min:1,max:100}} onChange={event=>setForm(current=>({...current,grade:event.target.value}))} fullWidth />}
             <TextField
               label="موعد التسليم"
               type="datetime-local"
