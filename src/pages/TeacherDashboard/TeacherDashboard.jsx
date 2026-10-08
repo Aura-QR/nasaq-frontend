@@ -94,6 +94,9 @@ import {
   fetchMyObservations,
 } from "@/APIs/school/lessonObservations";
 
+import { fetchActiveAcademicYear } from "@/APIs/school/academicYears";
+import { academicRecordPeriod } from "@/utils/academicRecordYear";
+
 import nasaqLogo from "../../images/wadq-logo.png";
 import NotificationBell from "@/components/Notifications/NotificationBell";
 
@@ -773,6 +776,17 @@ const TeacherDashboard = () => {
     useState([]);
   const [projects, setProjects] =
     useState([]);
+  const [activeYearId, setActiveYearId] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    fetchActiveAcademicYear().then((response) => {
+      const year = response?.data?.academicYear || response?.data?.year || response?.data;
+      if (mounted) setActiveYearId(normalizeId(year));
+    }).catch(() => { if (mounted) setActiveYearId(""); });
+    return () => { mounted = false; };
+  }, []);
+
   const [projectSubmissions, setProjectSubmissions] =
     useState([]);
   const [pendingLateness, setPendingLateness] =
@@ -1215,9 +1229,25 @@ const TeacherDashboard = () => {
   }, [classes, enrichedLectures]);
 
 
+  // Dashboard totals reflect the same current-year view as the teacher lists.
+  const currentExams = useMemo(() => exams.filter((exam) =>
+    academicRecordPeriod(exam, activeYearId,
+      Array.isArray(exam?.classes) ? exam.classes :
+      Array.isArray(exam?.classIds) ? exam.classIds :
+      Array.isArray(exam?.classrooms) ? exam.classrooms : []) !== "historical"
+  ), [exams, activeYearId]);
+  const currentProjects = useMemo(() => projects.filter((project) =>
+    academicRecordPeriod(project, activeYearId,
+      Array.isArray(project?.classes) ? project.classes :
+      Array.isArray(project?.classIds) ? project.classIds :
+      Array.isArray(project?.classrooms) ? project.classrooms : []) !== "historical"
+  ), [projects, activeYearId]);
+  const currentProjectIds = useMemo(() => new Set(currentProjects.map(getProjectId)), [currentProjects]);
+
   const pendingProjectCorrections = useMemo(
     () =>
       projectSubmissions
+        .filter((submission) => currentProjectIds.has(getProjectId(submission?.dashboardProject || submission?.project || submission?.projectId)))
         .filter(isPendingProjectSubmission)
         .map((submission, index) => {
           const project =
@@ -1250,7 +1280,7 @@ const TeacherDashboard = () => {
               : "/teacher/grading/projects",
           };
         }),
-    [projectSubmissions]
+    [projectSubmissions, currentProjectIds]
   );
 
   const pendingCorrections = useMemo(
@@ -1266,7 +1296,7 @@ const TeacherDashboard = () => {
   const recentEvaluations = useMemo(
     () =>
       [
-        ...exams.map((exam) => ({
+        ...currentExams.map((exam) => ({
           id: `exam-${getExamId(exam)}`,
           type: "exam",
           typeLabel: "اختبار",
@@ -1284,7 +1314,7 @@ const TeacherDashboard = () => {
             ? `/teacher/exams?examId=${getExamId(exam)}`
             : "/teacher/exams",
         })),
-        ...projects.map((project) => ({
+        ...currentProjects.map((project) => ({
           id: `project-${getProjectId(project)}`,
           type: "project",
           typeLabel: "مشروع",
@@ -1309,7 +1339,7 @@ const TeacherDashboard = () => {
             getTimestamp({ date: first.date })
         )
         .slice(0, 4),
-    [exams, projects]
+    [currentExams, currentProjects]
   );
 
   const todayLabel = useMemo(() => {
@@ -1488,14 +1518,14 @@ const TeacherDashboard = () => {
       },
       {
         title: "اختباراتي",
-        description: `${exams.length} اختبار • التصحيح من تفاصيل الاختبار`,
+        description: `${currentExams.length} اختبار • التصحيح من تفاصيل الاختبار`,
         icon: <QuizRounded />,
         onClick: () =>
           navigate("/teacher/exams"),
       },
       {
         title: "تصحيح المشروعات",
-        description: `${pendingProjectCorrections.length} تسليم يحتاج تصحيح من ${projects.length} مشروع`,
+        description: `${pendingProjectCorrections.length} تسليم يحتاج تصحيح من ${currentProjects.length} مشروع`,
         icon: <FactCheckRounded />,
         onClick: () =>
           navigate("/teacher/grading/projects"),
@@ -1523,8 +1553,8 @@ const TeacherDashboard = () => {
       pendingLateness,
       pendingAbsenceDays.length,
       pendingObservations.length,
-      exams.length,
-      projects.length,
+      currentExams.length,
+      currentProjects.length,
       pendingProjectCorrections.length,
       classRows.length,
     ]
@@ -2939,7 +2969,7 @@ const TeacherDashboard = () => {
                         fontWeight: 900,
                       }}
                     >
-                      {exams.length}
+                      {currentExams.length}
                     </Typography>
                   </Stack>
                   <Typography
@@ -3005,7 +3035,7 @@ const TeacherDashboard = () => {
                         fontWeight: 900,
                       }}
                     >
-                      {projects.length}
+                      {currentProjects.length}
                     </Typography>
                   </Stack>
                   <Typography

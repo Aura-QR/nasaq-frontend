@@ -1243,20 +1243,20 @@ const TeacherProjects = () => {
   }, [projectRows, search, statusFilter, yearFilter, activeYearId]);
 
   const stats = useMemo(() => {
-    const active = projectRows.filter((row) => !row.isExpired).length;
-    const expired = projectRows.filter((row) => row.isExpired).length;
-    const pending = projectRows.reduce(
+    const active = visibleRows.filter((row) => !row.isExpired).length;
+    const expired = visibleRows.filter((row) => row.isExpired).length;
+    const pending = visibleRows.reduce(
       (total, row) => total + row.pendingCount,
       0
     );
 
     return {
-      total: projectRows.length,
+      total: visibleRows.length,
       active,
       expired,
       pending,
     };
-  }, [projectRows]);
+  }, [visibleRows]);
 
   const openCreateDialog = () => {
     setForm(EMPTY_FORM);
@@ -1607,7 +1607,7 @@ const TeacherProjects = () => {
             icon={<AssignmentRounded />}
             title="إجمالي المشروعات"
             value={stats.total}
-            subtitle="كل المشروعات التي أنشأتها"
+            subtitle="وفق الفلاتر المحددة"
           />
           <StatCard
             icon={<CheckCircleRounded />}
@@ -1642,7 +1642,8 @@ const TeacherProjects = () => {
             display: "grid",
             gridTemplateColumns: {
               xs: "1fr",
-              md: "minmax(0, 1fr) 205px",
+              sm: "repeat(2, minmax(0, 1fr))",
+              lg: "minmax(0, 1fr) 205px 180px",
             },
             gap: 1,
           }}
@@ -1659,14 +1660,14 @@ const TeacherProjects = () => {
                 </InputAdornment>
               ),
             }}
-            sx={{
+            sx={{ minWidth: 0, gridColumn: { xs: "1 / -1", sm: "1 / -1", lg: "auto" },
               "& .MuiOutlinedInput-root": {
                 ...TEACHER_UI.field,
               },
             }}
           />
 
-          <FormControl size="small" sx={{ minWidth: 185 }}>
+          <FormControl size="small" sx={{ minWidth: 0 }}>
             <InputLabel>السنة الدراسية</InputLabel>
             <Select value={yearFilter} label="السنة الدراسية" onChange={(event) => setYearFilter(event.target.value)} sx={{ ...TEACHER_UI.field }}>
               {YEAR_FILTER_OPTIONS.map((option) => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
@@ -1783,7 +1784,9 @@ const TeacherProjects = () => {
                     fontSize: 14,
                   }}
                 >
-                  لا توجد مشروعات مطابقة
+                  {yearFilter === "current" && !search.trim() && statusFilter === "all"
+                    ? "لا توجد مشاريع مسجلة للسنة الدراسية الحالية"
+                    : "لا توجد مشروعات مطابقة"}
                 </Typography>
 
                 <Typography
@@ -1793,7 +1796,9 @@ const TeacherProjects = () => {
                     fontSize: 9.5,
                   }}
                 >
-                  غيّر الفلاتر أو أنشئ مشروعًا جديدًا للطلاب.
+                  {yearFilter === "current" && !search.trim() && statusFilter === "all"
+                    ? "يمكنك إنشاء مشروع جديد لطلاب السنة الحالية أو عرض السنوات السابقة."
+                    : "غيّر الفلاتر أو أنشئ مشروعًا جديدًا للطلاب."}
                 </Typography>
 
                 <Button

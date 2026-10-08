@@ -567,24 +567,6 @@ const TeacherExams = () => {
     );
   };
 
-  const counts = useMemo(() => {
-    const result = {
-      total: exams.length,
-      active: 0,
-      upcoming: 0,
-      ended: 0,
-    };
-
-    exams.forEach((exam) => {
-      const status = getExamStatus(exam);
-      if (result[status] !== undefined) {
-        result[status] += 1;
-      }
-    });
-
-    return result;
-  }, [exams]);
-
   const filteredExams = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -617,6 +599,25 @@ const TeacherExams = () => {
       return matchesSearch && matchesType && matchesStatus && matchesYear;
     });
   }, [exams, search, typeFilter, statusFilter, yearFilter, activeYearId]);
+
+  const counts = useMemo(() => {
+    const result = {
+      total: filteredExams.length,
+      active: 0,
+      upcoming: 0,
+      ended: 0,
+    };
+
+    filteredExams.forEach((exam) => {
+      const status = getExamStatus(exam);
+      if (result[status] !== undefined) {
+        result[status] += 1;
+      }
+    });
+
+    return result;
+  }, [filteredExams]);
+
 
   const handleDelete = async () => {
     const examId = getExamId(deleteTarget);
@@ -906,7 +907,7 @@ const TeacherExams = () => {
             icon={<FactCheckRounded />}
             label="إجمالي الاختبارات"
             value={counts.total}
-            helper="كل الاختبارات المسجلة بحسابك"
+            helper="وفق الفلاتر المحددة"
           />
           <StatCard
             icon={<CheckCircleRounded />}
