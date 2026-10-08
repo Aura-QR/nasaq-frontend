@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import { useAuthUser } from "react-auth-kit";
 import { Alert, Box, Button, CircularProgress, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
-import { api } from "@/APIs/Axios";
-import { fetchRegisterSheet, saveRegisterSheet, approveRegisterSheet, reopenRegisterSheet, fetchClassRegisterReport } from "@/APIs/school/gradeRegister";
+import { fetchRegisterOptions, fetchRegisterSheet, saveRegisterSheet, approveRegisterSheet, reopenRegisterSheet, fetchClassRegisterReport } from "@/APIs/school/gradeRegister";
 
 const idOf = (x) => String(x?._id || x?.id || x || "");
-const listOf = (payload) => { const v = payload?.data?.data ?? payload?.data ?? payload; return Array.isArray(v) ? v : Array.isArray(v?.items) ? v.items : Array.isArray(v?.results) ? v.results : Array.isArray(v?.docs) ? v.docs : []; };
 const mark = (n) => n === null || n === undefined ? "غير مكتمل" : Number(n).toLocaleString("ar-SA", { maximumFractionDigits: 2 });
 
 export default function GradeRegister() {
@@ -13,8 +11,9 @@ export default function GradeRegister() {
   const auth = getUser?.() || {};
   const role = String(auth?.user?.role || auth?.role || "").toUpperCase();
   const admin = ["OWNER", "SUPERVISOR", "MANAGER"].includes(role);
+  // From GET /grade-register/options: only the classes the user can open,
+  // each with its own grade's registered subjects for the current term.
   const [classes, setClasses] = useState([]);
-  const [offerings, setOfferings] = useState([]);
   const [classId, setClassId] = useState("");
   const [subjectOfferingId, setSubjectOfferingId] = useState("");
   const [sheet, setSheet] = useState(null);
@@ -27,13 +26,14 @@ export default function GradeRegister() {
   const [classReport, setClassReport] = useState(null);
   useEffect(() => {
     let active = true;
-    Promise.allSettled([api.get("/classes"), api.get("/subject-offerings")]).then(([c, s]) => {
+    fetchRegisterOptions().then((response) => {
       if (!active) return;
-      if (c.status === "fulfilled") setClasses(listOf(c.value));
-      if (s.status === "fulfilled") setOfferings(listOf(s.value));
+      if (response?.status === false) { setError(response.message); return; }
+      setClasses((response?.data ?? response)?.classes || []);
     });
     return () => { active = false; };
   }, []);
+  const offerings = classes.find((c) => c.classId === classId)?.subjects || [];
   const load = async () => {
     if (!classId || !subjectOfferingId) return;
     setLoading(true); setError("");
@@ -42,6 +42,7 @@ export default function GradeRegister() {
     else { setSheet(response?.data ?? response); setFinalMarks({}); setWrittenItems([]); setWrittenMarks({}); }
     setLoading(false);
   };
+  const marksOf = (itemId) => Object.entries(writtenMarks[itemId] || {}).map(([studentId, score]) => ({ studentId, score: score === "" ? null : Number(score) }));
   const submit = async (mode) => {
     setBusy(true); setError("");
     const base = { classId, subjectOfferingId };
@@ -50,7 +51,11 @@ export default function GradeRegister() {
       if (Object.values(finalMarks).some(x => x !== "" && (!Number.isFinite(Number(x)) || Number(x) < 0 || Number(x) > 40))) { setError("درجة اختبار نهاية الفترة يجب أن تكون بين 0 و40");setBusy(false);return; }
       if (writtenItems.some(x => !x.remove && (!x._id && !x.title?.trim() || x.maxScore !== undefined && (!(Number(x.maxScore) > 0))))) { setError("حدد اسم البند والدرجة العظمى الصحيحة");setBusy(false);return; }
       response = await saveRegisterSheet({ ...base, finalMarks: Object.entries(finalMarks).map(([studentId, score]) => ({ studentId, score: score === "" ? null : Number(score) })),
-        writtenItems: writtenItems.map(item => ({ ...(item._id ? { _id: item._id } : {}), ...(item.remove ? { remove: true } : { ...(item.title !== undefined ? { title: item.title } : {}), ...(item.maxScore !== undefined ? { maxScore: Number(item.maxScore) } : {}), marks: Object.entries(writtenMarks[item._id || item.localId] || {}).map(([studentId, score]) => ({ studentId, score: score === "" ? null : Number(score) })) }) })) });
+        writtenItems: [
+          ...writtenItems.map(item => ({ ...(item._id ? { _id: item._id } : {}), ...(item.remove ? { remove: true } : { ...(item.title !== undefined ? { title: item.title } : {}), ...(item.maxScore !== undefined ? { maxScore: Number(item.maxScore) } : {}), marks: marksOf(item._id || item.localId) }) })),
+          // Marks typed for a saved item whose title and out-of were not touched.
+          ...Object.keys(writtenMarks).filter(id => !writtenItems.some(item => (item._id || item.localId) === id)).map(id => ({ _id: id, marks: marksOf(id) })),
+        ] });
     } else if (mode === "approve") {
       if (!window.confirm("هل تريد اعتماد السجل السنوي؟ بعد الاعتماد، ستُقفل المتابعة اليومية لهذه المادة والفصل.")) { setBusy(false); return; }
       response = await approveRegisterSheet(base);
@@ -68,11 +73,11 @@ export default function GradeRegister() {
     <Typography variant="h4" fontWeight="bold" gutterBottom>السجل السنوي</Typography>
     <Typography color="text.secondary" sx={{ mb: 3 }}>عرض درجات الطلاب حسب الفصل والمادة، واعتماد السجل بعد اكتمال التقييم.</Typography>
     <Paper sx={{ p: 2, mb: 2 }}><Stack direction={{ xs: "column", md: "row" }} gap={2}>
-      <TextField select fullWidth label="الفصل" value={classId} onChange={(e) => { setClassId(e.target.value); setSheet(null); }}>
-        {classes.map((c) => <MenuItem key={idOf(c)} value={idOf(c)}>{c.name || c.className || idOf(c)}</MenuItem>)}
+      <TextField select fullWidth label="الفصل" value={classId} onChange={(e) => { setClassId(e.target.value); setSubjectOfferingId(""); setSheet(null); setClassReport(null); }}>
+        {classes.map((c) => <MenuItem key={c.classId} value={c.classId}>{c.className}</MenuItem>)}
       </TextField>
-      <TextField select fullWidth label="المادة" value={subjectOfferingId} onChange={(e) => { setSubjectOfferingId(e.target.value); setSheet(null); }}>
-        {offerings.map((o) => <MenuItem key={idOf(o)} value={idOf(o)}>{o.subjectId?.name || o.subject?.name || o.name || idOf(o)} — {o.gradeLevelId?.name || o.gradeLevel?.name || ""}</MenuItem>)}
+      <TextField select fullWidth label="المادة" value={subjectOfferingId} disabled={!classId} onChange={(e) => { setSubjectOfferingId(e.target.value); setSheet(null); }}>
+        {offerings.map((o) => <MenuItem key={o.subjectOfferingId} value={o.subjectOfferingId}>{o.subjectName} — {o.assessmentType === "final_exam" ? "تقويم ختامي" : "تقويم مستمر"}</MenuItem>)}
       </TextField>
       <Button variant="contained" disabled={!classId || !subjectOfferingId || loading} onClick={load} sx={{ minWidth: 140 }}>عرض السجل</Button>
     </Stack></Paper>

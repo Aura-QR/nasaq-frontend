@@ -353,7 +353,7 @@ const DailyTrackingReport = () => {
             <Table size="small" sx={{ minWidth: 980 }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: "#F7F9FB" }}>
-                  {["الطالب", "الحصص", "حضور", "غياب", "المشاركة", "الواجب", "اختبار ناجح", "اختبار غير مجتاز", "بدون اختبار"].map((label) => (
+                  {["الطالب", "الحصص", "حضور", "غياب", "المشاركة", "الواجب", "متوسط الاختبارات القصيرة"].map((label) => (
                     <TableCell key={label} align={label === "الطالب" ? "right" : "center"} sx={{ fontWeight: 900, fontSize: "9px", color: "#42576B" }}>{label}</TableCell>
                   ))}
                 </TableRow>
@@ -367,13 +367,12 @@ const DailyTrackingReport = () => {
                     <TableCell align="center">{safeNumber(student?.absentCount)}</TableCell>
                     <TableCell align="center"><RateCell value={student?.participationRate} /></TableCell>
                     <TableCell align="center"><RateCell value={student?.homeworkRate} /></TableCell>
-                    <TableCell align="center">{safeNumber(student?.quizzes?.passed)}</TableCell>
-                    <TableCell align="center">{safeNumber(student?.quizzes?.failed)}</TableCell>
-                    <TableCell align="center">{safeNumber(student?.quizzes?.noQuiz)}</TableCell>
+                    {/* Paper quiz marks as a percentage; — when she sat none. */}
+                    <TableCell align="center"><RateCell value={student?.quizAverage} /></TableCell>
                   </TableRow>
                 ))}
                 {!students.length && (
-                  <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5, color: "#8B96A3" }}>لا توجد بيانات متابعة في الفترة المحددة.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} align="center" sx={{ py: 5, color: "#8B96A3" }}>لا توجد بيانات متابعة في الفترة المحددة.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
