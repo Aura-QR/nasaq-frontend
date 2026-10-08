@@ -58,6 +58,9 @@ import {
   fetchTeacherExams,
 } from "@/APIs/school/exams";
 
+import { fetchActiveAcademicYear } from "@/APIs/school/academicYears";
+import { academicRecordPeriod, YEAR_FILTER_OPTIONS } from "@/utils/academicRecordYear";
+
 import nasaqLogo from "../../images/wadq-logo.png";
 import usePermissions from "@/utils/hooks/usePermissions";
 
@@ -436,6 +439,8 @@ const TeacherExams = () => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("current");
+  const [activeYearId, setActiveYearId] = useState("");
   const [selectedExam, setSelectedExam] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -478,6 +483,13 @@ const TeacherExams = () => {
       setLoading(false);
       setRefreshing(false);
     }
+  }, []);
+
+  useEffect(() => {
+    fetchActiveAcademicYear().then((response) => {
+      const year = response?.data?.academicYear || response?.data?.year || response?.data;
+      setActiveYearId(normalizeId(year));
+    });
   }, []);
 
   useEffect(() => {
@@ -577,6 +589,8 @@ const TeacherExams = () => {
     const query = search.trim().toLowerCase();
 
     return exams.filter((exam) => {
+      const period = academicRecordPeriod(exam, activeYearId, getClasses(exam));
+      const matchesYear = yearFilter === "all" || (yearFilter === "current" ? period !== "historical" : period === "historical");
       const type = getExamType(exam);
       const status = getExamStatus(exam);
       const classesText = getClasses(exam)
@@ -600,9 +614,9 @@ const TeacherExams = () => {
       const matchesStatus =
         statusFilter === "all" || status === statusFilter;
 
-      return matchesSearch && matchesType && matchesStatus;
+      return matchesSearch && matchesType && matchesStatus && matchesYear;
     });
-  }, [exams, search, typeFilter, statusFilter]);
+  }, [exams, search, typeFilter, statusFilter, yearFilter, activeYearId]);
 
   const handleDelete = async () => {
     const examId = getExamId(deleteTarget);
@@ -954,6 +968,10 @@ const TeacherExams = () => {
                 },
               }}
             />
+
+            <TextField select value={yearFilter} onChange={(event) => setYearFilter(event.target.value)} label="السنة الدراسية" size="small" sx={{ minWidth: { xs: "100%", lg: 185 } }}>
+              {YEAR_FILTER_OPTIONS.map((option) => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
+            </TextField>
 
             <TextField
               select

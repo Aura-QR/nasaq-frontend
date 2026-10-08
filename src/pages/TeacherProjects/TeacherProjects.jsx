@@ -72,6 +72,9 @@ import {
 import { TEACHER_UI } from "@/shared/ui/teacherUi";
 import usePermissions from "@/utils/hooks/usePermissions";
 
+import { fetchActiveAcademicYear } from "@/APIs/school/academicYears";
+import { academicRecordPeriod, YEAR_FILTER_OPTIONS } from "@/utils/academicRecordYear";
+
 import nasaqLogo from "../../images/wadq-logo.png";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
@@ -706,6 +709,14 @@ const TeacherProjects = () => {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("current");
+  const [activeYearId, setActiveYearId] = useState("");
+  useEffect(() => {
+    fetchActiveAcademicYear().then((response) => {
+      const year = response?.data?.academicYear || response?.data?.year || response?.data;
+      setActiveYearId(normalizeId(year));
+    });
+  }, []);
 
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -1210,6 +1221,8 @@ const TeacherProjects = () => {
     const query = normalizeText(search);
 
     return projectRows.filter((row) => {
+      const period = academicRecordPeriod(row.project, activeYearId, row.classes);
+      const matchesYear = yearFilter === "all" || (yearFilter === "current" ? period !== "historical" : period === "historical");
       const matchesSearch =
         !query ||
         [
@@ -1225,9 +1238,9 @@ const TeacherProjects = () => {
         (statusFilter === "expired" && row.isExpired) ||
         (statusFilter === "pending" && row.pendingCount > 0);
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesYear;
     });
-  }, [projectRows, search, statusFilter]);
+  }, [projectRows, search, statusFilter, yearFilter, activeYearId]);
 
   const stats = useMemo(() => {
     const active = projectRows.filter((row) => !row.isExpired).length;
@@ -1652,6 +1665,13 @@ const TeacherProjects = () => {
               },
             }}
           />
+
+          <FormControl size="small" sx={{ minWidth: 185 }}>
+            <InputLabel>السنة الدراسية</InputLabel>
+            <Select value={yearFilter} label="السنة الدراسية" onChange={(event) => setYearFilter(event.target.value)} sx={{ ...TEACHER_UI.field }}>
+              {YEAR_FILTER_OPTIONS.map((option) => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
+            </Select>
+          </FormControl>
 
           <FormControl size="small">
             <InputLabel>الحالة</InputLabel>
