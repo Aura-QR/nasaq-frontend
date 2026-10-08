@@ -355,7 +355,7 @@ const Profile = () => {
                 </Tooltip>
               )}
 
-              {permissions.delete && (
+              {permissions.delete && Number(item?.submissionCount ?? item?.submittedCount ?? (Array.isArray(item?.submissions) ? item.submissions.length : 0)) === 0 && (
                 <Tooltip title="حذف المشروع">
                   <IconButton
                     onClick={() => setDeleteOpen(true)}

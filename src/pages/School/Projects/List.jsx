@@ -94,6 +94,7 @@ const mapProjects = (data = []) =>
 
     return {
       id: item?._id || item?.id,
+      submissionCount: Number(item?.submissionCount ?? item?.submittedCount ?? (Array.isArray(item?.submissions) ? item.submissions.length : 0)),
       title: item?.title || "—",
       subjectId:
         subjectData?._id ||
@@ -221,6 +222,10 @@ const List = () => {
   };
 
   const handleDelete = async (id, setActive) => {
+    if (items.some((item) => String(item.id) === String(id) && item.submissionCount > 0)) {
+      toast.error("لا يمكن حذف مشروع سلّمه الطلاب؛ تسليماتهم ودرجاتهم محفوظة عليه");
+      return;
+    }
     try {
       const response = await deleteProject(id);
 
