@@ -125,6 +125,42 @@ const extractCollection = (response, keys = []) => {
   return candidates.find(Array.isArray) || [];
 };
 
+// Teacher class lists often omit enrollment totals. Resolve them from the
+// same enrollment endpoint used by school class management.
+const getEnrollmentCount = (response) => {
+  const raw = response?.data ?? response;
+  const payload = unwrapResponse(response);
+  const sources = [raw, raw?.data, payload];
+  for (const source of sources) {
+    for (const value of [
+      source?.pagination?.total, source?.pagination?.totalDocs,
+      source?.pagination?.totalItems, source?.meta?.total,
+      source?.meta?.totalDocs, source?.total, source?.totalDocs,
+      source?.totalItems,
+    ]) {
+      if (value !== undefined && value !== null && value !== "" && Number.isFinite(Number(value))) {
+        return Number(value);
+      }
+    }
+  }
+  return extractCollection(response, ["enrollments", "students"]).length;
+};
+
+const enrichTeacherClasses = async (items) =>
+  Promise.all(items.map(async (classEntity) => {
+    const classId = normalizeId(classEntity);
+    if (!classId) return classEntity;
+    try {
+      const response = await api.get("/enrollments", {
+        params: { classId, page: 1, limit: 1000 },
+      });
+      return { ...classEntity, studentsCount: getEnrollmentCount(response) };
+    } catch {
+      // A failed request must not be presented as a verified zero.
+      return classEntity;
+    }
+  }));
+
 const extractEntity = (response) => {
   const payload = unwrapResponse(response);
 
@@ -534,7 +570,7 @@ const TeacherExamAdd = () => {
         ).values()
       );
 
-      setClasses(myClasses);
+      setClasses(await enrichTeacherClasses(myClasses));
       setOfferings(uniqueOfferings);
 
       if (!uniqueOfferings.length) {
@@ -1540,9 +1576,12 @@ const TeacherExamAdd = () => {
                                 <Typography sx={{ color: "#708198", fontSize: "9px" }}>
                                   {classEntity?.studentsCount ??
                                     classEntity?.studentCount ??
-                                    classEntity?.students?.length ??
-                                    0}{" "}
-                                  طالب
+                                    (Array.isArray(classEntity?.students)
+                                      ? classEntity.students.length : null) ??
+                                    "غير متاح"}{" "}
+                                  {classEntity?.studentsCount == null &&
+                                  classEntity?.studentCount == null &&
+                                  !Array.isArray(classEntity?.students) ? "" : "طالب"}
                                 </Typography>
                               </Box>
                             }
