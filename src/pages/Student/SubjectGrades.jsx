@@ -111,17 +111,6 @@ const sectionConfigs = [
   },
 ];
 
-const gradeStatusLabels = {
-  upcoming: "لم يُعقد بعد",
-  missed: "لم تؤدِّه (0)",
-  awaiting_grade: "بانتظار التصحيح",
-  not_set: "لم يُحدَّد بعد",
-};
-
-const getGradeDisplay = (entry) =>
-  gradeStatusLabels[entry.status] ||
-  (entry.hasGrade ? `الدرجة ${entry.grade} من ${entry.max}` : `بدون درجة من ${entry.max}`);
-
 const getPercentage = (grade, max) => {
   if (!max) return 0;
   return Math.min(100, Math.max(0, Math.round((grade / max) * 100)));
@@ -272,8 +261,7 @@ const SubjectGrades = () => {
         return {
           grade,
           max,
-          status: entry?.status,
-          hasGrade: entry?.status === "graded" ? true : entry?.status ? false : hasGrade,
+          hasGrade,
           title: Array.isArray(resolvedValue)
             ? `${section.entryLabel} ${entry?.number || index + 1}`
             : section.entryLabel,
@@ -881,7 +869,9 @@ const GradeSectionCard = ({ section }) => {
               </Typography>
 
               <Typography sx={{ mt: 0.15, color: "#9aa4ae", fontSize: "7px" }}>
-                {getGradeDisplay(entry)}
+                {entry.hasGrade
+                  ? `الدرجة ${entry.grade} من ${entry.max}`
+                  : `بدون درجة من ${entry.max}`}
               </Typography>
             </Box>
 
@@ -894,7 +884,9 @@ const GradeSectionCard = ({ section }) => {
                 fontWeight: 900,
               }}
             >
-              {gradeStatusLabels[entry.status] ? "—" : entry.hasGrade ? `${entry.percentage}%` : "—"}
+              {entry.hasGrade
+                ? `${entry.percentage}%`
+                : "—"}
             </Typography>
           </Box>
         ))}

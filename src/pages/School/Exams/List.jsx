@@ -517,7 +517,6 @@ const mapExams = (
         item?.totalGrade ??
         item?.maxGrade ??
         "—",
-      startedCount: Number(item?.startedCount ?? item?.results?.startedCount ?? 0),
       questionsCount:
         getArray(item?.questions).length,
       academicYearId:
@@ -1126,10 +1125,6 @@ const List = () => {
     id,
     setActive
   ) => {
-    if (items.some((item) => String(item.id) === String(id) && item.startedCount > 0)) {
-      toast.error("لا يمكن حذف امتحان بدأه الطلاب؛ درجاتهم محفوظة عليه");
-      return;
-    }
     try {
       const response =
         await deleteExam(id);

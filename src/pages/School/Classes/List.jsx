@@ -125,7 +125,7 @@ const ConfirmDialog = ({ open, item, type, loading, onClose, onConfirm }) => {
   return (
     <Dialog open={open} onClose={loading ? undefined : onClose} fullWidth maxWidth="xs" PaperProps={{ sx: { borderRadius: "18px" } }}>
       <DialogTitle sx={{ color: "#122f4d", fontWeight: 800 }}>{title}</DialogTitle>
-      <DialogContent><Typography sx={{ color: "#193754", fontSize: "10.5px", lineHeight: 1.9 }}>{deleting ? "سيتم حذف" : active ? "سيتم إيقاف" : "سيتم تفعيل"} «{getClassDisplayName(item)}».</Typography></DialogContent>
+      <DialogContent><Typography sx={{ color: "#193754", fontSize: "10.5px", lineHeight: 1.9 }}>{deleting ? "سيتم حذف" : active ? "سيتم إيقاف" : "سيتم تفعيل"} «{getClassDisplayName(item)}». {deleting ? "سيُحذف معه جدول الحصص وإسنادات المعلمين المرتبطة به. ولا يمكن الحذف إن وُجدت درجات أو غياب أو تحاضير مرتبطة." : ""}</Typography></DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={loading}>إلغاء</Button>
         <Button onClick={onConfirm} disabled={loading} variant="contained" color={deleting || active ? "error" : "success"}>{loading ? <CircularProgress size={16} color="inherit" /> : "تأكيد"}</Button>
@@ -360,7 +360,7 @@ const List = () => {
       ? await deleteSchoolClass(getClassId(item))
       : await toggleSchoolClassActive(getClassId(item));
     if (response?.status === false) {
-      toast.error(response?.message || "تعذر تنفيذ العملية");
+      toast.error(response?.message || "تعذر تنفيذ العملية", { autoClose: 9000 });
       setActionLoading(false);
       return;
     }

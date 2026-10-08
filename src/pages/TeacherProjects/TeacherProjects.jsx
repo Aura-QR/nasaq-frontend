@@ -2367,7 +2367,7 @@ const TeacherProjects = () => {
                           </Button>
                           )}
 
-                          {permissions.delete && row.submittedCount === 0 && (
+                          {permissions.delete && (
                           <Tooltip title="حذف المشروع">
                             <IconButton
                               onClick={() =>

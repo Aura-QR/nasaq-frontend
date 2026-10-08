@@ -1850,7 +1850,7 @@ const SubjectOfferings = () => {
 
   const removeOffering = async (item) => {
     const confirmed = window.confirm(
-      `هل تريد حذف عرض ${item.subjectLabel} للصف ${item.gradeLabel}؟`
+      `هل تريد حذف عرض ${item.subjectLabel} للصف ${item.gradeLabel}؟\nسيُحذف معه جدول الحصص وإسنادات المعلمين المرتبطة به. ولا يمكن الحذف إن وُجدت درجات أو غياب أو تحاضير مرتبطة.`
     );
 
     if (!confirmed) return;

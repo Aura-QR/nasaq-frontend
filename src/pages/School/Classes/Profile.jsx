@@ -286,7 +286,7 @@ const Profile = () => {
 
         <Dialog open={Boolean(dialog)} onClose={actionLoading ? undefined : () => setDialog("")} fullWidth maxWidth="xs" PaperProps={{ sx: { borderRadius: "18px" } }}>
           <DialogTitle sx={{ color: "#122f4d", fontWeight: 800 }}>{dialog === "delete" ? "حذف الفصل" : active ? "إيقاف الفصل" : "تفعيل الفصل"}</DialogTitle>
-          <DialogContent><Typography sx={{ fontSize: "10.5px", lineHeight: 1.8 }}>تأكيد العملية على «{getClassDisplayName(item)}»؟</Typography></DialogContent>
+          <DialogContent><Typography sx={{ fontSize: "10.5px", lineHeight: 1.8 }}>تأكيد العملية على «{getClassDisplayName(item)}»؟ {dialog === "delete" ? "سيُحذف معه جدول الحصص وإسنادات المعلمين المرتبطة به. ولا يمكن الحذف إن وُجدت درجات أو غياب أو تحاضير مرتبطة." : ""}</Typography></DialogContent>
           <DialogActions><Button onClick={() => setDialog("")} disabled={actionLoading}>إلغاء</Button><Button onClick={confirmAction} disabled={actionLoading} variant="contained" color={dialog === "delete" || active ? "error" : "success"}>{actionLoading ? <CircularProgress size={16} color="inherit" /> : "تأكيد"}</Button></DialogActions>
         </Dialog>
       </Box>

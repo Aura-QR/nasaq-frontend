@@ -1,4 +1,4 @@
-import { api } from "../Axios";
+﻿import { api } from "../Axios";
 
 // =====================================================
 // HELPERS
@@ -316,17 +316,6 @@ export const startStudentExam = async (
   }
 };
 
-// Save ongoing answers without submitting the exam.
-export const saveStudentExamAnswers = async (examId, data) => {
-  try {
-    const response = await api.put(`/exams/${examId}/answers`, data);
-    return response.data;
-  } catch (err) {
-    return normalizeFailure(err, "تعذر حفظ الإجابات");
-  }
-};
-
-// =====================================================
 // =====================================================
 // GRADE EXAM
 // POST /exams/:examId/grade

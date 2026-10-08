@@ -1139,6 +1139,7 @@ const Terms = () => {
             </strong>
             ؟
           </Typography>
+          <Typography sx={{ mt: 1.5, color: "text.secondary" }}>{"سيُحذف معه جدول الحصص وإسنادات المعلمين المرتبطة به. ولا يمكن الحذف إن وُجدت درجات أو غياب أو تحاضير مرتبطة."}</Typography>
         </DialogContent>
 
         <DialogActions

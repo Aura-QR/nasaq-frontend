@@ -47,6 +47,7 @@ import {
 } from "react-router-dom";
 
 import { toast } from "react-toastify";
+import { api } from "@/APIs/Axios";
 
 import Container from "@/components/Container/Container";
 
@@ -423,6 +424,27 @@ const AcademicYearsList =
       loadYears();
     }, [loadYears]);
 
+    const [cleanupLoading, setCleanupLoading] = useState(false);
+    const handleCleanupLeftovers = async () => {
+      setCleanupLoading(true);
+      try {
+        const preview = (await api.post("/academic-years/leftovers/cleanup", {}))?.data;
+        if (preview?.status === false) { toast.error(preview.message || "تعذر معاينة البقايا"); return; }
+        const details = preview?.data ?? preview;
+        const counts = details?.wouldRemove ?? {};
+        const summary = Object.entries(counts).map(([key, value]) => `${key}: ${typeof value === "object" && value !== null ? JSON.stringify(value) : value}`).join("\n");
+        const kept = Array.isArray(details?.kept) ? details.kept.join("\n") : "";
+        const confirmed = window.confirm(`معاينة تنظيف بقايا السنوات المحذوفة (لم تُحذف أي بيانات بعد):\n${summary || "لا توجد عناصر معروضة للإزالة"}\n${kept ? `عناصر سيتم الاحتفاظ بها:\n${kept}\n` : ""}\nهل تريد تأكيد التنظيف نهائيًا؟`);
+        if (!confirmed) return;
+        const done = (await api.post("/academic-years/leftovers/cleanup", { commit: true }))?.data;
+        if (done?.status === false) { toast.error(done.message || "تعذر تنفيذ التنظيف"); return; }
+        toast.success(done?.message || "تم تنظيف بقايا السنوات المحذوفة");
+        await loadYears({ force: true });
+      } catch (error) {
+        toast.error(error?.response?.data?.message || "تعذر معاينة أو تنفيذ تنظيف البقايا", { autoClose: 9000 });
+      } finally { setCleanupLoading(false); }
+    };
+
     const handleDeleteYear =
       async (year) => {
         const academicYearId =
@@ -437,7 +459,7 @@ const AcademicYearsList =
 
         const confirmed =
           window.confirm(
-            `هل أنت متأكد من حذف السنة "${year?.name || ""}"؟ لا يمكن التراجع عن هذه العملية.`
+            `هل أنت متأكد من حذف السنة "${year?.name || ""}"؟\nسيُحذف معه جدول الحصص وإسنادات المعلمين المرتبطة به. ولا يمكن الحذف إن وُجدت درجات أو غياب أو تحاضير مرتبطة.\nلا يمكن التراجع عن الحذف.`
           );
 
         if (!confirmed) {
@@ -692,6 +714,10 @@ const AcademicYearsList =
                   }}
                 >
                   تحديث
+                </Button>
+
+                <Button type="button" variant="outlined" color="warning" disabled={cleanupLoading} onClick={handleCleanupLeftovers} sx={{ minHeight: 42, borderRadius: "12px", fontWeight: 800 }}>
+                  {cleanupLoading ? "جارٍ الفحص..." : "تنظيف بقايا السنوات المحذوفة"}
                 </Button>
 
                 <Button

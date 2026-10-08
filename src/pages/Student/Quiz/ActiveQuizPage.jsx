@@ -24,8 +24,6 @@ import Back from "@/components/Back/Back";
 
 import {
   gradeStudentExam,
-  saveStudentExamAnswers,
-  fetchMyExamResult,
   startStudentExam,
 } from "@/APIs/student";
 
@@ -129,11 +127,6 @@ const ActiveQuizPage = () => {
   const submittedRef =
     useRef(false);
 
-  const restoredRef = useRef(false);
-  const answersRef = useRef(answers);
-  const saveSequenceRef = useRef(Promise.resolve());
-  const lastSavedRef = useRef(null);
-
 
   useEffect(() => {
     isSubmittingRef.current =
@@ -218,16 +211,6 @@ const ActiveQuizPage = () => {
       }
 
 
-      const persisted = response?.data?.savedAnswers ?? response?.savedAnswers;
-      if (Array.isArray(persisted)) {
-        const recovered = Object.fromEntries(
-          persisted.filter((item) => item?.questionId != null)
-            .map((item) => [String(item.questionId), item.answer])
-        );
-        answersRef.current = recovered;
-        setAnswers(recovered);
-      }
-      restoredRef.current = true;
       setStartedExam(
         normalized
       );
@@ -272,24 +255,6 @@ const ActiveQuizPage = () => {
   ]);
 
 
-  // Save answers to the backend three seconds after the latest selection.
-  // Queue requests so an older snapshot never overwrites a newer one.
-  useEffect(() => {
-    answersRef.current = answers;
-    if (!restoredRef.current || loadingExam || submitted || isSubmitting || remainingSeconds <= 0) return;
-    const snapshot = JSON.stringify(buildSubmitPayload(startedExam?.questions || [], answers));
-    if (snapshot === lastSavedRef.current) return;
-    const timeout = window.setTimeout(() => {
-      saveSequenceRef.current = saveSequenceRef.current.catch(() => {}).then(async () => {
-        if (submittedRef.current || isSubmittingRef.current) return;
-        const result = await saveStudentExamAnswers(examId, JSON.parse(snapshot));
-        if (result?.status !== false) lastSavedRef.current = snapshot;
-      });
-    }, 3000);
-    return () => window.clearTimeout(timeout);
-  }, [answers, examId, loadingExam, submitted, isSubmitting, startedExam]);
-
-  // =========================================
   // =========================================
   // Exam Metadata
   // =========================================
@@ -410,8 +375,6 @@ const ActiveQuizPage = () => {
         );
 
 
-      // Finish any in-flight save before grading.
-      await saveSequenceRef.current.catch(() => {});
       const response =
         await gradeStudentExam(
           examId,
@@ -481,20 +444,6 @@ const ActiveQuizPage = () => {
         );
 
       } else {
-        const message = typeof response === "string" ? response : response?.message || "حدث خطأ أثناء تسليم الاختبار";
-        if (response?.statusCode === 400 && message.includes("وسُلّمت إجاباتك المحفوظة")) {
-          toast.info(message);
-          submittedRef.current = true;
-          setSubmitted(true);
-          try { sessionStorage.removeItem(`quiz_answers_${examId}`); } catch { /* Ignore */ }
-          const resultResponse = await fetchMyExamResult(examId);
-          const gradePath = location.pathname.replace(/\/[^/]+$/, "/grade");
-          navigate(gradePath, { replace: true, state: {
-            gradeResult: resultResponse?.data || resultResponse,
-            isTimeUp: true, questions: examQuestions, answers, examTitle, examType,
-          }});
-          return;
-        }
 
         toast.error(
           typeof response ===

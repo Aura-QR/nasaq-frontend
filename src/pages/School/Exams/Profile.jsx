@@ -558,7 +558,7 @@ const Profile = () => {
                 </Tooltip>
               )}
 
-              {permissions.delete && Number(item?.startedCount ?? item?.results?.startedCount ?? 0) === 0 && (
+              {permissions.delete && (
                 <Tooltip title="حذف الاختبار">
                   <IconButton
                     onClick={() =>

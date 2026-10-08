@@ -1356,7 +1356,7 @@ const TeacherExams = () => {
                           </Tooltip>
                           )}
 
-                          {permissions.delete && Number(exam?.startedCount ?? exam?.results?.startedCount ?? 0) === 0 && (
+                          {permissions.delete && (
                           <Tooltip title="حذف الاختبار">
                             <IconButton
                               type="button"

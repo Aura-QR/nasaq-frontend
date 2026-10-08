@@ -43,7 +43,6 @@ const getResponseList = (response) => {
 };
 
 const getErrorMessage = (response, fallback) =>
-  response?.response?.data?.message ||
   response?.message ||
   response?.data?.message ||
   (typeof response === "string" ? response : fallback);
