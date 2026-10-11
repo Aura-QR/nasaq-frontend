@@ -86,23 +86,36 @@ const ActiveQuizPage = () => {
   ] = useState(0);
 
 
-  const [
-    answers,
-    setAnswers,
-  ] = useState(() => {
+  // Keep drafts across tab/browser restarts, scoped to the signed-in student.
+  // This is a local draft only; syncing across devices requires a backend API.
+  const answerStorageKey = useMemo(() => {
     try {
-      const stored =
-        sessionStorage.getItem(
-          `quiz_answers_${examId}`
-        );
-
-      return stored
-        ? JSON.parse(stored)
-        : {};
+      const stored = JSON.parse(localStorage.getItem("user") || "null");
+      const user = stored?.student || stored?.profile || stored?.user ||
+        stored?.data?.student || stored?.data?.user || stored;
+      const userId = user?._id || user?.id || user?.studentId;
+      return userId ? `quiz_answers_${userId}_${examId}` : null;
     } catch {
-      return {};
+      return null;
     }
-  });
+  }, [examId]);
+
+  const [answers, setAnswers] = useState({});
+  const [draftLoaded, setDraftLoaded] = useState(false);
+
+  useEffect(() => {
+    setDraftLoaded(false);
+    try {
+      const raw = answerStorageKey
+        ? localStorage.getItem(answerStorageKey)
+        : sessionStorage.getItem(`quiz_answers_${examId}`);
+      const parsed = raw ? JSON.parse(raw) : {};
+      setAnswers(parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {});
+    } catch {
+      setAnswers({});
+    }
+    setDraftLoaded(true);
+  }, [answerStorageKey, examId]);
 
 
   const [
@@ -234,26 +247,20 @@ const ActiveQuizPage = () => {
 
 
   // =========================================
-  // Persist Answers
+  // Persist local answer draft
   // =========================================
-
   useEffect(() => {
+    if (!draftLoaded || submitted) return;
     try {
-      sessionStorage.setItem(
-        `quiz_answers_${examId}`,
-        JSON.stringify(
-          answers
-        )
-      );
+      if (answerStorageKey) {
+        localStorage.setItem(answerStorageKey, JSON.stringify(answers));
+      } else {
+        sessionStorage.setItem(`quiz_answers_${examId}`, JSON.stringify(answers));
+      }
     } catch {
-      // Ignore storage errors
+      // Browsers may disable storage; quiz submission remains available.
     }
-
-  }, [
-    answers,
-    examId,
-  ]);
-
+  }, [answers, examId, answerStorageKey, draftLoaded, submitted]);
 
   // =========================================
   // Exam Metadata
@@ -406,9 +413,8 @@ const ActiveQuizPage = () => {
 
 
         try {
-          sessionStorage.removeItem(
-            `quiz_answers_${examId}`
-          );
+          if (answerStorageKey) localStorage.removeItem(answerStorageKey);
+          sessionStorage.removeItem(`quiz_answers_${examId}`);
         } catch {
           // Ignore
         }
