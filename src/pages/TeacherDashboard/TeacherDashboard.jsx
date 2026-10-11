@@ -55,6 +55,7 @@ import {
 } from "react-auth-kit";
 
 import { useNavigate } from "react-router-dom";
+import useGradingSystem from "@/utils/hooks/useGradingSystem";
 
 import {
   fetchLectures,
@@ -767,6 +768,7 @@ const loadPreparationsForTeacher = async (
 };
 
 const TeacherDashboard = () => {
+  const gradingSystem = useGradingSystem();
   const navigate = useNavigate();
   const getAuthUser = useAuthUser();
   const signOut = useSignOut();
@@ -1558,6 +1560,12 @@ const TeacherDashboard = () => {
         onClick: () =>
           navigate("/teacher/exams"),
       },
+      ...(gradingSystem === "ministry" ? [{
+        title: "السجل السنوي",
+        description: "راجع درجات الطلاب والأعمال والتقييمات التحريرية",
+        icon: <GradeRounded />,
+        onClick: () => navigate("/teacher/grade-register"),
+      }] : []),
       {
         title: "تصحيح المشروعات",
         description: `${pendingProjectCorrections.length} تسليم يحتاج تصحيح من ${currentProjects.length} مشروع`,
@@ -1583,6 +1591,7 @@ const TeacherDashboard = () => {
     ],
     [
       navigate,
+      gradingSystem,
       nextUnpreparedLecture,
       todayLectures,
       pendingLateness,
