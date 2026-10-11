@@ -331,20 +331,71 @@ const SubjectGrades = () => {
 
   if (gradingSystem === "ministry") {
     const record = (register?.subjects || []).find(subject => String(subject.subjectOfferingId) === String(id) || String(subject.subjectId) === String(id));
-    const fmt = (number) => number === null || number === undefined ? "غير مكتمل" : Number(number).toLocaleString("ar-SA", {maximumFractionDigits: 2});
-    return <Container noSidebar={true}><Box dir="rtl" sx={{p:2,maxWidth:800,mx:"auto"}}><Typography variant="h5" fontWeight="bold" gutterBottom>درجاتي — السجل السنوي</Typography>
-      {registerError && <Typography color="error">{registerError}</Typography>}
-      {!register && !registerError && <Typography>جارٍ تحميل السجل السنوي...</Typography>}
-      {register && !record && <Typography>هذه المادة غير مدرجة في السجل السنوي</Typography>}
-      {record && <Paper sx={{p:3,borderRadius:3}}><Typography variant="h6">{record.subjectName}</Typography><Typography color="text.secondary">{record.term?.name}</Typography>
-        {record.status !== "approved" ? <Typography sx={{mt:2}}>لم يُعتمد بعد</Typography> : <Stack gap={2} sx={{mt:2}}>
-          <Typography>المهام والمشاركة ({record.maxScores?.performance ?? 40}): {fmt(record.performance)}</Typography>
-          <Typography>التقويم التحريري ({record.maxScores?.written ?? 20}): {fmt(record.written)}</Typography>
-          {record.assessmentType === "final_exam" && <Typography>اختبار نهاية الفترة (40): {fmt(record.final)}</Typography>}
-          <Typography fontWeight="bold">المجموع: {fmt(record.total)} / 100</Typography>
-        </Stack>}
-      </Paper>}
-    </Box></Container>;
+    const fmt = (number) => number === null || number === undefined ? "—" : Number(number).toLocaleString("ar-SA", { maximumFractionDigits: 2 });
+    const approved = record?.status === "approved";
+    const isFinal = record?.assessmentType === "final_exam";
+    const performanceMax = record?.maxScores?.performance ?? 40;
+    const writtenMax = record?.maxScores?.written ?? (isFinal ? 20 : 60);
+    const finalMax = record?.maxScores?.final ?? 40;
+    const scoreCards = record ? [
+      { label: "المهام والمشاركة", score: record.performance, max: performanceMax, icon: <FactCheckRounded />, color: COLORS.blue, tint: COLORS.blueLight },
+      { label: "التقييم التحريري", score: record.written, max: writtenMax, icon: <AssignmentRounded />, color: COLORS.purple, tint: COLORS.purpleLight },
+      ...(isFinal ? [{ label: "اختبار نهاية الفترة", score: record.final, max: finalMax, icon: <QuizRounded />, color: COLORS.orange, tint: COLORS.orangeLight }] : []),
+    ] : [];
+    const scorePercent = approved && record?.total != null ? getPercentage(Number(record.total), 100) : 0;
+    return (
+      <Container noSidebar={true}>
+        <Box dir="rtl" sx={{ width: "100%", maxWidth: 1040, mx: "auto", px: { xs: 1.5, sm: 2.5 }, py: { xs: 2, md: 3 } }}>
+          <Stack direction="row" alignItems="center" gap={1.5} sx={{ mb: 2.2 }}>
+            <IconButton aria-label="العودة إلى المواد" onClick={() => navigate("/student-dashboard/subjects")} sx={{ border: "1px solid #dce5ee", bgcolor: "white", borderRadius: "12px", color: COLORS.navy }}><ArrowForwardRounded /></IconButton>
+            <Box>
+              <Typography component="h1" sx={{ fontWeight: 900, color: COLORS.deepNavy, fontSize: { xs: 21, sm: 25 }, lineHeight: 1.5 }}>درجاتي — السجل السنوي</Typography>
+              <Typography sx={{ color: "#7b8998", fontSize: 12 }}>متابعة درجات المواد المعتمدة</Typography>
+            </Box>
+          </Stack>
+          {registerError && <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, color: "error.main" }}>{registerError}</Paper>}
+          {!register && !registerError && <Stack alignItems="center" gap={1.5} sx={{ py: 7 }}><CircularProgress size={27} /><Typography color="text.secondary">جارٍ تحميل السجل السنوي...</Typography></Stack>}
+          {register && !record && <Paper elevation={0} sx={{ p: 3, border: "1px solid #e1e8f0", borderRadius: 3 }}>هذه المادة غير مدرجة في السجل السنوي</Paper>}
+          {record && (
+            <Stack gap={2}>
+              <Paper elevation={0} sx={{ px: { xs: 2, sm: 2.5 }, py: 2, border: "1px solid #e2eaf1", borderRadius: "18px", background: "#fff" }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5}>
+                  <Stack direction="row" alignItems="center" gap={1.4}>
+                    <Box sx={{ width: 45, height: 45, display: "grid", placeItems: "center", borderRadius: "13px", bgcolor: COLORS.blueLight, color: COLORS.navy }}><MenuBookRounded /></Box>
+                    <Box><Typography sx={{ fontWeight: 800, fontSize: 18, color: COLORS.deepNavy }}>{record.subjectName || subjectDetails.subjectName}</Typography><Typography sx={{ color: "#8593a2", fontSize: 12 }}>{record.term?.name || subjectDetails.termLabel}</Typography></Box>
+                  </Stack>
+                  <Chip size="small" icon={approved ? <FactCheckRounded /> : undefined} label={approved ? "معتمد" : "لم يُعتمد بعد"} sx={{ color: approved ? "#187e59" : "#976321", bgcolor: approved ? "#e9f7ef" : "#fff4df", fontWeight: 800, "& .MuiChip-icon": { color: "inherit" } }} />
+                </Stack>
+              </Paper>
+              {!approved ? (
+                <Paper elevation={0} sx={{ p: { xs: 2.5, sm: 3 }, border: "1px solid #f0dfbd", bgcolor: "#fffaf0", borderRadius: "18px" }}>
+                  <Typography sx={{ fontWeight: 800, color: COLORS.deepNavy, mb: .5 }}>الدرجات غير متاحة حاليًا</Typography>
+                  <Typography sx={{ fontSize: 13, color: "#8c7653" }}>ستظهر درجات هذه المادة بعد اعتماد السجل السنوي من إدارة المدرسة.</Typography>
+                </Paper>
+              ) : (
+                <>
+                  <Paper elevation={0} sx={{ p: { xs: 2.2, sm: 2.8 }, border: "1px solid #dce8f3", borderRadius: "18px", background: "linear-gradient(115deg,#f4f9fe,#fff)" }}>
+                    <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between" gap={1.8}>
+                      <Box><Typography sx={{ fontSize: 13, fontWeight: 700, color: "#687e94" }}>المجموع النهائي</Typography><Stack direction="row" alignItems="baseline" gap={.8}><Typography sx={{ fontSize: { xs: 33, sm: 39 }, fontWeight: 900, color: COLORS.deepNavy, lineHeight: 1.5 }}>{fmt(record.total)}</Typography><Typography sx={{ color: "#8191a1", fontWeight: 600 }}>/ 100</Typography></Stack></Box>
+                      <Box sx={{ minWidth: { sm: 185 }, alignSelf: { xs: "stretch", sm: "center" } }}><Typography sx={{ fontSize: 12, color: COLORS.navy, fontWeight: 800, mb: .8, textAlign: "left" }}>{scorePercent}%</Typography><Box sx={{ height: 9, overflow: "hidden", bgcolor: "#e1e9f1", borderRadius: 9 }}><Box sx={{ height: "100%", width: `${scorePercent}%`, bgcolor: COLORS.green, borderRadius: 9 }} /></Box></Box>
+                    </Stack>
+                  </Paper>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: `repeat(${scoreCards.length}, minmax(0, 1fr))` }, gap: 1.5 }}>
+                    {scoreCards.map(card => (
+                      <Paper key={card.label} elevation={0} sx={{ border: "1px solid #e4ebf2", borderRadius: "16px", p: 2, minWidth: 0 }}>
+                        <Stack direction="row" alignItems="center" gap={1} sx={{ mb: 1.5 }}><Box sx={{ width: 35, height: 35, display: "grid", placeItems: "center", borderRadius: "10px", bgcolor: card.tint, color: card.color }}>{card.icon}</Box><Typography sx={{ color: COLORS.deepNavy, fontWeight: 750, fontSize: 13 }}>{card.label}</Typography></Stack>
+                        <Stack direction="row" alignItems="baseline" gap={.5}><Typography sx={{ fontSize: 25, fontWeight: 900, color: COLORS.deepNavy }}>{fmt(card.score)}</Typography><Typography sx={{ fontSize: 12, color: "#7b8b9b" }}>/ {fmt(card.max)}</Typography></Stack>
+                        <Box sx={{ bgcolor: "#edf2f7", height: 5, borderRadius: 6, mt: 1.5, overflow: "hidden" }}><Box sx={{ bgcolor: card.color, width: `${getPercentage(Number(card.score) || 0, Number(card.max))}%`, height: "100%", borderRadius: 6 }} /></Box>
+                      </Paper>
+                    ))}
+                  </Box>
+                </>
+              )}
+            </Stack>
+          )}
+        </Box>
+      </Container>
+    );
   }
   return (
     <Container noSidebar={true}>
