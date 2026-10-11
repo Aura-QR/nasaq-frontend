@@ -100,6 +100,36 @@ const DAY_LABELS = {
 
 
 
+// Schedule periods recur weekly. Keep the currently viewed week (Sunday–Saturday)
+// when switching periods instead of persisting a different weekday's date.
+const WEEKDAY_INDEX = {
+  sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+  thursday: 4, friday: 5, saturday: 6,
+};
+
+const lectureWeekday = (lecture) => {
+  const raw = String(lecture?.dayOfWeek || lecture?.day || "").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(WEEKDAY_INDEX, raw) ? WEEKDAY_INDEX[raw] : null;
+};
+
+const dateWeekday = (value) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return date.getDay();
+};
+
+const dateForLectureInWeek = (value, lecture) => {
+  const weekday = lectureWeekday(lecture);
+  const current = dateWeekday(value);
+  if (weekday === null || current === null || lecture?.isCover) return value;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + weekday - current);
+  return formatLocalDate(date);
+};
+
 const normalizeId = (value) => {
 
   if (value && typeof value === "object") {
@@ -624,7 +654,12 @@ const TeacherAttendance = () => {
 
       if (requestedExists) {
 
+        const requestedLecture = list.find((item) => normalizeId(item) === requestedLectureId);
         setSelectedLectureId(requestedLectureId);
+        // A URL may carry Sunday's date while pointing to a Tuesday period.
+        // Correct it before the attendance sheet is requested.
+        const correctDate = dateForLectureInWeek(selectedDate, requestedLecture);
+        if (correctDate !== selectedDate) setSelectedDate(correctDate);
 
         return;
 
@@ -638,7 +673,10 @@ const TeacherAttendance = () => {
 
         : list;
 
-      setSelectedLectureId(normalizeId(classMatches[0] || list[0] || ""));
+      const fallbackLecture = classMatches[0] || list[0] || null;
+      setSelectedLectureId(normalizeId(fallbackLecture || ""));
+      const correctDate = dateForLectureInWeek(selectedDate, fallbackLecture);
+      if (correctDate !== selectedDate) setSelectedDate(correctDate);
 
     } catch (requestError) {
 
@@ -814,7 +852,10 @@ const TeacherAttendance = () => {
 
     if (!confirmDiscard()) return;
 
-    setSelectedLectureId(event.target.value);
+    const nextLectureId = event.target.value;
+    const nextLecture = lectures.find((lecture) => normalizeId(lecture) === nextLectureId);
+    setSelectedLectureId(nextLectureId);
+    setSelectedDate((date) => dateForLectureInWeek(date, nextLecture));
 
   };
 
@@ -833,6 +874,11 @@ const TeacherAttendance = () => {
   const handleSave = async () => {
 
     if (!isMongoId(selectedLectureId) || !selectedDate || !rows.length) return;
+    const scheduledDay = lectureWeekday(selectedLecture);
+    if (!selectedLecture?.isCover && scheduledDay !== null && dateWeekday(selectedDate) !== scheduledDay) {
+      toast.error("تاريخ المتابعة لا يطابق يوم الحصة في الجدول الدراسي");
+      return;
+    }
 
     if (rows.some((r) => r.quizScore !== null && r.quizScore !== "" && !r.absent) && !(Number(quizMaxScore) > 0)) {
       toast.error("حدّد الدرجة العظمى للاختبار"); return;
