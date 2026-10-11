@@ -533,6 +533,10 @@ const TeacherAttendance = () => {
   const [lectures, setLectures] = useState([]);
 
   const [selectedLectureId, setSelectedLectureId] = useState(searchParams.get("lectureId") || "");
+  // The URL is initial navigation context, not an instruction to reselect a
+  // lecture every time a date-dependent request finishes.
+  const selectedLectureIdRef = useRef(searchParams.get("lectureId") || "");
+  const initialDateAlignmentDoneRef = useRef(false);
 
   const [sheet, setSheet] = useState(null);
   const [quizMaxScore, setQuizMaxScore] = useState("");
@@ -646,42 +650,30 @@ const TeacherAttendance = () => {
 
 
 
-      const requestedLectureId = searchParams.get("lectureId") || "";
-
+      const requestedLectureId = selectedLectureIdRef.current;
       const requestedClassId = searchParams.get("classId") || "";
-
-      const requestedExists = list.some((item) => normalizeId(item) === requestedLectureId);
-
-      if (requestedExists) {
-
-        const requestedLecture = list.find((item) => normalizeId(item) === requestedLectureId);
-        setSelectedLectureId(requestedLectureId);
-        // A URL may carry Sunday's date while pointing to a Tuesday period.
-        // Correct it before the attendance sheet is requested.
-        const correctDate = dateForLectureInWeek(selectedDate, requestedLecture);
-        if (correctDate !== selectedDate) setSelectedDate(correctDate);
-
-        return;
-
-      }
-
-
-
+      const requestedLecture = list.find((item) => normalizeId(item) === requestedLectureId);
       const classMatches = requestedClassId
-
         ? list.filter((item) => getClassId(item) === requestedClassId)
-
         : list;
+      const nextLecture = requestedLecture || classMatches[0] || list[0] || null;
+      const nextLectureId = normalizeId(nextLecture || "");
+      selectedLectureIdRef.current = nextLectureId;
+      setSelectedLectureId((previous) => previous === nextLectureId ? previous : nextLectureId);
 
-      const fallbackLecture = classMatches[0] || list[0] || null;
-      setSelectedLectureId(normalizeId(fallbackLecture || ""));
-      const correctDate = dateForLectureInWeek(selectedDate, fallbackLecture);
-      if (correctDate !== selectedDate) setSelectedDate(correctDate);
+      // Align a deep-linked lecture on initial load only. Subsequent date
+      // changes must not re-trigger alignment back to the original URL day.
+      if (!initialDateAlignmentDoneRef.current && nextLecture) {
+        initialDateAlignmentDoneRef.current = true;
+        const correctDate = dateForLectureInWeek(selectedDate, nextLecture);
+        if (correctDate !== selectedDate) setSelectedDate(correctDate);
+      }
 
     } catch (requestError) {
 
       setLectures([]);
 
+      selectedLectureIdRef.current = "";
       setSelectedLectureId("");
 
       setError(requestError?.message || "حدث خطأ أثناء تحميل الحصص");
@@ -854,6 +846,7 @@ const TeacherAttendance = () => {
 
     const nextLectureId = event.target.value;
     const nextLecture = lectures.find((lecture) => normalizeId(lecture) === nextLectureId);
+    selectedLectureIdRef.current = nextLectureId;
     setSelectedLectureId(nextLectureId);
     setSelectedDate((date) => dateForLectureInWeek(date, nextLecture));
 
