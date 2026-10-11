@@ -220,6 +220,26 @@ const getDisplayName = (...sources) => {
   return "";
 };
 
+// Prefer the active academic year's class/grade-level references, not the
+// unfiltered teacher endpoints, which may return assignments from prior years.
+const getRecordYearId = (record) => {
+  if (!record || typeof record !== "object") return "";
+  const classItem = record?.class || record?.classId || record?.classroom || record?.classroomId;
+  const offering = record?.subjectOffering || record?.subjectOfferingId;
+  const gradeLevel = record?.gradeLevel || record?.gradeLevelId;
+  const candidates = [
+    record?.academicYearId, record?.academicYear,
+    classItem?.academicYearId, classItem?.academicYear,
+    classItem?.gradeLevelId?.academicYearId,
+    classItem?.gradeLevel?.academicYearId,
+    gradeLevel?.academicYearId, gradeLevel?.academicYear,
+    offering?.academicYearId, offering?.academicYear,
+    offering?.gradeLevelId?.academicYearId,
+    offering?.gradeLevel?.academicYearId,
+  ];
+  return candidates.map(normalizeId).find(Boolean) || "";
+};
+
 const getLectureId = (lecture) =>
   normalizeId(lecture);
 
@@ -778,14 +798,6 @@ const TeacherDashboard = () => {
     useState([]);
   const [activeYearId, setActiveYearId] = useState("");
 
-  useEffect(() => {
-    let mounted = true;
-    fetchActiveAcademicYear().then((response) => {
-      const year = response?.data?.academicYear || response?.data?.year || response?.data;
-      if (mounted) setActiveYearId(normalizeId(year));
-    }).catch(() => { if (mounted) setActiveYearId(""); });
-    return () => { mounted = false; };
-  }, []);
 
   const [projectSubmissions, setProjectSubmissions] =
     useState([]);
@@ -860,6 +872,7 @@ const TeacherDashboard = () => {
 
       try {
         const [
+          activeYearResponse,
           profileResponse,
           lectureResponse,
           classesResponse,
@@ -869,6 +882,7 @@ const TeacherDashboard = () => {
           pendingAbsenceResponse,
           observationsResponse,
         ] = await Promise.all([
+          fetchActiveAcademicYear({ force: true }),
           fetchMyTeacherProfile(),
           fetchLectures(
             {
@@ -893,6 +907,17 @@ const TeacherDashboard = () => {
           fetchMyObservations(),
         ]);
 
+        if (activeYearResponse?.status === false) {
+          throw new Error(activeYearResponse.message || "تعذر تحديد السنة الدراسية النشطة");
+        }
+        const yearPayload = activeYearResponse?.data;
+        const activeYear = yearPayload?.academicYear || yearPayload?.year || yearPayload;
+        const yearId = normalizeId(activeYear);
+        if (!yearId) {
+          throw new Error("لا توجد سنة دراسية نشطة. يرجى تفعيل السنة من إعدادات المدرسة.");
+        }
+        setActiveYearId(yearId);
+
         const profile =
           extractEntity(profileResponse);
 
@@ -907,11 +932,7 @@ const TeacherDashboard = () => {
           );
         }
 
-        const lectureList =
-          extractCollection(
-            lectureResponse,
-            ["lectures"]
-          );
+        const allLectures = extractCollection(lectureResponse, ["lectures"]);
 
         const classList =
           classesResponse?.status === false ||
@@ -922,6 +943,20 @@ const TeacherDashboard = () => {
                 ["classes"]
               );
 
+        const currentClasses = classList.filter((item) => {
+          const recordYear = getRecordYearId(item);
+          return !recordYear || recordYear === yearId;
+        });
+        const currentClassIds = new Set(currentClasses.map(getClassId).filter(Boolean));
+        const lectureList = allLectures.filter((lecture) => {
+          const recordYear = getRecordYearId(lecture);
+          if (recordYear) return recordYear === yearId;
+          const classId = getClassId(lecture);
+          // If the API did not populate the year, a known class assignment
+          // is still enough to reject lectures belonging to old classes.
+          return !classId || !classList.length || currentClassIds.has(classId);
+        });
+
         /*
          * بعض استجابات فصول المعلم لا تحتوي studentsCount.
          * لذلك نحسب العدد الحقيقي من GET /students?classId=...
@@ -930,8 +965,8 @@ const TeacherDashboard = () => {
          * نستخرج الفصول من حصص المعلم نفسها.
          */
         const classCandidates =
-          classList.length > 0
-            ? classList
+          currentClasses.length > 0
+            ? currentClasses
             : lectureList
                 .map(
                   (lecture) =>
