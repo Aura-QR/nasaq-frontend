@@ -56,6 +56,8 @@ import {
 
 import { api } from "@/APIs/Axios";
 import { fetchLectures } from "@/APIs/school/lectures";
+import { fetchActiveAcademicYear } from "@/APIs/school/academicYears";
+import { isActiveYearRecord } from "@/utils/academicRecordYear";
 import { fetchMyDay } from "@/APIs/school/notifications";
 import {
   addPreparation,
@@ -768,7 +770,7 @@ const TeacherSchedule = () => {
       try {
         const todayDate = formatLocalDate(today);
 
-        const [lectureResponse, supervisorResponse] = await Promise.all([
+        const [lectureResponse, supervisorResponse, yearResponse] = await Promise.all([
           fetchLectures(
             {
               teacherId,
@@ -784,6 +786,7 @@ const TeacherSchedule = () => {
               params: { date: todayDate },
             })
             .catch(() => null),
+          fetchActiveAcademicYear({ force: true }),
         ]);
 
         if (isFailedResponse(lectureResponse)) {
@@ -795,10 +798,13 @@ const TeacherSchedule = () => {
           );
         }
 
+        const activeYear = yearResponse?.data?.academicYear || yearResponse?.data?.year || yearResponse?.data;
+        const activeYearId = normalizeId(activeYear);
+        if (yearResponse?.status === false || !activeYearId) throw new Error("تعذر تحديد السنة الدراسية النشطة");
         const lectureList = extractCollection(
           lectureResponse,
           ["lectures"]
-        );
+        ).filter((lecture) => isActiveYearRecord(lecture, activeYearId));
 
         const preparationList =
           await loadPreparationsForTeacher(

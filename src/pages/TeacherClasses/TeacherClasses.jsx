@@ -45,6 +45,8 @@ import { useAuthUser } from "react-auth-kit";
 import { useNavigate } from "react-router-dom";
 
 import { fetchLectures } from "@/APIs/school/lectures";
+import { fetchActiveAcademicYear } from "@/APIs/school/academicYears";
+import { isActiveYearRecord } from "@/utils/academicRecordYear";
 import { fetchSingleClass } from "@/APIs/school/classes";
 import { fetchStudents } from "@/APIs/school/students";
 
@@ -582,14 +584,14 @@ const TeacherClasses = () => {
       setError("");
 
       try {
-        const lecturesResponse = await fetchLectures(
+        const [lecturesResponse, yearResponse] = await Promise.all([fetchLectures(
           {
             teacherId,
             page: 1,
             limit: 500,
           },
           { force }
-        );
+        ), fetchActiveAcademicYear({ force: true })]);
 
         if (requestId !== requestIdRef.current) return;
 
@@ -599,7 +601,12 @@ const TeacherClasses = () => {
           );
         }
 
-        const lectureList = extractCollection(lecturesResponse, ["lectures"]);
+        const activeYear = yearResponse?.data?.academicYear || yearResponse?.data?.year || yearResponse?.data;
+        const activeYearId = normalizeId(activeYear);
+        if (yearResponse?.status === false || !activeYearId) throw new Error("تعذر تحديد السنة الدراسية النشطة");
+        const lectureList = extractCollection(lecturesResponse, ["lectures"]).filter(
+          (lecture) => isActiveYearRecord(lecture, activeYearId)
+        );
         const classMap = new Map();
 
         lectureList.forEach((lecture) => {
