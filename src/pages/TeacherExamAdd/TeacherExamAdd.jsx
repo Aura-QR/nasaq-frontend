@@ -902,6 +902,14 @@ const TeacherExamAdd = () => {
     setClassIds((previous) => previous.filter((id) => allowedIds.has(id)));
   }, [availableClasses]);
 
+  // Ministry: switching to a continuous subject drops a «نهائي» already chosen.
+  useEffect(() => {
+    if (ministry && !isEdit && examType === "final" && !enabledExamTypes.has("final")) {
+      setExamType("quiz");
+      setExamMaxGrade(10);
+    }
+  }, [ministry, isEdit, examType, enabledExamTypes]);
+
   useEffect(() => {
     if (
       !criteriaChecked ||
@@ -1466,6 +1474,8 @@ const TeacherExamAdd = () => {
                     sx={fieldSx}
                   >
                     {EXAM_TYPES.map((type) => {
+                      // Ministry: «نهائي» only on a final-exam subject, as on mobile and the server.
+                      if (ministry && !isEdit && type.value === "final" && !enabledExamTypes.has("final")) return null;
                       const disabled =
                         criteriaChecked &&
                         hasGradesCriteria &&
