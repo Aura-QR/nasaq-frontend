@@ -156,7 +156,7 @@ const NAVIGATION_SECTIONS = [
 
     items: [
       {
-        label: "حضور الإداريين والمشرفين",
+        label: "حضور الموظفين",
         path: "/school/staff-attendance",
         icon: <AssignmentRounded />,
         module: "staffAttendance",

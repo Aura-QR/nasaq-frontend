@@ -27,7 +27,7 @@ export const ENTITY_LABELS = {
   academicYears: "السنوات الدراسية",
   schoolSettings: "إعدادات المدرسة",
   messaging: "سجل رسائل واتساب",
-  staffAttendance: "حضور الإداريين والمشرفين",
+  staffAttendance: "حضور الموظفين",
   managers: "المديرون والمساعدون",
   analytics: "التقارير",
   settings: "الإعدادات",

@@ -590,7 +590,7 @@ const StaffAttendanceAdmin = () => {
       setSummaryRows([]);
       setSummaryTotalStaff(0);
       setSummaryWorkingDays(0);
-      toast.error(response?.message || "تعذر تحميل تقرير حضور الإداريين والمشرفين");
+      toast.error(response?.message || "تعذر تحميل تقرير حضور الموظفين");
       return;
     }
 
@@ -1097,6 +1097,7 @@ const StaffAttendanceAdmin = () => {
             <MenuItem value="">الكل</MenuItem>
             <MenuItem value="MANAGER">مدير / إداري</MenuItem>
             <MenuItem value="SUPERVISOR">مشرف</MenuItem>
+            <MenuItem value="STAFF">موظف خدمات</MenuItem>
           </TextField>
         </Box>
       </Paper>
@@ -1111,7 +1112,7 @@ const StaffAttendanceAdmin = () => {
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ backgroundColor: "rgba(36,74,112,.035)" }}>
-                  <TableCell align="right">الإداري / المشرف</TableCell>
+                  <TableCell align="right">الموظف</TableCell>
                   <TableCell align="right">التاريخ</TableCell>
                   <TableCell align="right">الحضور</TableCell>
                   <TableCell align="right">الانصراف</TableCell>
@@ -1259,7 +1260,7 @@ const StaffAttendanceAdmin = () => {
         >
           <Box>
             <Typography sx={{ color: "#122F4D", fontSize: 16, fontWeight: 900 }}>
-              تقرير حضور الإداريين والمشرفين
+              تقرير حضور الموظفين
             </Typography>
             <Typography sx={{ mt: 0.25, color: "#708198", fontSize: 10 }}>
               ملخص الحضور والغياب والتأخير والخروج المبكر وساعات العمل خلال فترة محددة.
@@ -1337,7 +1338,7 @@ const StaffAttendanceAdmin = () => {
             size="small"
             fullWidth
           >
-            <MenuItem value="">كل الإداريين والمشرفين</MenuItem>
+            <MenuItem value="">كل الموظفين</MenuItem>
             {staffMembers.map((teacher, index) => (
               <MenuItem
                 key={getStaffId(teacher) || index}
@@ -1364,6 +1365,7 @@ const StaffAttendanceAdmin = () => {
             <MenuItem value="">كل الأدوار</MenuItem>
             <MenuItem value="MANAGER">مدير / إداري</MenuItem>
             <MenuItem value="SUPERVISOR">مشرف</MenuItem>
+            <MenuItem value="STAFF">موظف خدمات</MenuItem>
           </TextField>
 
           <Button
@@ -1405,7 +1407,7 @@ const StaffAttendanceAdmin = () => {
         }}
       >
         {[
-          ["الإداريين والمشرفين في التقرير", summaryTotalStaff],
+          ["الموظفين في التقرير", summaryTotalStaff],
           ["أيام العمل بالفترة", summaryWorkingDays],
           ["إجمالي أيام الغياب", `غياب ${summaryTotals.daysAbsent} (منها ${summaryTotals.daysExcused} بعذر)`],
           ["أيام الحضور", summaryTotals.daysPresent],
@@ -1453,7 +1455,7 @@ const StaffAttendanceAdmin = () => {
             <Table size="small" sx={{ minWidth: 1480 }}>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "rgba(36,74,112,.035)" }}>
-                  <TableCell align="right">الإداري / المشرف</TableCell>
+                  <TableCell align="right">الموظف</TableCell>
                   <TableCell align="center">الحالة</TableCell>
                   <TableCell align="center">الغياب / أيام العمل</TableCell>
                   <TableCell align="center">أيام الحضور</TableCell>
@@ -1597,9 +1599,9 @@ const StaffAttendanceAdmin = () => {
             gap={1.2}
           >
             <Box>
-              <Back title="حضور الإداريين والمشرفين" />
+              <Back title="حضور الموظفين" />
               <Typography sx={{ mt: 0.5, color: "#708198", fontSize: 10 }}>
-                إعداد التسجيل الذاتي ومراجعة سجل حضور الإداريين والمشرفين والإدخالات اليدوية والتقارير.
+                إعداد التسجيل الذاتي ومراجعة سجل حضور الموظفين والإدخالات اليدوية والتقارير.
               </Typography>
             </Box>
 

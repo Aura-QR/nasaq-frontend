@@ -481,7 +481,7 @@ const Sidebar = ({ active, setActive }) => {
             show: dutyPermissions.read,
           },
           {
-            name: "حضور الإداريين والمشرفين",
+            name: "حضور الموظفين",
             Icon: HowToRegRounded,
             iconType: "mui",
             to: "/school/staff-attendance",
