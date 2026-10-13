@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, IconButton, InputAdornment, Paper, Stack,
+  DialogContent, DialogTitle, FormControlLabel, Checkbox, Switch, IconButton, InputAdornment, Paper, Stack,
   TextField, Tooltip, Typography,
 } from "@mui/material";
 import {
@@ -13,6 +13,7 @@ import Container from "@/components/Container/Container";
 import {
   createStaffMember, deleteStaffMember, fetchStaffMembers, updateStaffMember,
 } from "@/APIs/school/staffMembers";
+import { fetchSchoolSettings } from "@/APIs/school/schoolSettings";
 
 /*
  * موظفو الخدمات — a guard, a cleaner, a driver.
@@ -51,6 +52,31 @@ const copy = async (text) => {
 const EMPTY = { fullName: "", jobLabel: "", phoneNumber: "", username: "", password: "", email: "" };
 const PHONE = /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]*$/;
 
+const WEEK_DAYS = [
+  ["sunday", "الأحد"], ["monday", "الاثنين"], ["tuesday", "الثلاثاء"],
+  ["wednesday", "الأربعاء"], ["thursday", "الخميس"],
+  ["friday", "الجمعة"], ["saturday", "السبت"],
+];
+const schoolWeek = (items, fallback = []) => {
+  const byDay = new Map((Array.isArray(fallback) ? fallback : []).map((item) => [item.day, item]));
+  (Array.isArray(items) ? items : []).forEach((item) => byDay.set(item.day, item));
+  return WEEK_DAYS.map(([day]) => {
+    const item = byDay.get(day);
+    const isWorkingDay = item ? Boolean(item.isWorkingDay) : !["friday", "saturday"].includes(day);
+    return { day, isWorkingDay, startTime: isWorkingDay ? item?.startTime || "07:00" : null,
+      endTime: isWorkingDay ? item?.endTime || "14:00" : null };
+  });
+};
+const getScheduleError = (schedule) => {
+  for (const item of schedule) {
+    if (!item.isWorkingDay) continue;
+    if (!item.startTime || !item.endTime) return "حدّد بداية الدوام ونهايته معًا في يوم العمل";
+    if (item.startTime >= item.endTime) return "بداية الدوام يجب أن تسبق نهايته";
+  }
+  return "";
+};
+
+
 const StaffMembers = () => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +89,8 @@ const StaffMembers = () => {
   const [removing, setRemoving] = useState(null); // row
   const [credentials, setCredentials] = useState(null); // { fullName, username, password }
   const [saving, setSaving] = useState(false);
+  const [schoolSchedule, setSchoolSchedule] = useState(() => schoolWeek([]));
+  const [settingsError, setSettingsError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -77,13 +105,44 @@ const StaffMembers = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let active = true;
+    fetchSchoolSettings().then((result) => {
+      if (!active) return;
+      if (result?.status === false) {
+        setSettingsError("تعذر تحميل مواعيد المدرسة. تحقق من الجدول قبل حفظ المواعيد الخاصة.");
+        return;
+      }
+      const data = result?.data ?? result;
+      const settings = data?.settings ?? data?.school?.settings ?? data;
+      setSchoolSchedule(schoolWeek(settings?.workSchedule));
+      setSettingsError("");
+    }).catch(() => {
+      if (active) setSettingsError("تعذر تحميل مواعيد المدرسة. تحقق من الجدول قبل حفظ المواعيد الخاصة.");
+    });
+    return () => { active = false; };
+  }, []);
+
+  const setScheduleEnabled = (enabled) => setForm((current) => ({
+    ...current, values: {
+      ...current.values, customHours: enabled,
+      workSchedule: enabled ? schoolWeek(current.values.workSchedule, schoolSchedule) : [],
+    },
+  }));
+  const changeDay = (day, changes) => setForm((current) => ({
+    ...current, values: {
+      ...current.values,
+      workSchedule: current.values.workSchedule.map((entry) => entry.day === day
+        ? { ...entry, ...changes } : entry),
+    },
+  }));
 
   const set = (key) => (event) =>
     setForm((current) => ({ ...current, values: { ...current.values, [key]: event.target.value } }));
 
   const openCreate = () => {
     setFormError("");
-    setForm({ mode: "create", values: { ...EMPTY, password: generatePassword() } });
+    setForm({ mode: "create", values: { ...EMPTY, password: generatePassword(), customHours: false, workSchedule: [] } });
   };
 
   const openEdit = (row) => {
@@ -98,6 +157,8 @@ const StaffMembers = () => {
         username: row.username || "",
         email: row.hasEmail ? row.email : "",
         password: "",
+        customHours: Array.isArray(row.workSchedule) && row.workSchedule.length > 0,
+        workSchedule: Array.isArray(row.workSchedule) && row.workSchedule.length ? schoolWeek(row.workSchedule, schoolSchedule) : [],
       },
     });
   };
@@ -113,6 +174,7 @@ const StaffMembers = () => {
       return "رقم الجوال غير صحيح";
     if (values.email.trim() && !/^\S+@\S+\.\S+$/.test(values.email.trim()))
       return "البريد الإلكتروني غير صحيح";
+    if (values.customHours) return getScheduleError(values.workSchedule);
     return "";
   };
 
@@ -122,12 +184,13 @@ const StaffMembers = () => {
 
     setSaving(true);
     const result = form.mode === "create"
-      ? await createStaffMember(form.values)
+      ? await createStaffMember({ ...form.values, workSchedule: form.values.customHours ? form.values.workSchedule : [] })
       : await updateStaffMember(form.id, {
           fullName: form.values.fullName,
           jobLabel: form.values.jobLabel,
           phoneNumber: form.values.phoneNumber,
           ...(form.values.email.trim() ? { email: form.values.email } : {}),
+          workSchedule: form.values.customHours ? form.values.workSchedule : [],
         });
     setSaving(false);
 
@@ -185,7 +248,7 @@ const StaffMembers = () => {
         </Stack>
 
         <Alert severity="info" sx={{ borderRadius: "12px" }}>
-          يلتزم موظفو الخدمات بدوام المدرسة وأيامها، ويظهر حضورهم في تقرير حضور الإداريين.
+          يتبع موظفو الخدمات مواعيد دوام المدرسة ما لم تُحدَّد لهم مواعيد خاصة، ويظهر حضورهم في تقرير حضور الإداريين.
           ولا يطّلعون على أي بيانات للطلاب أو المعلمين.
         </Alert>
 
@@ -207,6 +270,7 @@ const StaffMembers = () => {
                     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
                       <Typography sx={{ fontWeight: 900, fontSize: 15 }}>{row.fullName || row.username}</Typography>
                       {row.jobLabel ? <Chip size="small" label={row.jobLabel} sx={{ fontWeight: 800 }} /> : null}
+                      {Array.isArray(row.workSchedule) && row.workSchedule.length > 0 ? <Chip size="small" color="primary" variant="outlined" label="مواعيد خاصة" /> : null}
                     </Stack>
                     <Typography sx={{ fontSize: 12.5, color: "text.secondary" }}>
                       اسم المستخدم: <Box component="span" dir="ltr" sx={{ fontFamily: "monospace", fontWeight: 700 }}>{row.username}</Box>
@@ -233,7 +297,7 @@ const StaffMembers = () => {
       </Stack>
 
       {/* إضافة / تعديل */}
-      <Dialog open={Boolean(form)} onClose={() => !saving && setForm(null)} dir="rtl" fullWidth maxWidth="xs">
+      <Dialog open={Boolean(form)} onClose={() => !saving && setForm(null)} dir="rtl" fullWidth maxWidth="sm">
         <DialogTitle>{form?.mode === "edit" ? "تعديل بيانات الموظف" : "إضافة موظف خدمات"}</DialogTitle>
         <DialogContent>
           {form ? (
@@ -271,6 +335,42 @@ const StaffMembers = () => {
               <TextField id="staff-email" label="البريد الإلكتروني (اختياري)" value={form.values.email} onChange={set("email")}
                 helperText="بدونه لا تصل الموظفَ رسالة استعادة كلمة المرور، وتُعيَّن له كلمة جديدة من هنا"
                 inputProps={{ dir: "ltr" }} />
+              <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                <Typography fontWeight={800} sx={{ mb: 0.5 }}>مواعيد الدوام</Typography>
+                <FormControlLabel control={<Switch checked={form.values.customHours} onChange={(e) => setScheduleEnabled(e.target.checked)} />}
+                  label="مواعيد خاصة بالموظف" />
+                {!form.values.customHours ? (
+                  <Typography variant="body2" color="text.secondary">يتبع مواعيد دوام المدرسة</Typography>
+                ) : (
+                  <Stack spacing={1.5} sx={{ mt: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      تُحسب مواعيد الحضور والتأخير والغياب لهذا الموظف وفق الجدول أدناه، وتسري عليه إجازات المدرسة الرسمية
+                    </Typography>
+                    {settingsError ? <Alert severity="warning">{settingsError}</Alert> : null}
+                    {form.values.workSchedule.map((item) => (
+                      <Box key={item.day} sx={{ borderTop: "1px solid", borderColor: "divider", pt: 1 }}>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between">
+                          <Typography fontWeight={700}>{WEEK_DAYS.find(([day]) => day === item.day)?.[1]}</Typography>
+                          <FormControlLabel label="يوم عمل" control={<Checkbox checked={item.isWorkingDay}
+                            onChange={(e) => changeDay(item.day, { isWorkingDay: e.target.checked,
+                              startTime: e.target.checked ? (item.startTime || "07:00") : null,
+                              endTime: e.target.checked ? (item.endTime || "14:00") : null })} />} />
+                        </Stack>
+                        {item.isWorkingDay ? (
+                          <Stack direction="row" gap={1} sx={{ mt: 0.5 }}>
+                            <TextField fullWidth size="small" type="time" label="بداية الدوام" value={item.startTime || ""}
+                              InputLabelProps={{ shrink: true }} inputProps={{ dir: "ltr" }}
+                              onChange={(e) => changeDay(item.day, { startTime: e.target.value })} />
+                            <TextField fullWidth size="small" type="time" label="نهاية الدوام" value={item.endTime || ""}
+                              InputLabelProps={{ shrink: true }} inputProps={{ dir: "ltr" }}
+                              onChange={(e) => changeDay(item.day, { endTime: e.target.value })} />
+                          </Stack>
+                        ) : null}
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+              </Paper>
             </Stack>
           ) : null}
         </DialogContent>

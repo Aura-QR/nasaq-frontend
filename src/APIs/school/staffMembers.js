@@ -37,6 +37,10 @@ const clean = (payload = {}, { partial = false } = {}) => {
     else if (partial && (key === "jobLabel" || key === "phoneNumber")) result[key] = "";
   });
 
+  if (Object.prototype.hasOwnProperty.call(payload, "workSchedule")) {
+    result.workSchedule = Array.isArray(payload.workSchedule) ? payload.workSchedule : [];
+  }
+
   return result;
 };
 
