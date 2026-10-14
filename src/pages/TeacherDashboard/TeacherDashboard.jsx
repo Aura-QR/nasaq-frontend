@@ -1921,21 +1921,10 @@ const TeacherDashboard = () => {
           </Stack>
 
           <Stack
-            direction={{
-              xs: "column",
-              md: "row",
-            }}
-            alignItems={{
-              xs: "stretch",
-              md: "center",
-            }}
-            justifyContent="space-between"
-            gap={2}
-            sx={{
-              position: "relative",
-              zIndex: 1,
-              mt: { xs: 1.8, md: 2.2 },
-            }}
+            direction="column"
+            alignItems="stretch"
+            gap={1.6}
+            sx={{ position: "relative", zIndex: 1, mt: { xs: 1.5, md: 1.7 } }}
           >
             <Box>
               <Chip
@@ -1943,8 +1932,8 @@ const TeacherDashboard = () => {
                 label="لوحة المعلم"
                 size="small"
                 sx={{
-                  mb: 1,
-                  py: 0.6,
+                  mb: .55,
+                  py: 0.45,
                   px: 0.5,
                   color:
                     "var(--color-gold-light)",
@@ -1966,10 +1955,10 @@ const TeacherDashboard = () => {
                 sx={{
                   color: "var(--color-white)",
                   fontSize: {
-                    xs: "24px",
-                    sm: "28px",
-                    md: "32px",
-                    lg: "36px",
+                    xs: "20px",
+                    sm: "23px",
+                    md: "25px",
+                    lg: "26px",
                   },
                   fontWeight: 900,
                   lineHeight: 1.3,
@@ -1980,8 +1969,9 @@ const TeacherDashboard = () => {
 
               <Typography
                 sx={{
-                  mt: 0.6,
+                  mt: 0.25,
                   maxWidth: 720,
+                  display: hasAnnouncements ? "none" : "block",
                   color:
                     "rgba(255,255,255,0.80)",
                   fontSize: {
@@ -2000,7 +1990,7 @@ const TeacherDashboard = () => {
                   sm: "row",
                 }}
                 gap={1.2}
-                sx={{ mt: 1.8 }}
+                sx={{ mt: 1.1, flexWrap: "wrap" }}
               >
                 <Button
                   variant="contained"
@@ -2011,8 +2001,8 @@ const TeacherDashboard = () => {
                     )
                   }
                   sx={{
-                    minHeight: 44,
-                    px: 2.4,
+                    minHeight: 38,
+                    px: 2,
                     borderRadius: "12px",
                     color:
                       "var(--color-navy-deep)",
@@ -2037,8 +2027,8 @@ const TeacherDashboard = () => {
                     navigate("/teacher/schedule")
                   }
                   sx={{
-                    minHeight: 44,
-                    px: 2.2,
+                    minHeight: 38,
+                    px: 1.8,
                     borderRadius: "12px",
                     color: "var(--color-white)",
                     borderColor:
@@ -2059,8 +2049,8 @@ const TeacherDashboard = () => {
               </Stack>
             </Box>
 
-            <Box sx={{ width: { xs: "100%", md: 330, lg: 350 }, flexShrink: 0, display: hasAnnouncements ? "block" : "none" }}>
-              <AnnouncementCarousel compact onHasAnnouncements={setHasAnnouncements} />
+            <Box sx={{ width: "100%", minWidth: 0, display: hasAnnouncements ? "block" : "none" }}>
+              <AnnouncementCarousel compact onHasAnnouncements={setHasAnnouncements} sx={{ width: "100%" }} />
             </Box>
             {!hasAnnouncements && (
             <Paper
@@ -2068,8 +2058,8 @@ const TeacherDashboard = () => {
               sx={{
                 width: {
                   xs: "100%",
-                  md: 330,
-                  lg: 350,
+                  md: "100%",
+                  lg: "100%",
                 },
                 p: { xs: 1.8, md: 2.2 },
                 border:

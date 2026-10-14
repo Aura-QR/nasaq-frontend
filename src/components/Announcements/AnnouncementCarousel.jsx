@@ -33,11 +33,11 @@ export function AnnouncementCard({ slide, compact = false, variant, onVideoEnded
     <Box sx={{
       position: "relative", isolation: "isolate", overflow: "hidden", boxSizing: "border-box",
       display: "flex", flexDirection: "column", justifyContent: "center", direction: "rtl", textAlign: "right",
-      minHeight: teacher ? 258 : { xs: 230, md: 236 },
-      px: teacher ? 2.3 : { xs: 2.4, md: 3.4 },
-      pt: teacher ? 2 : 2.4, pb: teacher ? 5.8 : 5.8,
+      minHeight: teacher ? { xs: 205, md: 195 } : { xs: 230, md: 236 },
+      px: teacher ? { xs: 2.2, md: 3.2 } : { xs: 2.4, md: 3.4 },
+      pt: teacher ? 2.3 : 2.4, pb: teacher ? 5.2 : 5.8,
       color: c.foreground,
-      background: teacher ? "linear-gradient(145deg,rgba(44,93,133,.62),rgba(22,54,85,.46))" :
+      background: teacher ? "linear-gradient(115deg,#234b6d 0%,#1b3f60 55%,#173652 100%)" :
         "linear-gradient(112deg,#f3f8fe 0%,#edf6ff 56%,#e6f1fc 100%)",
     }}>
       {studentMode && <Box aria-hidden sx={{ position: "absolute", pointerEvents: "none", left: -60, bottom: -135, width: 280, height: 280, borderRadius: "50%", background: "rgba(194,222,249,.19)", zIndex: -1 }} />}
@@ -55,7 +55,7 @@ export function AnnouncementCard({ slide, compact = false, variant, onVideoEnded
           lineHeight: 1.42, maxWidth: "100%", overflowWrap: "anywhere", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{slide.title}</Typography>
         {slide.body && <Typography sx={{ fontSize: teacher ? 12 : 13.5, lineHeight: 1.7, color: c.secondary,
           display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: teacher ? 1 : 2, overflow: "hidden" }}>{slide.body}</Typography>}
-        {slide.type === "honor_roll" && <Box sx={{ display: "grid", width: "100%", gridTemplateColumns: teacher ? "1fr" : { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: .8, minWidth: 0 }}>
+        {slide.type === "honor_roll" && <Box sx={{ display: "grid", width: "100%", gridTemplateColumns: teacher ? { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" } : { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: .8, minWidth: 0 }}>
           {shownStudents.map((entry, i) => <Stack direction="row" alignItems="center" spacing={1} key={entry.studentId || `${entry.name}-${i}`} sx={{
             minWidth: 0, px: 1.3, py: teacher ? .6 : 1.1, borderRadius: "12px", border: teacher ? "1px solid rgba(255,255,255,.14)" : "1px solid #e2ecf7",
             background: teacher ? "rgba(255,255,255,.10)" : "#fff", boxShadow: studentMode ? "0 4px 14px rgba(38,86,128,.035)" : "none" }}>
@@ -112,7 +112,7 @@ export default function AnnouncementCarousel({ compact = false, variant, onHasAn
   return <Box dir="rtl" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
     onTouchStart={e => { touch.current = e.touches[0]?.clientX; }}
     onTouchEnd={e => { if (touch.current == null) return; const delta = e.changedTouches[0]?.clientX - touch.current; if (Math.abs(delta) > 45 && items.length > 1) (delta > 0 ? next : prev)(); touch.current = null; }}
-    sx={{ position: "relative", overflow: "hidden", borderRadius: teacher ? "18px" : "23px", border: teacher ? "1px solid rgba(255,255,255,.19)" : "1px solid #dce9f6", boxShadow: teacher ? "none" : "0 9px 22px rgba(29,76,120,.065)", ...sx }}>
+    sx={{ position: "relative", overflow: "hidden", borderRadius: teacher ? "19px" : "23px", border: teacher ? "1px solid rgba(245,217,148,.85)" : "1px solid #dce9f6", boxShadow: teacher ? "0 0 0 3px rgba(245,217,148,.07), inset 0 0 28px rgba(245,217,148,.035), 0 10px 25px rgba(7,22,39,.12)" : "0 9px 22px rgba(29,76,120,.065)", ...sx }}>
     <AnnouncementCard key={items[index].id} slide={items[index]} compact={compact} variant={mode} onVideoPlayingChange={setPlaying} onVideoEnded={next} />
     {items.length > 1 && <Stack direction="row" alignItems="center" justifyContent="center" spacing={.75} sx={{ position: "absolute", bottom: 7, left: 0, right: 0, zIndex: 2, direction: "rtl" }}>
       <IconButton onClick={prev} aria-label="الإعلان السابق" size="small" sx={{ color: teacher ? "#fff" : "#397bb2", p: .5 }}><ArrowForwardIosRounded sx={{ fontSize: 16 }} /></IconButton>

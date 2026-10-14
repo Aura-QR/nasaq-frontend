@@ -477,7 +477,9 @@ const SchoolDashboardPage =
           </IconButton>
         </Stack>
 
-        <AnnouncementCarousel sx={{ mb: 1.6 }} />
+        {role !== ROLES.OWNER && (
+          <AnnouncementCarousel sx={{ mb: 1.6 }} />
+        )}
 
         {error && (
           <Alert
