@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, MenuItem, Paper, Select, Stack, Switch, Tab, Tabs, TextField, Typography } from "@mui/material";
 import { AddRounded, ArrowDownwardRounded, ArrowUpwardRounded, DeleteOutlineRounded, EditOutlined, CampaignRounded } from "@mui/icons-material";
 import usePermissions from "@/utils/hooks/usePermissions";
+import Container from "@/components/Container/Container";
 import { fetchAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, setAnnouncementStatus, updateAnnouncementOrder, uploadAnnouncementFile } from "@/APIs/school/announcements";
 import { AnnouncementCard } from "@/components/Announcements/AnnouncementCarousel";
 
@@ -41,7 +42,7 @@ export default function AnnouncementsManagement() {
   const remove = async item => { if (!window.confirm(`حذف الإعلان «${item.title}» نهائيًا؟`)) return; try { await deleteAnnouncement(item.id); await reload(); } catch (e) { setError(errorMessage(e)); } };
   const move = async (item, delta) => { const index = list.findIndex(x => x.id === item.id); const other = index + delta; if (other < 0 || other >= list.length) return; const reordered = [...list]; [reordered[index], reordered[other]] = [reordered[other], reordered[index]]; setList(reordered); try { await updateAnnouncementOrder(reordered.map(x => x.id)); await reload(); } catch (e) { setError(errorMessage(e)); await reload(); } };
   const visible = list.filter(x => (status === "all" || x.status === status) && (typeFilter === "all" || x.type === typeFilter));
-  return <Box dir="rtl" sx={{ p: { xs: 2, md: 3 }, maxWidth: 1200, mx: "auto" }}>
+  return <Container><Box dir="rtl" sx={{ p: { xs: 1, md: 2 }, maxWidth: 1200, mx: "auto" }}>
     <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2} mb={3}>
       <Box><Typography variant="h4" sx={{ fontWeight: 900, color: "#193957" }}>الإعلانات</Typography><Typography color="text.secondary">نظّم المحتوى الذي يظهر في لوحات المدرسة، المعلمين والطلاب</Typography></Box>
       {permissions.add && <Button onClick={openNew} variant="contained" startIcon={<AddRounded />} sx={{ bgcolor: "#244a70", borderRadius: 2, fontWeight: 800 }}>إعلان جديد</Button>}
@@ -64,5 +65,5 @@ export default function AnnouncementsManagement() {
       <Stack direction="row" alignItems="center" gap={2}><TextField size="small" type="number" label="مدة العرض بالثواني" inputProps={{ min: 2 }} value={form.durationSeconds} onChange={e => update("durationSeconds", e.target.value)} /><FormControlLabel label="إظهار الإعلان" control={<Switch checked={!!form.isActive} onChange={(_, c) => update("isActive", c)} />} /></Stack>
       <Typography fontWeight={800}>معاينة</Typography><Box sx={{ borderRadius: 3, overflow: "hidden" }}><AnnouncementCard compact slide={toPayload(form)} /></Box>
     </Stack></DialogContent><DialogActions sx={{ p: 2 }}><Button onClick={() => setEditing(null)} disabled={saving}>إلغاء</Button><Button variant="contained" disabled={saving || uploading} onClick={submit}>{saving ? "جارٍ الحفظ..." : "حفظ الإعلان"}</Button></DialogActions></Dialog>
-  </Box>;
+  </Box></Container>;
 }

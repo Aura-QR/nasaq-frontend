@@ -10,6 +10,7 @@ import {
 import {
   BadgeRounded,
   AccountBalanceWallet,
+  CampaignRounded,
   AddCardRounded,
   AccountTreeRounded,
   AutoStoriesRounded,
@@ -149,6 +150,9 @@ const Sidebar = ({ active, setActive }) => {
    * نطلب صلاحيات كل قسم منفصلة حتى يظل تصميم
    * الـSidebar القديم كما هو بدون أي تغيير بصري.
    */
+  const announcementsPermissions =
+    usePermissions("announcements");
+
   const studentsPermissions =
     usePermissions("students");
 
@@ -254,6 +258,17 @@ const Sidebar = ({ active, setActive }) => {
             iconType: "mui",
             to: "/school/dashboard",
             show: !isTeacher,
+          },
+          {
+            name: "الإعلانات",
+            Icon: CampaignRounded,
+            iconType: "mui",
+            to: "/school/announcements",
+            show: !isTeacher && (
+              role === "OWNER" ||
+              role === "SUPERVISOR" ||
+              (role === "MANAGER" && announcementsPermissions.read)
+            ),
           },
         ],
       },
@@ -841,6 +856,7 @@ const Sidebar = ({ active, setActive }) => {
     isTeacher,
     canManageAcademicYears,
     canManageSchoolSettings,
+    announcementsPermissions.read,
     studentsPermissions.read,
     teachersPermissions.read,
     subjectsPermissions.read,
