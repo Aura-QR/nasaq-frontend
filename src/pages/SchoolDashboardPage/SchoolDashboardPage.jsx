@@ -477,7 +477,7 @@ const SchoolDashboardPage =
           </IconButton>
         </Stack>
 
-        {role !== ROLES.OWNER && (
+        {[ROLES.SUPERVISOR, ROLES.MANAGER].includes(role) && (
           <AnnouncementCarousel sx={{ mb: 1.6 }} />
         )}
 

@@ -1700,7 +1700,7 @@ const TeacherDashboard = () => {
             position: "relative",
             overflow: "hidden",
             mb: { xs: 2, md: 2.5 },
-            p: { xs: 2.2, sm: 2.8, md: 3.2 },
+            p: { xs: 1.6, sm: 2, md: 2.2 },
             borderRadius: "22px",
             color: "var(--color-white)",
             background:
@@ -1923,131 +1923,27 @@ const TeacherDashboard = () => {
           <Stack
             direction="column"
             alignItems="stretch"
-            gap={1.6}
-            sx={{ position: "relative", zIndex: 1, mt: { xs: 1.5, md: 1.7 } }}
+            gap={1.15}
+            sx={{ position: "relative", zIndex: 1, mt: { xs: 1.1, md: 1.2 } }}
           >
-            <Box>
-              <Chip
-                icon={<AutoAwesomeRounded sx={{ fontSize: "16px !important" }} />}
-                label="لوحة المعلم"
-                size="small"
-                sx={{
-                  mb: .55,
-                  py: 0.45,
-                  px: 0.5,
-                  color:
-                    "var(--color-gold-light)",
-                  backgroundColor:
-                    "rgba(255,255,255,0.10)",
-                  border:
-                    "1px solid rgba(242,215,146,0.24)",
-                  fontSize: "12px",
-                  fontWeight: 800,
-                  "& .MuiChip-icon": {
-                    color:
-                      "var(--color-gold-light)",
-                  },
-                }}
-              />
-
-              <Typography
-                component="h1"
-                sx={{
-                  color: "var(--color-white)",
-                  fontSize: {
-                    xs: "20px",
-                    sm: "23px",
-                    md: "25px",
-                    lg: "26px",
-                  },
-                  fontWeight: 900,
-                  lineHeight: 1.3,
-                }}
-              >
-                {greeting}، {teacherName}
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 0.25,
-                  maxWidth: 720,
-                  display: hasAnnouncements ? "none" : "block",
-                  color:
-                    "rgba(255,255,255,0.80)",
-                  fontSize: {
-                    xs: "13px",
-                    sm: "14.5px",
-                  },
-                  lineHeight: 1.6,
-                }}
-              >
-                تابع حصصك وتحضيراتك، وابدأ يومك من مكان واحد بكل سهولة.
-              </Typography>
-
-              <Stack
-                direction={{
-                  xs: "column",
-                  sm: "row",
-                }}
-                gap={1.2}
-                sx={{ mt: 1.1, flexWrap: "wrap" }}
-              >
-                <Button
-                  variant="contained"
-                  startIcon={<AddRounded />}
-                  onClick={() =>
-                    navigate(
-                      "/teacher/schedule?mode=prepare"
-                    )
-                  }
-                  sx={{
-                    minHeight: 38,
-                    px: 2,
-                    borderRadius: "12px",
-                    color:
-                      "var(--color-navy-deep)",
-                    backgroundColor:
-                      "var(--color-gold-light)",
-                    fontSize: "13.5px",
-                    fontWeight: 800,
-                    textTransform: "none",
-                    boxShadow: "0 6px 16px rgba(211,164,79,0.25)",
-                    "&:hover": {
-                      backgroundColor: "#e8be6b",
-                    },
-                  }}
-                >
+            <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between" gap={1.1} sx={{ direction: "rtl" }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography component="h1" sx={{ color: "#fff", fontSize: { xs: 19, md: 22 }, fontWeight: 900, lineHeight: 1.35 }}>
+                  {greeting}، {teacherName}
+                </Typography>
+                {!hasAnnouncements && <Typography sx={{ color: "rgba(255,255,255,.72)", fontSize: 12, mt: .25 }}>تابع حصصك وتحضيراتك من مكان واحد</Typography>}
+              </Box>
+              <Stack direction="row" alignItems="center" gap={1} sx={{ flexShrink: 0, flexWrap: "wrap" }}>
+                <Button variant="contained" startIcon={<AddRounded />} onClick={() => navigate("/teacher/schedule?mode=prepare")}
+                  sx={{ minHeight: 36, px: 1.7, borderRadius: "11px", color: "var(--color-navy-deep)", backgroundColor: "var(--color-gold-light)", fontSize: 12.5, fontWeight: 800, textTransform: "none", "&:hover": { backgroundColor: "#e8be6b" } }}>
                   اختر حصة للتحضير
                 </Button>
-
-                <Button
-                  variant="outlined"
-                  endIcon={<ArrowBackRounded />}
-                  onClick={() =>
-                    navigate("/teacher/schedule")
-                  }
-                  sx={{
-                    minHeight: 38,
-                    px: 1.8,
-                    borderRadius: "12px",
-                    color: "var(--color-white)",
-                    borderColor:
-                      "rgba(255,255,255,0.32)",
-                    fontSize: "13.5px",
-                    fontWeight: 800,
-                    textTransform: "none",
-                    "&:hover": {
-                      borderColor:
-                        "var(--color-gold-light)",
-                      backgroundColor:
-                        "rgba(255,255,255,0.10)",
-                    },
-                  }}
-                >
+                <Button variant="outlined" endIcon={<ArrowBackRounded />} onClick={() => navigate("/teacher/schedule")}
+                  sx={{ minHeight: 36, px: 1.5, borderRadius: "11px", color: "#fff", borderColor: "rgba(255,255,255,.32)", fontSize: 12.5, fontWeight: 800, textTransform: "none", "&:hover": { borderColor: "var(--color-gold-light)", backgroundColor: "rgba(255,255,255,.08)" } }}>
                   عرض الجدول
                 </Button>
               </Stack>
-            </Box>
+            </Stack>
 
             <Box sx={{ width: "100%", minWidth: 0, display: hasAnnouncements ? "block" : "none" }}>
               <AnnouncementCarousel compact onHasAnnouncements={setHasAnnouncements} sx={{ width: "100%" }} />
