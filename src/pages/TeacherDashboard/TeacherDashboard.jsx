@@ -1759,6 +1759,17 @@ const TeacherDashboard = () => {
               />
             </Box>
 
+            <Box sx={{ minWidth: 0, flex: 1, textAlign: "right", mr: { xs: 0.5, md: 1.5 } }}>
+              <Typography component="h1" sx={{ color: "#fff", fontSize: { xs: 15, sm: 17, md: 20 }, fontWeight: 900, lineHeight: 1.35 }}>
+                {greeting}، {teacherName}
+              </Typography>
+              {!hasAnnouncements && (
+                <Typography sx={{ color: "rgba(255,255,255,.72)", fontSize: 12, mt: 0.25, display: { xs: "none", sm: "block" } }}>
+                  تابع حصصك وتحضيراتك من مكان واحد
+                </Typography>
+              )}
+            </Box>
+
             <Stack
               direction="row"
               alignItems="center"
@@ -1924,25 +1935,53 @@ const TeacherDashboard = () => {
             direction="column"
             alignItems="stretch"
             gap={0.5}
-            sx={{ position: "relative", zIndex: 1, mt: { xs: .3, md: .35 } }}
+            sx={{ position: "relative", zIndex: 1, mt: { xs: 1, md: 1.25 } }}
           >
-            <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between" gap={1.1} sx={{ direction: "rtl" }}>
-              <Box sx={{ minWidth: 0 }}>
-                <Typography component="h1" sx={{ color: "#fff", fontSize: { xs: 18, md: 20 }, fontWeight: 900, lineHeight: 1.35 }}>
-                  {greeting}، {teacherName}
-                </Typography>
-                {!hasAnnouncements && <Typography sx={{ color: "rgba(255,255,255,.72)", fontSize: 12, mt: .25 }}>تابع حصصك وتحضيراتك من مكان واحد</Typography>}
-              </Box>
-              <Stack direction="row" alignItems="center" gap={1} sx={{ flexShrink: 0, flexWrap: "wrap" }}>
-                <Button variant="contained" startIcon={<AddRounded />} onClick={() => navigate("/teacher/schedule?mode=prepare")}
-                  sx={{ minHeight: 36, px: 1.7, borderRadius: "11px", color: "var(--color-navy-deep)", backgroundColor: "var(--color-gold-light)", fontSize: 12.5, fontWeight: 800, textTransform: "none", "&:hover": { backgroundColor: "#e8be6b" } }}>
-                  اختر حصة للتحضير
-                </Button>
-                <Button variant="outlined" endIcon={<ArrowBackRounded />} onClick={() => navigate("/teacher/schedule")}
-                  sx={{ minHeight: 36, px: 1.5, borderRadius: "11px", color: "#fff", borderColor: "rgba(255,255,255,.32)", fontSize: 12.5, fontWeight: 800, textTransform: "none", "&:hover": { borderColor: "var(--color-gold-light)", backgroundColor: "rgba(255,255,255,.08)" } }}>
-                  عرض الجدول
-                </Button>
-              </Stack>
+            <Stack
+              direction="row"
+              justifyContent="center"
+              alignItems="center"
+              gap={{ xs: 1, sm: 1.5 }}
+              sx={{ width: "100%", flexWrap: "wrap" }}
+            >
+              <Button
+                variant="contained"
+                startIcon={<AddRounded />}
+                onClick={() => navigate("/teacher/schedule?mode=prepare")}
+                sx={{
+                  minHeight: 42,
+                  px: { xs: 2, sm: 3 },
+                  borderRadius: "12px",
+                  color: "var(--color-navy-deep)",
+                  backgroundColor: "var(--color-gold-light)",
+                  fontSize: { xs: 12, sm: 13.5 },
+                  fontWeight: 800,
+                  textTransform: "none",
+                  whiteSpace: "nowrap",
+                  "&:hover": { backgroundColor: "#e8be6b" },
+                }}
+              >
+                اختر حصة للتحضير
+              </Button>
+              <Button
+                variant="outlined"
+                endIcon={<ArrowBackRounded />}
+                onClick={() => navigate("/teacher/schedule")}
+                sx={{
+                  minHeight: 42,
+                  px: { xs: 2, sm: 3 },
+                  borderRadius: "12px",
+                  color: "#fff",
+                  borderColor: "rgba(255,255,255,.35)",
+                  fontSize: { xs: 12, sm: 13.5 },
+                  fontWeight: 800,
+                  textTransform: "none",
+                  whiteSpace: "nowrap",
+                  "&:hover": { borderColor: "var(--color-gold-light)", backgroundColor: "rgba(255,255,255,.08)" },
+                }}
+              >
+                عرض الجدول
+              </Button>
             </Stack>
 
             {!hasAnnouncements && (
