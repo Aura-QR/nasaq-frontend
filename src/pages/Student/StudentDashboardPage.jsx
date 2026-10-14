@@ -583,7 +583,7 @@ const StudentDashboardPage = () => {
 
   return (
     <Box dir="rtl">
-      <AnnouncementCarousel sx={{ mb: 2.3 }} />
+      <AnnouncementCarousel variant="student" sx={{ mb: 2.3 }} />
       {/* =====================================================
           HERO
       ===================================================== */}
