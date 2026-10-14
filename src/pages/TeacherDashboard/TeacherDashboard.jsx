@@ -1699,8 +1699,8 @@ const TeacherDashboard = () => {
           sx={{
             position: "relative",
             overflow: "hidden",
-            mb: { xs: 2, md: 2.5 },
-            p: { xs: 1.6, sm: 2, md: 2.2 },
+            mb: { xs: 1.5, md: 1.75 },
+            p: { xs: 1.25, sm: 1.5, md: 1.6 },
             borderRadius: "22px",
             color: "var(--color-white)",
             background:
@@ -1923,8 +1923,8 @@ const TeacherDashboard = () => {
           <Stack
             direction="column"
             alignItems="stretch"
-            gap={0.7}
-            sx={{ position: "relative", zIndex: 1, mt: { xs: .55, md: .65 } }}
+            gap={0.5}
+            sx={{ position: "relative", zIndex: 1, mt: { xs: .3, md: .35 } }}
           >
             <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between" gap={1.1} sx={{ direction: "rtl" }}>
               <Box sx={{ minWidth: 0 }}>
@@ -1945,9 +1945,6 @@ const TeacherDashboard = () => {
               </Stack>
             </Stack>
 
-            <Box sx={{ width: "100%", minWidth: 0, display: hasAnnouncements ? "block" : "none" }}>
-              <AnnouncementCarousel compact onHasAnnouncements={setHasAnnouncements} sx={{ width: "100%" }} />
-            </Box>
             {!hasAnnouncements && (
             <Paper
               elevation={0}
@@ -2084,6 +2081,11 @@ const TeacherDashboard = () => {
             )}
           </Stack>
         </Paper>
+
+        {/* Standalone announcement: separate from the compact teacher header. */}
+        <Box sx={{ display: hasAnnouncements ? "block" : "none", mb: { xs: 2, md: 2.5 } }}>
+          <AnnouncementCarousel compact onHasAnnouncements={setHasAnnouncements} sx={{ width: "100%" }} />
+        </Box>
 
         <Box
           sx={{
