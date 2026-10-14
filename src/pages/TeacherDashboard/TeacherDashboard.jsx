@@ -1923,12 +1923,12 @@ const TeacherDashboard = () => {
           <Stack
             direction="column"
             alignItems="stretch"
-            gap={1.15}
-            sx={{ position: "relative", zIndex: 1, mt: { xs: 1.1, md: 1.2 } }}
+            gap={0.7}
+            sx={{ position: "relative", zIndex: 1, mt: { xs: .55, md: .65 } }}
           >
             <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between" gap={1.1} sx={{ direction: "rtl" }}>
               <Box sx={{ minWidth: 0 }}>
-                <Typography component="h1" sx={{ color: "#fff", fontSize: { xs: 19, md: 22 }, fontWeight: 900, lineHeight: 1.35 }}>
+                <Typography component="h1" sx={{ color: "#fff", fontSize: { xs: 18, md: 20 }, fontWeight: 900, lineHeight: 1.35 }}>
                   {greeting}، {teacherName}
                 </Typography>
                 {!hasAnnouncements && <Typography sx={{ color: "rgba(255,255,255,.72)", fontSize: 12, mt: .25 }}>تابع حصصك وتحضيراتك من مكان واحد</Typography>}

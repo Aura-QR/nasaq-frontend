@@ -32,10 +32,10 @@ export function AnnouncementCard({ slide, compact = false, variant, onVideoEnded
   return (
     <Box sx={{
       position: "relative", isolation: "isolate", overflow: "hidden", boxSizing: "border-box",
-      display: "flex", flexDirection: "column", justifyContent: "center", direction: "rtl", textAlign: "right",
-      minHeight: teacher ? { xs: 168, md: 158 } : { xs: 230, md: 236 },
+      display: "flex", flexDirection: "column", justifyContent: "flex-start", direction: "rtl", textAlign: "right",
+      minHeight: teacher ? { xs: 150, md: 142 } : { xs: 230, md: 236 },
       px: teacher ? { xs: 2.2, md: 3.2 } : { xs: 2.4, md: 3.4 },
-      pt: teacher ? 1.4 : 2.4, pb: teacher ? 4.5 : 5.8,
+      pt: teacher ? 1.5 : 2.4, pb: teacher ? 4 : 5.8,
       color: c.foreground,
       background: teacher ? "linear-gradient(115deg,#234b6d 0%,#1b3f60 55%,#173652 100%)" :
         "linear-gradient(112deg,#f3f8fe 0%,#edf6ff 56%,#e6f1fc 100%)",
@@ -44,20 +44,20 @@ export function AnnouncementCard({ slide, compact = false, variant, onVideoEnded
       {image && <Box component="img" src={image} alt="" sx={{ pointerEvents: "none", zIndex: -1, position: "absolute", left: 0, top: 0,
         width: teacher ? "100%" : { xs: "45%", md: "36%" }, height: "100%", objectFit: "cover", opacity: teacher ? .12 : .16,
         maskImage: "linear-gradient(to right,#000,transparent)" }} />}
-      <Stack spacing={teacher ? .55 : 1.1} sx={{ width: "100%", minWidth: 0, alignItems: "flex-start", position: "relative" }}>
+      <Stack spacing={teacher ? .7 : 1.1} sx={{ width: "100%", minWidth: 0, alignItems: "flex-start", position: "relative" }}>
         <Stack direction="row" alignItems="center" spacing={.8} sx={{ px: 1.1, py: .6, borderRadius: "99px",
           background: teacher ? "rgba(255,255,255,.11)" : "#dcecff", color: teacher ? c.accent : "#3276ad",
           border: teacher ? "1px solid rgba(255,255,255,.12)" : "1px solid #d1e5fa" }}>
           <Icon sx={{ fontSize: 16 }} />
           <Typography sx={{ fontSize: 11, fontWeight: 850 }}>{LABELS[slide.type] || "إعلانات المدرسة"}</Typography>
         </Stack>
-        <Typography component="h3" sx={{ fontSize: teacher ? { xs: 18, md: 19 } : { xs: 21, md: 26 }, fontWeight: 900,
+        <Typography component="h3" sx={{ fontSize: teacher ? { xs: 19, md: 23 } : { xs: 21, md: 26 }, fontWeight: 900,
           lineHeight: 1.42, maxWidth: "100%", overflowWrap: "anywhere", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{slide.title}</Typography>
         {slide.body && <Typography sx={{ fontSize: teacher ? 12 : 13.5, lineHeight: 1.7, color: c.secondary,
           display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: teacher ? 1 : 2, overflow: "hidden" }}>{slide.body}</Typography>}
         {slide.type === "honor_roll" && <Box sx={{ display: "grid", width: "100%", gridTemplateColumns: teacher ? { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" } : { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: .8, minWidth: 0 }}>
           {shownStudents.map((entry, i) => <Stack direction="row" alignItems="center" spacing={1} key={entry.studentId || `${entry.name}-${i}`} sx={{
-            minWidth: 0, px: 1.3, py: teacher ? .35 : 1.1, borderRadius: "12px", border: teacher ? "1px solid rgba(255,255,255,.14)" : "1px solid #e2ecf7",
+            minWidth: 0, px: 1.3, py: teacher ? .75 : 1.1, borderRadius: "12px", border: teacher ? "1px solid rgba(255,255,255,.14)" : "1px solid #e2ecf7",
             background: teacher ? "rgba(255,255,255,.10)" : "#fff", boxShadow: studentMode ? "0 4px 14px rgba(38,86,128,.035)" : "none" }}>
             <Box sx={{ borderRadius: "50%", bgcolor: teacher ? "rgba(245,217,148,.15)" : "#fff4dd", p: .65, display: "grid", placeItems: "center", flexShrink: 0 }}><EmojiEventsRounded sx={{ color: teacher ? c.accent : "#c5953e", fontSize: 17 }} /></Box>
             <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -114,7 +114,7 @@ export default function AnnouncementCarousel({ compact = false, variant, onHasAn
     onTouchEnd={e => { if (touch.current == null) return; const delta = e.changedTouches[0]?.clientX - touch.current; if (Math.abs(delta) > 45 && items.length > 1) (delta > 0 ? next : prev)(); touch.current = null; }}
     sx={{ position: "relative", overflow: "hidden", borderRadius: teacher ? "19px" : "23px", border: teacher ? "1px solid rgba(245,217,148,.85)" : "1px solid #dce9f6", boxShadow: teacher ? "0 0 0 3px rgba(245,217,148,.07), inset 0 0 28px rgba(245,217,148,.035), 0 10px 25px rgba(7,22,39,.12)" : "0 9px 22px rgba(29,76,120,.065)", ...sx }}>
     <AnnouncementCard key={items[index].id} slide={items[index]} compact={compact} variant={mode} onVideoPlayingChange={setPlaying} onVideoEnded={next} />
-    {items.length > 1 && <Stack direction="row" alignItems="center" justifyContent="center" spacing={.75} sx={{ position: "absolute", bottom: 7, left: 0, right: 0, zIndex: 2, direction: "rtl" }}>
+    {items.length > 1 && <Stack direction="row" alignItems="center" justifyContent="center" spacing={.75} sx={{ position: "absolute", bottom: 4, left: 0, right: 0, zIndex: 2, direction: "rtl" }}>
       <IconButton onClick={prev} aria-label="الإعلان السابق" size="small" sx={{ color: teacher ? "#fff" : "#397bb2", p: .5 }}><ArrowForwardIosRounded sx={{ fontSize: 16 }} /></IconButton>
       {items.map((item, i) => <Box key={item.id || i} component="button" type="button" aria-label={`الإعلان ${i + 1}`} onClick={() => { setPlaying(false); setIndex(i); }} sx={{ width: i === index ? 22 : 7, height: 7, border: 0, borderRadius: 9, bgcolor: i === index ? (teacher ? "#f5d994" : "#397bb2") : (teacher ? "#91a8bd" : "#aac8e2"), cursor: "pointer", transition: "width .2s" }} />)}
       <IconButton onClick={next} aria-label="الإعلان التالي" size="small" sx={{ color: teacher ? "#fff" : "#397bb2", p: .5 }}><ArrowBackIosNewRounded sx={{ fontSize: 16 }} /></IconButton>

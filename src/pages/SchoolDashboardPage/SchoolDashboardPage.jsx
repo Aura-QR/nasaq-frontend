@@ -477,7 +477,7 @@ const SchoolDashboardPage =
           </IconButton>
         </Stack>
 
-        {[ROLES.SUPERVISOR, ROLES.MANAGER].includes(role) && (
+        {(String(role || "").trim().toUpperCase() === ROLES.SUPERVISOR || String(role || "").trim().toUpperCase() === ROLES.MANAGER) && (
           <AnnouncementCarousel sx={{ mb: 1.6 }} />
         )}
 
