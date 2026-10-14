@@ -4,6 +4,7 @@ import {
   AccountBalanceWalletRounded,
   AccountTreeRounded,
   AssessmentRounded,
+  CampaignRounded,
   AssignmentRounded,
   AutoStoriesRounded,
   CalendarMonthRounded,
@@ -336,6 +337,7 @@ const SchoolSidebar = ({
     ].includes(role);
 
   const modulePermissions = {
+    announcements: usePermissions("announcements"),
     students:
       usePermissions(
         "students"
@@ -632,6 +634,10 @@ const SchoolSidebar = ({
                 onClose
               }
             />
+
+            {(canManageManagers || modulePermissions.announcements?.read) && (
+              <SidebarLink item={{ label: "الإعلانات", path: "/school/announcements", icon: <CampaignRounded /> }} mobile={mobile} onClose={onClose} />
+            )}
 
             {canManageManagers && (
               <>

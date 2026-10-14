@@ -1,3 +1,4 @@
+import AnnouncementCarousel from "@/components/Announcements/AnnouncementCarousel";
 import {
   Alert,
   Avatar,
@@ -1624,6 +1625,8 @@ const TeacherDashboard = () => {
     );
   };
 
+  const [hasAnnouncements, setHasAnnouncements] = useState(false);
+
   const handleLogout = () => {
     signOut();
     localStorage.removeItem("permissions");
@@ -2056,6 +2059,10 @@ const TeacherDashboard = () => {
               </Stack>
             </Box>
 
+            <Box sx={{ width: { xs: "100%", md: 330, lg: 350 }, flexShrink: 0, display: hasAnnouncements ? "block" : "none" }}>
+              <AnnouncementCarousel compact onHasAnnouncements={setHasAnnouncements} />
+            </Box>
+            {!hasAnnouncements && (
             <Paper
               elevation={0}
               sx={{
@@ -2188,6 +2195,7 @@ const TeacherDashboard = () => {
                 </Typography>
               )}
             </Paper>
+            )}
           </Stack>
         </Paper>
 

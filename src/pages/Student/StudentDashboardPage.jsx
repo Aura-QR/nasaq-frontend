@@ -1,3 +1,4 @@
+import AnnouncementCarousel from "@/components/Announcements/AnnouncementCarousel";
 import { useMemo } from "react";
 import {
   Box,
@@ -582,6 +583,7 @@ const StudentDashboardPage = () => {
 
   return (
     <Box dir="rtl">
+      <AnnouncementCarousel sx={{ mb: 2.3 }} />
       {/* =====================================================
           HERO
       ===================================================== */}

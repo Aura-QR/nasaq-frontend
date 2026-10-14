@@ -20,6 +20,7 @@ import {
 } from "react";
 
 const ENTITY_LABELS = {
+  announcements: "الإعلانات",
   students: "الطلاب",
   teachers: "المعلمون",
   classes: "الفصول",

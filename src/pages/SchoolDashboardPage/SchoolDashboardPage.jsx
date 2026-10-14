@@ -1,3 +1,4 @@
+import AnnouncementCarousel from "@/components/Announcements/AnnouncementCarousel";
 import {
   ArrowBackRounded,
   GroupsRounded,
@@ -475,6 +476,8 @@ const SchoolDashboardPage =
             )}
           </IconButton>
         </Stack>
+
+        <AnnouncementCarousel sx={{ mb: 1.6 }} />
 
         {error && (
           <Alert

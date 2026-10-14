@@ -55,6 +55,7 @@ import TeacherDuty from "@/pages/TeacherDuty/TeacherDuty";
 import SchoolManagersList from "@/pages/SchoolManagers/List";
 import StaffMembers from "@/pages/StaffMembers/StaffMembers";
 import SchoolManagerAdd from "@/pages/SchoolManagers/Add";
+import AnnouncementsManagement from "@/pages/Announcements/AnnouncementsManagement";
 import SchoolPermissions from "@/pages/SchoolPermissions/SchoolPermissions";
 
 import SubjectOfferings from "@/pages/SubjectOfferings/SubjectOfferings";
@@ -302,6 +303,7 @@ const AppRouter = () => {
             />
           }
         >
+          <Route path="/school/announcements" element={<RequirePermission module="announcements" operation="read"><AnnouncementsManagement /></RequirePermission>} />
           <Route
             path="/school/dashboard"
             element={<SchoolDashboard />}
