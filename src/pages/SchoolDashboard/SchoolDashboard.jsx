@@ -805,7 +805,9 @@ const SchoolDashboard = () => {
         dir="rtl"
         sx={{ pb: 4 }}
       >
-        <AnnouncementCarousel sx={{ mb: 2 }} />
+        {["MANAGER", "SUPERVISOR"].includes(role) && (
+          <AnnouncementCarousel sx={{ mb: 2 }} />
+        )}
         <Paper
           elevation={0}
           sx={{

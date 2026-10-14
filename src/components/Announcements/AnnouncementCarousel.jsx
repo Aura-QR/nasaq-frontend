@@ -33,9 +33,9 @@ export function AnnouncementCard({ slide, compact = false, variant, onVideoEnded
     <Box sx={{
       position: "relative", isolation: "isolate", overflow: "hidden", boxSizing: "border-box",
       display: "flex", flexDirection: "column", justifyContent: "flex-start", direction: "rtl", textAlign: "right",
-      minHeight: teacher ? { xs: 150, md: 142 } : { xs: 230, md: 236 },
+      minHeight: teacher ? { xs: 140, md: 128 } : { xs: 230, md: 236 },
       px: teacher ? { xs: 2.2, md: 3.2 } : { xs: 2.4, md: 3.4 },
-      pt: teacher ? 1.5 : 2.4, pb: teacher ? 4 : 5.8,
+      pt: teacher ? 1.8 : 2.4, pb: teacher ? 4 : 5.8,
       color: c.foreground,
       background: teacher ? "linear-gradient(115deg,#234b6d 0%,#1b3f60 55%,#173652 100%)" :
         "linear-gradient(112deg,#f3f8fe 0%,#edf6ff 56%,#e6f1fc 100%)",
@@ -44,7 +44,8 @@ export function AnnouncementCard({ slide, compact = false, variant, onVideoEnded
       {image && <Box component="img" src={image} alt="" sx={{ pointerEvents: "none", zIndex: -1, position: "absolute", left: 0, top: 0,
         width: teacher ? "100%" : { xs: "45%", md: "36%" }, height: "100%", objectFit: "cover", opacity: teacher ? .12 : .16,
         maskImage: "linear-gradient(to right,#000,transparent)" }} />}
-      <Stack spacing={teacher ? .7 : 1.1} sx={{ width: "100%", minWidth: 0, alignItems: "flex-start", position: "relative" }}>
+      <Stack spacing={teacher ? .8 : 1.1} direction={teacher && slide.type === "honor_roll" ? { xs: "column", md: "row" } : "column"} alignItems={teacher && slide.type === "honor_roll" ? { xs: "stretch", md: "center" } : "flex-start"} justifyContent="space-between" sx={{ width: "100%", minWidth: 0, position: "relative", gap: teacher && slide.type === "honor_roll" ? { xs: 1, md: 2.5 } : 0 }}>
+        <Box sx={{ width: teacher && slide.type === "honor_roll" ? { xs: "100%", md: "38%" } : "100%", minWidth: 0 }}>
         <Stack direction="row" alignItems="center" spacing={.8} sx={{ px: 1.1, py: .6, borderRadius: "99px",
           background: teacher ? "rgba(255,255,255,.11)" : "#dcecff", color: teacher ? c.accent : "#3276ad",
           border: teacher ? "1px solid rgba(255,255,255,.12)" : "1px solid #d1e5fa" }}>
@@ -55,7 +56,8 @@ export function AnnouncementCard({ slide, compact = false, variant, onVideoEnded
           lineHeight: 1.42, maxWidth: "100%", overflowWrap: "anywhere", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{slide.title}</Typography>
         {slide.body && <Typography sx={{ fontSize: teacher ? 12 : 13.5, lineHeight: 1.7, color: c.secondary,
           display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: teacher ? 1 : 2, overflow: "hidden" }}>{slide.body}</Typography>}
-        {slide.type === "honor_roll" && <Box sx={{ display: "grid", width: "100%", gridTemplateColumns: teacher ? { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" } : { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: .8, minWidth: 0 }}>
+        </Box>
+        {slide.type === "honor_roll" && <Box sx={{ display: "grid", width: "100%", gridTemplateColumns: teacher ? { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" } : { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: .8, minWidth: 0, ...(teacher ? { flex: 1 } : {}) }}> 
           {shownStudents.map((entry, i) => <Stack direction="row" alignItems="center" spacing={1} key={entry.studentId || `${entry.name}-${i}`} sx={{
             minWidth: 0, px: 1.3, py: teacher ? .75 : 1.1, borderRadius: "12px", border: teacher ? "1px solid rgba(255,255,255,.14)" : "1px solid #e2ecf7",
             background: teacher ? "rgba(255,255,255,.10)" : "#fff", boxShadow: studentMode ? "0 4px 14px rgba(38,86,128,.035)" : "none" }}>
