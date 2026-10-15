@@ -72,7 +72,7 @@ export function AnnouncementCard({ slide, compact = false, variant, onVideoEnded
         {teacher && slide.type === "program" && !slide.cta?.label && <Box sx={{ display: { xs: "none", md: "flex" }, minHeight: 90, alignItems: "center", justifyContent: "center", gap: 2, border: "1px solid rgba(245,217,148,.18)", borderRadius: 3, bgcolor: "rgba(255,255,255,.045)" }}><CampaignRounded sx={{ fontSize: 34, color: "#f5d994" }} /><Typography sx={{ color: "#d5e5f3", fontWeight: 700, fontSize: 13 }}>إعلان من المدرسة</Typography></Box>}
         {slide.type === "video" && video && (video.youtubeId ?
           <Box component="iframe" title={slide.title} src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(video.youtubeId)}?mute=1&playsinline=1`} allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowFullScreen sx={{ width: "100%", maxWidth: teacher ? 260 : 360, height: teacher ? 135 : 165, border: 0, borderRadius: 2 }} /> :
-          video.source === "upload" || /\.(mp4|webm)(\?|$)/i.test(video.url || "") ?
+          /\.(mp4|webm)(\?|$)/i.test(video.url || "") ?
             <Box component="video" src={announcementMediaUrl(video.url)} controls muted playsInline onPlay={() => onVideoPlayingChange?.(true)} onPause={() => onVideoPlayingChange?.(false)} onEnded={() => { onVideoPlayingChange?.(false); onVideoEnded?.(); }} sx={{ width: "100%", maxWidth: teacher ? 260 : 360, maxHeight: 165, borderRadius: 2 }} /> :
             <Button href={video.url} target="_blank" rel="noopener noreferrer">مشاهدة الفيديو</Button>)}
         {slide.type === "program" && slide.cta?.label && <Button onClick={openCTA} endIcon={<ArrowOutwardRounded sx={{ transform: "scaleX(-1)" }} />} sx={{
