@@ -14,6 +14,7 @@ import Register from "@/pages/Register/Register";
 import Onboarding from "@/pages/Onboarding/Onboarding";
 import NoAccess from "@/pages/Others/NoAccess";
 import QuickPrepPrivacy from "@/pages/Privacy/QuickPrepPrivacy";
+import AppPrivacy from "@/pages/Privacy/AppPrivacy";
 
 // =========================
 // Teacher Pages
@@ -125,6 +126,12 @@ const AppRouter = () => {
       <Route
         path="/no-access"
         element={<NoAccess />}
+      />
+
+      {/* The privacy policy linked from Google Play and the App Store. Do not remove. */}
+      <Route
+        path="/privacy"
+        element={<AppPrivacy />}
       />
 
       <Route
