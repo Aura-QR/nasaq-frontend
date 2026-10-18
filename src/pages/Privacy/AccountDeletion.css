@@ -1,0 +1,13 @@
+.account-deletion .privacy-section a:not(.deletion-action) { color: var(--color-navy); font-weight: 750; overflow-wrap: anywhere; }
+.account-deletion .privacy-section h2 svg { vertical-align: middle; margin-inline-end: 8px; color: var(--color-gold-dark); }
+.deletion-steps { padding-inline-start: 24px; margin: 12px 0 22px; }
+.deletion-steps li { padding-inline-start: 8px; margin-bottom: 10px; }
+.deletion-action { display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin-top: 18px; padding: 14px 24px; border-radius: 12px; background: var(--color-navy-deep); color: white; text-decoration: none; font-weight: 800; }
+.deletion-action:hover { filter: brightness(1.12); }
+.deletion-email-note { margin-top: 18px !important; overflow-wrap: anywhere; }
+.deletion-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.deletion-english { overflow-wrap: anywhere; }
+.deletion-english ul { padding-left: 23px; padding-right: 0; }
+.deletion-english li { margin-bottom: 10px; }
+@media (max-width: 780px) { .deletion-grid { grid-template-columns: 1fr; gap: 0; } }
+@media (max-width: 520px) { .deletion-action { width: 100%; } }

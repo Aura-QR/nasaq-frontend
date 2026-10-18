@@ -14,6 +14,8 @@ import Register from "@/pages/Register/Register";
 import Onboarding from "@/pages/Onboarding/Onboarding";
 import NoAccess from "@/pages/Others/NoAccess";
 import QuickPrepPrivacy from "@/pages/Privacy/QuickPrepPrivacy";
+import AppPrivacy from "@/pages/Privacy/AppPrivacy";
+import AccountDeletion from "@/pages/Privacy/AccountDeletion";
 
 // =========================
 // Teacher Pages
@@ -126,6 +128,10 @@ const AppRouter = () => {
         path="/no-access"
         element={<NoAccess />}
       />
+
+      <Route path="/privacy" element={<AppPrivacy />} />
+
+      <Route path="/account-deletion" element={<AccountDeletion />} />
 
       <Route
         path="/privacy/quick-prep"
