@@ -1,4 +1,3 @@
-import AccountDeletionLink from "@/components/AccountDeletionLink";
 import {
   Avatar,
   Box,
@@ -387,7 +386,6 @@ const TeacherLayout = () => {
               }}
             />
 
-            <AccountDeletionLink compact />
 
             <Tooltip title="تسجيل الخروج">
               <IconButton

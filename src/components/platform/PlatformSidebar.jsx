@@ -1,4 +1,3 @@
-import AccountDeletionLink from "@/components/AccountDeletionLink";
 import {
   ApartmentRounded,
   DashboardRounded,
@@ -409,7 +408,6 @@ const SidebarContent = ({
             SUPER_ADMIN
           </Typography>
 
-          <AccountDeletionLink light />
 
           <Button
             fullWidth

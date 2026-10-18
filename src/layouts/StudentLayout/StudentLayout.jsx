@@ -1,4 +1,3 @@
-import AccountDeletionLink from "@/components/AccountDeletionLink";
 import {
   useEffect,
   useMemo,
@@ -498,7 +497,6 @@ const StudentLayout = () => {
               </Box>
             </Stack>
 
-            <AccountDeletionLink compact />
 
             {/* LOGOUT */}
 

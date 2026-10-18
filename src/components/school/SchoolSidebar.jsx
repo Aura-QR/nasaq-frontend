@@ -1,4 +1,3 @@
-import AccountDeletionLink from "@/components/AccountDeletionLink";
 import useGradingSystem from "@/utils/hooks/useGradingSystem";
 import {
   BadgeRounded,
@@ -821,7 +820,6 @@ const SchoolSidebar = ({
             )}
           </Typography>
 
-          <AccountDeletionLink light />
 
           <Box
             component="button"

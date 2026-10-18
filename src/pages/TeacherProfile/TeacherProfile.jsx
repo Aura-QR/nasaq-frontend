@@ -1,4 +1,3 @@
-import AccountDeletionLink from "@/components/AccountDeletionLink";
 import {
   ArrowBackRounded,
   CloseRounded,
@@ -888,7 +887,6 @@ const TeacherProfile = () => {
     <Box sx={{ ...TEACHER_UI.page, minHeight: "100vh", bgcolor: "#fff" }}>
       <Box sx={{ ...TEACHER_UI.container }}>
         <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-          <AccountDeletionLink compact />
         </Box>
         <Paper
           elevation={0}

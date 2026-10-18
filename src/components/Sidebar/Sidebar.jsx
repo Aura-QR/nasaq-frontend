@@ -1,4 +1,3 @@
-import AccountDeletionLink from "@/components/AccountDeletionLink";
 import useGradingSystem from "@/utils/hooks/useGradingSystem";
 import "./Sidebar.scss";
 
@@ -42,6 +41,7 @@ import {
   Route,
   SchoolRounded,
   SettingsRounded,
+  DeleteForeverRounded,
   UpgradeRounded,
   ViewList,
 } from "@mui/icons-material";
@@ -405,6 +405,13 @@ const Sidebar = ({ active, setActive }) => {
             show:
               canManageSchoolSettings &&
               schoolSettingsPermissions.read,
+          },
+          {
+            name: "طلب حذف المدرسة بالكامل",
+            Icon: DeleteForeverRounded,
+            iconType: "mui",
+            to: "/school/delete-request",
+            show: role === "OWNER",
           },
         ],
       },
@@ -983,7 +990,6 @@ const Sidebar = ({ active, setActive }) => {
             </span>
           </div>
 
-          <AccountDeletionLink light />
 
           <button
             type="button"
