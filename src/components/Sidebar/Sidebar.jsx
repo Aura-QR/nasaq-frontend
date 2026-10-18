@@ -1,3 +1,4 @@
+import AccountDeletionLink from "@/components/AccountDeletionLink";
 import useGradingSystem from "@/utils/hooks/useGradingSystem";
 import "./Sidebar.scss";
 
@@ -981,6 +982,8 @@ const Sidebar = ({ active, setActive }) => {
               <small>{roleLabel}</small>
             </span>
           </div>
+
+          <AccountDeletionLink light />
 
           <button
             type="button"
