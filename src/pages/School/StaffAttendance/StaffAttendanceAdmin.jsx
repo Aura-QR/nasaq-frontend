@@ -451,6 +451,8 @@ const StaffAttendanceAdmin = () => {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryLoaded, setSummaryLoaded] = useState(false);
   const [summaryRows, setSummaryRows] = useState([]);
+  // The days behind «غياب» for one person, shown on click.
+  const [absenceDays, setAbsenceDays] = useState(null);
   const [summaryTotalStaff, setSummaryTotalStaff] = useState(0);
   const [summaryWorkingDays, setSummaryWorkingDays] = useState(0);
   const [summaryRange, setSummaryRange] = useState({
@@ -1509,7 +1511,25 @@ const StaffAttendanceAdmin = () => {
                       </TableCell>
 
                       <TableCell align="center">
-                        <Typography sx={{ fontSize: 10.5, fontWeight: 900, whiteSpace: "nowrap" }}>
+                        <Typography
+                          {...(Number(row?.daysAbsent) > 0 && Array.isArray(row?.absentDates)
+                            ? {
+                                role: "button",
+                                tabIndex: 0,
+                                title: "عرض أيام الغياب",
+                                onClick: () => setAbsenceDays({ name: row?.name || "", dates: row.absentDates }),
+                                onKeyDown: (e) => {
+                                  if (e.key === "Enter") setAbsenceDays({ name: row?.name || "", dates: row.absentDates });
+                                },
+                              }
+                            : {})}
+                          sx={{
+                            fontSize: 10.5, fontWeight: 900, whiteSpace: "nowrap",
+                            ...(Number(row?.daysAbsent) > 0 && Array.isArray(row?.absentDates)
+                              ? { cursor: "pointer", textDecoration: "underline", color: "#A44343" }
+                              : {}),
+                          }}
+                        >
                           غياب {Number(row?.daysAbsent) || 0}
                           {(Number(row?.daysExcused) || 0) > 0 ? ` (منها ${Number(row?.daysExcused) || 0} بعذر)` : ""}
                           {" من "}{Number(row?.workingDays ?? summaryWorkingDays) || 0}
@@ -1834,6 +1854,40 @@ const StaffAttendanceAdmin = () => {
           >
             حذف
           </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={Boolean(absenceDays)} onClose={() => setAbsenceDays(null)} dir="rtl" fullWidth maxWidth="xs">
+        <DialogTitle sx={{ fontWeight: 900 }}>أيام غياب: {absenceDays?.name}</DialogTitle>
+        <DialogContent dividers>
+          {absenceDays?.dates?.length ? (
+            <Stack spacing={1}>
+              {[...absenceDays.dates]
+                .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+                .map((day) => (
+                  <Stack key={day.date} direction="row" alignItems="center" justifyContent="space-between">
+                    <Typography fontWeight={700}>
+                      {new Intl.DateTimeFormat("ar-SA-u-ca-gregory-nu-arab", {
+                        weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
+                      }).format(new Date(`${day.date}T00:00:00Z`))}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={day.excused ? "بعذر" : "بدون عذر"}
+                      sx={{
+                        fontWeight: 800,
+                        color: day.excused ? "#237449" : "#A44343",
+                        backgroundColor: day.excused ? "rgba(116,201,154,.17)" : "rgba(201,79,79,.12)",
+                      }}
+                    />
+                  </Stack>
+                ))}
+            </Stack>
+          ) : (
+            <Typography color="text.secondary">لا توجد أيام غياب في هذه الفترة</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAbsenceDays(null)}>إغلاق</Button>
         </DialogActions>
       </Dialog>
     </Container>
