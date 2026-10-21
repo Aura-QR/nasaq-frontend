@@ -212,6 +212,7 @@ const getAssignmentOfferingId = (item) =>
 const mapTeacher = (item) => ({
   id: getId(item),
   name:
+    item?.fullName ||
     item?.name ||
     item?.username ||
     item?.email ||
