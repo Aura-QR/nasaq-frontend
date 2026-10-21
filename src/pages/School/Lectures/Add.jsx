@@ -43,7 +43,7 @@ import {
   fetchSingleClass,
 } from "@/APIs/school/classes";
 
-import { fetchSingleTeacher } from "@/APIs/users/teachers";
+import { fetchSingleTeacher, fetchTeachersList } from "@/APIs/users/teachers";
 
 import {
   addLecture,
@@ -105,6 +105,7 @@ const extractList = (response) => {
       payload?.terms,
       payload?.offerings,
       payload?.assignments,
+      payload?.teachers,
       payload?.data,
     ].find(Array.isArray) || []
   );
@@ -750,12 +751,18 @@ const Add = () => {
         .map(mapTeacher)
         .filter((teacher) => teacher.id);
 
-      setTeachers(mappedTeachers);
-
       if (mappedTeachers.length === 0) {
-        setMessage(
-          "لا يوجد معلم مسند لهذه المادة حاليًا، ويمكن حفظ الحصة بدون معلم"
-        );
+        const fallbackResponse = await fetchTeachersList();
+        if (!mounted) return;
+        if (fallbackResponse?.status === false) {
+          setMessage(fallbackResponse?.message || "تعذر تحميل قائمة المعلمين");
+          setTeachers([]);
+          return;
+        }
+        setTeachers(extractList(fallbackResponse).map(mapTeacher).filter((teacher) => teacher.id));
+        setMessage("لا يوجد معلم مسند لهذه المادة، ويمكنك اختيار أي معلم أو حفظ الحصة بدون معلم.");
+      } else {
+        setTeachers(mappedTeachers);
       }
     };
 
@@ -813,7 +820,8 @@ const Add = () => {
       teacherId:
         formData.teacherId ||
         selectedTeacherId ||
-        queryTeacherId,
+        queryTeacherId ||
+        null,
 
       dayOfWeek: normalizeDay(
         formData.dayOfWeek || queryDay
@@ -1054,8 +1062,7 @@ const Add = () => {
                 disabled={
                   setupLoading ||
                   Boolean(queryTeacherId) ||
-                  !selectedOfferingId ||
-                  teacherOptions.length === 0
+                  !selectedOfferingId
                 }
                 onChange={(value) => {
                   setSelectedTeacherId(

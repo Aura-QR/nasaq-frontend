@@ -45,7 +45,7 @@ import {
   fetchSingleClass,
 } from "@/APIs/school/classes";
 
-import { fetchSingleTeacher } from "@/APIs/users/teachers";
+import { fetchSingleTeacher, fetchTeachersList } from "@/APIs/users/teachers";
 
 import {
   editLecture,
@@ -864,10 +864,20 @@ const Edit = () => {
       const currentTeacher =
         getLectureTeacher(lectureData);
 
-      if (
-        currentTeacher &&
-        getId(currentTeacher) === selectedTeacherId
-      ) {
+      if (teacherValues.length === 0) {
+        const fallbackResponse = await fetchTeachersList();
+        if (!mounted) return;
+        if (fallbackResponse?.status === false) {
+          setMessage(fallbackResponse?.message || "تعذر تحميل قائمة المعلمين");
+          setSetupLoading(false);
+          return;
+        }
+        teacherValues.push(...extractList(fallbackResponse));
+        setMessage("لا يوجد معلم مسند لهذه المادة، ويمكنك اختيار أي معلم أو حفظ الحصة بدون معلم.");
+      }
+
+      // Always preserve the current teacher, even if no longer assigned.
+      if (currentTeacher && getId(currentTeacher)) {
         teacherValues.unshift(currentTeacher);
       }
 
@@ -925,11 +935,6 @@ const Edit = () => {
         shouldValidate: true,
       });
 
-      if (mappedTeachers.length === 0) {
-        setMessage(
-          "لا يوجد معلم مسند لهذه المادة في الترم المختار"
-        );
-      }
 
       setSetupLoading(false);
     };
@@ -988,7 +993,8 @@ const Edit = () => {
 
       teacherId:
         formData.teacherId ||
-        selectedTeacherId,
+        selectedTeacherId ||
+        null,
 
       dayOfWeek: normalizeDay(
         formData.dayOfWeek || selectedDay
@@ -1277,16 +1283,14 @@ const Edit = () => {
                 register={register}
                 registerName="teacherId"
                 error={errors.teacherId?.message}
-                label="المعلم"
-                required
+                label="المعلم (اختياري)"
                 data={teacherOptions}
                 name="name"
                 defaultValue={selectedTeacherId}
                 disabled={
                   setupLoading ||
                   isComingFromTeacher ||
-                  !selectedOfferingId ||
-                  teacherOptions.length === 0
+                  !selectedOfferingId
                 }
                 onChange={(value) => {
                   setSelectedTeacherId(value || "");
