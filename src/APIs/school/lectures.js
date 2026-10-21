@@ -509,10 +509,10 @@ export const normalizeLecturePayload = (
     slot: Number(data.slot),
   };
 
-  const teacherId = normalizeId(data.teacherId);
-
-  if (teacherId) {
-    payload.teacherId = teacherId;
+  // Keep an explicit null when clearing an existing lecture's teacher.
+  // Omitting teacherId would leave the previous teacher unchanged on PATCH.
+  if (Object.prototype.hasOwnProperty.call(data, "teacherId")) {
+    payload.teacherId = normalizeId(data.teacherId) || null;
   }
 
   return payload;
