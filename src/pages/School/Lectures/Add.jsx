@@ -817,11 +817,8 @@ const Add = () => {
       termId:
         formData.termId || selectedTermId,
 
-      teacherId:
-        formData.teacherId ||
-        selectedTeacherId ||
-        queryTeacherId ||
-        null,
+      // Keep an intentional "no teacher" selection as null.
+      teacherId: formData.teacherId ? formData.teacherId : null,
 
       dayOfWeek: normalizeDay(
         formData.dayOfWeek || queryDay

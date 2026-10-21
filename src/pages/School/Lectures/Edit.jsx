@@ -991,10 +991,9 @@ const Edit = () => {
       termId:
         formData.termId || selectedTermId,
 
-      teacherId:
-        formData.teacherId ||
-        selectedTeacherId ||
-        null,
+      // An explicit empty selection means "no teacher".
+      // Do not fall back to the previously selected teacher.
+      teacherId: formData.teacherId ? formData.teacherId : null,
 
       dayOfWeek: normalizeDay(
         formData.dayOfWeek || selectedDay
