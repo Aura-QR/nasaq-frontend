@@ -27,9 +27,11 @@ import {
   ScheduleRounded,
   SchoolRounded,
   TaskAltRounded,
+  BadgeRounded,
 } from "@mui/icons-material";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { useAuthUser } from "react-auth-kit";
+import { isSaudiStudent } from "@/APIs/school/residencyDocuments";
 import {
   useStudentAttendance,
   useStudentExams,
@@ -288,6 +290,12 @@ const MORE_ACTIONS = [
     title: "الحضور",
     icon: HowToRegRounded,
     path: "/student-dashboard/attendance",
+  },
+  {
+    title: "وثيقة الإقامة",
+    icon: BadgeRounded,
+    path: "/student-dashboard/residency",
+    nonSaudiOnly: true,
   },
   {
     title: "سجلي المالي",
@@ -1258,7 +1266,7 @@ const StudentDashboardPage = () => {
             gap: 0.8,
           }}
         >
-          {MORE_ACTIONS.map((action) => {
+          {MORE_ACTIONS.filter((action) => !action.nonSaudiOnly || (studentProfile && !isSaudiStudent(studentProfile))).map((action) => {
             const Icon = action.icon;
 
             return (

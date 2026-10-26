@@ -14,6 +14,7 @@ import Library from "@/pages/Student/Library";
 import Attendance from "@/pages/Student/Attendance";
 import SubjectGrades from "@/pages/Student/SubjectGrades";
 import PreparationView from "@/pages/Student/PreparationView";
+import MyResidency from "@/pages/Student/MyResidency";
 
 // =========================
 // Quiz Pages
@@ -216,6 +217,11 @@ export const studentRoutes = (
         <Route
           path="/student-dashboard/attendance"
           element={<Attendance />}
+        />
+
+        <Route
+          path="/student-dashboard/residency"
+          element={<MyResidency />}
         />
 
         {/* =========================

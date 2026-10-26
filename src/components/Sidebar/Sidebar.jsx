@@ -290,6 +290,13 @@ const Sidebar = ({ active, setActive }) => {
             show: studentsPermissions.read,
           },
           {
+            name: "وثائق الإقامة",
+            Icon: BadgeRounded,
+            iconType: "mui",
+            to: "/users/students/residency-documents",
+            show: studentsPermissions.read,
+          },
+          {
             name: "إدارة المعلمين",
             icon: teacherIcon,
             to: "/users/teachers",

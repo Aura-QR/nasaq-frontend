@@ -84,6 +84,14 @@ const SUMMARY_CARDS = [
   { key: "unspecifiedNationality", label: "غير محدد الجنسية" },
 ];
 
+// كل مجموعة تفتح أسماء طلابها، والرابط إلى صفحة الطالب حيث تُرفع الوثيقة.
+const RESIDENCY_GROUPS = [
+  { key: "missing", label: "بدون وثيقة", color: "error", title: "طلاب غير سعوديين بدون وثيقة إقامة", hint: "افتح صفحة الطالب وارفع الوثيقة، أو اطلب من ولي الأمر رفعها من التطبيق." },
+  { key: "pending", label: "قيد المراجعة", color: "warning", title: "وثائق رفعها الطلاب بانتظار المراجعة", hint: "افتح صفحة الطالب لمراجعة الوثيقة وقبولها أو رفضها." },
+  { key: "expired", label: "منتهية", color: "error", title: "طلاب انتهت وثيقة إقامتهم", hint: "يلزم رفع وثيقة سارية.", showExpiry: true },
+  { key: "expiringSoon", label: "تنتهي خلال 30 يومًا", color: "warning", title: "وثائق تنتهي خلال 30 يومًا", hint: "يُستحسن تذكير ولي الأمر بتجديد الوثيقة.", showExpiry: true },
+].map((g) => ({ ...g, linkOf: (st) => `/users/students/${st._id}`, linkLabel: "صفحة الطالب" }));
+
 const unwrap = (response) => response?.data?.total ? response.data : response;
 
 const percent = (count, total) =>
@@ -156,7 +164,15 @@ const StudentStatistics = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [detailed, setDetailed] = useState(false);
-  const [showUnspecified, setShowUnspecified] = useState(false);
+  const [listDialog, setListDialog] = useState(null);
+  const openUnspecified = () =>
+    setListDialog({
+      title: "طلاب لم تُحدَّد جنسيتهم",
+      hint: "افتح بيانات الطالب واختر الجنسية ثم احفظ، وستتحدّث الإحصائيات تلقائيًا.",
+      rows: data?.unspecifiedStudents ?? [],
+      linkOf: (st) => `/users/students/edit/${st._id}`,
+      linkLabel: "تعديل",
+    });
 
   // The unfiltered call feeds the filter lists, so they never shrink to the
   // current selection.
@@ -239,6 +255,7 @@ const StudentStatistics = () => {
   }));
 
   const total = data?.total;
+  const residency = data?.residency;
 
   // The API lists classes by name; a report reads them stage by stage, grade by grade.
   const classRows = useMemo(() => {
@@ -341,7 +358,7 @@ const StudentStatistics = () => {
             <Paper
               className="stats-section"
               variant="outlined"
-              onClick={card.key === "unspecifiedNationality" && total?.unspecifiedNationality ? () => setShowUnspecified(true) : undefined}
+              onClick={card.key === "unspecifiedNationality" && total?.unspecifiedNationality ? openUnspecified : undefined}
               sx={{
                 p: 1.5,
                 borderRadius: 2,
@@ -453,34 +470,71 @@ const StudentStatistics = () => {
           <Alert
             severity="warning"
             sx={{ mb: 2, fontWeight: 700 }}
-            action={<Button color="inherit" sx={{ fontWeight: 900 }} onClick={() => setShowUnspecified(true)}>عرض الأسماء</Button>}
+            action={<Button color="inherit" sx={{ fontWeight: 900 }} onClick={openUnspecified}>عرض الأسماء</Button>}
           >
             يوجد {data.unspecifiedStudents.length} من الطلاب لم تُحدَّد جنسيتهم، ولا يُحتسبون ضمن السعوديين ولا غير السعوديين.
           </Alert>
         )}
 
-        <Dialog open={showUnspecified} onClose={() => setShowUnspecified(false)} fullWidth maxWidth="sm" dir="rtl">
-          <DialogTitle sx={{ fontWeight: 900 }}>طلاب لم تُحدَّد جنسيتهم</DialogTitle>
+        {residency?.nonSaudi > 0 && (
+          <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1.2} flexWrap="wrap" gap={1}>
+              <Typography sx={{ fontWeight: 900 }}>وثائق إقامة الطلاب غير السعوديين</Typography>
+              <Typography color="text.secondary" sx={{ fontSize: 13, fontWeight: 700 }}>
+                سارية: {residency.valid} من {residency.nonSaudi}
+              </Typography>
+            </Stack>
+            <Grid container spacing={1.2}>
+              {RESIDENCY_GROUPS.map((g) => {
+                const rows = residency[g.key] ?? [];
+                return (
+                  <Grid item xs={6} md={3} key={g.key}>
+                    <Paper
+                      variant="outlined"
+                      onClick={rows.length ? () => setListDialog({ ...g, rows }) : undefined}
+                      sx={{
+                        p: 1.3,
+                        borderRadius: 2,
+                        textAlign: "center",
+                        borderColor: rows.length ? `${g.color}.main` : undefined,
+                        cursor: rows.length ? "pointer" : "default",
+                        "&:hover": rows.length ? { bgcolor: "#fafafa" } : undefined,
+                      }}
+                    >
+                      <Typography color="text.secondary" sx={{ fontWeight: 800, fontSize: 13 }}>{g.label}</Typography>
+                      <Typography sx={{ fontWeight: 900, fontSize: 24 }}>{rows.length}</Typography>
+                    </Paper>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          </Paper>
+        )}
+
+        <Dialog open={!!listDialog} onClose={() => setListDialog(null)} fullWidth maxWidth="sm" dir="rtl">
+          <DialogTitle sx={{ fontWeight: 900 }}>{listDialog?.title}</DialogTitle>
           <DialogContent dividers>
-            <Typography color="text.secondary" sx={{ mb: 1.5, fontSize: 14 }}>
-              افتح بيانات الطالب واختر الجنسية ثم احفظ، وستتحدّث الإحصائيات تلقائيًا.
-            </Typography>
+            <Typography color="text.secondary" sx={{ mb: 1.5, fontSize: 14 }}>{listDialog?.hint}</Typography>
             <Table size="small">
               <TableHead>
                 <TableRow>
                   <TableCell sx={headCellSx}>الطالب</TableCell>
                   <TableCell sx={headCellSx}>الفصل</TableCell>
+                  {listDialog?.showExpiry && <TableCell sx={headCellSx}>تاريخ الانتهاء</TableCell>}
                   <TableCell sx={headCellSx} />
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(data?.unspecifiedStudents ?? []).map((st) => (
+                {(listDialog?.rows ?? []).map((st) => (
                   <TableRow key={st._id}>
                     <TableCell sx={cellSx}>{st.name}</TableCell>
                     <TableCell sx={cellSx}>{st.className ?? "—"}</TableCell>
+                    {listDialog?.showExpiry && (
+                      <TableCell sx={cellSx}>{st.expiryDate ? new Date(st.expiryDate).toLocaleDateString("ar-SA-u-ca-gregory") : "—"}</TableCell>
+                    )}
                     <TableCell sx={cellSx}>
-                      <Button size="small" variant="outlined" component={Link} to={`/users/students/edit/${st._id}`} sx={{ fontWeight: 800 }}>
-                        تعديل
+                      <Button size="small" variant="outlined" component={Link} to={listDialog.linkOf(st)} sx={{ fontWeight: 800 }}>
+                        {listDialog.linkLabel}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -489,7 +543,7 @@ const StudentStatistics = () => {
             </Table>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setShowUnspecified(false)} sx={{ fontWeight: 800 }}>إغلاق</Button>
+            <Button onClick={() => setListDialog(null)} sx={{ fontWeight: 800 }}>إغلاق</Button>
           </DialogActions>
         </Dialog>
 

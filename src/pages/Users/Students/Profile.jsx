@@ -52,6 +52,8 @@ import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import Back from "@/components/Back/Back";
 import Popup from "@/components/Popup/Popup";
+import StudentResidencyPanel from "@/components/Residency/StudentResidencyPanel";
+import { isSaudiStudent } from "@/APIs/school/residencyDocuments";
 
 import {
   deleteStudent,
@@ -595,6 +597,13 @@ const Profile = () => {
         <StudentDetails
           student={displayStudent}
         />
+
+        {displayStudent?._id && !isSaudiStudent(displayStudent) && (
+          <StudentResidencyPanel
+            studentId={displayStudent._id}
+            canEdit={!!permissions.edit}
+          />
+        )}
       </Stack>
 
       <Popup
