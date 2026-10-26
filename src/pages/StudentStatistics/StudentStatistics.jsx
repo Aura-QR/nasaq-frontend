@@ -3,6 +3,10 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   Grid,
   MenuItem,
@@ -28,6 +32,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuthUser } from "react-auth-kit";
+import { Link } from "react-router-dom";
 
 import Container from "@/components/Container/Container";
 import { fetchStudentStatistics } from "@/APIs/school/students";
@@ -151,6 +156,7 @@ const StudentStatistics = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [detailed, setDetailed] = useState(false);
+  const [showUnspecified, setShowUnspecified] = useState(false);
 
   // The unfiltered call feeds the filter lists, so they never shrink to the
   // current selection.
@@ -332,7 +338,19 @@ const StudentStatistics = () => {
       <Grid container spacing={1.5} mb={2}>
         {SUMMARY_CARDS.map((card) => (
           <Grid item xs={6} sm={4} md={2} key={card.key}>
-            <Paper className="stats-section" variant="outlined" sx={{ p: 1.5, borderRadius: 2, textAlign: "center" }}>
+            <Paper
+              className="stats-section"
+              variant="outlined"
+              onClick={card.key === "unspecifiedNationality" && total?.unspecifiedNationality ? () => setShowUnspecified(true) : undefined}
+              sx={{
+                p: 1.5,
+                borderRadius: 2,
+                textAlign: "center",
+                ...(card.key === "unspecifiedNationality" && total?.unspecifiedNationality
+                  ? { cursor: "pointer", borderColor: "warning.main", "&:hover": { bgcolor: "#fff8e1" } }
+                  : {}),
+              }}
+            >
               <Typography color="text.secondary" sx={{ fontWeight: 800, fontSize: 13 }}>{card.label}</Typography>
               <Typography sx={{ fontWeight: 900, fontSize: 26 }}>{total?.[card.key] ?? 0}</Typography>
               {card.key !== "total" && (
@@ -430,6 +448,50 @@ const StudentStatistics = () => {
         </Paper>
 
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+        {data?.unspecifiedStudents?.length > 0 && (
+          <Alert
+            severity="warning"
+            sx={{ mb: 2, fontWeight: 700 }}
+            action={<Button color="inherit" sx={{ fontWeight: 900 }} onClick={() => setShowUnspecified(true)}>عرض الأسماء</Button>}
+          >
+            يوجد {data.unspecifiedStudents.length} من الطلاب لم تُحدَّد جنسيتهم، ولا يُحتسبون ضمن السعوديين ولا غير السعوديين.
+          </Alert>
+        )}
+
+        <Dialog open={showUnspecified} onClose={() => setShowUnspecified(false)} fullWidth maxWidth="sm" dir="rtl">
+          <DialogTitle sx={{ fontWeight: 900 }}>طلاب لم تُحدَّد جنسيتهم</DialogTitle>
+          <DialogContent dividers>
+            <Typography color="text.secondary" sx={{ mb: 1.5, fontSize: 14 }}>
+              افتح بيانات الطالب واختر الجنسية ثم احفظ، وستتحدّث الإحصائيات تلقائيًا.
+            </Typography>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={headCellSx}>الطالب</TableCell>
+                  <TableCell sx={headCellSx}>الفصل</TableCell>
+                  <TableCell sx={headCellSx} />
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(data?.unspecifiedStudents ?? []).map((st) => (
+                  <TableRow key={st._id}>
+                    <TableCell sx={cellSx}>{st.name}</TableCell>
+                    <TableCell sx={cellSx}>{st.className ?? "—"}</TableCell>
+                    <TableCell sx={cellSx}>
+                      <Button size="small" variant="outlined" component={Link} to={`/users/students/edit/${st._id}`} sx={{ fontWeight: 800 }}>
+                        تعديل
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setShowUnspecified(false)} sx={{ fontWeight: 800 }}>إغلاق</Button>
+          </DialogActions>
+        </Dialog>
 
         {loading && !data ? (
           <Stack alignItems="center" py={6}><CircularProgress /></Stack>
