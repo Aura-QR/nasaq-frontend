@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Paper,
@@ -27,6 +28,8 @@ import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import StudentForm from "@/components/Students/StudentForm";
 import StudentFormActions from "@/components/Students/StudentFormActions";
+import StudentResidencyPanel from "@/components/Residency/StudentResidencyPanel";
+import { isSaudiStudent } from "@/APIs/school/residencyDocuments";
 
 import { editStudent } from "@/APIs/users/students";
 
@@ -74,7 +77,11 @@ const Edit = () => {
     formState: { errors },
     reset,
     setValue,
+    watch,
   } = useForm();
+
+  const selectedNationality = watch("nationality");
+  const selectedNationalityCode = watch("nationalityCode");
 
   const [loading, setLoading] =
     useState(false);
@@ -480,6 +487,20 @@ const Edit = () => {
                 loading={loading}
                 submitLabel="حفظ التعديلات"
               />
+
+              {/* The section follows the saved nationality: the server checks
+                  the stored record, so an unsaved change cannot upload yet. */}
+              {student?._id && !isSaudiStudent(student) ? (
+                <StudentResidencyPanel studentId={student._id} canEdit />
+              ) : (
+                student?._id &&
+                (selectedNationality || selectedNationalityCode) &&
+                !isSaudiStudent({ nationality: selectedNationality, nationalityCode: selectedNationalityCode }) && (
+                  <Alert severity="info">
+                    بعد حفظ الجنسية الجديدة يظهر قسم «وثيقة الإقامة» لرفع إقامة الطالب أو تأشيرة الزيارة.
+                  </Alert>
+                )
+              )}
             </>
           )}
         </Stack>
