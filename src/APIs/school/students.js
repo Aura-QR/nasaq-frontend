@@ -436,3 +436,30 @@ export const adminSetStudentPassword =
     }
   };
 
+
+/**
+ * Head counts of the active year's students by stage, grade, class, gender
+ * and nationality. Every breakdown follows the filters given.
+ */
+export const fetchStudentStatistics =
+  async (filters = {}) => {
+    const params = Object.fromEntries(
+      Object.entries(filters).filter(
+        ([, value]) => value !== undefined && value !== null && value !== ""
+      )
+    );
+
+    try {
+      const response = await api.get(
+        `${ENDPOINT}/statistics`,
+        { params }
+      );
+
+      return response.data;
+    } catch (error) {
+      return getApiError(
+        error,
+        "تعذر تحميل إحصائيات الطلاب"
+      );
+    }
+  };

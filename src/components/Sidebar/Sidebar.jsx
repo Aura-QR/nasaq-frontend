@@ -283,6 +283,13 @@ const Sidebar = ({ active, setActive }) => {
             show: studentsPermissions.read,
           },
           {
+            name: "إحصائيات الطلاب",
+            Icon: InsightsRounded,
+            iconType: "mui",
+            to: "/users/students/statistics",
+            show: studentsPermissions.read,
+          },
+          {
             name: "إدارة المعلمين",
             icon: teacherIcon,
             to: "/users/teachers",
@@ -1063,7 +1070,15 @@ const Category = ({ category, pathname, setActive }) => {
       <Collapse in={open}>
         <Stack spacing={0.7} mt={0.8}>
           {visibleItems.map((item) => (
-            <Item key={item.to} element={item} setActive={setActive} />
+            <Item
+              key={item.to}
+              element={item}
+              setActive={setActive}
+              pathname={pathname}
+              shadowedBy={visibleItems
+                .map((other) => other.to)
+                .filter((to) => to !== item.to && to.startsWith(`${item.to}/`))}
+            />
           ))}
         </Stack>
       </Collapse>
@@ -1071,7 +1086,9 @@ const Category = ({ category, pathname, setActive }) => {
   );
 };
 
-const Item = ({ element, setActive }) => {
+// An item stays lit on its sub-pages (a student's profile under «إدارة الطلاب»),
+// but not on a sub-page that has its own item («إحصائيات الطلاب»).
+const Item = ({ element, setActive, pathname = "", shadowedBy = [] }) => {
   const [hovered, setHovered] =
     useState(false);
   const IconComponent = element.Icon;
@@ -1079,9 +1096,12 @@ const Item = ({ element, setActive }) => {
   return (
     <NavLink
       to={element.to}
-      className={({ isActive }) =>
-        `item${isActive ? " active" : ""}`
-      }
+      className={({ isActive }) => {
+        const shadowed = shadowedBy.some(
+          (to) => pathname === to || pathname.startsWith(`${to}/`)
+        );
+        return `item${isActive && !shadowed ? " active" : ""}`;
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => {

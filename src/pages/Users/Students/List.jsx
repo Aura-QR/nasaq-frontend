@@ -12,6 +12,7 @@ import {
   AddCircleOutlineOutlined,
   CheckCircleRounded,
   FileDownloadOutlined,
+  InsightsRounded,
   Groups2Rounded,
   PeopleAltRounded,
   SchoolRounded,
@@ -903,6 +904,35 @@ const List = () => {
           تصدير
         </Button>
       </Box>
+
+      <Button
+        component={Link}
+        to="statistics"
+        variant="outlined"
+        startIcon={<InsightsRounded />}
+        sx={{
+          width: { xs: "100%", sm: "auto" },
+          minHeight: 42,
+          px: 1.8,
+          borderRadius: "12px",
+          color: "var(--color-navy)",
+          backgroundColor: "rgba(255, 252, 247, 0.84)",
+          borderColor: "rgba(36, 74, 112, 0.16)",
+          fontSize: "12px",
+          fontWeight: 800,
+          whiteSpace: "nowrap",
+          textTransform: "none",
+          "& .MuiButton-startIcon": { marginLeft: "7px", marginRight: 0 },
+          "& svg": { fontSize: "18px" },
+          "&:hover": {
+            color: "var(--color-gold-dark)",
+            backgroundColor: "var(--color-gold-soft)",
+            borderColor: "rgba(211, 164, 79, 0.42)",
+          },
+        }}
+      >
+        الإحصائيات
+      </Button>
 
       {permissions.add && (
         <Button

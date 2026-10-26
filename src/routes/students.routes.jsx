@@ -7,6 +7,7 @@ import Students_List from "../pages/Users/Students/List";
 import Students_Profile from "../pages/Users/Students/Profile";
 import Students_Add from "../pages/Users/Students/Add";
 import Students_Edit from "../pages/Users/Students/Edit";
+import StudentStatistics from "../pages/StudentStatistics/StudentStatistics";
 
 export const studentsRoutes = (
   <>
@@ -14,6 +15,14 @@ export const studentsRoutes = (
       <RequireAuth loginPath="/">
         <RequirePermission module="students" operation="read">
           <Students_List />
+        </RequirePermission>
+      </RequireAuth>
+    } />
+
+    <Route path="/users/students/statistics" element={
+      <RequireAuth loginPath="/">
+        <RequirePermission module="students" operation="read">
+          <StudentStatistics />
         </RequirePermission>
       </RequireAuth>
     } />
