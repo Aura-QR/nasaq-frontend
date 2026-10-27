@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { LATE_REASON_EVENT } from "./AttendanceAlerts";
 import {
   Badge,
   Box,
@@ -387,6 +388,12 @@ const NotificationBell = ({
     if (destination) {
       setAnchor(null);
       navigate(destination);
+    }
+
+    // The check-in screen holds no form of its own; the reason is asked in
+    // AttendanceAlerts' dialog. Ask now, even if it was put off with «لاحقًا».
+    if (item.type === "late_reason_required") {
+      window.dispatchEvent(new Event(LATE_REASON_EVENT));
     }
   };
 

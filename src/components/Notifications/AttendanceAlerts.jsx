@@ -92,6 +92,13 @@ import {
  * the phone away.
  */
 export const LATE_REASON_EVENT = "nasaq:late-reason-check";
+
+/** «الاثنين 26 أكتوبر» for a lateness asked about on a later day. */
+const formatLateDay = (isoDate) => {
+  const date = new Date(`${isoDate}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return isoDate;
+  return date.toLocaleDateString("ar-SA-u-ca-gregory", { weekday: "long", day: "numeric", month: "long" });
+};
 /**
  * Fired when a student/parent taps an absence notification in the bell.
  *
@@ -623,7 +630,9 @@ const AttendanceAlerts = () => {
 
         <DialogContent>
           <Typography sx={{ fontSize: 13.5, color: "#4a5560", lineHeight: 1.9 }}>
-            سُجّل تأخيرك اليوم{" "}
+            {lateness?.isToday === false && lateness?.date
+              ? `سُجّل تأخيرك يوم ${formatLateDay(lateness.date)} مدة `
+              : "سُجّل تأخيرك اليوم "}
             <strong>{lateness?.lateMinutes ?? 0} دقيقة</strong>. يُرجى بيان
             السبب ليصل إلى إدارة المدرسة مرفقًا بسجل الحضور.
           </Typography>
