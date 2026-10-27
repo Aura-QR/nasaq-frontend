@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Paper,
@@ -23,6 +24,9 @@ import Container from "@/components/Container/Container";
 import StudentForm from "@/components/Students/StudentForm";
 import StudentFormActions from "@/components/Students/StudentFormActions";
 import GeneratedCredentialsDialog from "@/components/GeneratedCredentialsDialog/GeneratedCredentialsDialog";
+import { ResidencyFields } from "@/components/Residency/ResidencyParts";
+import { RESIDENCY_EMPTY, residencyProblem, residencyTouched } from "@/components/Residency/residencyConstants";
+import { isSaudiStudent, uploadStudentResidency } from "@/APIs/school/residencyDocuments";
 
 import {
   addStudent,
@@ -106,6 +110,7 @@ const Add = () => {
     handleSubmit,
     formState: { errors },
     setValue,
+    watch,
   } = useForm({
     defaultValues: {
       registrationDate: new Date()
@@ -118,6 +123,17 @@ const Add = () => {
 
   const [loading, setLoading] =
     useState(false);
+
+  // A non-Saudi student's residency document, uploaded right after the
+  // student is created (the document needs the student's id).
+  const selectedNationality = watch("nationality");
+  const selectedNationalityCode = watch("nationalityCode");
+  const needsResidency =
+    Boolean(selectedNationality || selectedNationalityCode) &&
+    !isSaudiStudent({ nationality: selectedNationality, nationalityCode: selectedNationalityCode });
+  const [residencyValues, setResidencyValues] = useState(RESIDENCY_EMPTY);
+  const [residencyFiles, setResidencyFiles] = useState([]);
+  const [residencyError, setResidencyError] = useState("");
 
   const [
     busPlans,
@@ -230,6 +246,18 @@ const Add = () => {
   const onSubmit = async (
     formData
   ) => {
+    // Optional, but if begun it must be complete — otherwise the student is
+    // created and the document silently dropped.
+    const withResidency = needsResidency && residencyTouched(residencyValues, residencyFiles);
+    if (withResidency) {
+      const problem = residencyProblem(residencyValues, residencyFiles);
+      if (problem) {
+        setResidencyError(problem);
+        toast.error(`وثيقة الإقامة: ${problem}`);
+        return;
+      }
+    }
+
     try {
       setLoading(true);
 
@@ -345,6 +373,20 @@ const Add = () => {
         toast.warning(
           busWarning
         );
+      }
+
+      if (withResidency) {
+        const uploaded = await uploadStudentResidency(studentId, residencyValues, residencyFiles);
+        if (uploaded?.status === false) {
+          toast.warning(
+            `تمت إضافة الطالب، لكن تعذر رفع وثيقة الإقامة: ${uploaded.message}. يمكن رفعها من صفحة الطالب.`,
+            { autoClose: false }
+          );
+        } else {
+          toast.success("تم رفع وثيقة الإقامة واعتمادها");
+          setResidencyValues(RESIDENCY_EMPTY);
+          setResidencyFiles([]);
+        }
       }
 
       // Kept open until dismissed: this one needs somebody to act on it, and
@@ -529,6 +571,25 @@ const Add = () => {
             busPlanOptions={busPlanOptions}
             busPlansLoading={busPlansLoading}
           />
+
+          {needsResidency && (
+            <Paper elevation={0} sx={{ p: { xs: 1.5, md: 2 }, borderRadius: "20px", border: "1px solid rgba(36, 74, 112, 0.08)" }}>
+              <Typography sx={{ fontWeight: 900, fontSize: 16, color: "var(--color-navy-deep)" }}>
+                وثيقة الإقامة (اختياري)
+              </Typography>
+              <Typography sx={{ color: "var(--color-muted)", fontSize: 12, mb: 2 }}>
+                إقامة أو تأشيرة زيارة أو جواز سفر للطالب غير السعودي. تُرفع بعد حفظ الطالب وتُعتمد مباشرة، ويمكن رفعها لاحقًا من صفحة الطالب.
+              </Typography>
+              <ResidencyFields
+                values={residencyValues}
+                setValues={setResidencyValues}
+                files={residencyFiles}
+                setFiles={setResidencyFiles}
+                setError={setResidencyError}
+              />
+              {residencyError && <Alert severity="error" sx={{ mt: 1.5 }}>{residencyError}</Alert>}
+            </Paper>
+          )}
 
           <StudentFormActions
             loading={loading}

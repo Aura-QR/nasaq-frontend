@@ -26,33 +26,15 @@ import { toast } from "react-toastify";
 
 import { openResidencyFile } from "@/APIs/school/residencyDocuments";
 
-import { RESIDENCY_TYPES, STATUS_META, formatDay } from "./residencyConstants";
+import { RESIDENCY_EMPTY, RESIDENCY_TYPES, STATUS_META, formatDay, residencyProblem } from "./residencyConstants";
 
 const MAX_FILES = 2;
 const MAX_SIZE = 10 * 1024 * 1024;
 const ACCEPT = "image/jpeg,image/png,image/webp,image/heic,application/pdf";
 
-const EMPTY = { type: "iqama", otherTypeLabel: "", documentNumber: "", issueDate: "", expiryDate: "" };
-
-/**
- * نموذج رفع وثيقة إقامة، يستخدمه الطالب والمدرسة.
- * onSubmit(values, files) يعيد استجابة الخادم.
- */
-export const ResidencyUploadDialog = ({ open, onClose, onSubmit, title = "رفع وثيقة إقامة", note }) => {
-  const [values, setValues] = useState(EMPTY);
-  const [files, setFiles] = useState([]);
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
+/** حقول وثيقة الإقامة (النوع والرقم والتواريخ والملفات)، تُستخدم في نافذة الرفع وفي إضافة طالب. */
+export const ResidencyFields = ({ values, setValues, files, setFiles, setError }) => {
   const set = (key) => (e) => setValues((prev) => ({ ...prev, [key]: e.target.value }));
-
-  const close = () => {
-    if (saving) return;
-    setValues(EMPTY);
-    setFiles([]);
-    setError("");
-    onClose();
-  };
 
   const pickFiles = (e) => {
     const picked = Array.from(e.target.files || []);
@@ -66,12 +48,59 @@ export const ResidencyUploadDialog = ({ open, onClose, onSubmit, title = "رفع
     setFiles((prev) => [...prev, ...picked].slice(0, MAX_FILES));
   };
 
+  return (
+    <Stack spacing={2}>
+      <TextField select label="نوع الوثيقة" value={values.type} onChange={set("type")} fullWidth>
+        {RESIDENCY_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+      </TextField>
+      {values.type === "other" && (
+        <TextField label="اسم الوثيقة" value={values.otherTypeLabel} onChange={set("otherTypeLabel")} inputProps={{ maxLength: 60 }} fullWidth />
+      )}
+      <TextField label="رقم الوثيقة (اختياري)" value={values.documentNumber} onChange={set("documentNumber")} inputProps={{ maxLength: 40 }} fullWidth />
+      <Stack direction={{ xs: "column", sm: "row" }} gap={2}>
+        <TextField type="date" label="تاريخ الإصدار (اختياري)" value={values.issueDate} onChange={set("issueDate")} InputLabelProps={{ shrink: true }} fullWidth />
+        <TextField type="date" label="تاريخ الانتهاء (اختياري)" value={values.expiryDate} onChange={set("expiryDate")} InputLabelProps={{ shrink: true }} fullWidth />
+      </Stack>
+
+      <Box>
+        <Button component="label" variant="outlined" startIcon={<CloudUploadRounded />} disabled={files.length >= MAX_FILES} sx={{ fontWeight: 800 }}>
+          إرفاق صورة أو PDF
+          <input hidden type="file" accept={ACCEPT} multiple onChange={pickFiles} />
+        </Button>
+        <Typography color="text.secondary" sx={{ fontSize: 12, mt: 0.7 }}>
+          ملفان بحد أقصى (وجه الوثيقة وظهرها)، وحجم كل ملف حتى 10 ميجابايت.
+        </Typography>
+        <Stack direction="row" gap={1} flexWrap="wrap" mt={1}>
+          {files.map((f, i) => (
+            <Chip key={i} icon={<AttachFileRounded />} label={f.name} onDelete={() => setFiles((prev) => prev.filter((_, j) => j !== i))} />
+          ))}
+        </Stack>
+      </Box>
+    </Stack>
+  );
+};
+
+/**
+ * نموذج رفع وثيقة إقامة، يستخدمه الطالب والمدرسة.
+ * onSubmit(values, files) يعيد استجابة الخادم.
+ */
+export const ResidencyUploadDialog = ({ open, onClose, onSubmit, title = "رفع وثيقة إقامة", note }) => {
+  const [values, setValues] = useState(RESIDENCY_EMPTY);
+  const [files, setFiles] = useState([]);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const close = () => {
+    if (saving) return;
+    setValues(RESIDENCY_EMPTY);
+    setFiles([]);
+    setError("");
+    onClose();
+  };
+
   const submit = async () => {
-    if (!files.length) return setError("يرجى إرفاق صورة الوثيقة");
-    if (values.type === "other" && !values.otherTypeLabel.trim()) return setError("يرجى كتابة اسم الوثيقة");
-    if (values.issueDate && values.expiryDate && values.expiryDate <= values.issueDate) {
-      return setError("تاريخ الانتهاء يجب أن يكون بعد تاريخ الإصدار");
-    }
+    const problem = residencyProblem(values, files);
+    if (problem) return setError(problem);
     setSaving(true);
     setError("");
     const response = await onSubmit(values, files);
@@ -81,7 +110,7 @@ export const ResidencyUploadDialog = ({ open, onClose, onSubmit, title = "رفع
       return;
     }
     toast.success("تم رفع الوثيقة");
-    setValues(EMPTY);
+    setValues(RESIDENCY_EMPTY);
     setFiles([]);
     onClose(true);
   };
@@ -92,33 +121,7 @@ export const ResidencyUploadDialog = ({ open, onClose, onSubmit, title = "رفع
       <DialogContent dividers>
         <Stack spacing={2}>
           {note && <Alert severity="info">{note}</Alert>}
-          <TextField select label="نوع الوثيقة" value={values.type} onChange={set("type")} fullWidth>
-            {RESIDENCY_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
-          </TextField>
-          {values.type === "other" && (
-            <TextField label="اسم الوثيقة" value={values.otherTypeLabel} onChange={set("otherTypeLabel")} inputProps={{ maxLength: 60 }} fullWidth />
-          )}
-          <TextField label="رقم الوثيقة (اختياري)" value={values.documentNumber} onChange={set("documentNumber")} inputProps={{ maxLength: 40 }} fullWidth />
-          <Stack direction={{ xs: "column", sm: "row" }} gap={2}>
-            <TextField type="date" label="تاريخ الإصدار (اختياري)" value={values.issueDate} onChange={set("issueDate")} InputLabelProps={{ shrink: true }} fullWidth />
-            <TextField type="date" label="تاريخ الانتهاء (اختياري)" value={values.expiryDate} onChange={set("expiryDate")} InputLabelProps={{ shrink: true }} fullWidth />
-          </Stack>
-
-          <Box>
-            <Button component="label" variant="outlined" startIcon={<CloudUploadRounded />} disabled={files.length >= MAX_FILES} sx={{ fontWeight: 800 }}>
-              إرفاق صورة أو PDF
-              <input hidden type="file" accept={ACCEPT} multiple onChange={pickFiles} />
-            </Button>
-            <Typography color="text.secondary" sx={{ fontSize: 12, mt: 0.7 }}>
-              ملفان بحد أقصى (وجه الوثيقة وظهرها)، وحجم كل ملف حتى 10 ميجابايت.
-            </Typography>
-            <Stack direction="row" gap={1} flexWrap="wrap" mt={1}>
-              {files.map((f, i) => (
-                <Chip key={i} icon={<AttachFileRounded />} label={f.name} onDelete={() => setFiles((prev) => prev.filter((_, j) => j !== i))} />
-              ))}
-            </Stack>
-          </Box>
-
+          <ResidencyFields values={values} setValues={setValues} files={files} setFiles={setFiles} setError={setError} />
           {error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
