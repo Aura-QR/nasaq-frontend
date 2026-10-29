@@ -121,6 +121,8 @@ const ADMIN_ALERT_TYPES = [
   "teacher_absence_excuse_submitted",
   "staff_late_reason_submitted",
   "staff_leave_requested",
+  // Time-bound: a teacher asking to leave at ten needs the answer before ten.
+  "leave_requested",
 ];
 
 const ADMIN_ROLES = [ROLES.OWNER, ROLES.MANAGER, ROLES.SUPERVISOR];

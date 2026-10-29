@@ -27,6 +27,7 @@ const normalizeFailure = (error, fallback) => ({
 
 /** ما يتعرضش للمستخدم — نستخدمه لبناء النص بالعربي من النوع والبيانات. */
 export const NOTIFICATION_ICONS = {
+  leave_requested: "eventBusy",
   leave_approved: "check",
   leave_rejected: "close",
   cover_assigned: "person",
@@ -47,6 +48,7 @@ export const NOTIFICATION_ICONS = {
 };
 
 export const NOTIFICATION_COLORS = {
+  leave_requested: "warning",
   leave_approved: "success",
   leave_rejected: "error",
   cover_assigned: "info",
