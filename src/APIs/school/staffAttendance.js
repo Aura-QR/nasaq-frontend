@@ -382,11 +382,15 @@ export const createStaffLeaveRequest = async ({ date, leaveAt, reason, staffId }
     return { status: false, statusCode: 400, message: "التاريخ ووقت الاستئذان مطلوبان", data: null };
   }
 
+  if (!String(reason || "").trim()) {
+    return { status: false, statusCode: 400, message: "سبب الاستئذان مطلوب", data: null };
+  }
+
   try {
     const response = await api.post(`${ENDPOINT}/leave-requests`, {
       date,
       leaveAt: String(leaveAt).slice(0, 5),
-      ...(String(reason || "").trim() ? { reason: String(reason).trim() } : {}),
+      reason: String(reason).trim(),
       ...(staffId ? { staffId: normalizeRequestId(staffId) } : {}),
     });
     return response.data;

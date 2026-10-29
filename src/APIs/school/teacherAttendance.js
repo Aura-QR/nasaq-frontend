@@ -280,6 +280,9 @@ export const submitLateReason = async ({
   reason,
   date,
 } = {}) => {
+  if (!String(reason || "").trim()) {
+    return { status: false, message: "سبب التأخير مطلوب" };
+  }
   try {
     const response = await api.post(
       `${ENDPOINT}/me/late-reason`,

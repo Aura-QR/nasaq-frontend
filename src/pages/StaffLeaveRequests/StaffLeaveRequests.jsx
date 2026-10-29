@@ -352,6 +352,10 @@ const StaffLeaveRequests = ({ personal = false }) => {
       toast.error("التاريخ ووقت الاستئذان مطلوبان");
       return;
     }
+    if (!createForm.reason.trim()) {
+      toast.error("سبب الاستئذان مطلوب");
+      return;
+    }
     if (canCreateForOthers && !createForm.staffId) {
       toast.error("اختر الإداري / المشرف");
       return;
@@ -361,7 +365,7 @@ const StaffLeaveRequests = ({ personal = false }) => {
     const response = await createStaffLeaveRequest({
       date: createForm.date,
       leaveAt: createForm.leaveAt,
-      reason: createForm.reason,
+      reason: createForm.reason.trim(),
       ...(canCreateForOthers && createForm.staffId
         ? { staffId: createForm.staffId }
         : {}),
@@ -680,7 +684,10 @@ const StaffLeaveRequests = ({ personal = false }) => {
             <TextField
               multiline
               minRows={3}
-              label="السبب (اختياري)"
+              label="سبب الاستئذان (مطلوب)"
+              required
+              error={!createForm.reason.trim()}
+              helperText={!createForm.reason.trim() ? "يرجى توضيح سبب الاستئذان" : "سيُرسل السبب للإدارة مع الطلب"}
               value={createForm.reason}
               onChange={(event) => setCreateForm((current) => ({ ...current, reason: event.target.value }))}
               fullWidth
@@ -695,7 +702,7 @@ const StaffLeaveRequests = ({ personal = false }) => {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setCreateOpen(false)} disabled={busy}>إلغاء</Button>
-          <Button variant="contained" onClick={submitCreate} disabled={busy}>
+          <Button variant="contained" onClick={submitCreate} disabled={busy || !createForm.reason.trim()}>
             {busy ? "جارٍ الحفظ…" : "حفظ الطلب"}
           </Button>
         </DialogActions>

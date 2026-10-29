@@ -243,12 +243,16 @@ export const createLeaveRequest = async ({
     return { status: false, message: "التاريخ ووقت الانصراف مطلوبين" };
   }
 
+  if (!String(reason || "").trim()) {
+    return { status: false, message: "سبب الاستئذان مطلوب" };
+  }
+
   try {
     const response = await api.post(`${ENDPOINT}/leave-requests`, {
       date,
       leaveAt,
       ...(fromSlot ? { fromSlot: Number(fromSlot) } : {}),
-      ...(reason ? { reason } : {}),
+      reason: String(reason).trim(),
       ...(teacherId ? { teacherId: normalizeId(teacherId) } : {}),
     });
 

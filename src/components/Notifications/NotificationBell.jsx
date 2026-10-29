@@ -583,6 +583,10 @@ const NotificationBell = ({
                       secondary={
                         <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.7 }}>
                           {item.body}
+                          {(() => {
+                            const reason = [item.reason, item.data?.reason, item.metadata?.reason, item.payload?.reason, item.data?.lateReason].find((value) => typeof value === "string" && value.trim());
+                            return reason && !String(item.body || "").includes(reason.trim()) ? ` — السبب: ${reason.trim()}` : null;
+                          })()}
                         </Typography>
                       }
                     />

@@ -167,8 +167,13 @@ const LeaveRequests = () => {
       return;
     }
 
+    if (!createForm.reason.trim()) {
+      toast.error("سبب الاستئذان مطلوب");
+      return;
+    }
+
     setBusy(true);
-    const response = await createLeaveRequest(createForm);
+    const response = await createLeaveRequest({ ...createForm, reason: createForm.reason.trim() });
     setBusy(false);
 
     if (response.status) {
@@ -617,7 +622,10 @@ const LeaveRequests = () => {
               size="small"
               multiline
               minRows={2}
-              label="السبب (اختياري)"
+              label="سبب الاستئذان (مطلوب)"
+              required
+              error={!createForm.reason.trim()}
+              helperText={!createForm.reason.trim() ? "يرجى توضيح سبب الاستئذان" : "سيُرسل السبب للإدارة مع الطلب"}
               value={createForm.reason}
               onChange={(event) =>
                 setCreateForm((prev) => ({ ...prev, reason: event.target.value }))
@@ -637,7 +645,8 @@ const LeaveRequests = () => {
               teachersLoading ||
               !createForm.teacherId ||
               !createForm.date ||
-              !createForm.leaveAt
+              !createForm.leaveAt ||
+              !createForm.reason.trim()
             }
           >
             إنشاء الاستئذان
