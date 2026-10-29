@@ -1084,13 +1084,7 @@ const TeacherDuty = () => {
                     })
                   )
                 }
-                helperText="سيبها فاضية لو مش متأكد — الإدارة هتشوف اليوم كله"
-                sx={{
-                  "& .MuiOutlinedInput-root":
-                    {
-                      ...TEACHER_UI.field,
-                    },
-                }}
+              
               >
                 <MenuItem value="">
                   مش محدد
@@ -1113,7 +1107,7 @@ const TeacherDuty = () => {
                 size="small"
                 multiline
                 minRows={3}
-                label="السبب (اختياري)"
+                label="السبب "
                 value={
                   form.reason
                 }
