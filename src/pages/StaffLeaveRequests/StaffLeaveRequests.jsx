@@ -206,6 +206,8 @@ const displayStaffRole = (row) => {
   return "إداري / مشرف";
 };
 
+const returnClock = (value) => (value ? new Date(value).toLocaleTimeString("ar-SA-u-ca-gregory", { hour: "2-digit", minute: "2-digit" }) : "");
+
 const StaffLeaveRequests = ({ personal = false }) => {
   const getAuthUser = useAuthUser();
   const authState = getAuthUser?.() || {};
@@ -569,6 +571,9 @@ const StaffLeaveRequests = ({ personal = false }) => {
                       {!personal ? <Chip size="small" label={displayStaffRole(row)} /> : null}
                       <Chip size="small" label={row?.date || "—"} />
                       <Chip size="small" label={`الانصراف ${String(row?.leaveAt || "—").slice(0, 5)}`} />
+                      {row?.returnedAt ? (
+                        <Chip size="small" color="success" label={`عاد الساعة ${returnClock(row.returnedAt)}`} />
+                      ) : null}
                       <Box sx={{ flexGrow: 1 }} />
                       <Chip
                         size="small"

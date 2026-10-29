@@ -683,3 +683,20 @@ export const reviewLateReason = async (attendanceId, verdict, note) => {
     return getErrorResult(error, "تعذر حفظ القرار");
   }
 };
+
+/**
+ * Back on site from an approved استئذان. Verified like a check-in; reopens the
+ * day if leaving was recorded as a check-out, and tells the school.
+ */
+export const returnFromLeaveTeacher = async ({ lat, lng, mockLocationSuspected } = {}) => {
+  try {
+    const response = await api.post(`${ENDPOINT}/me/leave-return`, {
+      lat,
+      lng,
+      ...(mockLocationSuspected !== undefined ? { mockLocationSuspected: Boolean(mockLocationSuspected) } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تسجيل العودة من الاستئذان");
+  }
+};

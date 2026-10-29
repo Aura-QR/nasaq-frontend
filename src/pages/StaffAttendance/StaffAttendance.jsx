@@ -36,10 +36,13 @@ import {
   checkOutStaffAttendance,
   fetchMyStaffAttendance,
   fetchStaffAttendanceSettings,
+  fetchStaffLeaveRequests,
+  returnFromLeaveStaff,
 } from "@/APIs/school/staffAttendance";
 
 import Container from "@/components/Container/Container";
 import { LATE_REASON_EVENT } from "@/components/Notifications/AttendanceAlerts";
+import LeaveReturnCard from "@/components/Attendance/LeaveReturnCard";
 import { requestBrowserLocation } from "@/utils/geolocation";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
@@ -264,6 +267,11 @@ const StaffAttendance = () => {
   const [selfEnabled, setSelfEnabled] = useState(false);
 
   const today = useMemo(() => todayKey(timezone), [timezone]);
+  const ownId = String(currentUser?.userId || currentUser?._id || currentUser?.id || currentUser?.sub || "");
+  const loadTodayLeaves = useCallback(
+    () => fetchStaffLeaveRequests({ date: today, status: "approved", staffId: ownId || undefined }),
+    [today, ownId]
+  );
   const displayTime = useCallback((value) => formatTime(value, timezone), [timezone]);
 
   const loadHistory = useCallback(async ({ silent = false } = {}) => {
@@ -713,6 +721,13 @@ const StaffAttendance = () => {
                     تم تسجيل الانصراف الساعة {displayTime(currentRecord.checkOutAt)}
                   </Button>
                 )}
+
+                <LeaveReturnCard
+                  refreshKey={hasCheckedOut}
+                  loadLeaves={loadTodayLeaves}
+                  submitReturn={returnFromLeaveStaff}
+                  onReturned={() => loadHistory({ silent: true })}
+                />
 
                 <Stack direction={{ xs: "column", sm: "row" }} gap={1} sx={{ mt: 1.5 }}>
                   <StatusBox

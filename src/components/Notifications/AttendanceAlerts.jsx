@@ -123,6 +123,9 @@ const ADMIN_ALERT_TYPES = [
   "staff_leave_requested",
   // Time-bound: a teacher asking to leave at ten needs the answer before ten.
   "leave_requested",
+  // Back in the building: the one who let her out wants to know at once.
+  "leave_returned",
+  "staff_leave_returned",
 ];
 
 const ADMIN_ROLES = [ROLES.OWNER, ROLES.MANAGER, ROLES.SUPERVISOR];

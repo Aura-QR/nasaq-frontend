@@ -35,10 +35,13 @@ import {
   checkInTeacherAttendance,
   checkOutTeacherAttendance,
   fetchMyTeacherAttendance,
+  returnFromLeaveTeacher,
 } from "@/APIs/school/teacherAttendance";
 
 import NotificationBell from "@/components/Notifications/NotificationBell";
 import { LATE_REASON_EVENT } from "@/components/Notifications/AttendanceAlerts";
+import LeaveReturnCard from "@/components/Attendance/LeaveReturnCard";
+import { fetchLeaveRequests } from "@/APIs/school/duty";
 import { requestBrowserLocation } from "@/utils/geolocation";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
@@ -224,6 +227,7 @@ const TeacherCheckIn = () => {
   const [error, setError] = useState("");
 
   const today = useMemo(todayKey, []);
+  const loadTodayLeaves = useCallback(() => fetchLeaveRequests({ date: today, status: "approved" }), [today]);
 
   const loadHistory = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -651,6 +655,13 @@ const TeacherCheckIn = () => {
                     تم تسجيل الانصراف الساعة {formatTime(currentRecord.checkOutAt)}
                   </Button>
                 )}
+
+                <LeaveReturnCard
+                  refreshKey={hasCheckedOut}
+                  loadLeaves={loadTodayLeaves}
+                  submitReturn={returnFromLeaveTeacher}
+                  onReturned={() => loadHistory({ silent: true })}
+                />
 
                 <Stack direction={{ xs: "column", sm: "row" }} gap={1} sx={{ mt: 1.5 }}>
                   <StatusBox

@@ -619,3 +619,17 @@ export default {
   reviewStaffAbsenceExcuse,
   markStaffAbsenceExcusePresent,
 };
+
+/** Back on site from an approved استئذان (staff). */
+export const returnFromLeaveStaff = async ({ lat, lng, mockLocationSuspected } = {}) => {
+  try {
+    const response = await api.post(`${ENDPOINT}/me/leave-return`, {
+      lat: Number(lat),
+      lng: Number(lng),
+      ...(mockLocationSuspected !== undefined ? { mockLocationSuspected: Boolean(mockLocationSuspected) } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    return getErrorResult(error, "تعذر تسجيل العودة من الاستئذان");
+  }
+};

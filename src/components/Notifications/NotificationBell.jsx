@@ -62,6 +62,8 @@ const DESTINATIONS = {
     staff_leave_requested: "/school/staff-leave-requests",
     // A teacher's استئذان waiting for a decision.
     leave_requested: "/school/leave-requests",
+    leave_returned: "/school/leave-requests",
+    staff_leave_returned: "/school/staff-leave-requests",
     staff_leave_approved: "/staff-leave-requests",
     staff_leave_rejected: "/staff-leave-requests",
     staff_absence_excuse_required: "/staff-absence-excuses",

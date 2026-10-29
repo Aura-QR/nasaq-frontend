@@ -59,6 +59,8 @@ const EMPTY_CREATE_FORM = {
  * الموافقة مش مجاملة: هي اللي بتخلي الانصراف المبكر يتسجّل كمسموح بدل مخالفة،
  * وهي اللي بتقول للوحة الاحتياطي أنهي حصص محتاجة بديل.
  */
+const returnClock = (value) => (value ? new Date(value).toLocaleTimeString("ar-SA-u-ca-gregory", { hour: "2-digit", minute: "2-digit" }) : "");
+
 const LeaveRequests = () => {
   const [status, setStatus] = useState("");
   const [teacherId, setTeacherId] = useState("");
@@ -495,6 +497,12 @@ const LeaveRequests = () => {
                       {row.date} · انصراف {row.leaveAt}
                       {row.fromSlot ? ` · من الحصة ${row.fromSlot}` : " · اليوم كله"}
                     </Typography>
+                    {row.returnedAt && (
+                      <Typography sx={{ mt: 0.45, color: "#18865d", fontSize: "10px", fontWeight: 800 }}>
+                        عادت من الاستئذان الساعة {returnClock(row.returnedAt)}
+                        {row.departedAt ? ` (خرجت ${returnClock(row.departedAt)})` : ""}
+                      </Typography>
+                    )}
                     {row.reason && (
                       <Typography sx={{ mt: 0.45, color: "var(--color-text)", fontSize: "10px" }}>
                         {row.reason}
