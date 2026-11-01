@@ -16,6 +16,7 @@ import {
   Groups2Rounded,
   MenuBookRounded,
   PeopleAltRounded,
+  PersonOffRounded,
   RestartAltRounded,
   SortRounded,
 } from "@mui/icons-material";
@@ -33,6 +34,7 @@ import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import Table from "@/components/Table/Table";
 import AdminSetPasswordDialog from "@/components/school/AdminSetPasswordDialog";
+import EndTeacherServiceDialog from "@/components/school/EndTeacherServiceDialog";
 import SearchFilter from "@/components/Filters/SearchFilter";
 import SelectFilter from "@/components/Filters/SelectFilter";
 import PaginationControls from "@/components/Pagination";
@@ -135,6 +137,9 @@ const mapTeachers = (data = []) =>
       status: teacher?.isActive
         ? "نشط"
         : "غير نشط",
+      serviceEnded: Boolean(
+        teacher?.serviceEndedAt
+      ),
     };
   });
 
@@ -171,6 +176,7 @@ const List = () => {
   const [page, setPage] = useState(1);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordTeacher, setPasswordTeacher] = useState(null);
+  const [endServiceTeacher, setEndServiceTeacher] = useState(null);
 
   // The school director may reset passwords too; the server admits
   // SUPERVISOR on PATCH /:id/password alongside owner and assistant.
@@ -307,10 +313,15 @@ const List = () => {
         await deleteTeacher(id);
 
       if (!response?.status) {
-        toast.error(
+        const message =
           response?.message ||
-            response ||
-            "تعذر حذف المعلم"
+          "تعذر حذف المعلم";
+        // A teacher with lectures cannot be deleted; «إنهاء الخدمة» moves
+        // them in one step instead of editing each one in the timetable.
+        toast.error(
+          message.includes("مسند له")
+            ? `${message}. لنقل حصصه إلى معلم آخر دفعة واحدة استخدم «إنهاء الخدمة» من قائمة الإجراءات (…).`
+            : message
         );
         return;
       }
@@ -352,6 +363,47 @@ const List = () => {
       );
     }
   };
+
+  const handleServiceEnded = (result) => {
+    toast.success(
+      result?.message ||
+        "تم إنهاء خدمة المعلم"
+    );
+    const endedId = endServiceTeacher?.id;
+    setItems((previousItems) =>
+      previousItems.map((teacher) =>
+        teacher.id === endedId
+          ? {
+              ...teacher,
+              status: "غير نشط",
+              serviceEnded: true,
+            }
+          : teacher
+      )
+    );
+    setEndServiceTeacher(null);
+  };
+
+  const moreActions = permissions.edit
+    ? [
+        {
+          label: "إنهاء الخدمة",
+          icon: (
+            <PersonOffRounded
+              sx={{
+                color:
+                  "var(--color-danger)",
+                fontSize: 20,
+              }}
+            />
+          ),
+          color: "var(--color-danger)",
+          hidden: (teacher) =>
+            teacher.serviceEnded,
+          onClick: setEndServiceTeacher,
+        },
+      ]
+    : undefined;
 
   const openPasswordDialog = (teacher) => {
     if (!canSetPassword) return;
@@ -1284,6 +1336,7 @@ const List = () => {
                   ? openPasswordDialog
                   : undefined
               }
+              moreActions={moreActions}
             />
 
             {currentPagination && (
@@ -1307,6 +1360,15 @@ const List = () => {
           subjectId={passwordTeacher?.id || ""}
           onClose={closePasswordDialog}
           onSubmit={handleSetPassword}
+        />
+
+        <EndTeacherServiceDialog
+          open={Boolean(endServiceTeacher)}
+          teacher={endServiceTeacher}
+          onClose={() =>
+            setEndServiceTeacher(null)
+          }
+          onDone={handleServiceEnded}
         />
       </Box>
     </Container>

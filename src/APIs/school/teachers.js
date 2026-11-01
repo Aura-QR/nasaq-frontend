@@ -938,6 +938,66 @@ export const adminSetTeacherPassword =
     }
   };
 
+/**
+ * GET /teachers/:id/end-service/preview
+ *
+ * ملخص «إنهاء الخدمة» قبل التنفيذ: كام حصة هتتنقل للبديل، وأي حصص البديل
+ * مشغول فيها فهتفضل من غير معلم. قراءة فقط.
+ */
+export const previewTeacherEndService = async (
+  teacherId,
+  replacementTeacherId
+) => {
+  const id = normalizeId(teacherId);
+  if (!id) {
+    return { status: false, message: "معرّف المعلم غير موجود" };
+  }
+
+  try {
+    const response = await api.get(
+      `${ENDPOINT}/${id}/end-service/preview`,
+      {
+        params: replacementTeacherId
+          ? { replacementTeacherId: normalizeId(replacementTeacherId) }
+          : {},
+      }
+    );
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeError(
+      getApiError(error, "تعذر تحميل ملخص إنهاء الخدمة"),
+      "تعذر تحميل ملخص إنهاء الخدمة"
+    );
+  }
+};
+
+/** POST /teachers/:id/end-service */
+export const endTeacherService = async (
+  teacherId,
+  replacementTeacherId
+) => {
+  const id = normalizeId(teacherId);
+  if (!id) {
+    return { status: false, message: "معرّف المعلم غير موجود" };
+  }
+
+  try {
+    const response = await api.post(
+      `${ENDPOINT}/${id}/end-service`,
+      replacementTeacherId
+        ? { replacementTeacherId: normalizeId(replacementTeacherId) }
+        : {}
+    );
+    clearTeachersCache();
+    return normalizeSuccess(response);
+  } catch (error) {
+    return normalizeError(
+      getApiError(error, "تعذر إنهاء خدمة المعلم"),
+      "تعذر إنهاء خدمة المعلم"
+    );
+  }
+};
+
 export const invalidateTeachersCache =
   clearTeachersCache;
 

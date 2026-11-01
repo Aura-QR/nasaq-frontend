@@ -68,6 +68,7 @@ const Table = ({
   addFn,
   editBtn,
   setPasswordFn,
+  moreActions,
   renderCell,
   renderActions,
 }) => {
@@ -85,6 +86,7 @@ const Table = ({
       addFn ||
       editBtn ||
       setPasswordFn ||
+      moreActions?.length ||
       renderActions
   );
 
@@ -214,6 +216,7 @@ const Table = ({
               addFn={addFn}
               editBtn={editBtn}
               setPasswordFn={setPasswordFn}
+              moreActions={moreActions}
               renderCell={renderCell}
               renderActions={renderActions}
               hasActions={hasActions}
@@ -328,6 +331,7 @@ const TableItem = ({
   addFn,
   editBtn,
   setPasswordFn,
+  moreActions,
   renderCell,
   renderActions,
   hasActions,
@@ -346,6 +350,11 @@ const TableItem = ({
     closeMoreActions();
     setPasswordFn?.(item);
   };
+
+  // Extra «…» entries from the page, e.g. «إنهاء الخدمة» for teachers.
+  const visibleMoreActions = (moreActions || []).filter(
+    (action) => !action.hidden?.(item)
+  );
 
   const openDeletePopup = () => {
     setDeleteId(item.id);
@@ -460,7 +469,7 @@ const TableItem = ({
         <Box
           sx={{
             flex: 1.45,
-            minWidth: setPasswordFn || renderActions ? 190 : 148,
+            minWidth: setPasswordFn || visibleMoreActions.length || renderActions ? 190 : 148,
 
             display: "flex",
             alignItems: "center",
@@ -608,7 +617,7 @@ const TableItem = ({
             </Tooltip>
           )}
 
-          {setPasswordFn && (
+          {(setPasswordFn || visibleMoreActions.length > 0) && (
             <>
               <Tooltip
                 title="إجراءات أخرى"
@@ -671,6 +680,7 @@ const TableItem = ({
                   },
                 }}
               >
+                {setPasswordFn && (
                 <MenuItem
                   onClick={handleSetPassword}
                   sx={{
@@ -691,6 +701,29 @@ const TableItem = ({
                   />
                   تعيين كلمة المرور
                 </MenuItem>
+                )}
+
+                {visibleMoreActions.map((action) => (
+                  <MenuItem
+                    key={action.label}
+                    onClick={() => {
+                      closeMoreActions();
+                      action.onClick(item);
+                    }}
+                    sx={{
+                      gap: 1,
+                      minHeight: 42,
+                      color:
+                        action.color ||
+                        "var(--color-navy-deep)",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {action.icon}
+                    {action.label}
+                  </MenuItem>
+                ))}
               </Menu>
             </>
           )}
