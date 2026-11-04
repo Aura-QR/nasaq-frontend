@@ -38,6 +38,14 @@ export const addGradesCriteria = async (data) => {
   }
 };
 
+export const bulkAddGradesCriteria = async (data) => {
+  try {
+    return normalize(await api.post(`${ENDPOINT}/bulk`, data));
+  } catch (err) {
+    return fail(err, "تعذر إضافة توزيعات الدرجات");
+  }
+};
+
 export const editGradesCriteria = async (data, id) => {
   try {
     return normalize(await api.patch(`${ENDPOINT}/${id}`, data));

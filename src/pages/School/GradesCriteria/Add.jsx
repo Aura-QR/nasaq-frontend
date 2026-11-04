@@ -1,11 +1,12 @@
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Grid,
-  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -13,6 +14,8 @@ import {
 } from "@mui/material";
 import {
   AssessmentRounded,
+  CheckBoxOutlineBlankRounded,
+  CheckBoxRounded,
   CloseRounded,
   SaveRounded,
   SchoolRounded,
@@ -30,6 +33,7 @@ import { fetchSubjectOfferings } from "@/APIs/school/subjectOfferings";
 import { fetchTermsByAcademicYear } from "@/APIs/school/terms";
 import {
   addGradesCriteria,
+  bulkAddGradesCriteria,
   fetchGradesCriteria,
 } from "@/APIs/school/gradesCriteria";
 
@@ -189,10 +193,19 @@ const loadOfferingCatalog = async () => {
       return {
         id,
         label: parts.join(" • "),
+        gradeLabel: labelOfGrade(grade || {}),
+        gradeOrder: Number(grade?.order ?? 999),
         raw: offering,
       };
     })
-    .filter((item) => item.id);
+    .filter((item) => item.id)
+    .sort((a, b) => a.gradeOrder - b.gradeOrder || a.label.localeCompare(b.label, "ar"));
+};
+
+// Which offerings already have a distribution: those cannot take a second one.
+const loadCoveredOfferingIds = async () => {
+  const response = await fetchGradesCriteria({ page: 1, limit: 1000 });
+  return new Set(extractList(response).map(getCriteriaOfferingId).filter(Boolean));
 };
 
 const GRADE_FIELDS = ["final", "activities", "projects", "assignments", "quizzes"];
@@ -247,9 +260,8 @@ const GradeInputs = ({ register, errors }) => {
 const Add = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
+  const { register, handleSubmit, formState: { errors }, watch } = useForm({
     defaultValues: {
-      subjectOfferingId: searchParams.get("subjectOfferingId") || "",
       passingGrade: 50, final: 100, activities: 0, projects: 0, projectsCount: 0,
       assignments: 0, assignmentsCount: 0, quizzes: 0, quizzesCount: 0,
     },
@@ -258,18 +270,16 @@ const Add = () => {
   const [offerings, setOfferings] = useState([]);
   const [loadingOfferings, setLoadingOfferings] = useState(true);
   const [offeringsError, setOfferingsError] = useState("");
-  const [existingCriteria, setExistingCriteria] = useState(null);
-  const [checkingExisting, setCheckingExisting] = useState(false);
+  const [covered, setCovered] = useState(new Set());
+  const [selectedIds, setSelectedIds] = useState(() => {
+    const preset = searchParams.get("subjectOfferingId");
+    return preset ? [preset] : [];
+  });
   const [loading, setLoading] = useState(false);
 
-  const selectedOfferingId = idOf(watch("subjectOfferingId"));
   const values = watch();
   const totalGrades = useMemo(() => totalOf(values), [values]);
   const isTotalValid = totalGrades === 100;
-
-  useEffect(() => {
-    register("subjectOfferingId", { required: "اختر عرض المادة" });
-  }, [register]);
 
   useEffect(() => {
     let active = true;
@@ -277,9 +287,17 @@ const Add = () => {
       setLoadingOfferings(true);
       setOfferingsError("");
       try {
-        const loaded = await loadOfferingCatalog();
+        const [loaded, coveredIds] = await Promise.all([
+          loadOfferingCatalog(),
+          loadCoveredOfferingIds().catch(() => new Set()),
+        ]);
         if (!active) return;
         setOfferings(loaded);
+        setCovered(coveredIds);
+        setSelectedIds((previous) => previous.filter((id) => !coveredIds.has(id)));
+        if (searchParams.get("missing") === "1") {
+          setSelectedIds(loaded.filter((item) => !coveredIds.has(item.id)).map((item) => item.id));
+        }
         if (!loaded.length) setOfferingsError("لا توجد عروض مواد. أنشئ عروض المواد أولًا.");
       } catch (error) {
         if (!active) return;
@@ -292,39 +310,34 @@ const Add = () => {
     return () => { active = false; };
   }, []);
 
-  useEffect(() => {
-    if (!selectedOfferingId) {
-      setExistingCriteria(null);
-      return;
-    }
-    let active = true;
-    (async () => {
-      setCheckingExisting(true);
-      try {
-        const response = await fetchGradesCriteria({ subjectOfferingId: selectedOfferingId, page: 1, limit: 1000 });
-        if (!active) return;
-        const match = extractList(response).find((item) => getCriteriaOfferingId(item) === selectedOfferingId);
-        setExistingCriteria(match || null);
-      } catch {
-        if (active) setExistingCriteria(null);
-      } finally {
-        if (active) setCheckingExisting(false);
-      }
-    })();
-    return () => { active = false; };
-  }, [selectedOfferingId]);
+  const missing = useMemo(() => offerings.filter((item) => !covered.has(item.id)), [offerings, covered]);
+  const selected = useMemo(() => {
+    const chosen = new Set(selectedIds);
+    return offerings.filter((item) => chosen.has(item.id));
+  }, [offerings, selectedIds]);
+
+  const toggleGrade = (gradeLabel) => {
+    const ids = missing.filter((item) => item.gradeLabel === gradeLabel).map((item) => item.id);
+    const allIn = ids.every((id) => selectedIds.includes(id));
+    setSelectedIds((previous) =>
+      allIn ? previous.filter((id) => !ids.includes(id)) : [...new Set([...previous, ...ids])]
+    );
+  };
+
+  const missingGrades = useMemo(() => {
+    const counts = new Map();
+    missing.forEach((item) => counts.set(item.gradeLabel, (counts.get(item.gradeLabel) || 0) + 1));
+    return Array.from(counts.entries());
+  }, [missing]);
 
   const onSubmit = async (formData) => {
-    const subjectOfferingId = idOf(formData.subjectOfferingId);
-    if (!subjectOfferingId) return toast.error("اختر عرض المادة");
-    if (existingCriteria) return toast.info("يوجد توزيع درجات لهذا العرض بالفعل");
+    if (!selectedIds.length) return toast.error("اختر مادة واحدة على الأقل");
     if (!isTotalValid) return toast.error("يجب أن يكون مجموع الدرجات 100 درجة");
 
     const passingGrade = numberOrZero(formData.passingGrade);
     if (passingGrade < 0 || passingGrade > 100) return toast.error("درجة النجاح يجب أن تكون من 0 إلى 100");
 
-    const payload = {
-      subjectOfferingId,
+    const weights = {
       final: numberOrZero(formData.final),
       assignments: numberOrZero(formData.assignments),
       assignmentsCount: numberOrZero(formData.assignmentsCount),
@@ -338,7 +351,20 @@ const Add = () => {
 
     setLoading(true);
     try {
-      const response = await addGradesCriteria(payload);
+      if (selectedIds.length > 1) {
+        const response = await bulkAddGradesCriteria({ ...weights, subjectOfferingIds: selectedIds });
+        if (response?.status === false) {
+          toast.error(getErrorMessage(response, "حدث خطأ أثناء إضافة توزيعات الدرجات"));
+          return;
+        }
+        const result = unwrap(response) || {};
+        toast.success(`تم توزيع الدرجات على ${result.created ?? selectedIds.length} مادة`);
+        if (result.alreadyHad) toast.info(`${result.alreadyHad} مادة لديها توزيع سابق ولم يتغير`);
+        navigate("/school/gradesCriteria");
+        return;
+      }
+
+      const response = await addGradesCriteria({ ...weights, subjectOfferingId: selectedIds[0] });
       if (!response?.status) {
         const message = getErrorMessage(response, "حدث خطأ أثناء إضافة توزيع الدرجات");
         if (/duplicate|already exists|موجود بالفعل|مكرر/i.test(String(message))) toast.info("يوجد توزيع درجات لهذا العرض بالفعل");
@@ -359,32 +385,84 @@ const Add = () => {
         <Paper elevation={0} sx={{ ...FORM_CARD_SX, mt: 0 }}>
           <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between" gap={1}>
             <Back title="إضافة توزيع درجات" />
-            <Typography sx={{ color: "var(--color-muted)", fontSize: 10.5 }}>اختر عرض المادة المحدد بالصف والترم، ثم وزّع 100 درجة.</Typography>
+            <Typography sx={{ color: "var(--color-muted)", fontSize: 10.5 }}>اختر المواد، ثم وزّع 100 درجة.</Typography>
           </Stack>
         </Paper>
 
         <Paper elevation={0} sx={FORM_CARD_SX}>
-          <SectionHeading icon={<SchoolRounded />} title="عرض المادة" description="كل توزيع درجات مرتبط بعرض مادة واحد، لذلك يمكن لنفس المادة أن يكون لها توزيع مختلف في كل ترم." />
-          <TextField select fullWidth label="المادة / الصف / الترم / السنة" value={selectedOfferingId} onChange={(e) => setValue("subjectOfferingId", e.target.value, { shouldDirty: true, shouldValidate: true })}
-            disabled={loadingOfferings || !offerings.length} error={Boolean(errors.subjectOfferingId)}
-            helperText={errors.subjectOfferingId?.message || (loadingOfferings ? "جاري تحميل عروض المواد..." : `${offerings.length} عرض متاح`)}>
-            <MenuItem value="">اختر عرض المادة</MenuItem>
-            {offerings.map((item) => <MenuItem value={item.id} key={item.id}>{item.label}</MenuItem>)}
-          </TextField>
+          <SectionHeading icon={<SchoolRounded />} title="المواد" description="اختر مادة أو أكثر؛ يُطبّق التوزيع نفسه على كل مادة مختارة، ويمكن تعديل أي مادة لاحقًا بمفردها." />
+          {!loadingOfferings && offerings.length > 0 && (
+            <Alert severity={missing.length ? "warning" : "success"} sx={{ mb: 1.5 }}
+              action={missing.length > 0 && (
+                <Button color="inherit" size="small" sx={{ fontWeight: 800 }}
+                  onClick={() => setSelectedIds(missing.map((item) => item.id))}>
+                  اختيار الكل ({missing.length})
+                </Button>
+              )}>
+              {missing.length
+                ? `${missing.length} من أصل ${offerings.length} مادة بدون توزيع درجات، ولا يستطيع المعلمون إنشاء اختبارات لها.`
+                : "جميع المواد لديها توزيع درجات."}
+            </Alert>
+          )}
+
+          {missingGrades.length > 1 && (
+            <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ mb: 1.5 }}>
+              {missingGrades.map(([gradeLabel, count]) => {
+                const ids = missing.filter((item) => item.gradeLabel === gradeLabel).map((item) => item.id);
+                const allIn = ids.every((id) => selectedIds.includes(id));
+                return (
+                  <Chip key={gradeLabel} clickable onClick={() => toggleGrade(gradeLabel)}
+                    label={`${gradeLabel} (${count})`} color={allIn ? "primary" : "default"}
+                    variant={allIn ? "filled" : "outlined"} sx={{ fontWeight: 700 }} />
+                );
+              })}
+            </Stack>
+          )}
+
+          <Autocomplete multiple disableCloseOnSelect options={offerings} value={selected}
+            onChange={(_, value) => setSelectedIds(value.map((item) => item.id))}
+            groupBy={(option) => option.gradeLabel}
+            getOptionLabel={(option) => option.label}
+            getOptionDisabled={(option) => covered.has(option.id)}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            disabled={loadingOfferings || !offerings.length}
+            limitTags={6}
+            noOptionsText="لا توجد مواد"
+            renderOption={(props, option, { selected: isSelected }) => (
+              <li {...props} key={option.id}>
+                <Checkbox icon={<CheckBoxOutlineBlankRounded fontSize="small" />} checkedIcon={<CheckBoxRounded fontSize="small" />}
+                  checked={isSelected} sx={{ ml: 1 }} />
+                {option.label}
+                {covered.has(option.id) && <Chip size="small" label="لديها توزيع" sx={{ mr: 1, fontSize: 10 }} />}
+              </li>
+            )}
+            renderInput={(params) => (
+              <TextField {...params} label="المواد"
+                placeholder={selected.length ? "" : "اختر مادة أو أكثر"}
+                helperText={loadingOfferings ? "جاري تحميل عروض المواد..." : `تم اختيار ${selected.length} مادة — سيُطبّق التوزيع نفسه على جميع المواد المختارة`} />
+            )} />
+          {selected.length > 0 && (
+            <Button size="small" onClick={() => setSelectedIds([])} sx={{ mt: 0.5 }}>مسح الاختيار</Button>
+          )}
           {loadingOfferings && <Stack direction="row" gap={1} mt={1}><CircularProgress size={15} /><Typography sx={{ fontSize: 10 }}>جاري التحميل...</Typography></Stack>}
           {offeringsError && <Alert severity="warning" sx={{ mt: 1 }}>{offeringsError}</Alert>}
-          {checkingExisting && <Typography sx={{ mt: 1, fontSize: 10, color: "var(--color-muted)" }}>جاري التحقق من وجود توزيع سابق...</Typography>}
-          {existingCriteria && <Alert severity="info" sx={{ mt: 1 }}>يوجد توزيع درجات لهذا العرض بالفعل. اختر عرضًا آخر أو عدّل التوزيع الموجود.</Alert>}
         </Paper>
 
         <Paper elevation={0} sx={FORM_CARD_SX}>
           <SectionHeading icon={<AssessmentRounded />} title="تفاصيل توزيع الدرجات" description="القيم الصفرية مسموحة، لكن مجموع أوزان الدرجات يجب أن يساوي 100."
             endContent={<Chip label={`${totalGrades} / 100`} sx={{ fontWeight: 800, color: isTotalValid ? "#237449" : "var(--color-danger)" }} />} />
           <GradeInputs register={register} errors={errors} />
+          {Number(values?.quizzes || 0) === 0 && (
+            <Alert severity="info" sx={{ mt: 1.5 }}>
+              درجة الاختبارات القصيرة صفر، لذلك لن يتمكن المعلمون من إنشاء «اختبار قصير» لهذه المواد.
+            </Alert>
+          )}
         </Paper>
 
         <Paper elevation={0} sx={{ ...FORM_CARD_SX, display: "flex", justifyContent: "flex-end", gap: 1 }}>
-          <Button type="submit" variant="contained" startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <SaveRounded />} disabled={loading || checkingExisting || Boolean(existingCriteria) || !selectedOfferingId || !isTotalValid}>حفظ التوزيع</Button>
+          <Button type="submit" variant="contained" startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <SaveRounded />} disabled={loading || !selectedIds.length || !isTotalValid}>
+            {selectedIds.length > 1 ? `حفظ التوزيع لـ ${selectedIds.length} مادة` : "حفظ التوزيع"}
+          </Button>
           <Button type="button" variant="outlined" startIcon={<CloseRounded />} onClick={() => navigate("/school/gradesCriteria")} disabled={loading}>إلغاء</Button>
         </Paper>
       </Box>

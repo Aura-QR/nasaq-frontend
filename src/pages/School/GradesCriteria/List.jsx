@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -342,8 +343,15 @@ const mapCriteria = (
         termYearMap
       );
 
+    // The offering it was set for has been deleted: the row no longer
+    // applies to any subject, and «—» left the school guessing why.
+    const orphaned =
+      item?.subjectOffering === null &&
+      !item?.subjectOfferingId;
+
     return {
       id: item?._id || item?.id,
+      orphaned,
 
       subjectOfferingId:
         normalizeId(
@@ -361,8 +369,9 @@ const mapCriteria = (
       subjectId:
         resolvedSubject.id,
 
-      subject:
-        resolvedSubject.name,
+      subject: orphaned
+        ? "مادة محذوفة"
+        : resolvedSubject.name,
 
       subjectCode:
         resolvedSubject.code,
@@ -809,6 +818,63 @@ const List = () => {
     usePermissions(
       "gradesCriteria"
     );
+
+  // How many subject offerings still have no distribution: a teacher cannot
+  // create an exam for any of them.
+  const [coverage, setCoverage] =
+    useState(null);
+
+  useEffect(() => {
+    let active = true;
+
+    Promise.all([
+      api.get("/subject-offerings", {
+        params: { page: 1, limit: 1000 },
+      }),
+      fetchGradesCriteria({
+        page: 1,
+        limit: 1000,
+      }),
+    ])
+      .then(([offeringsRes, criteriaRes]) => {
+        if (!active) return;
+        const offerings =
+          getResponseList(offeringsRes);
+        const criteria =
+          getResponseList(criteriaRes);
+        const covered = new Set(
+          criteria
+            .map((item) =>
+              normalizeId(
+                item?.subjectOfferingId
+              )
+            )
+            .filter(Boolean)
+        );
+        setCoverage({
+          offerings: offerings.length,
+          missing: offerings.filter(
+            (item) =>
+              !covered.has(
+                normalizeId(item)
+              )
+          ).length,
+          orphaned: criteria.filter(
+            (item) =>
+              item?.subjectOffering ===
+                null &&
+              !item?.subjectOfferingId
+          ).length,
+        });
+      })
+      .catch(() => {
+        if (active) setCoverage(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [location.key, gradesCriterion]);
 
   useEffect(() => {
     const mappedItems =
@@ -1308,6 +1374,44 @@ const List = () => {
             </Stack>
           </Stack>
         </Paper>
+
+        {coverage?.missing > 0 && (
+          <Alert
+            severity="warning"
+            sx={{ mb: 1.25, borderRadius: "14px" }}
+            action={
+              permissions.add && (
+                <Button
+                  component={Link}
+                  to="add?missing=1"
+                  color="inherit"
+                  size="small"
+                  sx={{ fontWeight: 800 }}
+                >
+                  توزيع الدرجات عليها
+                </Button>
+              )
+            }
+          >
+            {coverage.missing} من أصل{" "}
+            {coverage.offerings} مادة بدون
+            توزيع درجات، ولا يستطيع المعلمون
+            إنشاء اختبارات لها. يمكن توزيع
+            الدرجات عليها جميعًا مرة واحدة.
+          </Alert>
+        )}
+
+        {coverage?.orphaned > 0 && (
+          <Alert
+            severity="info"
+            sx={{ mb: 1.25, borderRadius: "14px" }}
+          >
+            {coverage.orphaned} من التوزيعات
+            مرتبطة بمواد حُذفت، فلا تنطبق على
+            أي مادة حاليًا («مادة محذوفة» في
+            الجدول)، ويمكن حذفها.
+          </Alert>
+        )}
 
         <Box
           sx={{
