@@ -6,16 +6,19 @@ import {
 } from "@mui/icons-material";
 
 import {
+  Alert,
+  Autocomplete,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Grid,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 
@@ -25,7 +28,6 @@ import {
   useState,
 } from "react";
 
-import { useForm } from "react-hook-form";
 import {
   useNavigate,
   useParams,
@@ -43,12 +45,25 @@ import {
 import Back from "@/components/Back/Back";
 import Container from "@/components/Container/Container";
 import SearchFilter from "@/components/Filters/SearchFilter";
+import SelectFilter from "@/components/Filters/SelectFilter";
 import Loading from "@/components/Loading";
-import PaginationControls from "@/components/Pagination";
-import Select from "@/components/Select/Select";
 
 import { translateGender } from "@/utils/helpers/translateGender";
 import { useInstallmentPlans } from "@/utils/hooks/apis/financials/useInstallmentPlans";
+
+// The class's name («ثالث/بنات»), not its room number: rooms are often
+// blank or a bare «11», which told the school nothing.
+const classLabelOf = (cls) => {
+  if (!cls) return "";
+  if (cls.name) return cls.name;
+  if (cls.roomNumber) {
+    return `${cls.roomNumber} - ${translateGender(cls.gender, "class")}`;
+  }
+  return "";
+};
+
+const classIdOf = (cls) =>
+  String(cls?._id || cls?.id || cls || "");
 
 const statusMap = {
   paid: "مدفوعة",
@@ -142,22 +157,26 @@ const ModuleTripsProfilePage = () => {
   ] = useState(false);
   const [openAdd, setOpenAdd] =
     useState(false);
-  const [page, setPage] =
-    useState(1);
-  const [limit, setLimit] =
-    useState(10);
-  const [
-    pagination,
-    setPagination,
-  ] = useState(null);
   const [
     searchName,
     setSearchName,
   ] = useState("");
+  const [
+    classFilter,
+    setClassFilter,
+  ] = useState("");
+  // Who was just added, shown first: the list is ordered by when the
+  // student's financial record was made, so a new name could land anywhere.
+  const [
+    justAdded,
+    setJustAdded,
+  ] = useState([]);
 
+  // Every student of the trip, not one page of ten: the search ran over the
+  // visible page only, so a student on page three «was not added».
   const filters = useMemo(
-    () => ({ page, limit }),
-    [page, limit]
+    () => ({ page: 1, limit: 1000 }),
+    []
   );
 
   const candidateFilters =
@@ -165,10 +184,6 @@ const ModuleTripsProfilePage = () => {
       () => ({ limit: 500 }),
       []
     );
-
-  useEffect(() => {
-    setPage(1);
-  }, [limit]);
 
   const fetchData = async () => {
     if (!tripTemplateId) return;
@@ -209,27 +224,12 @@ const ModuleTripsProfilePage = () => {
       setStudents(
         studentsRes.data || []
       );
-
-      setPagination(
-        studentsRes.totalDocs !==
-          undefined &&
-          studentsRes.totalPages !==
-            undefined
-          ? {
-              totalDocs:
-                studentsRes.totalDocs,
-              totalPages:
-                studentsRes.totalPages,
-            }
-          : null
-      );
     } else {
       toast.error(
         studentsRes ||
           "حدث خطأ ما أثناء جلب طلاب الرحلة"
       );
       setStudents([]);
-      setPagination(null);
     }
 
     if (candidatesRes.status) {
@@ -275,22 +275,39 @@ const ModuleTripsProfilePage = () => {
         item?.student || {};
       const cls = item?.class || {};
 
-      const classLabel =
-        cls?.roomNumber
-          ? `${cls.roomNumber} - ${translateGender(
-              cls.gender,
-              "class"
-            )}`
-          : "بدون فصل";
-
       return {
         _id: student?._id,
-        displayName: `${
-          student?.name || "طالب"
-        } (${classLabel})`,
+        name: student?.name || "طالب",
+        classId: classIdOf(cls),
+        classLabel:
+          classLabelOf(cls) ||
+          "بدون فصل",
       };
     })
-    .filter((item) => item._id);
+    .filter((item) => item._id)
+    .sort(
+      (a, b) =>
+        a.classLabel.localeCompare(
+          b.classLabel,
+          "ar"
+        ) ||
+        a.name.localeCompare(
+          b.name,
+          "ar"
+        )
+    );
+
+  const classOptions = useMemo(() => {
+    const map = new Map();
+    [...(students || []), ...(candidates || [])].forEach((item) => {
+      const id = classIdOf(item?.class);
+      const label = classLabelOf(item?.class);
+      if (id && label) map.set(id, label);
+    });
+    return Array.from(map, ([value, label]) => ({ value, label })).sort(
+      (a, b) => a.label.localeCompare(b.label, "ar")
+    );
+  }, [students, candidates]);
 
   const displayedStudents =
     useMemo(() => {
@@ -299,19 +316,30 @@ const ModuleTripsProfilePage = () => {
           .trim()
           .toLowerCase();
 
-      if (!query) return students;
+      const added = new Set(justAdded);
 
-      return (
-        students || []
-      ).filter((item) => {
-        const studentName =
-          item?.student?.name || "";
-
-        return studentName
-          .toLowerCase()
-          .includes(query);
-      });
-    }, [students, searchName]);
+      return (students || [])
+        .filter((item) => {
+          if (
+            classFilter &&
+            classIdOf(item?.class) !==
+              classFilter
+          ) {
+            return false;
+          }
+          if (!query) return true;
+          return (
+            item?.student?.name || ""
+          )
+            .toLowerCase()
+            .includes(query);
+        })
+        .sort(
+          (a, b) =>
+            Number(added.has(String(b?.student?._id))) -
+            Number(added.has(String(a?.student?._id)))
+        );
+    }, [students, searchName, classFilter, justAdded]);
 
   const handleRemove =
     async (studentId) => {
@@ -563,6 +591,23 @@ const ModuleTripsProfilePage = () => {
               />
             </Box>
 
+            <Box
+              sx={{
+                width: {
+                  xs: "100%",
+                  sm: 240,
+                },
+              }}
+            >
+              <SelectFilter
+                value={classFilter}
+                onChange={setClassFilter}
+                label="الفصل"
+                allLabel="جميع الفصول"
+                options={classOptions}
+              />
+            </Box>
+
             <Button
               startIcon={
                 <AddCircleOutlineOutlined />
@@ -631,7 +676,12 @@ const ModuleTripsProfilePage = () => {
 
             <Chip
               size="small"
-              label={`${displayedStudents.length} طالب`}
+              label={
+                displayedStudents.length ===
+                students.length
+                  ? `${students.length} طالب`
+                  : `${displayedStudents.length} من ${students.length} طالب`
+              }
               sx={{
                 bgcolor:
                   "var(--color-gold-soft)",
@@ -665,8 +715,9 @@ const ModuleTripsProfilePage = () => {
                   fontWeight: 700,
                 }}
               >
-                لا يوجد طلاب مطابقين
-                لبحث الاسم
+                {students.length
+                  ? "لا يوجد طلاب مطابقون للبحث"
+                  : "لم يُضف أي طالب إلى الرحلة بعد"}
               </Typography>
             </Box>
           ) : (
@@ -761,6 +812,13 @@ const ModuleTripsProfilePage = () => {
                           key={
                             student?._id
                           }
+                          style={
+                            justAdded.includes(
+                              String(student?._id)
+                            )
+                              ? { outline: "2px solid rgba(14,159,110,.35)" }
+                              : undefined
+                          }
                         >
                           <td
                             style={{
@@ -773,12 +831,8 @@ const ModuleTripsProfilePage = () => {
                           </td>
 
                           <td>
-                            {cls?.roomNumber
-                              ? `${cls.roomNumber} - ${translateGender(
-                                  cls?.gender,
-                                  "class"
-                                )}`
-                              : "—"}
+                            {classLabelOf(cls) ||
+                              "—"}
                           </td>
 
                           <td>
@@ -883,25 +937,6 @@ const ModuleTripsProfilePage = () => {
           )}
         </Paper>
 
-        {pagination && (
-          <Box sx={{ mt: 1 }}>
-            <PaginationControls
-              pagination={
-                pagination
-              }
-              page={page}
-              onPageChange={
-                setPage
-              }
-              limit={limit}
-              onLimitChange={
-                setLimit
-              }
-              label="عدد الطلاب"
-            />
-          </Box>
-        )}
-
         <EnrollDialog
           open={openAdd}
           onClose={() =>
@@ -910,8 +945,11 @@ const ModuleTripsProfilePage = () => {
           tripTemplateId={
             tripTemplateId
           }
-          onDone={async () => {
+          onDone={async (addedIds) => {
             setOpenAdd(false);
+            setJustAdded(addedIds || []);
+            setSearchName("");
+            setClassFilter("");
             await fetchData();
           }}
           loading={actionLoading}
@@ -923,6 +961,9 @@ const ModuleTripsProfilePage = () => {
           }
           planOptions={
             planOptions
+          }
+          classOptions={
+            classOptions
           }
         />
       </Box>
@@ -939,68 +980,91 @@ const EnrollDialog = ({
   setActionLoading,
   candidateOptions,
   planOptions,
+  classOptions,
 }) => {
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm({
-    defaultValues: {
-      studentId: "",
-      installmentPlanId: "",
-    },
-  });
+  const [classId, setClassId] =
+    useState("");
+  const [selected, setSelected] =
+    useState([]);
+  const [planId, setPlanId] =
+    useState("");
+  const [progress, setProgress] =
+    useState(null);
 
   useEffect(() => {
     if (open) {
-      reset({
-        studentId: "",
-        installmentPlanId: "",
-      });
+      setClassId("");
+      setSelected([]);
+      setPlanId("");
+      setProgress(null);
     }
-  }, [open, reset]);
+  }, [open]);
 
-  const onSubmit = async (
-    formData
-  ) => {
-    if (!tripTemplateId) return;
+  const visible = useMemo(
+    () =>
+      classId
+        ? candidateOptions.filter(
+            (item) =>
+              item.classId === classId
+          )
+        : candidateOptions,
+    [candidateOptions, classId]
+  );
+
+  const candidateClasses = useMemo(
+    () =>
+      classOptions.filter((option) =>
+        candidateOptions.some(
+          (item) =>
+            item.classId === option.value
+        )
+      ),
+    [classOptions, candidateOptions]
+  );
+
+  const onSubmit = async () => {
+    if (!tripTemplateId || !selected.length) return;
 
     setActionLoading(true);
+    const added = [];
+    const failed = [];
 
-    const response =
-      await enrollStudentInTripTemplate(
-        tripTemplateId,
-        {
-          studentId:
-            formData.studentId,
-          installmentPlanId:
-            formData.installmentPlanId ||
-            undefined,
-        }
-      );
-
-    if (response.status) {
-      toast.success(
-        response.message ||
-          "تم إضافة الطالب إلى الرحلة بنجاح"
-      );
-
-      await onDone();
-    } else {
-      toast.error(
-        response ||
-          "حدث خطأ ما أثناء إضافة الطالب إلى الرحلة"
-      );
+    for (const [index, item] of selected.entries()) {
+      setProgress({ done: index, total: selected.length });
+      const response =
+        await enrollStudentInTripTemplate(
+          tripTemplateId,
+          {
+            studentId: item._id,
+            installmentPlanId:
+              planId || undefined,
+          }
+        );
+      if (response.status) added.push(String(item._id));
+      else failed.push(`${item.name}: ${response?.message || response}`);
     }
 
+    setProgress(null);
     setActionLoading(false);
+
+    if (added.length) {
+      toast.success(
+        added.length === 1
+          ? `تمت إضافة ${selected.find((item) => String(item._id) === added[0])?.name} إلى الرحلة`
+          : `تمت إضافة ${added.length} طالب إلى الرحلة`
+      );
+    }
+    failed.forEach((message) =>
+      toast.error(message)
+    );
+
+    if (added.length) await onDone(added);
   };
 
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={loading ? undefined : onClose}
       fullWidth
       maxWidth="sm"
       PaperProps={{
@@ -1023,7 +1087,7 @@ const EnrollDialog = ({
           fontWeight: 900,
         }}
       >
-        إضافة طالب إلى الرحلة
+        إضافة طلاب إلى الرحلة
       </DialogTitle>
 
       <DialogContent
@@ -1033,67 +1097,138 @@ const EnrollDialog = ({
           pb: 1.5,
         }}
       >
-        <Grid
-          container
-          spacing={1.25}
-        >
-          <Grid
-            item
-            xs={12}
-            sm={6}
-          >
-            <Select
-              register={register}
-              registerName="studentId"
-              data={
-                candidateOptions
-              }
-              name="displayName"
-              error={
-                errors.studentId
-                  ?.message
-              }
-              label="الطالب"
-              required
-            />
-          </Grid>
+        <Stack spacing={1.5}>
+          <SelectFilter
+            value={classId}
+            onChange={setClassId}
+            label="الفصل"
+            allLabel="جميع الفصول"
+            options={candidateClasses}
+          />
 
-          <Grid
-            item
-            xs={12}
-            sm={6}
-          >
-            <Select
-              register={register}
-              registerName="installmentPlanId"
-              data={planOptions}
-              name="displayName"
-              error={
-                errors
-                  .installmentPlanId
-                  ?.message
-              }
-              label="خطة التقسيط"
-              defaultSelect="كاش بدون تقسيط"
-            />
-          </Grid>
+          <Autocomplete
+            multiple
+            disableCloseOnSelect
+            options={visible}
+            value={selected}
+            onChange={(_, value) =>
+              setSelected(value)
+            }
+            groupBy={(option) =>
+              option.classLabel
+            }
+            getOptionLabel={(option) =>
+              option.name
+            }
+            isOptionEqualToValue={(a, b) =>
+              a._id === b._id
+            }
+            limitTags={5}
+            noOptionsText="لا يوجد طلاب متاحون"
+            renderOption={(props, option, { selected: isSelected }) => (
+              <li {...props} key={option._id}>
+                <Checkbox
+                  size="small"
+                  checked={isSelected}
+                  sx={{ ml: 1 }}
+                />
+                {option.name}
+              </li>
+            )}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="الطلاب"
+                placeholder={
+                  selected.length
+                    ? ""
+                    : "اكتب اسم الطالب للبحث"
+                }
+              />
+            )}
+          />
 
-          {candidateOptions.length ===
-            0 && (
-            <Grid item xs={12}>
-              <Typography
-                sx={{
-                  color:
-                    "var(--color-muted)",
-                  fontSize: 10,
-                }}
+          <Stack
+            direction="row"
+            gap={1}
+            flexWrap="wrap"
+          >
+            {visible.length > 0 && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() =>
+                  setSelected((previous) => {
+                    const ids = new Set(previous.map((item) => item._id));
+                    return [
+                      ...previous,
+                      ...visible.filter((item) => !ids.has(item._id)),
+                    ];
+                  })
+                }
               >
-                لا يوجد طلاب متاحون
-                للإضافة حالياً.
-              </Typography>
-            </Grid>
+                {classId
+                  ? `اختيار طلاب الفصل كاملًا (${visible.length})`
+                  : `اختيار جميع الطلاب (${visible.length})`}
+              </Button>
+            )}
+            {selected.length > 0 && (
+              <Button
+                size="small"
+                onClick={() =>
+                  setSelected([])
+                }
+              >
+                مسح الاختيار
+              </Button>
+            )}
+          </Stack>
+
+          <TextField
+            select
+            fullWidth
+            label="طريقة السداد"
+            value={planId}
+            onChange={(e) =>
+              setPlanId(e.target.value)
+            }
+            SelectProps={{ native: true }}
+            InputLabelProps={{ shrink: true }}
+            helperText="تُسدَّد رسوم الرحلة دفعة واحدة عادةً. اختر خطة تقسيط فقط إذا كانت الرسوم ستُقسَّط على أكثر من دفعة."
+          >
+            <option value="">
+              دفعة واحدة (بدون تقسيط)
+            </option>
+            {planOptions.map((plan) => (
+              <option
+                key={plan._id}
+                value={plan._id}
+              >
+                {plan.displayName}
+              </option>
+            ))}
+          </TextField>
+
+          {candidateOptions.length === 0 && (
+            <Alert severity="info">
+              جميع الطلاب مسجلون في هذه
+              الرحلة.
+            </Alert>
           )}
-        </Grid>
+
+          {progress && (
+            <Typography
+              sx={{
+                color:
+                  "var(--color-muted)",
+                fontSize: 11,
+              }}
+            >
+              جارٍ الإضافة… {progress.done} من{" "}
+              {progress.total}
+            </Typography>
+          )}
+        </Stack>
       </DialogContent>
 
       <DialogActions
@@ -1107,6 +1242,7 @@ const EnrollDialog = ({
         <Button
           variant="outlined"
           onClick={onClose}
+          disabled={loading}
           sx={{
             minHeight: 38,
             borderRadius: "10px",
@@ -1118,13 +1254,10 @@ const EnrollDialog = ({
 
         <Button
           variant="contained"
-          onClick={handleSubmit(
-            onSubmit
-          )}
+          onClick={onSubmit}
           disabled={
             loading ||
-            candidateOptions.length ===
-              0
+            selected.length === 0
           }
           sx={{
             minHeight: 38,
@@ -1133,7 +1266,9 @@ const EnrollDialog = ({
             fontWeight: 900,
           }}
         >
-          إضافة الطالب
+          {selected.length > 1
+            ? `إضافة ${selected.length} طالب`
+            : "إضافة الطالب"}
         </Button>
       </DialogActions>
     </Dialog>
