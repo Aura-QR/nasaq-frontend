@@ -13,6 +13,7 @@ import {
   Checkbox,
   Chip,
   Dialog,
+  FormControlLabel,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -37,6 +38,7 @@ import { toast } from "react-toastify";
 import {
   enrollStudentInTripTemplate,
   fetchTripTemplate,
+  payTripInstallment,
   fetchTripTemplateCandidates,
   fetchTripTemplateStudents,
   removeStudentFromTripTemplate,
@@ -990,6 +992,16 @@ const EnrollDialog = ({
     useState("");
   const [progress, setProgress] =
     useState(null);
+  // Most trip fees are handed over in cash as the student signs up; this
+  // records that payment with the enrolment instead of a second visit to
+  // each student's details.
+  const [paidNow, setPaidNow] =
+    useState(false);
+  const [paidAt, setPaidAt] =
+    useState("");
+
+  const today = () =>
+    new Date().toLocaleDateString("en-CA");
 
   useEffect(() => {
     if (open) {
@@ -997,8 +1009,14 @@ const EnrollDialog = ({
       setSelected([]);
       setPlanId("");
       setProgress(null);
+      setPaidNow(false);
+      setPaidAt(today());
     }
   }, [open]);
+
+  useEffect(() => {
+    if (planId) setPaidNow(false);
+  }, [planId]);
 
   const visible = useMemo(
     () =>
@@ -1028,6 +1046,7 @@ const EnrollDialog = ({
     setActionLoading(true);
     const added = [];
     const failed = [];
+    const unpaid = [];
 
     for (const [index, item] of selected.entries()) {
       setProgress({ done: index, total: selected.length });
@@ -1040,8 +1059,26 @@ const EnrollDialog = ({
               planId || undefined,
           }
         );
-      if (response.status) added.push(String(item._id));
-      else failed.push(`${item.name}: ${response?.message || response}`);
+      if (!response.status) {
+        failed.push(`${item.name}: ${response?.message || response}`);
+        continue;
+      }
+      added.push(String(item._id));
+
+      if (paidNow) {
+        const trip = response.data || {};
+        const first = (trip.installments || []).find(
+          (inst) => inst.installmentNumber === 1
+        );
+        const payment = trip._id && first
+          ? await payTripInstallment(item._id, trip._id, {
+              installmentNumber: 1,
+              amount: Number(first.amount) - Number(first.paidAmount || 0),
+              paidAt: paidAt || today(),
+            })
+          : { status: false };
+        if (!payment.status) unpaid.push(item.name);
+      }
     }
 
     setProgress(null);
@@ -1057,6 +1094,11 @@ const EnrollDialog = ({
     failed.forEach((message) =>
       toast.error(message)
     );
+    if (unpaid.length) {
+      toast.warning(
+        `أُضيف الطلاب، لكن تعذر تسجيل السداد لـ: ${unpaid.join("، ")}. سجّله من «التفاصيل».`
+      );
+    }
 
     if (added.length) await onDone(added);
   };
@@ -1209,6 +1251,40 @@ const EnrollDialog = ({
             ))}
           </TextField>
 
+          {!planId && (
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              gap={1}
+            >
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={paidNow}
+                    onChange={(e) =>
+                      setPaidNow(e.target.checked)
+                    }
+                  />
+                }
+                label="تم سداد رسوم الرحلة"
+                sx={{ flex: 1, m: 0 }}
+              />
+              {paidNow && (
+                <TextField
+                  type="date"
+                  size="small"
+                  label="تاريخ السداد"
+                  value={paidAt}
+                  onChange={(e) =>
+                    setPaidAt(e.target.value)
+                  }
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ width: { xs: "100%", sm: 180 } }}
+                />
+              )}
+            </Stack>
+          )}
+
           {candidateOptions.length === 0 && (
             <Alert severity="info">
               جميع الطلاب مسجلون في هذه
@@ -1266,9 +1342,10 @@ const EnrollDialog = ({
             fontWeight: 900,
           }}
         >
-          {selected.length > 1
+          {(selected.length > 1
             ? `إضافة ${selected.length} طالب`
-            : "إضافة الطالب"}
+            : "إضافة الطالب") +
+            (paidNow ? " وتسجيل السداد" : "")}
         </Button>
       </DialogActions>
     </Dialog>
