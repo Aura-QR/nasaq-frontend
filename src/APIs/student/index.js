@@ -461,3 +461,13 @@ export const submitProject = async (
     );
   }
 };
+// GET /preparation/student/homework
+// واجبات الدروس المكتوبة في التحضير، مع المادة وموعد التسليم.
+export const fetchStudentLessonHomework = async () => {
+  try {
+    const response = await api.get("/preparation/student/homework");
+    return response.data;
+  } catch (err) {
+    return normalizeFailure(err, "تعذر تحميل واجبات الدروس");
+  }
+};

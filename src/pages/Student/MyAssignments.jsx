@@ -22,7 +22,6 @@ import {
   ErrorOutlineRounded,
   EventAvailableRounded,
   HourglassBottomRounded,
-  MenuBookRounded,
   SchoolRounded,
   TuneRounded,
 } from "@mui/icons-material";
@@ -40,6 +39,7 @@ import {
 } from "@/utils/hooks/apis/student/useStudent";
 
 import AssignmentCard from "./components/AssignmentCard";
+import LessonHomeworkSection from "./components/LessonHomeworkSection";
 import ExamResultDialog from "@/components/ExamResultDialog/ExamResultDialog";
 
 // =====================================================
@@ -1158,6 +1158,9 @@ const MyAssignments = () => {
             )}
           </Stack>
         </Paper>
+
+        {/* واجبات الدروس المكتوبة في التحضير */}
+        <LessonHomeworkSection />
 
         {/* =============================================
             FILTER

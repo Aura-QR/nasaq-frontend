@@ -1050,6 +1050,19 @@ const TeacherAttendance = () => {
 
 
         {sheet?.registerLocked && <Alert severity="info" sx={{ mt: 1 }}>اعتُمد السجل السنوي لهذه المادة؛ لا يمكن تعديل المتابعة</Alert>}
+        {/* الواجب المطلوب في هذه الحصة: عمود «الواجب» يرصد حلّه. */}
+        {sheet?.homeworkDue?.length > 0 && (
+          <Alert severity="warning" icon={false} sx={{ mt: 1, borderRadius: "12px" }}>
+            <Typography sx={{ fontSize: "11px", fontWeight: 900, mb: 0.4 }}>
+              {sheet.homeworkDue.length > 1 ? "الواجبات المطلوبة اليوم" : "الواجب المطلوب اليوم"} — رصد حلّه في عمود «الواجب»
+            </Typography>
+            {sheet.homeworkDue.map((hw) => (
+              <Typography key={hw._id} sx={{ fontSize: "11px" }}>
+                • {hw.title}{hw.lessonTitle ? ` (درس: ${hw.lessonTitle})` : ""}
+              </Typography>
+            ))}
+          </Alert>
+        )}
         {rows.length > 0 && <TextField type="number" size="small" label="الدرجة العظمى للاختبار" value={quizMaxScore}
           onChange={(e) => setQuizMaxScore(e.target.value)} disabled={sheet?.registerLocked || saving}
           inputProps={{ min: 1, step: "any" }} InputLabelProps={{ shrink: true }} sx={{ mt: 2, width: 240 }} />}
