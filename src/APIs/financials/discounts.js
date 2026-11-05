@@ -13,3 +13,21 @@ export const removeDiscountFromBus=async(id)=>{try{return(await api.delete(`${E}
 export const applyDiscountToTrip=async(studentId,tripId,data)=>{try{return(await api.post(`${E}/apply/trips/${studentId}/${tripId}`,data)).data}catch(e){return apiError(e,"تعذر تطبيق خصم الرحلة")}};
 export const removeDiscountFromTrip=async(studentId,tripId)=>{try{return(await api.delete(`${E}/apply/trips/${studentId}/${tripId}`)).data}catch(e){return apiError(e,"تعذر إزالة خصم الرحلة")}};
 export default {fetchDiscounts,fetchSingleDiscount,addDiscount,editDiscount,deleteDiscount,applyDiscountToTuition,removeDiscountFromTuition,applyDiscountToBus,removeDiscountFromBus,applyDiscountToTrip,removeDiscountFromTrip};
+
+// خصم خاص لطالب واحد (نسبة أو مبلغ) مع سببه.
+export const applyCustomDiscountToTuition = async (studentId, data) => {
+  try {
+    return (await api.post(`${E}/apply/tuition/${studentId}/custom`, data)).data;
+  } catch (e) {
+    return apiError(e, "تعذر تطبيق الخصم الخاص");
+  }
+};
+
+// إزالة خصم واحد من الخصومات المطبقة على الرسوم الدراسية.
+export const removeTuitionDiscountEntry = async (studentId, entryId, params) => {
+  try {
+    return (await api.delete(`${E}/apply/tuition/${studentId}/${entryId}`, { params })).data;
+  } catch (e) {
+    return apiError(e, "تعذر إزالة الخصم");
+  }
+};

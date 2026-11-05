@@ -52,13 +52,14 @@ import {
 } from "@/APIs/financials/financialRecordCorrections";
 
 import {
-  applyDiscountToTuition,
-  removeDiscountFromTuition,
 } from "@/APIs/financials/discounts";
 
 import {
   payAdditionalFee,
 } from "@/APIs/financials/additionalFees";
+import TuitionDiscountsPanel from "./components/TuitionDiscountsPanel";
+import FeeItemSalePanel from "./components/FeeItemSalePanel";
+import { cancelFeeItemSale } from "@/APIs/financials/feeItems";
 
 import Back from "@/components/Back/Back";
 import PaymentHistoryDialog, {
@@ -521,16 +522,6 @@ const FinancialRecordProfilePage =
       selectedInstallment,
       setSelectedInstallment,
     ] = useState(null);
-
-    const [
-      selectedDiscountId,
-      setSelectedDiscountId,
-    ] = useState("");
-
-    const [
-      discountLoading,
-      setDiscountLoading,
-    ] = useState(false);
 
     const [
       switchPlanOpen,
@@ -1358,122 +1349,6 @@ const FinancialRecordProfilePage =
         );
       };
 
-    const handleApplyDiscount =
-      async () => {
-        if (
-          !studentId
-        ) {
-          return;
-        }
-
-        if (
-          !permissions?.edit
-        ) {
-          toast.error(
-            "ليس لديك صلاحية تعديل الرسوم"
-          );
-          return;
-        }
-
-        if (
-          !selectedDiscountId
-        ) {
-          toast.error(
-            "اختر خصمًا أولًا"
-          );
-          return;
-        }
-
-        setDiscountLoading(
-          true
-        );
-
-        const response =
-          await applyDiscountToTuition(
-            studentId,
-            {
-              discountId:
-                selectedDiscountId,
-              ...(academicYearId
-                ? {
-                    academicYearId,
-                  }
-                : {}),
-            }
-          );
-
-        if (
-          response?.status
-        ) {
-          toast.success(
-            response?.message ||
-              "تم تطبيق الخصم"
-          );
-
-          setSelectedDiscountId(
-            ""
-          );
-
-          await refetch();
-        } else {
-          toast.error(
-            getErrorMessage(
-              response,
-              "تعذر تطبيق الخصم"
-            )
-          );
-        }
-
-        setDiscountLoading(
-          false
-        );
-      };
-
-    const handleRemoveDiscount =
-      async () => {
-        if (
-          !studentId
-        ) {
-          return;
-        }
-
-        setDiscountLoading(
-          true
-        );
-
-        const response =
-          await removeDiscountFromTuition(
-            studentId,
-            academicYearId
-              ? {
-                  academicYearId,
-                }
-              : undefined
-          );
-
-        if (
-          response?.status
-        ) {
-          toast.success(
-            response?.message ||
-              "تم إزالة الخصم"
-          );
-
-          await refetch();
-        } else {
-          toast.error(
-            getErrorMessage(
-              response,
-              "تعذر إزالة الخصم"
-            )
-          );
-        }
-
-        setDiscountLoading(
-          false
-        );
-      };
-
     if (loading) {
       return (
         <Container>
@@ -1838,6 +1713,21 @@ const FinancialRecordProfilePage =
                                 }}
                               >
                                 السجل
+                              </Button>
+                            ) : null}
+                            {permissions?.edit && item.raw?.feeItemId && item.paid <= 0 ? (
+                              <Button
+                                variant="outlined"
+                                color="error"
+                                onClick={async () => {
+                                  if (!window.confirm(`إلغاء بيع «${item.name}»؟`)) return;
+                                  const r = await cancelFeeItemSale(studentId, item.feeId, academicYearId ? { academicYearId } : undefined);
+                                  if (r?.status) { toast.success(r?.message || "تم إلغاء البيع"); await refetch(); }
+                                  else toast.error(r?.message || r || "تعذر إلغاء البيع");
+                                }}
+                                sx={{ minHeight: 34, borderRadius: "9px", fontSize: "9.5px", fontWeight: 800 }}
+                              >
+                                إلغاء البيع
                               </Button>
                             ) : null}
                             {!(permissions?.edit && item.remaining > 0) &&
@@ -2560,195 +2450,22 @@ const FinancialRecordProfilePage =
             </Grid>
           </Paper>
 
-          <Paper
-            elevation={0}
-            sx={{
-              mt: 1.25,
-              p: {
-                xs: 1.5,
-                md: 2,
-              },
-              border:
-                "1px solid rgba(36,74,112,.09)",
-              borderRadius:
-                "18px",
-              bgcolor:
-                "var(--color-cream)",
-            }}
-          >
-            <Stack
-              direction={{
-                xs:
-                  "column",
-                md: "row",
-              }}
-              justifyContent="space-between"
-              alignItems={{
-                xs:
-                  "stretch",
-                md:
-                  "center",
-              }}
-              gap={1.5}
-            >
-              <Box>
-                <Typography
-                  sx={{
-                    fontSize:
-                      "14px",
-                    fontWeight:
-                      800,
-                    color:
-                      "var(--color-navy-deep)",
-                  }}
-                >
-                  خصم الرسوم
-                  الدراسية
-                </Typography>
+          <TuitionDiscountsPanel
+            tuition={tuition}
+            discounts={activeDiscounts}
+            loadingList={discountsLoading}
+            studentId={studentId}
+            academicYearId={academicYearId}
+            canEdit={!!permissions?.edit}
+            onChanged={refetch}
+          />
 
-                <Typography
-                  sx={{
-                    mt: 0.3,
-                    fontSize:
-                      "10px",
-                    color:
-                      "var(--color-muted)",
-                  }}
-                >
-                  {discountAmount >
-                  0
-                    ? `الخصم الحالي: ${
-                        discount?.name ||
-                        "خصم"
-                      } · ${formatMoney(
-                        discountAmount
-                      )}`
-                    : "لا يوجد خصم مطبق حاليًا."}
-                </Typography>
-              </Box>
-
-              {permissions?.edit && (
-                <Stack
-                  direction={{
-                    xs:
-                      "column",
-                    sm:
-                      "row",
-                  }}
-                  gap={1}
-                >
-                  {discountAmount <=
-                  0 ? (
-                    <>
-                      <FormControl
-                        size="small"
-                        sx={{
-                          minWidth:
-                            240,
-                        }}
-                      >
-                        <InputLabel>
-                          اختر خصم
-                        </InputLabel>
-
-                        <Select
-                          value={
-                            selectedDiscountId
-                          }
-                          label="اختر خصم"
-                          onChange={(
-                            event
-                          ) =>
-                            setSelectedDiscountId(
-                              event
-                                .target
-                                .value
-                            )
-                          }
-                          disabled={
-                            discountsLoading ||
-                            discountLoading
-                          }
-                        >
-                          {activeDiscounts.map(
-                            (
-                              item
-                            ) => (
-                              <MenuItem
-                                key={
-                                  item
-                                    ?._id ||
-                                  item?.id
-                                }
-                                value={
-                                  item
-                                    ?._id ||
-                                  item?.id
-                                }
-                              >
-                                {
-                                  item?.name
-                                }
-                                {item?.percentage
-                                  ? ` - ${item.percentage}%`
-                                  : ""}
-                              </MenuItem>
-                            )
-                          )}
-                        </Select>
-                      </FormControl>
-
-                      <Button
-                        variant="contained"
-                        onClick={
-                          handleApplyDiscount
-                        }
-                        disabled={
-                          !selectedDiscountId ||
-                          discountLoading
-                        }
-                        sx={{
-                          borderRadius:
-                            "10px",
-                          fontWeight:
-                            800,
-                          fontSize:
-                            "10px",
-                          textTransform:
-                            "none",
-                        }}
-                      >
-                        تطبيق الخصم
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      onClick={
-                        handleRemoveDiscount
-                      }
-                      disabled={
-                        discountLoading
-                      }
-                      sx={{
-                        borderRadius:
-                          "10px",
-                        fontWeight:
-                          800,
-                        fontSize:
-                          "10px",
-                        textTransform:
-                          "none",
-                      }}
-                    >
-                      إزالة الخصم
-                    </Button>
-                  )}
-                </Stack>
-              )}
-            </Stack>
-          </Paper>
+          <FeeItemSalePanel
+            studentId={studentId}
+            academicYearId={academicYearId}
+            canEdit={!!permissions?.edit}
+            onChanged={refetch}
+          />
 
           <Dialog
             open={switchPlanOpen}

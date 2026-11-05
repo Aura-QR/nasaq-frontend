@@ -19,6 +19,7 @@ import StudentFinancialMySummary from "@/pages/Student/Financials/MySummary";
 import Discounts_List from "@/pages/Financials/Discounts/List";
 import Discounts_Add from "@/pages/Financials/Discounts/Add";
 import Discounts_Edit from "@/pages/Financials/Discounts/Edit";
+import FeeItems_List from "@/pages/Financials/FeeItems/List";
 
 import AdditionalFees_List from "@/pages/Financials/AdditionalFees/List";
 import AdditionalFees_Add from "@/pages/Financials/AdditionalFees/Add";
@@ -244,6 +245,20 @@ export const financialsRoutes = (
             operation="edit"
           >
             <Discounts_Edit />
+          </RequirePermission>
+        </RequireAuth>
+      }
+    />
+
+    <Route
+      path="/financial/fee-items"
+      element={
+        <RequireAuth loginPath="/">
+          <RequirePermission
+            module="financial"
+            operation="read"
+          >
+            <FeeItems_List />
           </RequirePermission>
         </RequireAuth>
       }
