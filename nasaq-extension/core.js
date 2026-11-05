@@ -131,7 +131,8 @@
       const capabilities = await api('/preparation/generation-options');
       if (!capabilities.ok || capabilities.data?.version !== 1 ||
           !Object.keys(RESOURCE_LABELS).every((type) => capabilities.data?.resourceTypes?.includes(type)) ||
-          (requestedRows.some((row) => row.resourceTypes.includes('quiz')) && !capabilities.data?.linkedExams)) {
+          (requestedRows.some((row) => row.resourceTypes.includes('quiz')) && !capabilities.data?.linkedExams) ||
+          (requestedRows.some((row) => row.homework) && !capabilities.data?.manualHomework)) {
         problem({ label: 'خدمة التحضير' }, 'الإضافات', { message: 'تعذر تأكيد دعم اختيارات الإضافات. يجب نشر تحديث الخادم وسير عمل التوليد قبل الاستخدام. ' + (capabilities.message || ''), status: capabilities.status });
         result.stopped = true; return result;
       }
@@ -194,7 +195,8 @@
         }
         const generated = await api(`/preparation/${row.preparationId}/generate`, { method: 'POST',
           ...(row.resourceTypes !== undefined ? { body: { resourceTypes: [...row.resourceTypes], includeContent: withContent,
-            ...(row.resourceTypes.includes('quiz') ? { exam: { ...row.exam } } : {}) } } : {}) });
+            ...(row.resourceTypes.includes('quiz') ? { exam: { ...row.exam } } : {}),
+            ...(row.homework && row.resourceTypes.includes('homework') ? { homework: { ...row.homework } } : {}) } } : {}) });
         if (!generated.ok) { problem(row, 'توليد المحتوى', generated); continue; }
         result.generated++;
         let incomplete = false;

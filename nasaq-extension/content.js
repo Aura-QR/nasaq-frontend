@@ -11,7 +11,7 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
   const state = { open: false, loading: false, busy: false, cancel: false, weekOf: today(), week: null,
-    teacherId: '', teachers: null, chosen: new Map(), ticked: new Set(), lessons: new Map(), additions: new Map(), exams: new Map(),
+    teacherId: '', teachers: null, chosen: new Map(), ticked: new Set(), lessons: new Map(), additions: new Map(), exams: new Map(), homework: new Map(),
     error: '', result: null, progress: '', withContent: true, andSubmit: true, session: null, version: 0 };
   const root = document.createElement('div');
   root.className = 'nasaq-prep-root'; root.dir = 'rtl'; document.body.appendChild(root);
@@ -60,7 +60,7 @@
     const version = ++state.version;
     state.loading = true; state.error = ''; state.week = null;
     state.chosen.clear(); state.ticked.clear(); state.lessons.clear();
-    if (!preserve) { state.additions.clear(); state.exams.clear(); }
+    if (!preserve) { state.additions.clear(); state.exams.clear(); state.homework.clear(); }
     if (!preserve) state.result = null;
     render();
     const current = await session();
@@ -72,7 +72,7 @@
     }
     if (state.session && (current.token !== state.session.token || current.base !== state.session.base)) {
       state.teacherId = ''; state.teachers = null;
-      state.additions.clear(); state.exams.clear();
+      state.additions.clear(); state.exams.clear(); state.homework.clear();
     }
     state.session = current;
     const query = new URLSearchParams({ weekOf: state.weekOf });
@@ -118,6 +118,21 @@
       if (units.status === 401 || units.status === 403) break;
     }
   }
+  // الواجب الذي يكتبه المعلم بنفسه يُرسل كما هو بدل توليده.
+  function homeworkConfig(slot) {
+    if (!state.homework.has(slot.lectureId)) state.homework.set(slot.lectureId, { mode: 'auto', title: '', description: '' });
+    return state.homework.get(slot.lectureId);
+  }
+  function manualHomework(slot) {
+    if (!state.additions.get(slot.lectureId)?.has('homework')) return undefined;
+    const config = state.homework.get(slot.lectureId);
+    if (!config || config.mode !== 'manual') return undefined;
+    return { title: config.title.trim(), description: config.description.trim() };
+  }
+  function homeworkIssue(slot) {
+    const manual = manualHomework(slot);
+    return Boolean(manual && (!manual.title || !manual.description));
+  }
   async function prepare() {
     if (state.busy || state.loading || !state.week) return;
     const rows = slots().filter((slot) => eligible(slot) && state.ticked.has(slot.lectureId)).map((slot) => ({
@@ -125,6 +140,7 @@
       originalLessonId: C.id(slot.preparation?.lessonId), lessonId: state.chosen.get(slot.lectureId) || '',
       resourceTypes: [...(state.additions.get(slot.lectureId) || [])],
       exam: state.exams.has(slot.lectureId) ? { ...state.exams.get(slot.lectureId) } : undefined,
+      homework: manualHomework(slot),
       label: `${DAYS[slot.dayOfWeek] || slot.dayOfWeek} · ح${slot.slot} · ${slot.subject?.name || ''} · ${slot.class?.name || ''}`,
     }));
     if (!rows.length) return;
@@ -136,6 +152,8 @@
       state.error = 'الإرسال يتطلب درسًا ومحتوى رقميًا وتكليفًا وهدفًا. اختر الدروس أو أوقف الإرسال لحفظ المسودات.';
       render(); return;
     }
+    const missingHomework = slots().find((slot) => state.ticked.has(slot.lectureId) && homeworkIssue(slot));
+    if (missingHomework) { state.error = `ح${missingHomework.slot} — اكتب عنوان الواجب ونصه، أو اختر «ولّده تلقائيًا».`; render(); return; }
     const invalidExam = rows.find((row) => row.resourceTypes.includes('quiz') && C.examIssue(row.exam));
     if (invalidExam) { state.error = `${invalidExam.label} — ${C.examIssue(invalidExam.exam)}`; render(); return; }
     const expected = state.session;
@@ -217,6 +235,31 @@
       });
       label.append(check, el('span', null, title)); resources.appendChild(label);
     }
+    if (choices.has('homework')) {
+      const config = homeworkConfig(slot); const box = el('div', 'nq-homework');
+      const modes = el('div', 'nq-homework-modes');
+      for (const [mode, title] of [['auto', 'ولّده تلقائيًا'], ['manual', 'أكتبه بنفسي']]) {
+        const label = el('label', 'nq-resource-choice'); const radio = el('input');
+        radio.type = 'radio'; radio.name = `nq-hw-${slot.lectureId}`; radio.checked = config.mode === mode; radio.disabled = busy;
+        radio.setAttribute('aria-label', `الواجب ${title} للحصة ${slot.slot}`);
+        radio.addEventListener('change', () => { if (radio.checked) { config.mode = mode; render(); } });
+        label.append(radio, el('span', null, title)); modes.appendChild(label);
+      }
+      box.appendChild(modes);
+      if (config.mode === 'manual') {
+        const title = el('input', 'nq-exam-input'); title.type = 'text'; title.maxLength = 300; title.value = config.title;
+        title.placeholder = 'عنوان الواجب، مثل: حل تمارين صفحة ٤٥'; title.disabled = busy;
+        title.setAttribute('aria-label', `عنوان الواجب للحصة ${slot.slot}`);
+        title.addEventListener('input', () => { config.title = title.value; renderFooter(); });
+        const text = el('textarea', 'nq-homework-text'); text.rows = 3; text.maxLength = 10000; text.value = config.description;
+        text.placeholder = 'نص الواجب كما سيقرؤه الطالب'; text.disabled = busy;
+        text.setAttribute('aria-label', `نص الواجب للحصة ${slot.slot}`);
+        text.addEventListener('input', () => { config.description = text.value; renderFooter(); });
+        box.append(title, text);
+      }
+      box.appendChild(el('div', 'nq-row-help', 'موعد التسليم يُحدَّد تلقائيًا بالحصة القادمة للمادة نفسها، ويظهر للطالب في «واجباتي» بعد إرسال التحضير، وفي كشف المتابعة يوم التسليم.'));
+      resources.appendChild(box);
+    }
     resources.appendChild(el('div', 'nq-row-help', 'يمكن اختيار أكثر من نوع أو إلغاء الجميع. الإضافات الموجودة تُحفظ ولا تُحذف عند إلغاء الاختيار.'));
     if (state.session?.role !== 'TEACHER') resources.appendChild(el('div', 'nq-row-help', 'إنشاء الامتحان متاح للمعلم صاحب الحصة من حسابه فقط.'));
     if (choices.has('quiz')) {
@@ -254,12 +297,13 @@
     const missingForAdditions = selected.some((slot) => state.additions.get(slot.lectureId)?.size && !state.chosen.get(slot.lectureId));
     const invalidExam = selected.some((slot) => state.additions.get(slot.lectureId)?.has('quiz') && C.examIssue(state.exams.get(slot.lectureId)));
     if (invalidExam) footer.appendChild(el('div', 'nq-row-help nq-error-text', 'أكمل تواريخ وإعدادات الامتحان في الحصص المحددة.'));
+    if (selected.some(homeworkIssue)) footer.appendChild(el('div', 'nq-row-help nq-error-text', 'اكتب عنوان الواجب ونصه في الحصص التي اخترت فيها «أكتبه بنفسي».'));
     footer.appendChild(el('div', 'nq-row-help', 'تُولّد الإضافات المحددة حتى عند إيقاف كتابة حقول التحضير. لحفظ مسودة فقط ألغِ الإضافات والتوليد والإرسال. الإرسال يحتاج تكليفًا واحدًا على الأقل.'));
     if (missing) footer.appendChild(el('div', 'nq-row-help', `${missing} حصة محددة دون درس. التوليد والإرسال يحتاجان اختيار الدروس.`));
     const progress = el('div', 'nq-progress', state.busy ? state.progress : '');
     progress.setAttribute('role', 'status'); footer.appendChild(progress);
     footer.appendChild(button(`حضّر المحدد (${selected.length})`, prepare,
-      busy || !selected.length || invalidExam || missingForAdditions || ((state.withContent || state.andSubmit) && missing > 0), 'nq-btn nq-btn-main'));
+      busy || !selected.length || invalidExam || selected.some(homeworkIssue) || missingForAdditions || ((state.withContent || state.andSubmit) && missing > 0), 'nq-btn nq-btn-main'));
     if (state.busy) footer.appendChild(button(state.cancel ? 'سيتم التوقف بعد الطلب الحالي' : 'إيقاف بعد الطلب الحالي', () => {
       state.cancel = true; renderFooter();
     }, state.cancel));

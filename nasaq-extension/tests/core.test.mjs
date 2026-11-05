@@ -264,3 +264,23 @@ test('exam settings are required and validated before any API request', async ()
     assert.equal(calls, 0); assert.equal(result.stopped, true);
   }
 });
+test('homework the teacher wrote is sent as written', async () => {
+  const homework = { title: 'حل تمارين صفحة ٤٥', description: 'التمرين ١ و٢' };
+  const bodies = [];
+  const result = await run([{ ...fresh()[0], resourceTypes: ['homework'], homework }], async (path, options) => {
+    if (path.endsWith('/generation-options')) return ok({ version: 1, resourceTypes: Object.keys(C.RESOURCE_LABELS), manualHomework: true });
+    if (path.endsWith('/bulk')) return bulk(options);
+    if (path.endsWith('/generate')) { bodies.push(options.body); return ok({ resourceResults: [{ type: 'homework', status: 'created' }] }); }
+    return ok();
+  }, { withContent: false, andSubmit: false });
+  assert.deepEqual(bodies[0], { resourceTypes: ['homework'], includeContent: false, homework });
+  assert.equal(result.resourcesAdded, 1);
+});
+test('written homework stops on a server that would generate it instead', async () => {
+  const calls = [];
+  const result = await run([{ ...fresh()[0], resourceTypes: ['homework'], homework: { title: 'أ', description: 'ب' } }], async (path) => {
+    calls.push(path);
+    return ok({ version: 1, resourceTypes: Object.keys(C.RESOURCE_LABELS) });
+  });
+  assert.deepEqual(calls, ['/preparation/generation-options']); assert.equal(result.stopped, true);
+});

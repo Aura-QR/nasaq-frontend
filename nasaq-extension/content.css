@@ -186,3 +186,7 @@
 .nasaq-prep-root .nq-exam-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
 .nasaq-prep-root .nq-exam-fields label { font-size: 11px; }
 .nasaq-prep-root .nq-exam-fields input, .nasaq-prep-root .nq-exam-fields select { display: block; width: 100%; font: inherit; padding: 5px; border: 1px solid #c8d3dd; border-radius: 6px; background: #fff; color: #0f2f4f; }
+.nasaq-prep-root .nq-homework { margin: 8px 0; padding: 8px; border: 1px dashed #c8d3dd; border-radius: 8px; background: #fbfcfd; }
+.nasaq-prep-root .nq-homework-modes { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.nasaq-prep-root .nq-homework .nq-exam-input, .nasaq-prep-root .nq-homework-text { display: block; width: 100%; box-sizing: border-box; font: inherit; padding: 6px; margin-top: 6px; border: 1px solid #c8d3dd; border-radius: 6px; background: #fff; color: #0f2f4f; }
+.nasaq-prep-root .nq-homework-text { resize: vertical; min-height: 60px; }

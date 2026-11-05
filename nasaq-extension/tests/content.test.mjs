@@ -190,3 +190,27 @@ test('periods start unticked, and «تحديد الحصص المتاحة» selec
   p.selectAll();
   assert.equal(p.find('.nq-check').checked, true);
 });
+
+test('writing homework yourself shows its fields, blocks until filled, and sends the text', async () => {
+  const bodies = [];
+  const prep = { _id: 'p1', reviewStatus: 'draft', lessonId: 'lesson1', lessonTitle: 'الجمع' };
+  const p = await panel(async (base, token, path, options) => {
+    if (path.endsWith('/generation-options')) return ok({ version: 1, resourceTypes: ['homework', 'activity', 'enrichment', 'quiz'], linkedExams: true, manualHomework: true });
+    if (path.startsWith('/preparation/weekly')) return ok(week([slot(prep)]));
+    if (path.endsWith('/generate')) { bodies.push(options.body); return ok({ resourceResults: [{ type: 'homework', status: 'created' }] }); }
+    if (path.endsWith('/submit')) return ok({});
+    return ok(prep);
+  });
+  const find = (label) => p.body.all().find((n) => n.attributes['aria-label'] === label);
+  const homework = find('واجب للحصة 1'); homework.checked = true; homework.fire('change');
+  assert.equal(find('عنوان الواجب للحصة 1'), undefined);
+  const manual = find('الواجب أكتبه بنفسي للحصة 1'); manual.checked = true; manual.fire('change');
+  p.selectAll();
+  assert.equal(p.find('.nq-btn-main').disabled, true);
+  const title = find('عنوان الواجب للحصة 1'); title.value = 'حل تمارين صفحة ٤٥'; title.fire('input');
+  const text = find('نص الواجب للحصة 1'); text.value = 'التمرين ١ و٢'; text.fire('input');
+  assert.equal(p.find('.nq-btn-main').disabled, false);
+  await p.find('.nq-btn-main').fire('click'); await settle();
+  assert.equal(JSON.stringify(bodies[0].homework), JSON.stringify({ title: 'حل تمارين صفحة ٤٥', description: 'التمرين ١ و٢' }));
+  assert.equal(JSON.stringify(bodies[0].resourceTypes), JSON.stringify(['homework']));
+});
