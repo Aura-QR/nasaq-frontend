@@ -31,3 +31,12 @@ export const removeTuitionDiscountEntry = async (studentId, entryId, params) => 
     return apiError(e, "تعذر إزالة الخصم");
   }
 };
+
+// تطبيق خصم من القائمة على عدة طلاب دفعة واحدة.
+export const applyDiscountBulk = async (discountId, data) => {
+  try {
+    return (await api.post(`${E}/${discountId}/apply-bulk`, data)).data;
+  } catch (e) {
+    return apiError(e, "تعذر تطبيق الخصم على الطلاب");
+  }
+};
