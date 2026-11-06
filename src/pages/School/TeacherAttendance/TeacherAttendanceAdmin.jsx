@@ -49,7 +49,7 @@ import usePermissions from "@/utils/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
-import { CSVLink } from "react-csv";
+import { downloadXlsx, minutesToHours } from "@/utils/exportXlsx";
 
 
 import Container from "@/components/Container/Container";
@@ -710,44 +710,64 @@ const TeacherAttendanceAdmin = () => {
   }, []);
 
   /*
-   * The report as a spreadsheet.
-   *
-   * Arabic headers survive Excel only with the byte-order mark CSVLink writes
-   * by default — without it every column title opens as mojibake, which is
-   * how an export gets reported as broken.
+   * The report as an Excel workbook: its own columns, right to left, times as
+   * hours:minutes. A CSV opened in Arabic Excel put every value in one column
+   * and showed minutes as raw numbers (8410) nobody could read.
    */
-  const summaryCsv = useMemo(
-    () =>
-      sortedSummaryRows.map((row) => ({
-        "المعلم": row?.teacherName || "معلم",
-        "الحالة": row?.teacherDeleted ? "محذوف" : "حالي",
-        "أيام الدوام في الفترة": summaryWorkingDays,
-        "أيام الحضور": Number(row?.daysPresent) || 0,
-        "أيام الغياب": Number(row?.daysAbsent) || 0,
-        "غياب بعذر": Number(row?.daysAbsentExcused) || 0,
-        "غياب بدون عذر": Number(row?.daysAbsentUnexcused) || 0,
-        "أيام التأخير": Number(row?.daysLate) || 0,
-        "إجمالي دقائق التأخير": Number(row?.totalLateMinutes) || 0,
-        "أيام الخروج المبكر": Number(row?.daysLeftEarly) || 0,
-        "إجمالي دقائق الخروج المبكر":
-          Number(row?.totalEarlyLeaveMinutes) || 0,
-        "دقائق العمل": Number(row?.totalWorkMinutes) || 0,
-        "دقائق العمل المتوقعة": Number(row?.totalExpectedWorkMinutes) || 0,
-        "أيام بدون انصراف": Number(row?.daysMissingCheckOut) || 0,
-        "أيام تأخير غير مقاس": Number(row?.daysLatenessNotTracked) || 0,
-        "أيام خروج غير مقاس": Number(row?.daysEarlyLeaveNotTracked) || 0,
-        "دوام في إجازة": Number(row?.daysOnDayOff) || 0,
-      })),
-    [sortedSummaryRows, summaryWorkingDays]
-  );
-
-  const summaryFileName = useMemo(
-    () =>
-      `تقرير-حضور-المعلمين-${summaryRange.dateFrom || "بداية"}-${
-        summaryRange.dateTo || "نهاية"
-      }.csv`,
-    [summaryRange.dateFrom, summaryRange.dateTo]
-  );
+  const [exporting, setExporting] = useState(false);
+  const exportSummary = useCallback(async () => {
+    const rows = sortedSummaryRows.map((row) => ({
+      teacher: row?.teacherName || "معلم",
+      status: row?.teacherDeleted ? "محذوف" : "حالي",
+      workingDays: Number(summaryWorkingDays) || 0,
+      present: Number(row?.daysPresent) || 0,
+      absent: Number(row?.daysAbsent) || 0,
+      excused: Number(row?.daysAbsentExcused) || 0,
+      unexcused: Number(row?.daysAbsentUnexcused) || 0,
+      lateDays: Number(row?.daysLate) || 0,
+      lateTime: minutesToHours(row?.totalLateMinutes),
+      earlyDays: Number(row?.daysLeftEarly) || 0,
+      earlyTime: minutesToHours(row?.totalEarlyLeaveMinutes),
+      workTime: minutesToHours(row?.totalWorkMinutes),
+      expectedTime: minutesToHours(row?.totalExpectedWorkMinutes),
+      noCheckout: Number(row?.daysMissingCheckOut) || 0,
+      onDayOff: Number(row?.daysOnDayOff) || 0,
+    }));
+    const all = [
+      { header: "المعلم", key: "teacher", width: 30 },
+      { header: "الحالة", key: "status", width: 9 },
+      { header: "أيام الدوام في الفترة", key: "workingDays" },
+      { header: "أيام الحضور", key: "present" },
+      { header: "أيام الغياب", key: "absent" },
+      { header: "غياب بعذر", key: "excused" },
+      { header: "غياب بدون عذر", key: "unexcused" },
+      { header: "أيام التأخير", key: "lateDays" },
+      { header: "مجموع التأخير (ساعة:دقيقة)", key: "lateTime", width: 16 },
+      { header: "أيام الخروج المبكر", key: "earlyDays" },
+      { header: "مجموع الخروج المبكر (ساعة:دقيقة)", key: "earlyTime", width: 18 },
+      { header: "ساعات العمل الفعلية", key: "workTime", width: 14 },
+      { header: "ساعات العمل المطلوبة", key: "expectedTime", width: 14 },
+      { header: "أيام بدون تسجيل انصراف", key: "noCheckout" },
+      { header: "دوام في يوم إجازة", key: "onDayOff" },
+    ];
+    // Columns that are zero for every teacher add nothing but width.
+    const optional = new Set(["excused", "unexcused", "lateDays", "earlyDays", "noCheckout", "onDayOff"]);
+    const columns = all.filter((c) => !optional.has(c.key) || rows.some((r) => r[c.key]));
+    setExporting(true);
+    try {
+      await downloadXlsx({
+        fileName: `تقرير-حضور-المعلمين-${summaryRange.dateFrom || "بداية"}-${summaryRange.dateTo || "نهاية"}`,
+        sheetName: "حضور المعلمين",
+        title: `تقرير حضور المعلمين من ${summaryRange.dateFrom || "—"} إلى ${summaryRange.dateTo || "—"}`,
+        columns,
+        rows,
+      });
+    } catch {
+      toast.error("تعذر تصدير التقرير");
+    } finally {
+      setExporting(false);
+    }
+  }, [sortedSummaryRows, summaryWorkingDays, summaryRange.dateFrom, summaryRange.dateTo]);
 
   const saveSettings = async () => {
     if (!canConfigureAttendance) return;
@@ -1448,20 +1468,15 @@ const TeacherAttendanceAdmin = () => {
 
         {summaryLoaded && summaryRows.length > 0 ? (
           <Box sx={{ mt: 1.2, display: "flex", justifyContent: "flex-start" }}>
-            <Box
-              component={CSVLink}
-              data={summaryCsv}
-              filename={summaryFileName}
-              sx={{ display: "inline-flex", textDecoration: "none" }}
+            <Button
+              variant="outlined"
+              onClick={exportSummary}
+              disabled={exporting}
+              startIcon={exporting ? <CircularProgress size={16} /> : <FileDownloadOutlined />}
+              sx={{ minHeight: 40, px: 2.2, borderRadius: "11px", fontWeight: 800 }}
             >
-              <Button
-                variant="outlined"
-                startIcon={<FileDownloadOutlined />}
-                sx={{ minHeight: 40, px: 2.2, borderRadius: "11px", fontWeight: 800 }}
-              >
-                {`تصدير التقرير (${summaryRows.length} معلم)`}
-              </Button>
-            </Box>
+              {`تصدير إلى Excel (${summaryRows.length} معلم)`}
+            </Button>
           </Box>
         ) : null}
       </Paper>
