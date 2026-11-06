@@ -382,7 +382,12 @@ const DailyTrackingReport = () => {
                 {students.map((student) => (
                   <TableRow key={student?.studentId || student?.studentName} hover>
                     <TableCell sx={{ fontWeight: 900, fontSize: "10px" }}>
-                      {student?.studentName || <Typography component="span" sx={{ fontSize: "10px", color: "#B9821D", fontWeight: 800 }}>طالب لم يعد مسجّلًا</Typography>}
+                      {student?.studentName || "—"}
+                      {(student?.studentMissing || !student?.studentName) && (
+                        <Typography component="span" sx={{ display: "block", fontSize: "9px", color: "#B9821D", fontWeight: 800 }}>
+                          سجل قديم — لم يعد مسجّلًا في الفصل
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell align="center">
                       {/* الغياب يُسجَّل باليوم؛ الضغط يعرض التواريخ وحالة العذر. */}
