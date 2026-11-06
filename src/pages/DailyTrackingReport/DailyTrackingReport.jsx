@@ -4,6 +4,9 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   LinearProgress,
   MenuItem,
   Paper,
@@ -30,6 +33,22 @@ import { fetchSubjectOfferings } from "@/APIs/school/subjectOfferings";
 import { getSchoolTeachersList } from "@/APIs/school/teachers";
 import { fetchTeacherAssignments, fetchLectures } from "@/APIs/school/lectures";
 import Container from "@/components/Container/Container";
+
+const EXCUSE_LABELS = {
+  accepted: { label: "بعذر مقبول", color: "#25865A", bg: "#EAF8F1" },
+  pending: { label: "عذر قيد المراجعة", color: "#B9821D", bg: "#FFF6E5" },
+  rejected: { label: "عذر مرفوض", color: "#C0504A", bg: "#FFF0EF" },
+  none: { label: "بدون عذر", color: "#6B7785", bg: "#F3F5F7" },
+};
+
+const formatAbsenceDay = (day) => {
+  try {
+    return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })
+      .format(new Date(`${day}T00:00:00Z`));
+  } catch {
+    return day;
+  }
+};
 
 
 const pad = (value) => String(value).padStart(2, "0");
@@ -102,6 +121,7 @@ const DailyTrackingReport = () => {
   const authRoot = getAuthUser?.() || {};
   const role = String(authRoot?.user?.role || authRoot?.role || "").toUpperCase();
   const isTeacher = role === "TEACHER";
+  const [absenceStudent, setAbsenceStudent] = useState(null);
   const [classes, setClasses] = useState([]);
   const [offerings, setOfferings] = useState([]);
   const [teachers, setTeachers] = useState([]);
@@ -353,7 +373,7 @@ const DailyTrackingReport = () => {
             <Table size="small" sx={{ minWidth: 980 }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: "#F7F9FB" }}>
-                  {["الطالب", "الحصص", "حضور", "غياب", "المشاركة", "الواجب", "متوسط الاختبارات القصيرة"].map((label) => (
+                  {["الطالب", "أيام الغياب", "الحصص المتابَعة", "حصص الحضور", "حصص الغياب", "المشاركة", "الواجب", "متوسط الاختبارات القصيرة"].map((label) => (
                     <TableCell key={label} align={label === "الطالب" ? "right" : "center"} sx={{ fontWeight: 900, fontSize: "9px", color: "#42576B" }}>{label}</TableCell>
                   ))}
                 </TableRow>
@@ -361,7 +381,23 @@ const DailyTrackingReport = () => {
               <TableBody>
                 {students.map((student) => (
                   <TableRow key={student?.studentId || student?.studentName} hover>
-                    <TableCell sx={{ fontWeight: 900, fontSize: "10px" }}>{student?.studentName || "—"}</TableCell>
+                    <TableCell sx={{ fontWeight: 900, fontSize: "10px" }}>
+                      {student?.studentName || <Typography component="span" sx={{ fontSize: "10px", color: "#B9821D", fontWeight: 800 }}>طالب لم يعد مسجّلًا</Typography>}
+                    </TableCell>
+                    <TableCell align="center">
+                      {/* الغياب يُسجَّل باليوم؛ الضغط يعرض التواريخ وحالة العذر. */}
+                      {Number(student?.absentDays) > 0 ? (
+                        <Chip
+                          size="small"
+                          clickable
+                          onClick={() => setAbsenceStudent(student)}
+                          label={`${student.absentDays} ${student.absentDays === 1 ? "يوم" : student.absentDays === 2 ? "يومان" : "أيام"}${student.excusedDays ? ` (${student.excusedDays} بعذر)` : ""}`}
+                          sx={{ fontWeight: 900, fontSize: "9.5px", bgcolor: "#FFF0EF", color: "#C0504A" }}
+                        />
+                      ) : (
+                        <Typography component="span" sx={{ fontSize: "10px", color: "#8B96A3" }}>0</Typography>
+                      )}
+                    </TableCell>
                     <TableCell align="center">{safeNumber(student?.totalLectures)}</TableCell>
                     <TableCell align="center">{safeNumber(student?.presentCount)}</TableCell>
                     <TableCell align="center">{safeNumber(student?.absentCount)}</TableCell>
@@ -372,11 +408,37 @@ const DailyTrackingReport = () => {
                   </TableRow>
                 ))}
                 {!students.length && (
-                  <TableRow><TableCell colSpan={7} align="center" sx={{ py: 5, color: "#8B96A3" }}>لا توجد بيانات متابعة في الفترة المحددة.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} align="center" sx={{ py: 5, color: "#8B96A3" }}>لا توجد بيانات متابعة في الفترة المحددة.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
           </TableContainer>
+          <Typography sx={{ mt: 0.8, fontSize: "9.5px", color: "#83909D" }}>
+            الغياب يُسجَّل باليوم: إذا سُجّلت الطالبة غائبة في أي حصة احتُسب اليوم كله غيابًا. «أيام الغياب» عدد الأيام، و«حصص الغياب» عدد الحصص المتابَعة في تلك الأيام. اضغط عدد الأيام لعرض التواريخ.
+          </Typography>
+
+          <Dialog open={!!absenceStudent} onClose={() => setAbsenceStudent(null)} fullWidth maxWidth="xs" PaperProps={{ sx: { borderRadius: "18px" } }}>
+            <DialogTitle sx={{ fontWeight: 900, fontSize: "15px" }}>
+              أيام غياب {absenceStudent?.studentName || ""}
+            </DialogTitle>
+            <DialogContent>
+              <Stack gap={0.75}>
+                {(absenceStudent?.absences || []).map((a) => {
+                  const excuse = EXCUSE_LABELS[a.excuseStatus] || EXCUSE_LABELS.none;
+                  return (
+                    <Stack key={a.date} direction="row" alignItems="center" justifyContent="space-between"
+                      sx={{ p: 1, borderRadius: "11px", border: "1px solid rgba(36,74,112,.08)" }}>
+                      <Typography sx={{ fontSize: "12px", fontWeight: 800 }}>{formatAbsenceDay(a.date)}</Typography>
+                      <Chip size="small" label={excuse.label} sx={{ fontWeight: 800, fontSize: "9.5px", color: excuse.color, bgcolor: excuse.bg }} />
+                    </Stack>
+                  );
+                })}
+              </Stack>
+              <Typography sx={{ mt: 1.25, fontSize: "10px", color: "#83909D" }}>
+                حالة العذر من صفحة «أعذار الغياب».
+              </Typography>
+            </DialogContent>
+          </Dialog>
 
           <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1 }}>
             <Button size="small" startIcon={<RefreshRounded />} onClick={loadReport} disabled={loading}>تحديث التقرير</Button>
