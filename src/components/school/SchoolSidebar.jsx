@@ -17,6 +17,7 @@ import {
   GroupsRounded,
   LibraryBooksRounded,
   LocalOfferRounded,
+  LaptopChromebookRounded,
   CheckroomRounded,
   LogoutRounded,
   MenuBookRounded,
@@ -213,6 +214,12 @@ const NAVIGATION_SECTIONS = [
         path: "/school/attendance",
         icon: <AssignmentRounded />,
         module: "attendance",
+      },
+      {
+        label: "التعليم عن بُعد",
+        path: "/school/remote-learning",
+        icon: <LaptopChromebookRounded />,
+        allowedRoles: [ROLES.OWNER, ROLES.MANAGER, ROLES.SUPERVISOR],
       },
       {
         label: "سجل المتابعة اليومي",

@@ -38,6 +38,7 @@ import {
   useStudentLectures,
   useStudentSubjects,
 } from "@/utils/hooks/apis/student/useStudent";
+import RemoteLessonsCard from "@/components/RemoteLessons/RemoteLessonsCard";
 
 const COLORS = {
   navy: "#244a70",
@@ -591,6 +592,8 @@ const StudentDashboardPage = () => {
 
   return (
     <Box dir="rtl">
+      {/* يظهر في أيام التعليم عن بُعد فقط: حصص اليوم وزر «انضم للحصة» */}
+      <RemoteLessonsCard role="STUDENT" />
       <AnnouncementCarousel variant="student" sx={{ mb: 2.3 }} />
       {/* =====================================================
           HERO

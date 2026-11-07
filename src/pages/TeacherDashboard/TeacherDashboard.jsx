@@ -101,6 +101,7 @@ import { academicRecordPeriod } from "@/utils/academicRecordYear";
 
 import nasaqLogo from "../../images/wadq-logo.png";
 import NotificationBell from "@/components/Notifications/NotificationBell";
+import RemoteLessonsCard from "@/components/RemoteLessons/RemoteLessonsCard";
 
 const DATE_LOCALE = "ar-EG-u-nu-latn";
 
@@ -1662,6 +1663,8 @@ const TeacherDashboard = () => {
           py: { xs: 2, sm: 2.5, md: 3.5 },
         }}
       >
+        {/* أيام التعليم عن بُعد: حصص اليوم ورابط الحصة الثابت */}
+        <RemoteLessonsCard role="TEACHER" />
         {error && (
           <Alert
             severity="error"

@@ -21,6 +21,7 @@ import AccountDeletion from "@/pages/Privacy/AccountDeletion";
 // Teacher Pages
 // =========================
 import TeacherDashboard from "@/pages/TeacherDashboard/TeacherDashboard";
+import RemoteLearningAdmin from "@/pages/School/RemoteLearning/RemoteLearningAdmin";
 import TeacherProjectGrading from "@/pages/TeacherProjectGrading/TeacherProjectGrading";
 import TeacherExamGrading from "@/pages/TeacherExamGrading/TeacherExamGrading";
 import TeacherExams from "@/pages/TeacherExams/TeacherExams";
@@ -390,6 +391,11 @@ const AppRouter = () => {
                 <DailyTrackingReport />
               </RequirePermission>
             }
+          />
+
+          <Route
+            path="/school/remote-learning"
+            element={<RemoteLearningAdmin />}
           />
 
           <Route
