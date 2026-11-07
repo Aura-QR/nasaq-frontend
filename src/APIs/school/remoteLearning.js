@@ -19,3 +19,4 @@ export const setMyMeetingUrl = (meetingUrl) => ok(() => api.put(`${E}/me/meeting
 export const setLessonLink = (lectureId, date, joinUrl) => ok(() => api.put(`${E}/lessons/${lectureId}/link`, { date, joinUrl }), "تعذر حفظ رابط الحصة");
 export const fetchMyRemoteLessons = (date) => ok(() => api.get(`${E}/me/lessons`, { params: date ? { date } : {} }), "تعذر تحميل حصص اليوم");
 export const fetchMyMeetingUrl = () => ok(() => api.get(`${E}/me/meeting-url`), "تعذر تحميل الرابط");
+export const fetchRemoteDayPlan = (date) => ok(() => api.get(`${E}/day-plan`, { params: { date } }), "تعذر تحميل حصص اليوم");

@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Alert, Box, Button, Checkbox, Chip, CircularProgress, FormControlLabel, IconButton, Paper, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
-import { DeleteOutlineRounded, LaptopChromebookRounded, LinkRounded, SaveRounded } from "@mui/icons-material";
+import { ContentCopyRounded, DeleteOutlineRounded, LaptopChromebookRounded, LinkRounded, SaveRounded } from "@mui/icons-material";
 import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import {
-  createRemoteDay, deleteRemoteDay, fetchRemoteDays, fetchTeacherLinks, setTeacherLink,
+  createRemoteDay, deleteRemoteDay, fetchRemoteDayPlan, fetchRemoteDays, fetchTeacherLinks, setTeacherLink,
 } from "@/APIs/school/remoteLearning";
 import { fetchStages } from "@/APIs/school/stages";
 
@@ -36,6 +36,33 @@ export default function RemoteLearningAdmin() {
   const [links, setLinks] = useState({});
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [planDate, setPlanDate] = useState(today());
+  const [plan, setPlan] = useState(null);
+
+  const loadPlan = async (date = planDate) => {
+    const r = await fetchRemoteDayPlan(date);
+    setPlan(r?.status ? r.data : null);
+  };
+  useEffect(() => {
+    loadPlan(planDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planDate]);
+
+  // نص جاهز لمجموعة الفصل على واتساب: الطلاب الذين يستخدمون التطبيق فقط لا يرون البطاقة بعد.
+  const copyClass = async (c) => {
+    const lines = [`📚 حصص ${c.className} عن بُعد — ${fmt(plan.date)}`, ""];
+    c.lessons.forEach((l) => {
+      lines.push(`الحصة ${l.slot}: ${l.subjectName}${l.teacherName ? ` — ${l.teacherName}` : ""}`);
+      lines.push(l.joinUrl || "(الرابط يُرسل لاحقًا)");
+      lines.push("");
+    });
+    try {
+      await navigator.clipboard.writeText(lines.join("\n").trim());
+      toast.success(`تم نسخ حصص ${c.className}`);
+    } catch {
+      toast.error("تعذر النسخ");
+    }
+  };
 
   const load = async () => {
     const [d, s, t] = await Promise.all([fetchRemoteDays(), fetchStages(), fetchTeacherLinks()]);
@@ -66,6 +93,7 @@ export default function RemoteLearningAdmin() {
     if (!r?.status) return toast.error(r?.message || "تعذر الحفظ");
     toast.success(r.message);
     load();
+    loadPlan();
   };
 
   const removeDay = async (d) => {
@@ -78,7 +106,7 @@ export default function RemoteLearningAdmin() {
     const value = (links[t._id] || "").trim();
     if (value && !/^https:\/\/\S{8,}$/.test(value)) return toast.error("الرابط يجب أن يبدأ بـ https://");
     const r = await setTeacherLink(t._id, value);
-    if (r?.status) { toast.success(r.message); setTeachers((p) => p.map((x) => (x._id === t._id ? { ...x, meetingUrl: value } : x))); }
+    if (r?.status) { toast.success(r.message); setTeachers((p) => p.map((x) => (x._id === t._id ? { ...x, meetingUrl: value } : x))); loadPlan(); }
     else toast.error(r?.message || "تعذر الحفظ");
   };
 
@@ -144,6 +172,46 @@ export default function RemoteLearningAdmin() {
                 );
               })}
             </Stack>
+          )}
+        </Paper>
+
+        <Paper elevation={0} sx={card}>
+          <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ sm: "center" }} justifyContent="space-between" gap={1} sx={{ mb: 1 }}>
+            <Typography sx={{ fontSize: 15, fontWeight: 900 }}>حصص اليوم لكل فصل</Typography>
+            <TextField size="small" type="date" label="اليوم" InputLabelProps={{ shrink: true }} value={planDate} onChange={(e) => setPlanDate(e.target.value)} />
+          </Stack>
+          {!plan?.remote ? (
+            <Typography sx={{ fontSize: 12, color: "#83909D" }}>هذا اليوم ليس يوم تعليم عن بُعد.</Typography>
+          ) : (
+            <>
+              {plan.missingLinks > 0 ? (
+                <Alert severity="warning" sx={{ mb: 1.25, borderRadius: "12px" }}>
+                  {plan.missingLinks} حصة بدون رابط — أضف روابط المعلمين في القسم التالي قبل بدء اليوم.
+                </Alert>
+              ) : (
+                <Alert severity="success" sx={{ mb: 1.25, borderRadius: "12px" }}>كل الحصص لها روابط.</Alert>
+              )}
+              <Typography sx={{ fontSize: 11, color: "#83909D", mb: 1 }}>
+                زر «نسخ للواتساب» ينسخ حصص الفصل وروابطها لإرسالها في مجموعة الفصل، لأن تطبيق الجوال لا يعرض بطاقة «انضم للحصة» بعد.
+              </Typography>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1 }}>
+                {plan.classes.map((c) => (
+                  <Box key={c.classId} sx={{ p: 1.25, borderRadius: "12px", border: "1px solid rgba(36,74,112,.08)" }}>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 900 }}>{c.className}</Typography>
+                      <Button size="small" startIcon={<ContentCopyRounded />} onClick={() => copyClass(c)} sx={{ fontWeight: 800 }}>نسخ للواتساب</Button>
+                    </Stack>
+                    {c.lessons.map((l) => (
+                      <Stack key={l.lectureId} direction="row" alignItems="center" justifyContent="space-between" sx={{ py: 0.25 }}>
+                        <Typography sx={{ fontSize: 12 }}>الحصة {l.slot} · {l.subjectName} — {l.teacherName}</Typography>
+                        {l.joinUrl ? <Chip size="small" color="success" variant="outlined" label="رابط" component="a" href={l.joinUrl} target="_blank" clickable />
+                          : <Chip size="small" color={l.isActivity ? "default" : "warning"} label="بدون رابط" />}
+                      </Stack>
+                    ))}
+                  </Box>
+                ))}
+              </Box>
+            </>
           )}
         </Paper>
 
