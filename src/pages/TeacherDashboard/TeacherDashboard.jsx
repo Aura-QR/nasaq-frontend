@@ -1663,8 +1663,6 @@ const TeacherDashboard = () => {
           py: { xs: 2, sm: 2.5, md: 3.5 },
         }}
       >
-        {/* أيام التعليم عن بُعد: حصص اليوم ورابط الحصة الثابت */}
-        <RemoteLessonsCard role="TEACHER" />
         {error && (
           <Alert
             severity="error"
@@ -2123,6 +2121,9 @@ const TeacherDashboard = () => {
             )}
           </Stack>
         </Paper>
+
+        {/* أيام التعليم عن بُعد: حصص اليوم ورابط الحصة الثابت، تحت الترحيب. */}
+        <RemoteLessonsCard role="TEACHER" />
 
         {/* Standalone announcement: separate from the compact teacher header. */}
         <Box sx={{ display: hasAnnouncements ? "block" : "none", mb: { xs: 2, md: 2.5 } }}>

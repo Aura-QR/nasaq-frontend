@@ -592,8 +592,6 @@ const StudentDashboardPage = () => {
 
   return (
     <Box dir="rtl">
-      {/* يظهر في أيام التعليم عن بُعد فقط: حصص اليوم وزر «انضم للحصة» */}
-      <RemoteLessonsCard role="STUDENT" />
       <AnnouncementCarousel variant="student" sx={{ mb: 2.3 }} />
       {/* =====================================================
           HERO
@@ -826,6 +824,9 @@ const StudentDashboardPage = () => {
           </Box>
         </Stack>
       </Paper>
+
+      {/* يظهر في أيام التعليم عن بُعد فقط: حصص اليوم وزر «انضم للحصة»، تحت الترحيب. */}
+      <RemoteLessonsCard role="STUDENT" />
 
       {/* =====================================================
           QUICK ACCESS
