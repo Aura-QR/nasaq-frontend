@@ -29,6 +29,7 @@ import {
   ScheduleRounded,
   AssignmentTurnedInRounded,
   TaskAltRounded,
+  LaptopChromebookRounded,
   AccountCircleRounded,
   DirectionsBus,
   ExpandLess,
@@ -478,6 +479,14 @@ const Sidebar = ({ active, setActive }) => {
             iconType: "mui",
             to: "/school/absence-excuses",
             show: attendancePermissions.read,
+          },
+          {
+            // أيام الدراسة عن بُعد، وحصص كل فصل وروابطها، وروابط المعلمين.
+            name: "التعليم عن بُعد",
+            Icon: LaptopChromebookRounded,
+            iconType: "mui",
+            to: "/school/remote-learning",
+            show: canManageSchoolSettings,
           },
           {
             name: "حضور المعلمين",

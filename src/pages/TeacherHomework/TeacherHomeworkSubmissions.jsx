@@ -28,6 +28,7 @@ import {
   ReplayRounded,
 } from "@mui/icons-material";
 import { toast } from "react-toastify";
+import Container from "@/components/Container/Container";
 import {
   fetchHomeworkSubmissions,
   fetchTeacherLessonHomework,
@@ -351,9 +352,11 @@ function HomeworkDetail({ resourceId }) {
 export default function TeacherHomeworkSubmissions() {
   const { resourceId } = useParams();
   return (
-    <Box sx={{ p: { xs: 1.5, md: 3 }, maxWidth: 1000, mx: "auto" }}>
-      {resourceId ? <HomeworkDetail resourceId={resourceId} /> : <HomeworkList />}
-    </Box>
+    <Container>
+      <Box sx={{ p: { xs: 1.5, md: 3 }, maxWidth: 1000, mx: "auto" }}>
+        {resourceId ? <HomeworkDetail resourceId={resourceId} /> : <HomeworkList />}
+      </Box>
+    </Container>
   );
 }
 
