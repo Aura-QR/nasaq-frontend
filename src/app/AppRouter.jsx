@@ -23,6 +23,7 @@ import AccountDeletion from "@/pages/Privacy/AccountDeletion";
 import TeacherDashboard from "@/pages/TeacherDashboard/TeacherDashboard";
 import RemoteLearningAdmin from "@/pages/School/RemoteLearning/RemoteLearningAdmin";
 import TeacherProjectGrading from "@/pages/TeacherProjectGrading/TeacherProjectGrading";
+import TeacherHomeworkSubmissions from "@/pages/TeacherHomework/TeacherHomeworkSubmissions";
 import TeacherExamGrading from "@/pages/TeacherExamGrading/TeacherExamGrading";
 import TeacherExams from "@/pages/TeacherExams/TeacherExams";
 import TeacherExamAdd from "@/pages/TeacherExamAdd/TeacherExamAdd";
@@ -602,6 +603,15 @@ const AppRouter = () => {
           <Route
             path="/teacher/grading/projects"
             element={<TeacherProjectGrading />}
+          />
+
+          <Route
+            path="/teacher/homework-submissions"
+            element={<TeacherHomeworkSubmissions />}
+          />
+          <Route
+            path="/teacher/homework-submissions/:resourceId"
+            element={<TeacherHomeworkSubmissions />}
           />
 
           {/* =========================

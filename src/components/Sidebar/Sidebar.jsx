@@ -28,6 +28,7 @@ import {
   RateReviewRounded,
   ScheduleRounded,
   AssignmentTurnedInRounded,
+  TaskAltRounded,
   AccountCircleRounded,
   DirectionsBus,
   ExpandLess,
@@ -801,6 +802,13 @@ const Sidebar = ({ active, setActive }) => {
               Icon: FactCheckRounded,
               iconType: "mui",
               to: "/teacher/grading/exams",
+              show: true,
+            },
+            {
+              name: "تسليمات الواجبات",
+              Icon: TaskAltRounded,
+              iconType: "mui",
+              to: "/teacher/homework-submissions",
               show: true,
             },
             {

@@ -1058,7 +1058,11 @@ const TeacherAttendance = () => {
             </Typography>
             {sheet.homeworkDue.map((hw) => (
               <Typography key={hw._id} sx={{ fontSize: "11px" }}>
-                • {hw.title}{hw.lessonTitle ? ` (درس: ${hw.lessonTitle})` : ""}
+                • {hw.title}{hw.lessonTitle ? ` (درس: ${hw.lessonTitle})` : ""}{" "}
+                <Box component="span" onClick={() => navigate(`/teacher/homework-submissions/${hw._id}`)}
+                  sx={{ color: "#244a70", fontWeight: 900, cursor: "pointer", textDecoration: "underline" }}>
+                  عرض تسليمات الطلاب
+                </Box>
               </Typography>
             ))}
           </Alert>

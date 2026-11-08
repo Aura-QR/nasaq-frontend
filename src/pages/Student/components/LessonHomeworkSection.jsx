@@ -19,6 +19,7 @@ import {
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { fetchStudentLessonHomework } from "@/APIs/student";
+import HomeworkHandIn from "./HomeworkHandIn";
 
 /*
  * واجبات الدروس.
@@ -78,7 +79,7 @@ const dueStatus = (dueAt, today) => {
   return { label: "انتهى موعده", color: COLORS.gray, background: COLORS.grayLight };
 };
 
-function HomeworkCard({ item, today }) {
+function HomeworkCard({ item, today, onChange }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const status = dueStatus(item.dueAt, today);
@@ -168,6 +169,8 @@ function HomeworkCard({ item, today }) {
           </Button>
         )}
       </Stack>
+
+      <HomeworkHandIn item={item} onChange={onChange} />
     </Paper>
   );
 }
@@ -202,6 +205,12 @@ export default function LessonHomeworkSection() {
     return { current, past };
   }, [items, today]);
 
+  const updateSubmission = (id, submission) =>
+    setItems((prev) => prev.map((h) => (h._id === id ? { ...h, submission } : h)));
+
+  // ما لم يُسلَّم بعد، أو أُعيد للتعديل.
+  const toHandIn = current.filter((h) => !h.submission || h.submission.status === "returned").length;
+
   if (!loading && !items.length) return null;
 
   return (
@@ -212,7 +221,9 @@ export default function LessonHomeworkSection() {
         </Typography>
         {!loading && (
           <Typography sx={{ fontSize: 12, color: COLORS.gray }}>
-            {current.length ? `${current.length} مطلوب` : "لا توجد واجبات مطلوبة حاليًا"}
+            {current.length
+              ? `${current.length} مطلوب${toHandIn ? ` · ${toHandIn} لم يُسلَّم` : " · سُلّمت كلها"}`
+              : "لا توجد واجبات مطلوبة حاليًا"}
           </Typography>
         )}
       </Stack>
@@ -224,7 +235,7 @@ export default function LessonHomeworkSection() {
       ) : (
         <Stack gap={1}>
           {current.map((item) => (
-            <HomeworkCard key={item._id} item={item} today={today} />
+            <HomeworkCard key={item._id} item={item} today={today} onChange={updateSubmission} />
           ))}
           {past.length > 0 && (
             <>
@@ -239,7 +250,7 @@ export default function LessonHomeworkSection() {
               <Collapse in={showPast} unmountOnExit>
                 <Stack gap={1}>
                   {past.map((item) => (
-                    <HomeworkCard key={item._id} item={item} today={today} />
+                    <HomeworkCard key={item._id} item={item} today={today} onChange={updateSubmission} />
                   ))}
                 </Stack>
               </Collapse>
