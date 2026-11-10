@@ -430,6 +430,9 @@ const TeacherExamAdd = () => {
   const [optionsError, setOptionsError] = useState("");
   const [offerings, setOfferings] = useState([]);
   const [classes, setClasses] = useState([]);
+  // The timetable's answer to «which classes do I teach this subject in»:
+  // offering id → class ids. The server accepts an exam only for these.
+  const [lectureClasses, setLectureClasses] = useState(null);
 
   const [subjectOfferingId, setSubjectOfferingId] = useState("");
   const [classIds, setClassIds] = useState([]);
@@ -468,13 +471,26 @@ const TeacherExamAdd = () => {
     setOptionsError("");
 
     try {
-      const [profileResult, classesResult, subjectsResult, schoolClassesResult] =
+      const [profileResult, classesResult, subjectsResult, schoolClassesResult, lecturesResult] =
         await Promise.allSettled([
           api.get("/teachers/me"),
           api.get("/classes/teacher/me"),
           api.get("/subjects/teacher/me"),
           api.get("/classes", { params: { page: 1, limit: 1000 } }),
+          api.get("/lectures/teacher/me"),
         ]);
+
+      if (lecturesResult.status === "fulfilled") {
+        const map = new Map();
+        extractCollection(lecturesResult.value, ["lectures"]).forEach((lecture) => {
+          const offeringId = normalizeId(lecture?.subjectOfferingId);
+          const classId = normalizeId(lecture?.classId);
+          if (!offeringId || !classId) return;
+          if (!map.has(offeringId)) map.set(offeringId, new Set());
+          map.get(offeringId).add(classId);
+        });
+        setLectureClasses(map.size ? map : null);
+      }
 
       const profile =
         profileResult.status === "fulfilled"
@@ -878,6 +894,15 @@ const TeacherExamAdd = () => {
   const availableClasses = useMemo(() => {
     if (!subjectOfferingId) return classes;
 
+    // Two subjects can share a name (التربية الإسلامية for ثاني and for
+    // خامس are separate offerings). Offering a class from the timetable only
+    // under the offering actually taught there stops the server's
+    // «ليس لديك صلاحية لإنشاء اختبار للفصول» before it happens.
+    if (lectureClasses) {
+      const taught = lectureClasses.get(subjectOfferingId);
+      return taught ? classes.filter((c) => taught.has(normalizeId(c))) : [];
+    }
+
     const offeringGradeId = getOfferingGradeId(selectedOffering);
 
     const matched = classes.filter((classEntity) => {
@@ -895,7 +920,7 @@ const TeacherExamAdd = () => {
     });
 
     return matched;
-  }, [classes, selectedOffering, subjectOfferingId]);
+  }, [classes, selectedOffering, subjectOfferingId, lectureClasses]);
 
   useEffect(() => {
     const allowedIds = new Set(availableClasses.map(normalizeId));
@@ -1417,6 +1442,15 @@ const TeacherExamAdd = () => {
                     {offerings.map((offering, index) => (
                       <MenuItem key={normalizeId(offering)} value={normalizeId(offering)}>
                         {getOfferingLabel(offering, index)}
+                        {(() => {
+                          // Name the classes, so two subjects with one name can be told apart.
+                          const taught = lectureClasses?.get(normalizeId(offering));
+                          if (!taught?.size) return null;
+                          const names = classes
+                            .filter((c) => taught.has(normalizeId(c)))
+                            .map((c, i) => getClassLabel(c, i));
+                          return names.length ? ` (${names.join("، ")})` : null;
+                        })()}
                       </MenuItem>
                     ))}
                   </TextField>
@@ -1579,7 +1613,7 @@ const TeacherExamAdd = () => {
                 </Typography>
               ) : !availableClasses.length ? (
                 <Alert severity="info" sx={{ borderRadius: "12px" }}>
-                  لا توجد فصول مرتبطة بهذه المادة.
+                  لا توجد لك حصص لهذه المادة في الجدول الدراسي، لذا لا يمكن إنشاء اختبار لها. إن كان اسم المادة مكررًا فاختر المادة الأخرى بالاسم نفسه، أو راجع الإدارة لإضافة الحصص.
                 </Alert>
               ) : (
                 <FormControl error={Boolean(validationErrors.classIds)} fullWidth>
