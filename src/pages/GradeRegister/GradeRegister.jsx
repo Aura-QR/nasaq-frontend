@@ -16,6 +16,7 @@ export default function GradeRegister() {
   // From GET /grade-register/options: only the classes the user can open,
   // each with its own grade's registered subjects for the current term.
   const [classes, setClasses] = useState([]);
+  const [optionsLoaded, setOptionsLoaded] = useState(false);
   const [classId, setClassId] = useState("");
   const [subjectOfferingId, setSubjectOfferingId] = useState("");
   const [sheet, setSheet] = useState(null);
@@ -32,6 +33,7 @@ export default function GradeRegister() {
       if (!active) return;
       if (response?.status === false) { setError(response.message); return; }
       setClasses((response?.data ?? response)?.classes || []);
+      setOptionsLoaded(true);
     });
     return () => { active = false; };
   }, []);
@@ -120,6 +122,13 @@ export default function GradeRegister() {
       </Paper>
     {admin && <Stack direction="row" gap={1} sx={{ mb: 1.3 }}><Button sx={outlinedSx} variant="outlined" disabled={!classId || busy} onClick={async()=>{setBusy(true);setError("");const r=await fetchClassRegisterReport({classId}); if(r.status === false)setError(r.message); else setClassReport(r.data ?? r);setBusy(false);}}>تقرير درجات الفصل</Button>{classReport && <Button sx={outlinedSx} variant="outlined" onClick={()=>window.print()}>طباعة تقرير الفصل</Button>}</Stack>}
     {classReport && <Paper elevation={0} sx={{...panel,p:2,mb:1.75}}><Typography variant="h6" gutterBottom>تقرير الفصل — {classReport.className}</Typography><TableContainer sx={{ borderRadius: "10px", border: "1px solid #e5eaf0", overflowX: "auto" }}><Table size="small" sx={{ minWidth: 690, "& .MuiTableBody-root .MuiTableRow-root:nth-of-type(even)": { bgcolor: "#fafbfd" }, "& .MuiTableCell-root": { py: .95 } }}><TableHead><TableRow><TableCell sx={headCellSx}>الطالب</TableCell>{(classReport.subjects || []).map(sub=><TableCell key={idOf(sub.subjectOfferingId)}>{sub.subjectName}</TableCell>)}</TableRow></TableHead><TableBody>{(classReport.students || []).map(st=><TableRow key={idOf(st.studentId)}><TableCell>{st.name}</TableCell>{(classReport.subjects || []).map(sub=><TableCell key={idOf(sub.subjectOfferingId)}>{mark(st.totals?.[idOf(sub.subjectOfferingId)])}</TableCell>)}</TableRow>)}</TableBody></Table></TableContainer></Paper>}
+    {optionsLoaded && !classes.length && !error && (
+      <Alert severity="warning" sx={{ mb: 2, borderRadius: "12px" }} action={admin ? <Button color="inherit" size="small" onClick={() => navigate("/school/subjects")}>إدارة المواد</Button> : null}>
+        {admin
+          ? "لا توجد مواد مسجّلة في السجل السنوي بعد. افتح كل مادة من «إدارة المواد» واختر «نوع التقويم»: تقويم مستمر أو تقويم ختامي. المواد التي نوعها «لا يدخل في السجل» لا تظهر هنا."
+          : "لا توجد مواد من موادك مسجّلة في السجل السنوي بعد. تحدّث مع إدارة المدرسة لتحديد «نوع التقويم» للمواد."}
+      </Alert>
+    )}
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     {loading && <CircularProgress />}
     {sheet && !loading && <Paper elevation={0} sx={{ ...panel, p: {xs:1.5,md:2} }}>
