@@ -45,6 +45,7 @@ import { toast } from "react-toastify";
 import Container from "@/components/Container/Container";
 import WhatsappSection from "./WhatsappSection";
 import GradingSystemSetting from "./GradingSystemSetting";
+import AbsenceLimitSetting from "./AbsenceLimitSetting";
 import HolidaysSection from "./HolidaysSection";
 import Back from "@/components/Back/Back";
 import Input from "@/components/Input/Input";
@@ -1471,6 +1472,7 @@ const SchoolSettings = () => {
   return (
     <Container>
       <GradingSystemSetting canEdit={canEditAttendanceSettings} />
+      <AbsenceLimitSetting canEdit={canEditAttendanceSettings} />
       <Box
         component="form"
         onSubmit={handleSubmit(onSubmit)}

@@ -216,6 +216,12 @@ const NAVIGATION_SECTIONS = [
         module: "attendance",
       },
       {
+        label: "سجل الفصل",
+        path: "/school/class-record",
+        icon: <AssignmentRounded />,
+        module: "attendance",
+      },
+      {
         label: "التعليم عن بُعد",
         path: "/school/remote-learning",
         icon: <LaptopChromebookRounded />,

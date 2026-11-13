@@ -47,6 +47,7 @@ import {
   DeleteForeverRounded,
   UpgradeRounded,
   ViewList,
+  TableChartRounded,
 } from "@mui/icons-material";
 
 import {
@@ -481,6 +482,13 @@ const Sidebar = ({ active, setActive }) => {
             show: attendancePermissions.read,
           },
           {
+            name: "سجل الفصل",
+            Icon: TableChartRounded,
+            iconType: "mui",
+            to: "/school/class-record",
+            show: attendancePermissions.read,
+          },
+          {
             // أيام الدراسة عن بُعد، وحصص كل فصل وروابطها، وروابط المعلمين.
             name: "التعليم عن بُعد",
             Icon: LaptopChromebookRounded,
@@ -843,6 +851,13 @@ const Sidebar = ({ active, setActive }) => {
               Icon: HowToRegRounded,
               iconType: "mui",
               to: "/teacher/attendance",
+              show: true,
+            },
+            {
+              name: "سجل الفصل",
+              Icon: TableChartRounded,
+              iconType: "mui",
+              to: "/teacher/class-record",
               show: true,
             },
             {
