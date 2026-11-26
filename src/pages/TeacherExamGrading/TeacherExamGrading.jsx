@@ -82,7 +82,7 @@ const COLORS = {
 
 const STATUS_OPTIONS = [
   { value: "all", label: "كل النتائج" },
-  { value: "pending", label: result.status === "pending_review" ? `بانتظار التصحيح (${result.pendingCount ?? 0})` : "تحتاج مراجعة" },
+  { value: "pending", label: "تحتاج مراجعة" },
   { value: "graded", label: "تم التصحيح" },
 ];
 
