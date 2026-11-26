@@ -1,4 +1,5 @@
-import {
+
+git branch --show-currentimport {
   Alert,
   Box,
   Button,
@@ -35,6 +36,7 @@ import {
   checkInTeacherAttendance,
   checkOutTeacherAttendance,
   fetchMyTeacherAttendance,
+  fetchMyAttendanceStats,
   returnFromLeaveTeacher,
 } from "@/APIs/school/teacherAttendance";
 
@@ -221,6 +223,13 @@ const TeacherCheckIn = () => {
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [myStats, setMyStats] = useState(null);
+  const [showAbsenceDates, setShowAbsenceDates] = useState(false);
+  useEffect(() => {
+    let active = true;
+    fetchMyAttendanceStats().then(r => { if (active && r?.status !== false) setMyStats(r?.data ?? r); });
+    return () => { active = false; };
+  }, []);
   const [history, setHistory] = useState([]);
   const [currentRecord, setCurrentRecord] = useState(null);
   const [locationState, setLocationState] = useState("idle");
@@ -758,6 +767,17 @@ const TeacherCheckIn = () => {
             )}
           </Paper>
 
+          {myStats && <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
+            <Typography fontWeight={900}>إحصائيات حضوري {myStats.term?.name ? `— ${myStats.term.name}` : ""}</Typography>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4,1fr)" }, gap: 1, mt: 1 }}>
+              <Typography>نسبة الحضور: {myStats.attendanceRate == null ? "—" : `${myStats.attendanceRate}%`}</Typography>
+              <Button onClick={() => setShowAbsenceDates(v => !v)}>أيام الغياب: {myStats.daysAbsent ?? "—"} ({myStats.daysAbsentExcused ?? "—"} بعذر)</Button>
+              <Typography>أيام التأخير: {myStats.daysLate ?? "—"} ({myStats.totalLateMinutes ?? "—"} دقيقة)</Typography>
+              <Typography>نسبة الانضباط: {myStats.punctualityRate == null ? "—" : `${myStats.punctualityRate}%`}</Typography>
+            </Box>
+            {showAbsenceDates && (myStats.absentDates || []).map(d => <Stack key={d.date} direction="row" gap={1} alignItems="center"><Typography>{d.date} — {d.excused ? "بعذر مقبول" : "بدون عذر"}</Typography>{!d.excused && <Button href={`/teacher/absence-excuses?date=${encodeURIComponent(d.date)}`}>تقديم عذر</Button>}</Stack>)}
+            {myStats.overLimit === true && <Alert severity="info">بلغت أيام غيابك بغير عذر الحدَّ المعتمد في المدرسة.</Alert>}
+          </Paper>}
           <Paper
             elevation={0}
             sx={{

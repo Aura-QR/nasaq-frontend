@@ -326,10 +326,10 @@ export const fetchTeacherAttendanceAdmin = async (
    Absent Teachers
 ========================================================= */
 
-export const fetchAbsentTeachers = async () => {
+export const fetchAbsentTeachers = async ({ date } = {}) => {
   try {
     const response = await api.get(
-      `${ENDPOINT}/absent`
+      `${ENDPOINT}/absent`, { params: date ? { date } : {} }
     );
 
     return response.data;
@@ -699,4 +699,13 @@ export const returnFromLeaveTeacher = async ({ lat, lng, mockLocationSuspected }
   } catch (error) {
     return getErrorResult(error, "تعذر تسجيل العودة من الاستئذان");
   }
+};
+
+export const fetchMyAttendanceStats = async ({ dateFrom, dateTo } = {}) => {
+  try { return (await api.get(`${ENDPOINT}/me/stats`, { params: { dateFrom, dateTo } })).data; }
+  catch (error) { return getErrorResult(error, "تعذر تحميل إحصائيات الحضور"); }
+};
+export const fetchTeacherAttendanceToday = async (date) => {
+  try { return (await api.get(`${ENDPOINT}/today`, { params: { date } })).data; }
+  catch (error) { return getErrorResult(error, "تعذر تحميل إحصائيات اليوم"); }
 };

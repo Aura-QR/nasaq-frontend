@@ -1472,7 +1472,8 @@ const SchoolSettings = () => {
   return (
     <Container>
       <GradingSystemSetting canEdit={canEditAttendanceSettings} />
-      <AbsenceLimitSetting canEdit={canEditAttendanceSettings} />
+      <AbsenceLimitSetting canEdit={canEditAttendanceSettings} field="absenceAlertDays" title="حد غياب الطلاب" />
+      <AbsenceLimitSetting canEdit={canEditAttendanceSettings} field="teacherAbsenceAlertDays" title="حد غياب المعلمين" />
       <Box
         component="form"
         onSubmit={handleSubmit(onSubmit)}

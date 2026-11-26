@@ -21,7 +21,7 @@ import {
   RefreshRounded,
 } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 
 import {
@@ -46,6 +46,7 @@ const formatDate = (value) => {
 
 const MyTeacherAbsenceExcuses = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState([]);
   const [selectedDay, setSelectedDay] = useState(null);
@@ -72,6 +73,13 @@ const MyTeacherAbsenceExcuses = () => {
     loadDays();
   }, [loadDays]);
 
+  useEffect(() => {
+    const date = new URLSearchParams(location.search).get("date");
+    if (!loading && date) {
+      const day = days.find(d => d.date === date);
+      if (day) setSelectedDay(day);
+    }
+  }, [days, loading, location.search]);
   const closeDialog = () => {
     if (sending || uploading) return;
     setSelectedDay(null);

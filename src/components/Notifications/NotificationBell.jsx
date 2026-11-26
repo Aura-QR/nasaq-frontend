@@ -388,7 +388,7 @@ const NotificationBell = ({
 
     // Marking it read is not, on its own, something the user can see happen.
     // Where the notice points is.
-    const destination = destinationFor(item.type, role);
+    const destination = item.type === "teacher_absence_limit_reached" && !["TEACHER", "STUDENT"].includes(role) ? `/school/teacher-attendance?tab=report&teacherId=${encodeURIComponent(item.data?.teacherId || "")}` : destinationFor(item.type, role);
     if (destination) {
       setAnchor(null);
       navigate(destination);

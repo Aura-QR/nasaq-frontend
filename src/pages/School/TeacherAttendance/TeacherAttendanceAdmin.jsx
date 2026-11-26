@@ -1,3 +1,5 @@
+import { fetchActiveAcademicYear } from "@/APIs/school/academicYears";
+import { fetchTerms } from "@/APIs/school/terms";
 import {
   Alert,
   Box,
@@ -46,7 +48,7 @@ import {
 
 import { useAuthUser } from "react-auth-kit";
 import usePermissions from "@/utils/hooks/usePermissions";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { downloadXlsx, minutesToHours } from "@/utils/exportXlsx";
@@ -61,6 +63,7 @@ import {
   createManualTeacherAttendance,
   deleteTeacherAttendance,
   fetchAbsentTeachers,
+  fetchTeacherAttendanceToday,
   fetchTeacherAttendanceAdmin,
   fetchTeacherAttendanceSettings,
   fetchTeacherAttendanceSummary,
@@ -69,6 +72,14 @@ import {
 } from "@/APIs/school/teacherAttendance";
 
 const PAGE_LIMIT = 10;
+const pct = (value) => value == null ? "—" : `${value}%`;
+const band = (value) => value == null ? "#708198" : value >= 95 ? "#4f9a7e" : value >= 90 ? "#c9a227" : "#c0533f";
+const weekdays = { sunday: "الأحد", monday: "الإثنين", tuesday: "الثلاثاء", wednesday: "الأربعاء", thursday: "الخميس", friday: "الجمعة", saturday: "السبت" };
+function Tiles({ items }) {
+  return <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", md: `repeat(${items.length},minmax(0,1fr))` }, gap: 1 }}>{items.map(([label, value, hint, color]) => <Paper key={label} variant="outlined" sx={{ p: 1.5, minWidth: 0 }}><Typography color="text.secondary" variant="body2">{label}</Typography><Typography fontWeight={900} fontSize={21} color={color || "text.primary"}>{value ?? "—"}</Typography>{hint && <Typography variant="caption">{hint}</Typography>}</Paper>)}</Box>;
+}
+function Rate({ value, bar }) { return <Box sx={{ color: band(value), minWidth: 65 }}><Typography variant="body2" fontWeight={800}>{pct(value)}</Typography>{bar && value != null && <Box sx={{ height: 4, bgcolor: "#e5e9ef", borderRadius: 2 }}><Box sx={{ height: 4, width: `${Math.max(0, Math.min(100, value))}%`, bgcolor: band(value), borderRadius: 2 }} /></Box>}</Box>; }
+
 
 const todayKey = () => {
   const now = new Date();
@@ -232,6 +243,7 @@ const extractAttendanceSummary = (response) => {
 
   return {
     rows,
+    overview: payload?.overview ?? null,
     totalTeachers: Number(
       payload?.totalTeachers ??
         payload?.meta?.totalTeachers ??
@@ -419,6 +431,7 @@ const emptyManualForm = () => ({
 
 const TeacherAttendanceAdmin = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const getAuthUser = useAuthUser();
   const authState = getAuthUser?.();
   const currentUser = authState?.user || authState || {};
@@ -437,6 +450,22 @@ const TeacherAttendanceAdmin = () => {
   const canDeleteRecords = Boolean(teacherAttendancePermissions.delete);
 
   const [tab, setTab] = useState(() => (canConfigureAttendance ? 0 : 1));
+  const [dailyDate, setDailyDate] = useState(todayKey);
+  const [dailyStats, setDailyStats] = useState(null);
+  const [overview, setOverview] = useState(null);
+  const [termReady, setTermReady] = useState(false);
+  const [tableTeacher, setTableTeacher] = useState("");
+  useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    if (query.get("tab") === "report") { setTab(2); setTableTeacher(query.get("teacherId") || ""); }
+    if (query.get("tab") === "daily") { setTab(1); setDailyDate(query.get("date") || todayKey()); }
+  }, [location.search]);
+  useEffect(() => {
+    let active = true;
+    setDailyStats(null);
+    fetchTeacherAttendanceToday(dailyDate).then(r => { if (active && r?.status !== false) setDailyStats(r?.data ?? r); });
+    return () => { active = false; };
+  }, [dailyDate]);
 
   // Settings
   const [settingsLoading, setSettingsLoading] = useState(true);
@@ -482,6 +511,24 @@ const TeacherAttendanceAdmin = () => {
     teacherId: "",
   });
 
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const year = await fetchActiveAcademicYear();
+        const y = year?.data?.academicYear ?? year?.data;
+        const id = y?._id || y?.id;
+        if (!id) return;
+        const result = await fetchTerms(id);
+        const terms = Array.isArray(result?.data) ? result.data : result?.data?.data || result?.data?.terms || [];
+        const today = todayKey();
+        const term = terms.find(t => String(t.startDate || "").slice(0,10) <= today && String(t.endDate || "").slice(0,10) >= today);
+        if (active && term?.startDate) setSummaryRange(r => ({ ...r, dateFrom: String(term.startDate).slice(0,10), dateTo: today }));
+      } finally { if (active) setTermReady(true); }
+    })().catch(() => {});
+    return () => { active = false; };
+  }, []);
+
   // Manual create
   const [manualOpen, setManualOpen] = useState(false);
   const [manualSaving, setManualSaving] = useState(false);
@@ -525,7 +572,7 @@ const TeacherAttendanceAdmin = () => {
   }, []);
 
   const loadAbsent = useCallback(async () => {
-    const response = await fetchAbsentTeachers();
+    const response = await fetchAbsentTeachers({ date: dailyDate });
 
     if (response?.status === false) {
       return;
@@ -542,7 +589,7 @@ const TeacherAttendanceAdmin = () => {
     if (!absentData.isWorkingDay) {
       setShowAbsent(false);
     }
-  }, []);
+  }, [dailyDate]);
 
   const loadRecords = useCallback(async () => {
     setRecordsLoading(true);
@@ -550,6 +597,8 @@ const TeacherAttendanceAdmin = () => {
     const params = {
       page,
       limit: PAGE_LIMIT,
+      dateFrom: dailyDate,
+      dateTo: dailyDate,
       ...(filter === "manual" ? { method: "manual" } : {}),
     };
 
@@ -567,7 +616,7 @@ const TeacherAttendanceAdmin = () => {
     setRecords(pageData.rows);
     setMeta(pageData.meta);
     setRecordsLoading(false);
-  }, [filter, page]);
+  }, [filter, page, dailyDate]);
 
   const loadSummary = useCallback(async () => {
     const dateFrom = String(summaryRange.dateFrom || "").trim();
@@ -595,6 +644,7 @@ const TeacherAttendanceAdmin = () => {
     setSummaryLoaded(true);
 
     if (isFailed(response)) {
+      setOverview(null);
       setSummaryRows([]);
       setSummaryTotalTeachers(0);
       setSummaryWorkingDays(0);
@@ -603,6 +653,7 @@ const TeacherAttendanceAdmin = () => {
     }
 
     const summary = extractAttendanceSummary(response);
+    setOverview(summary.overview);
     setSummaryRows(summary.rows);
     setSummaryTotalTeachers(summary.totalTeachers);
     setSummaryWorkingDays(summary.workingDays);
@@ -619,10 +670,10 @@ const TeacherAttendanceAdmin = () => {
   }, [loadRecords, loadAbsent]);
 
   useEffect(() => {
-    if (tab === 2 && !summaryLoaded) {
+    if (tab === 2 && termReady && !summaryLoaded) {
       loadSummary();
     }
-  }, [tab, summaryLoaded, loadSummary]);
+  }, [tab, termReady, summaryLoaded, loadSummary]);
 
   const visibleRecords = useMemo(() => {
     if (filter === "weak") {
@@ -634,11 +685,11 @@ const TeacherAttendanceAdmin = () => {
     }
 
     if (filter === "today") {
-      return records.filter((record) => normalizeRecordDate(record) === today);
+      return records.filter((record) => normalizeRecordDate(record) === dailyDate);
     }
 
     return records;
-  }, [records, filter, today]);
+  }, [records, filter, dailyDate]);
 
   const totalPages = Math.max(
     1,
@@ -685,7 +736,7 @@ const TeacherAttendanceAdmin = () => {
     const { key, direction } = summarySort;
     const sign = direction === "desc" ? -1 : 1;
 
-    return [...summaryRows].sort((a, b) => {
+    return summaryRows.filter(row => !tableTeacher || normalizeId(row.teacherId) === tableTeacher).sort((a, b) => {
       if (key === "teacherName") {
         return (
           sign *
@@ -695,9 +746,11 @@ const TeacherAttendanceAdmin = () => {
           )
         );
       }
+      if (a?.[key] == null) return b?.[key] == null ? 0 : 1;
+      if (b?.[key] == null) return -1;
       return sign * ((Number(a?.[key]) || 0) - (Number(b?.[key]) || 0));
     });
-  }, [summaryRows, summarySort]);
+  }, [summaryRows, summarySort, tableTeacher]);
 
   const toggleSummarySort = useCallback((key) => {
     setSummarySort((current) =>
@@ -719,7 +772,10 @@ const TeacherAttendanceAdmin = () => {
     const rows = sortedSummaryRows.map((row) => ({
       teacher: row?.teacherName || "معلم",
       status: row?.teacherDeleted ? "محذوف" : "حالي",
-      workingDays: Number(summaryWorkingDays) || 0,
+      workingDays: row.workingDays ?? summaryWorkingDays,
+      attendanceRate: row.attendanceRate ?? "—",
+      punctualityRate: row.punctualityRate ?? "—",
+      overLimit: row.overLimit == null ? "—" : row.overLimit ? "نعم" : "لا",
       present: Number(row?.daysPresent) || 0,
       absent: Number(row?.daysAbsent) || 0,
       excused: Number(row?.daysAbsentExcused) || 0,
@@ -734,6 +790,9 @@ const TeacherAttendanceAdmin = () => {
       onDayOff: Number(row?.daysOnDayOff) || 0,
     }));
     const all = [
+      { header: "نسبة الحضور %", key: "attendanceRate" },
+      { header: "نسبة الانضباط %", key: "punctualityRate" },
+      { header: "بلغ حد الغياب", key: "overLimit" },
       { header: "المعلم", key: "teacher", width: 30 },
       { header: "الحالة", key: "status", width: 9 },
       { header: "أيام الدوام في الفترة", key: "workingDays" },
@@ -1029,6 +1088,10 @@ const TeacherAttendanceAdmin = () => {
 
   const renderLog = () => (
     <Stack spacing={1.5}>
+      <TextField type="date" label="تاريخ السجل" size="small" value={dailyDate} onChange={e => { setDailyDate(e.target.value || todayKey()); setPage(1); }} InputLabelProps={{ shrink: true }} />
+      {dailyStats?.isWorkingDay === false ? <Alert severity="info">لا دوام في هذا اليوم</Alert> : dailyStats?.isWorkingDay === true && <Tiles items={[
+        ["الحضور", `${dailyStats.present} من ${dailyStats.expected}`], ["نسبة الحضور", pct(dailyStats.attendanceRate)], ["المتأخرون", dailyStats.late], [dailyStats.dayEnded ? "الغائبون" : "لم يسجّلوا بعد", dailyStats.dayEnded ? dailyStats.absent : dailyStats.notCheckedIn, dailyStats.dayEnded ? `${dailyStats.absentExcused ?? 0} بعذر` : null, dailyStats.dayEnded ? "#c0533f" : "#708198"], ["الانضباط بالموعد", pct(dailyStats.punctualityRate)]
+      ]} />}
       <Paper elevation={0} sx={{ ...pageCardSx, p: { xs: 1.5, md: 2 } }}>
         <Stack
           direction={{ xs: "column", md: "row" }}
@@ -1089,7 +1152,7 @@ const TeacherAttendanceAdmin = () => {
             <Box>
               <Typography sx={{ color: "#A23E3E", fontSize: 12, fontWeight: 900 }}>
                 {absentDayInfo.isWorkingDay
-                  ? `${absentTeachers.length} معلم بدون سجل حضور اليوم`
+                  ? `${absentTeachers.length} معلم دون سجل حضور في التاريخ المحدد`
                   : absentDayInfo.message ||
                     "هذا اليوم إجازة رسمية للمدرسة"}
               </Typography>
@@ -1117,7 +1180,7 @@ const TeacherAttendanceAdmin = () => {
           <Stack direction="row" flexWrap="wrap" gap={0.7}>
             {!absentTeachers.length ? (
               <Typography sx={{ color: "#708198", fontSize: 10 }}>
-                كل المعلمين لديهم سجل حضور اليوم.
+                جميع المعلمين لديهم سجل حضور في التاريخ المحدد.
               </Typography>
             ) : (
               absentTeachers.map((teacher, index) => (
@@ -1138,7 +1201,7 @@ const TeacherAttendanceAdmin = () => {
             ["all", "كل السجلات"],
             ["manual", "يدوي فقط"],
             ["weak", "تحقق جزئي"],
-            ["today", "اليوم"],
+            ["today", "التاريخ المحدد"],
           ].map(([value, label]) => (
             <Chip
               key={value}
@@ -1360,7 +1423,7 @@ const TeacherAttendanceAdmin = () => {
           <Button
             variant="outlined"
             onClick={loadSummary}
-            disabled={summaryLoading}
+            disabled={summaryLoading || !termReady}
             startIcon={
               summaryLoading
                 ? <CircularProgress size={15} />
@@ -1442,7 +1505,7 @@ const TeacherAttendanceAdmin = () => {
           <Button
             variant="contained"
             onClick={loadSummary}
-            disabled={summaryLoading}
+            disabled={summaryLoading || !termReady}
             startIcon={
               summaryLoading
                 ? <CircularProgress size={15} color="inherit" />
@@ -1475,55 +1538,23 @@ const TeacherAttendanceAdmin = () => {
               startIcon={exporting ? <CircularProgress size={16} /> : <FileDownloadOutlined />}
               sx={{ minHeight: 40, px: 2.2, borderRadius: "11px", fontWeight: 800 }}
             >
-              {`تصدير إلى Excel (${summaryRows.length} معلم)`}
+              {`تصدير إلى Excel (${sortedSummaryRows.length} معلم)`}
             </Button>
           </Box>
         ) : null}
       </Paper>
 
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr 1fr",
-            lg: "repeat(6,minmax(0,1fr))",
-          },
-          gap: 1,
-        }}
-      >
-        {[
-          ["المعلمين في التقرير", summaryTotalTeachers],
-          ["أيام الدوام في الفترة", summaryWorkingDays],
-          ["أيام الحضور", summaryTotals.daysPresent],
-          ["أيام الغياب", `${summaryTotals.daysAbsent} · ${summaryTotals.daysAbsentExcused} بعذر · ${summaryTotals.daysAbsentUnexcused} بدون`],
-          ["أيام التأخير", summaryTotals.daysLate],
-          ["إجمالي التأخير", formatMinutes(summaryTotals.totalLateMinutes, { duration: true })],
-        ].map(([label, value]) => (
-          <Paper
-            key={label}
-            elevation={0}
-            sx={{
-              ...pageCardSx,
-              p: 1.35,
-              backgroundColor: "#fff",
-            }}
-          >
-            <Typography sx={{ color: "#708198", fontSize: 9, fontWeight: 800 }}>
-              {label}
-            </Typography>
-            <Typography
-              sx={{
-                mt: 0.25,
-                color: "#122F4D",
-                fontSize: 20,
-                fontWeight: 900,
-              }}
-            >
-              {value}
-            </Typography>
-          </Paper>
-        ))}
-      </Box>
+      <Tiles items={[
+        ["متوسط نسبة الحضور", pct(overview?.attendanceRate), null, band(overview?.attendanceRate)],
+        ["نسبة الانضباط بالموعد", pct(overview?.punctualityRate), null, band(overview?.punctualityRate)],
+        ["الغياب بغير عذر", overview?.totalAbsentUnexcused, overview?.totalAbsentDays != null ? `من أصل ${overview.totalAbsentDays} يوم غياب` : null],
+        ["بلوغ حد الغياب", overview?.overLimitCount, overview?.teacherAbsenceAlertDays === null ? "لم يُحدَّد حد غياب المعلمين في الإعدادات" : null]
+      ]} />
+      <Typography variant="body2">حضور كامل: {overview?.perfectAttendanceCount ?? "—"} · أيام الحضور: {summaryTotals.daysPresent} · أيام التأخير: {summaryTotals.daysLate} · المعلمون: {summaryTotalTeachers}</Typography>
+      {!!overview?.overLimit?.length && <Alert severity="warning">بلغ حد الغياب: {overview.overLimit.map(t => <Button key={t.teacherId} size="small" onClick={() => setTableTeacher(normalizeId(t.teacherId))}>{t.teacherName} ({t.daysAbsentUnexcused} أيام بغير عذر)</Button>)}</Alert>}
+      {tableTeacher && <Button onClick={() => setTableTeacher("")}>إلغاء تصفية المعلم</Button>}
+      {!!overview?.daily?.length && <Paper variant="outlined" sx={{ p: 2 }}><Typography fontWeight={800}>نسبة الحضور حسب اليوم (%)</Typography><Box sx={{ overflowX: "auto" }}><Box sx={{ display: "flex", alignItems: "end", gap: 1, minWidth: Math.max(300, overview.daily.length * 42) }}>{overview.daily.map(d => <Tooltip key={d.date} title={`${d.date} · الحضور ${d.present}/${d.expected} · التأخير ${d.late} · الغياب ${d.absent ?? "—"} · بعذر ${d.absentExcused ?? "—"} · الانضباط ${pct(d.punctualityRate)} · الحضور ${pct(d.attendanceRate)}`}><Box component="button" aria-label={`${d.date} ${pct(d.attendanceRate)}`} onClick={() => { setDailyDate(d.date); setPage(1); setTab(1); }} sx={{ cursor: "pointer", border: 0, bgcolor: "transparent", flex: 1, minWidth: 34, p: 0 }}><Box sx={{ height: 125, display: "flex", alignItems: "end" }}><Box sx={{ width: "100%", height: `${d.attendanceRate ?? 0}%`, minHeight: 2, bgcolor: band(d.attendanceRate), borderRadius: "4px 4px 0 0" }} /></Box><Typography variant="caption">{d.date.slice(5)}</Typography></Box></Tooltip>)}</Box></Box></Paper>}
+      {!!overview?.byWeekday?.length && <Stack direction="row" flexWrap="wrap" gap={1}>{overview.byWeekday.map(d => <Chip key={d.weekday} label={`${weekdays[d.weekday] || d.weekday} ${pct(d.attendanceRate)}`} sx={{ bgcolor: d.attendanceRate != null && d.attendanceRate === Math.min(...overview.byWeekday.filter(x => x.attendanceRate != null).map(x => x.attendanceRate)) ? "#fbeeee" : undefined, color: band(d.attendanceRate) }} />)}</Stack>}
 
       <Alert severity="info" sx={{ borderRadius: "14px" }}>
         "غير مقاس" لا يعني أن المعلم حضر أو انصرف في الموعد؛ بل يعني أن جدول
@@ -1543,7 +1574,10 @@ const TeacherAttendanceAdmin = () => {
                   {[
                     ["teacherName", "المعلم", "right"],
                     [null, "الحالة", "center"],
+                    ["workingDays", "أيام الدوام", "center"],
                     ["daysPresent", "أيام الحضور", "center"],
+                    ["attendanceRate", "نسبة الحضور", "center"],
+                    ["punctualityRate", "نسبة الانضباط", "center"],
                     ["daysAbsent", "أيام الغياب", "center"],
                     ["daysAbsentExcused", "بعذر", "center"],
                     ["daysAbsentUnexcused", "بدون عذر", "center"],
@@ -1579,13 +1613,13 @@ const TeacherAttendanceAdmin = () => {
               <TableBody>
                 {!summaryLoaded ? (
                   <TableRow>
-                    <TableCell colSpan={15} align="center" sx={{ py: 7, color: "#708198" }}>
+                    <TableCell colSpan={18} align="center" sx={{ py: 7, color: "#708198" }}>
                       اختر الفترة ثم اضغط «عرض التقرير».
                     </TableCell>
                   </TableRow>
-                ) : !summaryRows.length ? (
+                ) : !sortedSummaryRows.length ? (
                   <TableRow>
-                    <TableCell colSpan={15} align="center" sx={{ py: 7, color: "#708198" }}>
+                    <TableCell colSpan={18} align="center" sx={{ py: 7, color: "#708198" }}>
                       لا توجد بيانات حضور في الفترة المحددة.
                     </TableCell>
                   </TableRow>
@@ -1593,12 +1627,14 @@ const TeacherAttendanceAdmin = () => {
                   sortedSummaryRows.map((row, index) => (
                     <TableRow
                       key={normalizeId(row?.teacherId) || `${row?.teacherName || "teacher"}-${index}`}
+                      sx={{ bgcolor: row.overLimit === true ? "#fbeeee" : undefined }}
                       hover
                     >
                       <TableCell align="right">
                         <Typography sx={{ color: "#122F4D", fontSize: 11, fontWeight: 900 }}>
                           {row?.teacherName || "معلم"}
                         </Typography>
+                        {row.overLimit === true && <Chip size="small" label="بلغ حد الغياب" color="error" />}
                       </TableCell>
 
                       <TableCell align="center">
@@ -1615,9 +1651,10 @@ const TeacherAttendanceAdmin = () => {
                         />
                       </TableCell>
 
-                      <TableCell align="center">
-                        {Number(row?.daysPresent) || 0}
-                      </TableCell>
+                      <TableCell align="center">{row.workingDays ?? "—"}</TableCell>
+                      <TableCell align="center">{Number(row?.daysPresent) || 0}</TableCell>
+                      <TableCell align="center"><Rate value={row.attendanceRate} bar /></TableCell>
+                      <TableCell align="center"><Rate value={row.punctualityRate} /></TableCell>
 
                       <TableCell align="center">
                         <Chip
