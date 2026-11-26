@@ -102,6 +102,7 @@ const DESTINATIONS = {
 
 /** Null when this notice has nowhere useful to send this person. */
 const destinationFor = (type, role, data) => {
+  if (type === "makeup_exam_scheduled" && role === "STUDENT" && data?.examId) return `/student-dashboard/exams/${encodeURIComponent(data.examId)}/quiz`;
   if (type === "exam_graded" && role === "STUDENT" && data?.examId) return `/student-dashboard/exams/${encodeURIComponent(data.examId)}/quiz/grade`;
   if (role === "STUDENT") return DESTINATIONS.STUDENT[type] ?? null;
   if (role === "TEACHER") return DESTINATIONS.TEACHER[type] ?? null;

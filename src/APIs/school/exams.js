@@ -375,3 +375,12 @@ export const saveExamReview = async (id, grades) => {
   try { return normalizeSuccess(await api.patch(`${ENDPOINT}/${normalizeId(id)}/review`, { grades })); }
   catch (error) { return normalizeFailure(error, 'تعذر حفظ التصحيح'); }
 };
+
+export const fetchMakeupCandidates = async id => {
+  try { return normalizeSuccess(await api.get(`${ENDPOINT}/${normalizeId(id)}/makeup-candidates`)); }
+  catch (error) { return normalizeFailure(error, 'تعذر تحميل الطالبات المؤهلات للاختبار البديل'); }
+};
+export const createMakeupExam = async (id, data) => {
+  try { return normalizeSuccess(await api.post(`${ENDPOINT}/${normalizeId(id)}/makeup`, data)); }
+  catch (error) { return normalizeFailure(error, 'تعذر إنشاء الاختبار البديل'); }
+};

@@ -563,7 +563,7 @@ const StartPage = () => {
           justify-center
         "
       >
-        <StartQuizCard
+        {exam?.makeupExamId ? <button type="button" onClick={()=>navigate(`/student-dashboard/exams/${encodeURIComponent(exam.makeupExamId?._id || exam.makeupExamId)}/quiz`)}>لديكِ اختبار بديل لهذا الاختبار</button> : <StartQuizCard
           subjectLabel={
             subjectLabel
           }
@@ -597,7 +597,7 @@ const StartPage = () => {
           isStarting={
             loadingStarter
           }
-        />
+        />}
       </div>
     </Container>
   );

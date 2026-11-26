@@ -1,3 +1,4 @@
+import { isMakeup, makeupId } from "@/components/ExamQuestions/MakeupExam";
 import {
   useMemo,
   useState,
@@ -1601,6 +1602,8 @@ const ExamCard = ({
   exam,
   onOpen,
 }) => {
+  const navigate = useNavigate();
+  const makeup = exam.rawExam?.makeupExamId;
   const status =
     STATUS_UI[
       exam.status
@@ -1794,7 +1797,8 @@ const ExamCard = ({
         />
       </Stack>
 
-      <Button
+      {isMakeup(exam.rawExam) && <Chip size="small" label="اختبار بديل" />}
+      {makeup ? <Button fullWidth onClick={()=>navigate(`/student-dashboard/exams/${encodeURIComponent(makeupId(makeup))}/quiz`)}>لديكِ اختبار بديل لهذا الاختبار</Button> : <Button
         fullWidth
         disabled={
           !isAvailable &&
@@ -1858,9 +1862,9 @@ const ExamCard = ({
                 : exam.examType === "activity"
                   ? "ابدأ النشاط"
                   : "ابدأ الاختبار القصير"}
-      </Button>
+      </Button>}
 
-      {isCompleted && (
+      {isCompleted && !makeup && (
         <ExamResultDialog
           open={resultOpen}
           onClose={() =>

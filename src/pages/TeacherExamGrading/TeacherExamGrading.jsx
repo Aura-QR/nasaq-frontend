@@ -651,7 +651,7 @@ const TeacherExamGrading = () => {
         return;
       }
 
-      const nextExams = extractCollection(response, ["exams"]);
+      const nextExams = extractCollection(response, ["exams"]).flatMap(exam => [exam, ...(Array.isArray(exam.makeups) ? exam.makeups.map(m => ({...exam, ...m, makeups: [], originalExamId: getExamId(exam)})) : [])]);
       setExams(nextExams);
 
       setSelectedExamId((current) => {
@@ -1757,7 +1757,7 @@ const TeacherExamGrading = () => {
                               noWrap
                               sx={{ fontSize: "10px", fontWeight: 900 }}
                             >
-                              {getStudentName(result)}
+                              {getStudentName(result)} {result.makeupExamId || result.isMakeup ? " · بديل" : ""}
                             </Typography>
                             {!!email && (
                               <Typography

@@ -430,6 +430,7 @@ const TeacherExamAdd = () => {
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [loadingExam, setLoadingExam] = useState(Boolean(id));
   const [loadedExamId, setLoadedExamId] = useState("");
+  const [makeupOriginal, setMakeupOriginal] = useState(null);
   const [saving, setSaving] = useState(false);
   const [optionsError, setOptionsError] = useState("");
   const [offerings, setOfferings] = useState([]);
@@ -751,6 +752,7 @@ const TeacherExamAdd = () => {
         setClassIds(nextClassIds);
         setExamType(exam?.examType || "quiz");
         setLoadedGrade(exam?.grade ?? null);
+        setMakeupOriginal(exam?.originalExam || (exam?.originalExamId || exam?.isMakeup ? { title: exam?.originalTitle || "الاختبار الأصلي" } : null));
         setStartDate(
           exam?.startDate
             ? String(exam.startDate).slice(0, 10)
@@ -1200,6 +1202,7 @@ const TeacherExamAdd = () => {
           px: { xs: 2, sm: 3, md: 4, lg: 5 },
         }}
       >
+        {makeupOriginal && <Typography sx={{mb: 2}} fontWeight={700}>اختبار بديل لـ: {makeupOriginal.title || makeupOriginal.startDate || "الاختبار الأصلي"}</Typography>}
         <Paper
           elevation={0}
           sx={{

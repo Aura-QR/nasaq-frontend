@@ -1,3 +1,4 @@
+import MakeupExam from "@/components/ExamQuestions/MakeupExam";
 import EssayReview from "@/components/ExamQuestions/EssayReview";
 import {
   Box,
@@ -452,6 +453,7 @@ const Profile = () => {
         }}
       >
         <Back title="تفاصيل الاختبار" />
+        <MakeupExam exam={item} admin canCreate={permissions.add} />
 
         <Paper
           elevation={0}
