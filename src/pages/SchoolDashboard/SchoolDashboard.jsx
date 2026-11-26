@@ -570,6 +570,11 @@ const SchoolDashboard = () => {
       dashboard?.attendanceToday || 0
     );
 
+  // The owner's dashboard carries it at the top level; the manager's nests
+  // every figure under `metrics`.
+  const teachersToday =
+    dashboard?.teachersToday ?? dashboard?.metrics?.teachersToday ?? null;
+
   const netIncome =
     Number(
       financialSummary?.netIncome || 0
@@ -808,7 +813,7 @@ const SchoolDashboard = () => {
         {["MANAGER", "SUPERVISOR"].includes(role) && (
           <AnnouncementCarousel sx={{ mb: 2 }} />
         )}
-        {dashboard?.teachersToday?.isWorkingDay === true && ["OWNER", "MANAGER"].includes(role) && <Paper component={Link} to="/school/teacher-attendance?tab=daily" variant="outlined" sx={{ display: "block", p: 2, mb: 2, textDecoration: "none", color: "inherit" }}><Typography fontWeight={800}>حضور المعلمين اليوم</Typography><Typography fontSize={24} fontWeight={900}>{dashboard.teachersToday.present} من {dashboard.teachersToday.expected} · {dashboard.teachersToday.attendanceRate == null ? "—" : `${dashboard.teachersToday.attendanceRate}%`}</Typography><Typography color="text.secondary">متأخرون {dashboard.teachersToday.late} · {dashboard.teachersToday.dayEnded ? `الغائبون ${dashboard.teachersToday.absent}` : `لم يسجّلوا بعد ${dashboard.teachersToday.notCheckedIn}`}</Typography></Paper>}
+        {teachersToday?.isWorkingDay === true && ["OWNER", "SUPERVISOR", "MANAGER"].includes(role) && <Paper component={Link} to="/school/teacher-attendance?tab=daily" variant="outlined" sx={{ display: "block", p: 2, mb: 2, textDecoration: "none", color: "inherit" }}><Typography fontWeight={800}>حضور المعلمين اليوم</Typography><Typography fontSize={24} fontWeight={900}>{teachersToday.present} من {teachersToday.expected} · {teachersToday.attendanceRate == null ? "—" : `${teachersToday.attendanceRate}%`}</Typography><Typography color="text.secondary">متأخرون {teachersToday.late} · {teachersToday.dayEnded ? `الغائبون ${teachersToday.absent}` : `لم يسجّلوا بعد ${teachersToday.notCheckedIn}`}</Typography></Paper>}
         <Paper
           elevation={0}
           sx={{

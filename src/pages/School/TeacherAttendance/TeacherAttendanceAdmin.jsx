@@ -790,13 +790,13 @@ const TeacherAttendanceAdmin = () => {
       onDayOff: Number(row?.daysOnDayOff) || 0,
     }));
     const all = [
-      { header: "نسبة الحضور %", key: "attendanceRate" },
-      { header: "نسبة الانضباط %", key: "punctualityRate" },
-      { header: "بلغ حد الغياب", key: "overLimit" },
       { header: "المعلم", key: "teacher", width: 30 },
       { header: "الحالة", key: "status", width: 9 },
       { header: "أيام الدوام في الفترة", key: "workingDays" },
       { header: "أيام الحضور", key: "present" },
+      { header: "نسبة الحضور %", key: "attendanceRate" },
+      { header: "نسبة الانضباط %", key: "punctualityRate" },
+      { header: "بلغ حد الغياب", key: "overLimit" },
       { header: "أيام الغياب", key: "absent" },
       { header: "غياب بعذر", key: "excused" },
       { header: "غياب بدون عذر", key: "unexcused" },

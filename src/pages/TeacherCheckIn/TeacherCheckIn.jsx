@@ -29,6 +29,7 @@ import {
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthUser } from "react-auth-kit";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
 import {
@@ -208,6 +209,20 @@ const StatusBox = ({ icon, title, passed, waiting, details }) => (
   </Paper>
 );
 
+/*
+ * «غيابي وأعذاري» lists the last 14 days only (the server's default window),
+ * so a button for an older day would open the page with nothing to select.
+ */
+const EXCUSE_WINDOW_DAYS = 14;
+const excusableDate = (date) => {
+  const day = new Date(`${date}T12:00:00`);
+  if (Number.isNaN(day.getTime())) return false;
+  const earliest = new Date();
+  earliest.setHours(12, 0, 0, 0);
+  earliest.setDate(earliest.getDate() - (EXCUSE_WINDOW_DAYS - 1));
+  return day >= earliest;
+};
+
 const TeacherCheckIn = () => {
   const getAuthUser = useAuthUser();
   const authState = getAuthUser?.();
@@ -222,6 +237,7 @@ const TeacherCheckIn = () => {
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+  const navigate = useNavigate();
   const [myStats, setMyStats] = useState(null);
   const [showAbsenceDates, setShowAbsenceDates] = useState(false);
   useEffect(() => {
@@ -774,7 +790,7 @@ const TeacherCheckIn = () => {
               <Typography>أيام التأخير: {myStats.daysLate ?? "—"} ({myStats.totalLateMinutes ?? "—"} دقيقة)</Typography>
               <Typography>نسبة الانضباط: {myStats.punctualityRate == null ? "—" : `${myStats.punctualityRate}%`}</Typography>
             </Box>
-            {showAbsenceDates && (myStats.absentDates || []).map(d => <Stack key={d.date} direction="row" gap={1} alignItems="center"><Typography>{d.date} — {d.excused ? "بعذر مقبول" : "بدون عذر"}</Typography>{!d.excused && <Button href={`/teacher/absence-excuses?date=${encodeURIComponent(d.date)}`}>تقديم عذر</Button>}</Stack>)}
+            {showAbsenceDates && (myStats.absentDates || []).map(d => <Stack key={d.date} direction="row" gap={1} alignItems="center"><Typography>{d.date} — {d.excused ? "بعذر مقبول" : "بدون عذر"}</Typography>{!d.excused && (excusableDate(d.date) ? <Button onClick={() => navigate(`/teacher/absence-excuses?date=${encodeURIComponent(d.date)}`)}>تقديم عذر</Button> : <Typography variant="caption" color="text.secondary">انتهت مدة تقديم العذر</Typography>)}</Stack>)}
             {myStats.overLimit === true && <Alert severity="info">بلغت أيام غيابك بغير عذر الحدَّ المعتمد في المدرسة.</Alert>}
           </Paper>}
           <Paper
