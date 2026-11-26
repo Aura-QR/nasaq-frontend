@@ -315,6 +315,20 @@ export const saveTeachingPlan = async (
         )
           ? { slotPreference: preference }
           : {}),
+        // نوع التقويم لهذا الصف: لا يُرسل إلا إذا غيّره المستخدم، وnull
+        // تعني الرجوع إلى نوع تقويم المادة.
+        ...(entry &&
+        "assessmentType" in entry &&
+        [
+          "continuous",
+          "final_exam",
+          null,
+        ].includes(entry.assessmentType)
+          ? {
+              assessmentType:
+                entry.assessmentType,
+            }
+          : {}),
       };
     }
   );

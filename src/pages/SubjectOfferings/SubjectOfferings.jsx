@@ -49,6 +49,7 @@ import { toast } from "react-toastify";
 
 import Container from "@/components/Container/Container";
 import usePermissions from "@/utils/hooks/usePermissions";
+import useGradingSystem from "@/utils/hooks/useGradingSystem";
 
 import { api } from "@/APIs/Axios";
 import {
@@ -66,6 +67,11 @@ import {
 } from "@/APIs/school/subjectOfferings";
 import { fetchStages } from "@/APIs/school/stages";
 import { fetchSchoolSettings } from "@/APIs/school/schoolSettings";
+
+const ASSESSMENT_LABELS = {
+  continuous: "تقويم مستمر",
+  final_exam: "تقويم ختامي",
+};
 
 const COLORS = {
   navy: "#122f4d",
@@ -1195,6 +1201,7 @@ const TeachingPlanImportDialog = ({
 
 const SubjectOfferings = () => {
   const permissions = usePermissions("subjects");
+  const isMinistryGrading = useGradingSystem() === "ministry";
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -1232,6 +1239,13 @@ const SubjectOfferings = () => {
    * تحققه الخاص: عدد الحصص رقم له حدود، والتفضيل قيمة من ثلاث.
    */
   const [preferenceDraft, setPreferenceDraft] = useState({});
+
+  /*
+   * نوع التقويم لهذا الصف (نظام الوزارة). القيمة الفارغة تعني «حسب المادة».
+   * الوزارة تحدده لكل صف لا لكل مادة: لغتي تقويم مستمر في الأول الابتدائي
+   * وتقويم ختامي في صفوف لاحقة. يحفظه الخادم على كل ترمات السنة للصف نفسه.
+   */
+  const [assessmentDraft, setAssessmentDraft] = useState({});
   const [slotsPerWeek, setSlotsPerWeek] = useState(null);
   const [capacityByGrade, setCapacityByGrade] = useState({});
 
@@ -1417,6 +1431,16 @@ const SubjectOfferings = () => {
           .filter(Boolean)
       )
     );
+    setAssessmentDraft(
+      Object.fromEntries(
+        loadedOfferings
+          .map((item) => {
+            const offeringId = idOf(item);
+            return offeringId ? [offeringId, item?.assessmentType || ""] : null;
+          })
+          .filter(Boolean)
+      )
+    );
     setLoadingOfferings(false);
   }, [selectedGradeId, selectedTermId]);
 
@@ -1546,6 +1570,9 @@ const SubjectOfferings = () => {
               ? Number(item?.periodsPerWeek)
               : 0,
             slotPreference: normalizePreference(item?.slotPreference),
+            assessmentType: item?.assessmentType || "",
+            subjectAssessmentType: subject?.assessmentType || "",
+            isActivity: Boolean(subject?.isActivity),
           };
         })
         .filter((item) => item.id),
@@ -1584,6 +1611,14 @@ const SubjectOfferings = () => {
    * إرسال نصف الصف يعني أن تعديل التفضيل وحده يضيع عدد الحصص من الحساب
    * الذي يعتمد عليه فحص الجاهزية.
    */
+  const assessmentChanged = (item) =>
+    assessmentDraft[item.id] !== undefined &&
+    (assessmentDraft[item.id] || "") !== (item.assessmentType || "");
+
+  const updateAssessment = (offeringId, value) => {
+    setAssessmentDraft((current) => ({ ...current, [offeringId]: value || "" }));
+  };
+
   const changedPlanEntries = useMemo(
     () =>
       normalizedOfferings
@@ -1594,18 +1629,23 @@ const SubjectOfferings = () => {
             return false;
           }
 
-          return planRowChanged(
-            item,
-            draftValue,
-            preferenceDraft[item.id]
+          return (
+            planRowChanged(item, draftValue, preferenceDraft[item.id]) ||
+            assessmentChanged(item)
           );
         })
         .map((item) => ({
           subjectOfferingId: item.id,
           periodsPerWeek: Number(planDraft[item.id]),
           slotPreference: normalizePreference(preferenceDraft[item.id]),
+          // يُرسل فقط إذا تغيّر: الخادم ينسخه إلى بقية ترمات السنة، فإرساله
+          // مع كل تعديل لعدد الحصص قد يعيد ضبط ترم آخر دون قصد.
+          ...(assessmentChanged(item)
+            ? { assessmentType: assessmentDraft[item.id] || null }
+            : {}),
         })),
-    [normalizedOfferings, planDraft, preferenceDraft]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [normalizedOfferings, planDraft, preferenceDraft, assessmentDraft]
   );
 
   const hasInvalidPlanValue = useMemo(
@@ -1716,6 +1756,9 @@ const SubjectOfferings = () => {
             ...offering,
             periodsPerWeek: saved.periodsPerWeek,
             slotPreference: saved.slotPreference,
+            ...("assessmentType" in saved
+              ? { assessmentType: saved.assessmentType }
+              : {}),
           };
         })
       );
@@ -2576,6 +2619,7 @@ const SubjectOfferings = () => {
                     border: `1px solid ${COLORS.border}`,
                     borderRadius: "14px",
                     display: "flex",
+                    flexWrap: "wrap",
                     alignItems: "center",
                     gap: 1,
                     bgcolor: "#fff",
@@ -2711,6 +2755,45 @@ const SubjectOfferings = () => {
                       </MenuItem>
                     ))}
                   </TextField>
+
+                  {/*
+                    نوع التقويم لهذا الصف. يظهر للمدارس التي تعمل بنظام درجات
+                    الوزارة فقط، ولا يظهر للأنشطة لأنها لا تدخل في السجل.
+                  */}
+                  {isMinistryGrading && !item.isActivity && (
+                    <TextField
+                      select
+                      size="small"
+                      label="نوع التقويم لهذا الصف"
+                      value={assessmentDraft[item.id] ?? item.assessmentType ?? ""}
+                      onChange={(event) =>
+                        updateAssessment(item.id, event.target.value)
+                      }
+                      SelectProps={{ displayEmpty: true }}
+                      InputLabelProps={{ shrink: true }}
+                      sx={{
+                        width: { xs: "100%", sm: 170 },
+                        flexShrink: 0,
+                        "& .MuiOutlinedInput-root": {
+                          borderRadius: "10px",
+                          bgcolor: assessmentChanged(item) ? "#fff8e6" : "#fff",
+                        },
+                        "& .MuiSelect-select": {
+                          fontWeight: 800,
+                          fontSize: 11.5,
+                          py: 1,
+                          color: COLORS.navy,
+                        },
+                        "& .MuiInputLabel-root": { fontSize: 11 },
+                      }}
+                    >
+                      <MenuItem value="">
+                        حسب المادة ({ASSESSMENT_LABELS[item.subjectAssessmentType] || "غير محدد"})
+                      </MenuItem>
+                      <MenuItem value="continuous">تقويم مستمر (40 + 60)</MenuItem>
+                      <MenuItem value="final_exam">تقويم ختامي (40 + 20 + 40)</MenuItem>
+                    </TextField>
+                  )}
 
                   {permissions.delete && (
                     <Tooltip title="حذف العرض">
