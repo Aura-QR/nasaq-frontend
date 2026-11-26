@@ -1,3 +1,4 @@
+import { marksError, serializeQuestion } from "@/utils/examQuestions";
 import {
   Alert,
   Box,
@@ -479,6 +480,7 @@ const getErrorMessage = (
 
 const createQuestion = () => ({
   question: "",
+  type: "mcq", marks: "", modelAnswer: "",
   options: ["", "", "", ""],
   correctAnswer: "",
 });
@@ -488,7 +490,8 @@ const normalizeQuestion = (
 ) => ({
   question:
     question?.question || "",
-  options: [
+  type: question?.type || "mcq", marks: question?.marks ?? "", modelAnswer: question?.modelAnswer || "",
+  options: question?.type === "true_false" ? ["صح", "خطأ"] : question?.type === "essay" ? [] : [
     ...(Array.isArray(
       question?.options
     )
@@ -1164,6 +1167,7 @@ const Edit = () => {
         );
 
       reset({
+        grade: exam?.grade,
         academicYearId:
           resolvedYearId,
         termId: resolvedTermId,
@@ -1516,6 +1520,9 @@ const Edit = () => {
       return;
     }
 
+    const markValidation = marksError(formData.questions || []);
+    if (markValidation) { toast.error(markValidation); return; }
+    if ((formData.questions || []).some(q => !q.question?.trim() || (q.type !== "essay" && (!q.correctAnswer?.trim() || !q.options.includes(q.correctAnswer))))) { toast.error("أكمل بيانات الأسئلة والإجابات الصحيحة"); return; }
     setLoading(true);
 
     try {
@@ -1539,7 +1546,7 @@ const Edit = () => {
           getArray(
             formData.questions
           ).map(
-            normalizeQuestion
+            serializeQuestion
           ),
       };
 
@@ -1702,6 +1709,7 @@ const Edit = () => {
             register={register}
             errors={errors}
             watch={watch}
+            setValue={setValue}
             remove={remove}
             addQuestion={
               addQuestion

@@ -1330,6 +1330,7 @@ const TeacherExams = () => {
                         />
                       </Stack>
 
+                      {exam.pendingReviewCount > 0 && <Chip clickable color="warning" label={`${exam.pendingReviewCount} بانتظار التصحيح`} onClick={()=>navigate(`/teacher/grading/exams?examId=${encodeURIComponent(examId)}`)} />}
                       <Divider sx={{ my: 1.2, borderColor: "rgba(36,74,112,.07)" }} />
 
                       <Stack

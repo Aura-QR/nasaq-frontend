@@ -366,3 +366,12 @@ export default {
   gradeExamStudent,
   overrideExamGrade,
 };
+
+export const fetchExamReview = async (id, status = 'pending') => {
+  try { return normalizeSuccess(await api.get(`${ENDPOINT}/${normalizeId(id)}/review`, { params: { status } })); }
+  catch (error) { return normalizeFailure(error, 'تعذر تحميل الإجابات المقالية'); }
+};
+export const saveExamReview = async (id, grades) => {
+  try { return normalizeSuccess(await api.patch(`${ENDPOINT}/${normalizeId(id)}/review`, { grades })); }
+  catch (error) { return normalizeFailure(error, 'تعذر حفظ التصحيح'); }
+};

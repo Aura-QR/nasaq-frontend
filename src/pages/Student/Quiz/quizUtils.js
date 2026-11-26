@@ -108,7 +108,9 @@ export const normalizeStartedExam = (
           question?.text ||
           "",
 
-        choices: (
+        type: question?.type || "mcq",
+        marks: question?.marks,
+        choices: question?.type === "true_false" ? ["صح", "خطأ"] : (
           question?.options ||
           question?.choices ||
           []
@@ -153,6 +155,7 @@ export const isGradeResponse = (
 
 
   return (
+    payload?.status === "pending_review" ||
     payload?.examId !==
       undefined ||
     payload?.passed !==

@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import { fetchMyExamResult } from "@/APIs/student";
 import {
   useLocation,
   useNavigate,
@@ -28,7 +31,7 @@ const GradePage = () => {
 
 
   const {
-    gradeResult,
+    gradeResult: initialResult,
     isTimeUp,
     questions,
     answers,
@@ -38,6 +41,11 @@ const GradePage = () => {
     location.state || {};
 
 
+  const { examId } = useParams();
+  const [remote, setRemote] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(()=>{let active=true; if(!examId)return; fetchMyExamResult(examId).then(r=>{if(!active)return;if(r?.status===false)setError(r.message);else setRemote(r?.data ?? r);}).catch(()=>{if(active)setError('تعذر عرض نتيجة الاختبار');});return()=>{active=false;};},[examId]);
+  const gradeResult = remote ?? initialResult;
   const passed =
     gradeResult?.passed;
 
@@ -98,6 +106,9 @@ const GradePage = () => {
       : "/student-dashboard/exams";
 
 
+  if (!gradeResult) return <Container noSidebar={true}><Back title={title}/><p className="p-6 text-center">{error || 'جارٍ تحميل النتيجة…'}</p></Container>;
+  if (!questions?.length && gradeResult.status !== 'pending_review') return <Container noSidebar={true}><Back title={title}/><div className="p-5"><h2>الدرجة: {gradeResult.achievedGrade ?? '—'} من {gradeResult.maxGrade ?? gradeResult.grade ?? '—'}</h2>{(gradeResult.results ?? gradeResult.answers ?? []).map((a,i)=><div key={a.questionId ?? i} className="p-4 my-2 border rounded-xl bg-white"><h3>السؤال {i+1}</h3>{a.earned !== undefined && <p>{a.earned ?? '—'} من {a.marks}</p>}<p className="whitespace-pre-wrap">إجابتك: {a.studentAnswer ?? a.answer ?? '—'}</p>{a.type !== 'essay' && a.correctAnswer && <p>الإجابة الصحيحة: {a.correctAnswer}</p>}{a.feedback && <p>ملاحظة: {a.feedback}</p>}{a.modelAnswer && <p>الإجابة النموذجية: {a.modelAnswer}</p>}</div>)}</div></Container>;
+  if (gradeResult?.status === "pending_review") return <Container noSidebar={true}><Back title={title} /><div className="p-6 text-center"><RateReview /><p>تم التسليم، وستظهر النتيجة بعد تصحيح المعلمة</p><button type="button" onClick={() => navigate(listPath)}>العودة إلى الاختبارات</button></div></Container>;
   return (
     <Container noSidebar={true}>
 

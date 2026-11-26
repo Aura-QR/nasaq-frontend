@@ -1,3 +1,4 @@
+import EssayReview from "@/components/ExamQuestions/EssayReview";
 import {
   Alert,
   Box,
@@ -81,7 +82,7 @@ const COLORS = {
 
 const STATUS_OPTIONS = [
   { value: "all", label: "كل النتائج" },
-  { value: "pending", label: "تحتاج مراجعة" },
+  { value: "pending", label: result.status === "pending_review" ? `بانتظار التصحيح (${result.pendingCount ?? 0})` : "تحتاج مراجعة" },
   { value: "graded", label: "تم التصحيح" },
 ];
 
@@ -381,6 +382,7 @@ const getStudentEmail = (result) => {
 };
 
 const getResultScore = (result) => {
+  if (result?.status === "pending_review") return null;
   const rawValue =
     result?.achievedGrade ??
     result?.score ??
@@ -1464,6 +1466,7 @@ const TeacherExamGrading = () => {
               backgroundColor: COLORS.surface,
             }}
           >
+            {selectedExamId && (getQuestions(selectedDetail || selectedExam || {}).some(q=>q.type === "essay") || selectedExam?.pendingReviewCount > 0) && <EssayReview key={selectedExamId} examId={selectedExamId} onSaved={()=>loadExamDetail(selectedExamId,{force:true})} />}
             {!selectedExam ? (
               <Box
                 sx={{
@@ -1743,7 +1746,7 @@ const TeacherExamGrading = () => {
                               label={
                                 graded
                                   ? `${score} / ${maxScore}`
-                                  : "تحتاج مراجعة"
+                                  : result.status === "pending_review" ? `بانتظار التصحيح (${result.pendingCount ?? 0})` : "تحتاج مراجعة"
                               }
                               size="small"
                               sx={{

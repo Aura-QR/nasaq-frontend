@@ -107,9 +107,9 @@ const ExamResultDialog = ({
   );
 
   const answers = Array.isArray(
-    result?.results
+    result?.results ?? result?.answers
   )
-    ? result.results
+    ? (result.results ?? result.answers)
     : [];
 
   return (
@@ -175,7 +175,8 @@ const ExamResultDialog = ({
           </Typography>
         )}
 
-        {!loading && !error && result && (
+        {!loading && !error && result?.status === "pending_review" && <Typography sx={{py:4,textAlign:"center"}}>تم التسليم، وستظهر النتيجة بعد تصحيح المعلمة</Typography>}
+        {!loading && !error && result && result.status !== "pending_review" && (
           <Stack spacing={2.2}>
             <Stack
               direction="row"
@@ -304,7 +305,7 @@ const ExamResultDialog = ({
                             "#f7f9fb",
                         }}
                       >
-                        {answer.isCorrect ? (
+                        {answer.type === "essay" ? null : answer.isCorrect ? (
                           <CheckCircleRounded
                             sx={{
                               fontSize: 20,
@@ -341,11 +342,14 @@ const ExamResultDialog = ({
                             }}
                           >
                             إجابتك:{" "}
-                            {answer.studentAnswer ||
+                            {answer.studentAnswer || answer.answer ||
                               "—"}
                           </Typography>
 
-                          {!answer.isCorrect && (
+                          {answer.earned !== undefined && <Typography>{answer.earned ?? "—"} من {answer.marks}</Typography>}
+                          {answer.type === "essay" && answer.feedback && <Typography sx={{whiteSpace:"pre-wrap"}}>ملاحظة: {answer.feedback}</Typography>}
+                          {answer.type === "essay" && answer.modelAnswer && <Typography sx={{whiteSpace:"pre-wrap"}}>الإجابة النموذجية: {answer.modelAnswer}</Typography>}
+                          {answer.type !== "essay" && !answer.isCorrect && (
                             <Typography
                               sx={{
                                 fontSize: 13,

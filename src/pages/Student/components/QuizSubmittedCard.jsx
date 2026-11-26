@@ -5,6 +5,7 @@ const QuizSubmittedCard = ({
   gradeResult,
   onBack,
 }) => {
+  if (gradeResult?.status === "pending_review") return <div className="p-6 text-center"><TaskAlt /><p>تم التسليم، وستظهر النتيجة بعد تصحيح المعلمة</p><button onClick={onBack}>العودة</button></div>;
   const passed = gradeResult?.passed;
   const percentage = gradeResult?.percentage ?? null;
   const achievedGrade = gradeResult?.achievedGrade ?? null;

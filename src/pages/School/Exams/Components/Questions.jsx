@@ -1,3 +1,5 @@
+import QuestionMarksSummary from "@/components/ExamQuestions/QuestionMarksSummary";
+import QuestionTypeFields from "@/components/ExamQuestions/QuestionTypeFields";
 import {
   Box,
   Button,
@@ -22,6 +24,7 @@ const Questions = ({
   register,
   errors,
   watch,
+  setValue,
   remove,
   addQuestion,
 }) => {
@@ -184,6 +187,7 @@ const Questions = ({
       <Stack spacing={1.25}>
         {fields.map(
           (field, questionIndex) => {
+            const question = watch(`questions.${questionIndex}`) || field;
             const options =
               watch(
                 `questions.${questionIndex}.options`
@@ -346,7 +350,8 @@ const Questions = ({
                     />
                   </Grid>
 
-                  {[0, 1, 2, 3].map(
+                  <Grid item xs={12}><QuestionTypeFields question={question} onChange={patch => Object.entries(patch).forEach(([key,value]) => setValue(`questions.${questionIndex}.${key}`, value, { shouldDirty: true }))} /></Grid>
+                  {(question.type || "mcq") === "mcq" && [0, 1, 2, 3].map(
                     (optionIndex) => (
                       <Grid
                         item
@@ -382,7 +387,7 @@ const Questions = ({
                     )
                   )}
 
-                  <Grid
+                  {(question.type || "mcq") === "mcq" && <Grid
                     item
                     xs={12}
                   >
@@ -409,7 +414,7 @@ const Questions = ({
                         correctAnswerDisabled
                       }
                     />
-                  </Grid>
+                  </Grid>}
                 </Grid>
               </Paper>
             );
@@ -417,6 +422,7 @@ const Questions = ({
         )}
       </Stack>
 
+      <QuestionMarksSummary questions={watch("questions") || []} grade={watch("grade")} onChange={qs=>qs.forEach((q,i)=>setValue(`questions.${i}.marks`,q.marks,{shouldDirty:true}))} />
       <Button
         type="button"
         onClick={addQuestion}

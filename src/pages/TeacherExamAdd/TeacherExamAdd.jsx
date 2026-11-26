@@ -1,3 +1,6 @@
+import QuestionMarksSummary from "@/components/ExamQuestions/QuestionMarksSummary";
+import QuestionTypeFields from "@/components/ExamQuestions/QuestionTypeFields";
+import { marksError, serializeQuestion } from "@/utils/examQuestions";
 import useGradingSystem from "@/utils/hooks/useGradingSystem";
 import {
   Alert,
@@ -70,7 +73,8 @@ const createQuestion = (source = {}) => ({
     globalThis.crypto?.randomUUID?.() ||
     `${Date.now()}-${Math.random()}`,
   question: source.question || "",
-  options: Array.isArray(source.options)
+  type: source.type || "mcq", marks: source.marks ?? "", modelAnswer: source.modelAnswer || "",
+  options: source.type === "true_false" ? ["صح", "خطأ"] : source.type === "essay" ? [] : Array.isArray(source.options)
     ? [...source.options.slice(0, 4), "", "", "", ""].slice(0, 4)
     : ["", "", "", ""],
   correctAnswer: source.correctAnswer || "",
@@ -443,6 +447,7 @@ const TeacherExamAdd = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [duration, setDuration] = useState(30);
+  const [loadedGrade, setLoadedGrade] = useState(null);
   const [questions, setQuestions] = useState([createQuestion()]);
   const [validationErrors, setValidationErrors] = useState({});
 
@@ -745,6 +750,7 @@ const TeacherExamAdd = () => {
         setSubjectOfferingId(offeringId);
         setClassIds(nextClassIds);
         setExamType(exam?.examType || "quiz");
+        setLoadedGrade(exam?.grade ?? null);
         setStartDate(
           exam?.startDate
             ? String(exam.startDate).slice(0, 10)
@@ -1068,6 +1074,7 @@ const TeacherExamAdd = () => {
         item.question = "اكتب نص السؤال";
       }
 
+      if (question.type === "essay") return item;
       if (cleanOptions.some((option) => !option)) {
         item.options = "أكمل الاختيارات الأربعة";
       } else if (new Set(cleanOptions).size !== cleanOptions.length) {
@@ -1111,6 +1118,8 @@ const TeacherExamAdd = () => {
       return;
     }
 
+    const markValidation = marksError(questions);
+    if (markValidation) { toast.error(markValidation); return; }
     const payload = {
       subjectOfferingId,
       classIds: examType === "final" ? availableClasses.slice(0, 1).map(normalizeId) : classIds,
@@ -1119,11 +1128,7 @@ const TeacherExamAdd = () => {
       endDate,
       duration: Number(duration),
       ...(ministry && !isEdit ? { grade: Number(examMaxGrade) } : {}),
-      questions: questions.map((question) => ({
-        question: question.question.trim(),
-        options: question.options.map((option) => option.trim()),
-        correctAnswer: question.correctAnswer.trim(),
-      })),
+      questions: questions.map(serializeQuestion),
     };
 
     setSaving(true);
@@ -1170,8 +1175,7 @@ const TeacherExamAdd = () => {
       questions.filter(
         (question) =>
           question.question.trim() &&
-          question.options.every((option) => option.trim()) &&
-          question.correctAnswer.trim()
+          (question.type === "essay" || (question.options.every((option) => option.trim()) && question.correctAnswer.trim()))
       ).length,
     [questions]
   );
@@ -1846,7 +1850,8 @@ const TeacherExamAdd = () => {
                         sx={{ ...fieldSx, mt: 1.2 }}
                       />
 
-                      <Box
+                      <QuestionTypeFields question={question} onChange={patch => updateQuestion(questionIndex, patch)} />
+                      {(question.type || "mcq") === "mcq" && <Box
                         sx={{
                           mt: 1.1,
                           display: "grid",
@@ -1891,7 +1896,7 @@ const TeacherExamAdd = () => {
                             </Stack>
                           );
                         })}
-                      </Box>
+                      </Box>}
 
                       {(questionError.options || questionError.correctAnswer) && (
                         <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.8 }}>
@@ -1923,6 +1928,7 @@ const TeacherExamAdd = () => {
               })}
             </Stack>
 
+            <QuestionMarksSummary questions={questions} grade={isEdit ? loadedGrade : ministry ? examMaxGrade : selectedCriteria?.grade} onChange={setQuestions} />
             <Button
               type="button"
               onClick={addQuestionCard}

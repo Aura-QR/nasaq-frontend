@@ -666,12 +666,13 @@ const ActiveQuizPage = () => {
 
           <h3 className="text-lg sm:text-xl font-extrabold text-[#1E293B] leading-relaxed mb-5">
 
-            {currentQuestion?.text ||
-              ""}
+            {currentQuestion?.text || ""}
+            {currentQuestion?.marks != null && <span className="text-sm font-normal"> ({currentQuestion.marks} درجات)</span>}
 
           </h3>
 
 
+          {currentQuestion?.type === "essay" && <div><textarea className="w-full border rounded-xl p-3" rows={6} maxLength={5000} value={answers[currentQuestion.id] || ""} onChange={e => setAnswers(previous => ({ ...previous, [currentQuestion.id]: e.target.value }))} /><p>{(answers[currentQuestion.id] || "").length} / 5000</p></div>}
           <div className="grid grid-cols-1 gap-3">
 
             {(
@@ -836,11 +837,7 @@ const ActiveQuizPage = () => {
               <button
                 type="button"
 
-                onClick={() =>
-                  triggerSubmit(
-                    false
-                  )
-                }
+                onClick={() => { const empty = examQuestions.filter(q=>q.type === "essay" && !String(answers[q.id] ?? "").trim()).length; if (!empty || window.confirm(`لم تُجب عن ${empty} سؤال مقالي، وستُحسب درجته صفرًا. هل تريد المتابعة؟`)) triggerSubmit(false); }}
 
                 disabled={
                   isSubmitting

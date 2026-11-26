@@ -1,3 +1,4 @@
+import EssayReview from "@/components/ExamQuestions/EssayReview";
 import {
   Box,
   Chip,
@@ -678,6 +679,7 @@ const Profile = () => {
             </Box>
           </Stack>
 
+          {permissions.edit && questions.some(q=>q.type === "essay") && <EssayReview examId={id} />}
           {questions.length >
           0 ? (
             <Stack spacing={1.25}>
@@ -755,6 +757,8 @@ const Profile = () => {
                       </Typography>
                     </Stack>
 
+                    <Typography sx={{my:1}}>{({mcq:"اختيار من متعدد",true_false:"صح أو خطأ",essay:"مقالي"})[question.type || "mcq"]} {question.marks != null ? `— ${question.marks} درجات` : ""}</Typography>
+                    {question.type === "essay" && question.modelAnswer && <Typography sx={{whiteSpace:"pre-wrap"}}>الإجابة النموذجية: {question.modelAnswer}</Typography>}
                     <Box
                       sx={{
                         display:

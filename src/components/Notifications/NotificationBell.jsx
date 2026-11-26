@@ -101,7 +101,8 @@ const DESTINATIONS = {
 };
 
 /** Null when this notice has nowhere useful to send this person. */
-const destinationFor = (type, role) => {
+const destinationFor = (type, role, data) => {
+  if (type === "exam_graded" && role === "STUDENT" && data?.examId) return `/student-dashboard/exams/${encodeURIComponent(data.examId)}/quiz/grade`;
   if (role === "STUDENT") return DESTINATIONS.STUDENT[type] ?? null;
   if (role === "TEACHER") return DESTINATIONS.TEACHER[type] ?? null;
   return DESTINATIONS.SCHOOL_ADMIN[type] ?? null;
@@ -388,7 +389,7 @@ const NotificationBell = ({
 
     // Marking it read is not, on its own, something the user can see happen.
     // Where the notice points is.
-    const destination = item.type === "teacher_absence_limit_reached" && !["TEACHER", "STUDENT"].includes(role) ? `/school/teacher-attendance?tab=report&teacherId=${encodeURIComponent(item.data?.teacherId || "")}` : destinationFor(item.type, role);
+    const destination = destinationFor(item.type, role, item.data);
     if (destination) {
       setAnchor(null);
       navigate(destination);

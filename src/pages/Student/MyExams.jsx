@@ -1700,7 +1700,7 @@ const ExamCard = ({
             <StatusIcon />
           }
           label={
-            status.label
+            exam.rawExam?.result?.status === "pending_review" || exam.rawExam?.resultStatus === "pending_review" || exam.rawExam?.status === "pending_review" ? "بانتظار التصحيح" : status.label
           }
           sx={{
             height: 27,

@@ -51,7 +51,7 @@ const ReviewPage = () => {
 
       for (
         const result of
-        gradeResult?.results || []
+        gradeResult?.results || gradeResult?.answers || []
       ) {
         map[
           result.questionId
@@ -132,7 +132,7 @@ const ReviewPage = () => {
 
 
             const studentAnswer =
-              result?.studentAnswer ??
+              result?.studentAnswer ?? result?.answer ??
               answers[
                 question.id
               ];
@@ -156,6 +156,7 @@ const ReviewPage = () => {
               );
 
 
+            if (question.type === "essay" || result?.type === "essay") return <div key={question.id} className="rounded-3xl border bg-white p-5"><h3>{question.text}</h3><p>{result?.earned ?? "—"} من {result?.marks ?? question.marks}</p><p className="whitespace-pre-wrap break-words">إجابتك: {studentAnswer || "—"}</p>{result?.feedback && <p className="whitespace-pre-wrap">ملاحظة: {result.feedback}</p>}{result?.modelAnswer && <p className="whitespace-pre-wrap">الإجابة النموذجية: {result.modelAnswer}</p>}</div>;
             return (
               <div
                 key={
@@ -193,7 +194,7 @@ const ReviewPage = () => {
 
                   <h3 className="text-base font-bold text-[#1E293B] leading-relaxed flex-1">
 
-                    {question.text}
+                    {question.text} {result?.earned !== undefined && `(${result.earned ?? "—"} من ${result.marks})`}
 
                   </h3>
 
