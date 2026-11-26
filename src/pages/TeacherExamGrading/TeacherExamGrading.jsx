@@ -622,6 +622,8 @@ const TeacherExamGrading = () => {
   const [savingGrade, setSavingGrade] = useState(false);
   const [gradeError, setGradeError] = useState("");
 
+  const essayReviewRef = useRef(null);
+  const essayReviewSectionRef = useRef(null);
   const autoOpenedStudentRef = useRef("");
   const detailCacheRef = useRef({});
   const resultsCacheRef = useRef({});
@@ -1483,7 +1485,21 @@ const TeacherExamGrading = () => {
               backgroundColor: COLORS.surface,
             }}
           >
-            {selectedExamId && (getQuestions(selectedDetail || selectedExam || {}).some(q=>q.type === "essay") || selectedExam?.pendingReviewCount > 0) && <EssayReview key={selectedExamId} examId={selectedExamId} onSaved={()=>loadExamDetail(selectedExamId,{force:true})} />}
+            {selectedExamId &&
+              (getQuestions(selectedDetail || selectedExam || {}).some(
+                (question) => question.type === "essay"
+              ) ||
+                selectedExam?.pendingReviewCount > 0 ||
+                results.some((result) => result.status === "pending_review")) && (
+                <Box ref={essayReviewSectionRef} sx={{ scrollMarginTop: 16 }}>
+                  <EssayReview
+                    key={selectedExamId}
+                    examId={selectedExamId}
+                    reviewRef={essayReviewRef}
+                    onSaved={() => loadExamDetail(selectedExamId, { force: true })}
+                  />
+                </Box>
+              )}
             {!selectedExam ? (
               <Box
                 sx={{
@@ -1796,7 +1812,17 @@ const TeacherExamGrading = () => {
                               </Tooltip>
 
                               <Button
-                                onClick={() => openGradeDialog(result)}
+                                onClick={() => {
+                                  if (result.status === "pending_review") {
+                                    essayReviewRef.current?.selectPending();
+                                    essayReviewSectionRef.current?.scrollIntoView({
+                                      behavior: "smooth",
+                                      block: "start",
+                                    });
+                                    return;
+                                  }
+                                  openGradeDialog(result);
+                                }}
                                 startIcon={<GradingRounded />}
                                 sx={{
                                   ...TEACHER_UI.button,

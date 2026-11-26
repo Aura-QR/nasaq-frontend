@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useImperativeHandle } from 'react';
 import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material';
 import { fetchExamReview, saveExamReview } from '@/APIs/school/exams';
-export default function EssayReview({ examId, onSaved }) {
+export default function EssayReview({ examId, onSaved, reviewRef }) {
   const [mode,setMode]=useState('pending');
   const [data,setData]=useState(null);
   const [edits,setEdits]=useState({});
@@ -9,6 +9,17 @@ export default function EssayReview({ examId, onSaved }) {
   const [error,setError]=useState('');
   const [message,setMessage]=useState('');
   const dirty=Object.keys(edits).length>0;
+  const [pendingRequested, setPendingRequested] = useState(false);
+  useImperativeHandle(reviewRef, () => ({
+    selectPending: () => setPendingRequested(true),
+  }), []);
+  useEffect(() => {
+    if (!pendingRequested || busy) return;
+    setPendingRequested(false);
+    if (mode === 'pending') return;
+    if (dirty && !window.confirm('توجد درجات غير محفوظة. هل تريد المتابعة؟')) return;
+    setMode('pending');
+  }, [pendingRequested, busy, mode, dirty]);
   const load=useCallback(async()=>{setBusy(true);setError('');try{const r=await fetchExamReview(examId,mode);if(!r.status) throw Error(r.message);setData(r.data);setEdits({});}catch(e){setError(e.message);setData(null);}finally{setBusy(false);}},[examId,mode]);
   useEffect(()=>{load();},[load]);
   useEffect(()=>{if(!dirty)return;const warn=e=>{e.preventDefault();e.returnValue='';};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[dirty]);
