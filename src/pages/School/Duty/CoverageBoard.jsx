@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -34,6 +35,10 @@ import { toast } from "react-toastify";
 import AppContainer from "@/components/Container/Container";
 
 import {
+  addDays,
+  createLeaveRequest,
+  cancelLeaveRequest,
+  cancelAffectedCovers,
   assignSubstitute,
   COVER_REASON_LABELS,
   DAY_NAMES,
@@ -53,6 +58,8 @@ import { getSchoolTeachersList } from "@/APIs/school/teachers";
  */
 const CoverageBoard = () => {
   const [date, setDate] = useState(() => toDateInput());
+  const [planned, setPlanned] = useState(null);
+  const [cancelPlanned, setCancelPlanned] = useState(null);
   const [board, setBoard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -150,7 +157,7 @@ const CoverageBoard = () => {
           ? response.data
           : response.data?.data ?? [];
         setTeachers(
-          rows.map((teacher) => ({
+          rows.filter(teacher => teacher.isActive !== false && teacher.active !== false && !teacher.deletedAt).map((teacher) => ({
             id: String(teacher.id || teacher._id || ""),
             name: String(teacher.fullName || teacher.name || "").trim(),
           }))
@@ -170,6 +177,37 @@ const CoverageBoard = () => {
     if (!stats.needCover) return 0;
     return Math.round((stats.covered / stats.needCover) * 100);
   }, [stats]);
+
+  const nextWorkingDay = async () => {
+    setBusy(true);
+    try {
+      for (let i = 1; i <= 7; i++) {
+        const next = addDays(toDateInput(), i);
+        const response = await fetchCoverage(next);
+        if (!response.status) { toast.error(response.message); return; }
+        if (response.data?.isWorkingDay !== false) { setDate(next); return; }
+      }
+      toast.info("لا يوجد يوم دوام خلال الأيام السبعة المقبلة");
+    } finally { setBusy(false); }
+  };
+  const savePlanned = async () => {
+    if (!planned.teacherId || !planned.date || !planned.dateTo || planned.dateTo < planned.date || planned.dateTo > addDays(planned.date, 30) || !planned.reason.trim()) return;
+    setBusy(true);
+    const response = await createLeaveRequest({ ...planned, kind: "full_day" });
+    if (response.status) {
+      const count = response.data?.workingDays ?? response.data?.count ?? (Array.isArray(response.data) ? response.data.length : undefined);
+      toast.success(count != null ? `تم تسجيل غياب ${teachers.find(t => t.id === planned.teacherId)?.name || "المعلم"}: ${count} يوم دوام` : response.message);
+      setPlanned(null); await load({silent:true});
+    } else toast.error(response.message);
+    setBusy(false);
+  };
+  const removePlanned = async scope => {
+    setBusy(true);
+    const response = await cancelLeaveRequest(cancelPlanned.leaveRequestId || cancelPlanned._id, scope);
+    if (response.status) { await cancelAffectedCovers(response.data, toast.error); setCancelPlanned(null); await load({silent:true}); }
+    else toast.error(response.message);
+    setBusy(false);
+  };
 
   const handleAssign = async (teacherId) => {
     if (!target) return;
@@ -289,7 +327,7 @@ const CoverageBoard = () => {
                     fontWeight: 800,
                   }}
                 >
-                  الانتظار والمناوبة
+                  {board?.isFuture ? `تحضير الاحتياط ليوم ${DAY_NAMES[board.dayOfWeek] || ""} ${date}` : "الانتظار والمناوبة"}
                 </Typography>
                 <Chip
                   size="small"
@@ -308,7 +346,7 @@ const CoverageBoard = () => {
                   fontSize: "11px",
                 }}
               >
-                تابع الغياب، وزّع حصص الاحتياطي وحدد مناوبة اليوم من مكان واحد.
+                {board?.isFuture ? "لم يسجّل أحد حضوره لهذا اليوم بعد؛ تظهر هنا حصص الغياب المسبق فقط." : "تابع الغياب ووزّع حصص الاحتياط وحدد مناوبة اليوم."}
               </Typography>
             </Box>
 
@@ -326,6 +364,9 @@ const CoverageBoard = () => {
                 InputLabelProps={{ shrink: true }}
                 sx={{ minWidth: { sm: 170 } }}
               />
+              <Button disabled={busy} onClick={() => setDate(toDateInput())}>اليوم</Button>
+              <Button disabled={busy} onClick={nextWorkingDay}>الغد</Button>
+              <Button variant="contained" disabled={busy || loading || board?.isWorkingDay === false} onClick={() => setPlanned({teacherId:"",date,dateTo:date,reason:""})}>تسجيل غياب مسبق</Button>
               <Tooltip title="تحديث">
                 <span>
                   <IconButton
@@ -369,8 +410,9 @@ const CoverageBoard = () => {
           >
             <CircularProgress />
           </Paper>
-        ) : !board ? null : (
+        ) : !board ? null : board.isWorkingDay === false ? <Paper sx={{p:3}}>لا دوام في هذا اليوم</Paper> : (
           <>
+            {!!board.plannedAbsences?.length && <Paper sx={{p:2,mb:2}}><Typography fontWeight={800}>الغائبون مسبقًا</Typography>{board.plannedAbsences.map((row,i) => <Stack key={row.leaveRequestId || row._id || i} direction="row" alignItems="center" justifyContent="space-between" gap={1}><Box><Typography>{row.teacherName || row.name}</Typography><Typography variant="body2">{row.reason}</Typography></Box><Button color="error" disabled={busy} onClick={() => setCancelPlanned(row)}>إلغاء</Button></Stack>)}</Paper>}
             <SummaryRow
               board={board}
               stats={stats}
@@ -419,6 +461,15 @@ const CoverageBoard = () => {
           </>
         )}
 
+        <Dialog open={!!planned} onClose={() => !busy && setPlanned(null)} fullWidth maxWidth="sm" dir="rtl">
+          <DialogTitle>تسجيل غياب مسبق</DialogTitle><DialogContent><Stack spacing={2} sx={{pt:1}}>
+            <Autocomplete options={teachers} getOptionLabel={t => t.name} value={teachers.find(t => t.id === planned?.teacherId) || null} onChange={(_,t) => setPlanned(p => ({...p,teacherId:t?.id || ""}))} renderInput={params => <TextField {...params} label="المعلم" required/>}/>
+            <TextField type="date" label="من تاريخ" InputLabelProps={{shrink:true}} value={planned?.date || ""} onChange={e => setPlanned(p => ({...p,date:e.target.value,dateTo:e.target.value}))}/>
+            <TextField type="date" label="إلى تاريخ" InputLabelProps={{shrink:true}} inputProps={{min:planned?.date,max:planned?.date ? addDays(planned.date,30):undefined}} value={planned?.dateTo || ""} onChange={e => setPlanned(p => ({...p,dateTo:e.target.value}))}/>
+            <TextField label="السبب" required multiline minRows={3} inputProps={{maxLength:500}} value={planned?.reason || ""} onChange={e => setPlanned(p => ({...p,reason:e.target.value}))}/>
+          </Stack></DialogContent><DialogActions><Button disabled={busy} onClick={() => setPlanned(null)}>إغلاق</Button><Button variant="contained" disabled={busy || !planned?.teacherId || !planned?.reason?.trim() || !planned?.date || !planned?.dateTo || planned.dateTo < planned.date || planned.dateTo > addDays(planned.date,30)} onClick={savePlanned}>حفظ</Button></DialogActions>
+        </Dialog>
+        <Dialog open={!!cancelPlanned} onClose={() => !busy && setCancelPlanned(null)} dir="rtl"><DialogTitle>إلغاء الغياب المسبق</DialogTitle><DialogContent>اختر الأيام التي تريد إلغاء الغياب فيها.</DialogContent><DialogActions><Button disabled={busy} onClick={() => setCancelPlanned(null)}>رجوع</Button><Button disabled={busy} onClick={() => removePlanned("day")}>هذا اليوم فقط</Button>{cancelPlanned?.groupId && <Button disabled={busy} color="error" onClick={() => removePlanned("group")}>كل الأيام</Button>}</DialogActions></Dialog>
         <PickSubstituteDialog
           target={target}
           busy={busy}
@@ -644,7 +695,7 @@ const LectureLine = ({ item }) => (
     <Typography sx={{ color: "var(--color-muted)", fontSize: "10px" }}>
       {item.subjectName ?? "—"} · {item.absentTeacherName ?? "بدون معلم"}
       {" · "}
-      {COVER_REASON_LABELS[item.reason] ?? item.reason}
+      {item.reason === "planned_absence" ? <Chip size="small" color="info" label="غياب مسبق"/> : COVER_REASON_LABELS[item.reason] ?? item.reason}
       {item.leaveAt ? ` من ${item.leaveAt}` : ""}
     </Typography>
   </Box>
@@ -721,6 +772,7 @@ const CoveredCard = ({ item, busy, onRemove }) => (
           label={adminRoleLabel(item.substituteRole)}
         />
       )}
+      {item.ownerPresent && <><Chip size="small" color="warning" label="المعلمة حضرت"/><Button color="error" disabled={busy} onClick={onRemove}>إلغاء الاحتياط</Button></>}
       <Tooltip title="إلغاء التكليف">
         <span>
           <IconButton size="small" color="error" onClick={onRemove} disabled={busy}>

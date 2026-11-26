@@ -33,6 +33,9 @@ import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 
 import {
+  addDays,
+  groupLeaveRequests,
+  leaveDescription,
   cancelLeaveRequest,
   createLeaveRequest,
   fetchLeaveRequests,
@@ -190,6 +193,8 @@ const TeacherDuty = () => {
   const [form, setForm] =
     useState({
       date: toDateInput(),
+      dateTo: toDateInput(),
+      kind: "early",
       leaveAt: "",
       fromSlot: "",
       reason: "",
@@ -222,7 +227,7 @@ const TeacherDuty = () => {
           Array.isArray(
             leaveResponse.data
           )
-            ? leaveResponse.data
+            ? groupLeaveRequests(leaveResponse.data)
             : []
         );
       } else {
@@ -259,13 +264,15 @@ const TeacherDuty = () => {
 
     if (response.status) {
       toast.success(
-        response.message
+        form.kind === "full_day" ? "تم إرسال طلب الغياب إلى الإدارة." : response.message
       );
 
       setOpen(false);
 
       setForm({
         date: toDateInput(),
+        dateTo: toDateInput(),
+        kind: "early",
         leaveAt: "",
         fromSlot: "",
         reason: "",
@@ -282,13 +289,13 @@ const TeacherDuty = () => {
   };
 
   const cancel = async (
-    id
+    id, scope
   ) => {
     setBusy(true);
 
     const response =
       await cancelLeaveRequest(
-        id
+        id, scope
       );
 
     setBusy(false);
@@ -824,10 +831,7 @@ const TeacherDuty = () => {
                                   fontWeight: 900,
                                 }}
                               >
-                                {row.date}
-                                {" • "}
-                                انصراف{" "}
-                                {row.leaveAt}
+                                {leaveDescription(row)}
                               </Typography>
 
                               <Chip
@@ -860,9 +864,7 @@ const TeacherDuty = () => {
                                 mt: 0.3,
                               }}
                             >
-                              {row.fromSlot
-                                ? `من الحصة ${row.fromSlot}`
-                                : "اليوم كله"}
+                              {row.kind !== "full_day" ? (row.fromSlot ? `من الحصة ${row.fromSlot}` : "اليوم كله") : ""}
                               {row.reason
                                 ? ` • ${row.reason}`
                                 : ""}
@@ -900,7 +902,7 @@ const TeacherDuty = () => {
                                 }
                                 onClick={() =>
                                   cancel(
-                                    row._id
+                                    row._id, row.groupId ? "group" : undefined
                                   )
                                 }
                                 sx={{
@@ -1004,10 +1006,12 @@ const TeacherDuty = () => {
             sx={{ p: 1.6 }}
           >
             <Stack spacing={1.4}>
+              <TextField select size="small" label="نوع الطلب" value={form.kind} onChange={e => setForm(p => ({...p,kind:e.target.value,dateTo:p.date}))}><MenuItem value="early">استئذان (خروج مبكر)</MenuItem><MenuItem value="full_day">غياب يوم كامل</MenuItem></TextField>
               <TextField
                 type="date"
                 size="small"
-                label="اليوم"
+                label={form.kind === "full_day" ? "من تاريخ" : "اليوم"}
+                inputProps={form.kind === "full_day" ? {min:toDateInput()} : {}}
                 value={form.date}
                 onChange={(
                   event
@@ -1033,6 +1037,7 @@ const TeacherDuty = () => {
                 }}
               />
 
+              {form.kind === "full_day" ? <TextField type="date" size="small" label="إلى تاريخ" InputLabelProps={{shrink:true}} inputProps={{min:form.date,max:addDays(form.date,30)}} value={form.dateTo} onChange={e => setForm(p => ({...p,dateTo:e.target.value}))}/> : <>
               <TextField
                 type="time"
                 size="small"
@@ -1103,7 +1108,9 @@ const TeacherDuty = () => {
                 ))}
               </TextField>
 
+              </>}
               <TextField
+                inputProps={{maxLength:500}}
                 size="small"
                 multiline
                 minRows={3}
@@ -1161,7 +1168,7 @@ const TeacherDuty = () => {
               disabled={
                 busy ||
                 !form.date ||
-                !form.leaveAt
+                !form.reason.trim() || (form.kind === "full_day" ? (!form.dateTo || form.date < toDateInput() || form.dateTo < form.date || form.dateTo > addDays(form.date,30)) : !form.leaveAt)
               }
               startIcon={
                 busy ? (

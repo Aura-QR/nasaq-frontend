@@ -30,6 +30,9 @@ import { toast } from "react-toastify";
 import AppContainer from "@/components/Container/Container";
 
 import {
+  cancelAffectedCovers,
+  groupLeaveRequests,
+  leaveDescription,
   cancelLeaveRequest,
   createLeaveRequest,
   fetchLeaveRequests,
@@ -62,6 +65,7 @@ const EMPTY_CREATE_FORM = {
 const returnClock = (value) => (value ? new Date(value).toLocaleTimeString("ar-SA-u-ca-gregory", { hour: "2-digit", minute: "2-digit" }) : "");
 
 const LeaveRequests = () => {
+  const [kind, setKind] = useState("");
   const [status, setStatus] = useState("");
   const [teacherId, setTeacherId] = useState("");
   const [from, setFrom] = useState(() => toDateInput());
@@ -88,14 +92,14 @@ const LeaveRequests = () => {
     });
 
     if (response.status) {
-      setRows(Array.isArray(response.data) ? response.data : []);
+      setRows(groupLeaveRequests(Array.isArray(response.data) ? response.data : []).filter(row => !kind || (kind === "full_day" ? row.kind === kind : row.kind !== "full_day")));
     } else {
       setRows([]);
       toast.error(response.message);
     }
 
     setLoading(false);
-  }, [status, teacherId, from, to]);
+  }, [status, teacherId, from, to, kind]);
 
   useEffect(() => {
     load();
@@ -155,6 +159,7 @@ const LeaveRequests = () => {
 
     if (response.status) {
       toast.success(response.message);
+      if (decision.status === "rejected") await cancelAffectedCovers(response.data, toast.error);
       setDecision(null);
       setNote("");
       load();
@@ -192,11 +197,12 @@ const LeaveRequests = () => {
     if (!cancelTarget?._id) return;
 
     setBusy(true);
-    const response = await cancelLeaveRequest(cancelTarget._id);
+    const response = await cancelLeaveRequest(cancelTarget._id, cancelTarget.groupId ? "group" : undefined);
     setBusy(false);
 
     if (response.status) {
       toast.success(response.message);
+      await cancelAffectedCovers(response.data, toast.error);
       setCancelTarget(null);
       load();
     } else {
@@ -211,9 +217,10 @@ const LeaveRequests = () => {
     rejected: rows.filter((row) => row.status === "rejected").length,
   }), [rows]);
 
-  const activeFiltersCount = [status, teacherId, from, to].filter(Boolean).length;
+  const activeFiltersCount = [status, teacherId, from, to, kind].filter(Boolean).length;
 
   const resetFilters = () => {
+    setKind("");
     setStatus("");
     setTeacherId("");
     setFrom(toDateInput());
@@ -405,6 +412,7 @@ const LeaveRequests = () => {
                 <MenuItem key={teacher.id} value={teacher.id}>{teacher.name}</MenuItem>
               ))}
             </TextField>
+            <TextField select size="small" label="النوع" value={kind} onChange={e => setKind(e.target.value)}><MenuItem value="">كل الأنواع</MenuItem><MenuItem value="early">استئذان</MenuItem><MenuItem value="full_day">غياب يوم كامل</MenuItem></TextField>
             <TextField
               select
               size="small"
@@ -494,8 +502,8 @@ const LeaveRequests = () => {
                       />
                     </Stack>
                     <Typography sx={{ mt: 0.45, color: "var(--color-muted)", fontSize: "10px" }}>
-                      {row.date} · انصراف {row.leaveAt}
-                      {row.fromSlot ? ` · من الحصة ${row.fromSlot}` : " · اليوم كله"}
+                      {leaveDescription(row)}
+                      {row.kind !== "full_day" && row.fromSlot ? ` · من الحصة ${row.fromSlot}` : ""}
                     </Typography>
                     {row.returnedAt && (
                       <Typography sx={{ mt: 0.45, color: "#18865d", fontSize: "10px", fontWeight: 800 }}>
@@ -675,8 +683,8 @@ const LeaveRequests = () => {
         </DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            {decision?.row?.teacherName} · {decision?.row?.date} · انصراف{" "}
-            {decision?.row?.leaveAt}
+            {decision?.row?.teacherName} · {decision?.row ? leaveDescription(decision.row) : ""}
+            {decision?.status === "approved" && decision?.row?.kind === "full_day" && <Box>سيظهر هذا الغياب في شاشة الاحتياط لتلك الأيام، ويُحتسب غيابًا بعذر.</Box>}
           </Typography>
           <TextField
             fullWidth

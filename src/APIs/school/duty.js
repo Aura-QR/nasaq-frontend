@@ -78,6 +78,7 @@ export const LEAVE_STATUS_LABELS = {
 
 export const COVER_REASON_LABELS = {
   absent: "غياب",
+  planned_absence: "غياب مسبق",
   leave: "استئذان",
   other: "أخرى",
 };
@@ -238,8 +239,10 @@ export const createLeaveRequest = async ({
   fromSlot,
   reason,
   teacherId,
+  kind,
+  dateTo,
 } = {}) => {
-  if (!date || !leaveAt) {
+  if (!date || (kind !== "full_day" && !leaveAt)) {
     return { status: false, message: "التاريخ ووقت الانصراف مطلوبين" };
   }
 
@@ -250,8 +253,7 @@ export const createLeaveRequest = async ({
   try {
     const response = await api.post(`${ENDPOINT}/leave-requests`, {
       date,
-      leaveAt,
-      ...(fromSlot ? { fromSlot: Number(fromSlot) } : {}),
+      ...(kind === "full_day" ? { kind, dateTo: dateTo || date } : { leaveAt, ...(fromSlot ? { fromSlot: Number(fromSlot) } : {}) }),
       reason: String(reason).trim(),
       ...(teacherId ? { teacherId: normalizeId(teacherId) } : {}),
     });
@@ -312,7 +314,7 @@ export const reviewLeaveRequest = async (id, { status, reviewNote } = {}) => {
 };
 
 /** DELETE /duty/leave-requests/:id */
-export const cancelLeaveRequest = async (id) => {
+export const cancelLeaveRequest = async (id, scope) => {
   const requestId = normalizeId(id);
 
   if (!requestId) {
@@ -321,7 +323,7 @@ export const cancelLeaveRequest = async (id) => {
 
   try {
     const response = await api.delete(
-      `${ENDPOINT}/leave-requests/${requestId}`
+      `${ENDPOINT}/leave-requests/${requestId}`, { params: cleanParams({ scope }) }
     );
 
     return normalizeSuccess(response);
@@ -364,4 +366,36 @@ export default {
   fetchLeaveRequests,
   reviewLeaveRequest,
   cancelLeaveRequest,
+};
+
+export const addDays = (date, days) => {
+  const value = new Date(`${date}T12:00:00`);
+  value.setDate(value.getDate() + days);
+  return toDateInput(value);
+};
+
+export const groupLeaveRequests = (rows = []) => {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = row.groupId ? `${row.groupId}-${row.status}` : row._id;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  return [...groups.values()].map(group => {
+    const sorted = [...group].sort((a,b) => String(a.date).localeCompare(String(b.date)));
+    return { ...sorted[0], groupDays: sorted.length, dateTo: sorted.at(-1).date };
+  });
+};
+export const leaveDescription = row => row.kind === "full_day"
+  ? `غياب يوم كامل · ${row.groupDays || 1} أيام (${row.date}${row.dateTo && row.dateTo !== row.date ? ` إلى ${row.dateTo}` : ""})`
+  : `${row.date} · استئذان ${row.leaveAt || ""}`;
+
+export const cancelAffectedCovers = async (data, onError) => {
+  const covers = data?.affectedCovers;
+  if (!Array.isArray(covers) || !covers.length) return;
+  if (!window.confirm(`لهذه المعلمة ${covers.length} حصة احتياط مسجّلة في هذه الأيام. هل تريد إلغاءها وإبلاغ البدلاء؟`)) return;
+  for (const cover of covers) {
+    const response = await removeSubstitute(cover?.substitutionId || cover?._id || cover?.id || cover);
+    if (!response.status) onError(response.message);
+  }
 };
