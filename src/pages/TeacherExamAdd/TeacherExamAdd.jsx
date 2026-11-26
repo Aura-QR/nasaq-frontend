@@ -431,6 +431,7 @@ const TeacherExamAdd = () => {
   const [loadingExam, setLoadingExam] = useState(Boolean(id));
   const [loadedExamId, setLoadedExamId] = useState("");
   const [makeupOriginal, setMakeupOriginal] = useState(null);
+  const isMakeupEdit = isEdit && Boolean(makeupOriginal);
   const [saving, setSaving] = useState(false);
   const [optionsError, setOptionsError] = useState("");
   const [offerings, setOfferings] = useState([]);
@@ -931,9 +932,10 @@ const TeacherExamAdd = () => {
   }, [classes, selectedOffering, subjectOfferingId, lectureClasses]);
 
   useEffect(() => {
+    if (isMakeupEdit) return;
     const allowedIds = new Set(availableClasses.map(normalizeId));
     setClassIds((previous) => previous.filter((id) => allowedIds.has(id)));
-  }, [availableClasses]);
+  }, [availableClasses, isMakeupEdit]);
 
   // Ministry: switching to a continuous subject drops a «نهائي» already chosen.
   useEffect(() => {
@@ -945,6 +947,7 @@ const TeacherExamAdd = () => {
 
   useEffect(() => {
     if (
+      isMakeupEdit ||
       !criteriaChecked ||
       !selectedCriteria ||
       !examType
@@ -956,6 +959,7 @@ const TeacherExamAdd = () => {
       setExamType("");
     }
   }, [
+    isMakeupEdit,
     criteriaChecked,
     selectedCriteria,
     enabledExamTypes,
@@ -1018,6 +1022,7 @@ const TeacherExamAdd = () => {
   };
 
   const toggleClass = (classId) => {
+    if (isMakeupEdit) return;
     setClassIds((previous) =>
       previous.includes(classId)
         ? previous.filter((id) => id !== classId)
@@ -1028,6 +1033,7 @@ const TeacherExamAdd = () => {
   const validate = () => {
     const errors = {};
 
+    if (!isMakeupEdit) {
     if (!subjectOfferingId) {
       errors.subjectOfferingId = "اختر المادة الدراسية";
     } else if (
@@ -1054,6 +1060,8 @@ const TeacherExamAdd = () => {
 
     if (!examType) {
       errors.examType = "اختر نوع الاختبار";
+    }
+
     }
 
     if (!startDate) errors.startDate = "حدد تاريخ البداية";
@@ -1102,16 +1110,17 @@ const TeacherExamAdd = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (saving || (isEdit && loadedExamId !== id)) return;
 
-    if (ministry && examType === "final" && !enabledExamTypes.has("final")) { toast.error("هذه المادة تقويم مستمر أو لم يُحدَّد لها نوع تقويم ختامي"); return; }
-    if (ministry && (!Number.isFinite(Number(examMaxGrade)) || Number(examMaxGrade) < 1 || Number(examMaxGrade) > 100)) { toast.error("الدرجة العظمى للاختبار يجب أن تكون بين 1 و100"); return; }
+    if (!isMakeupEdit && ministry && examType === "final" && !enabledExamTypes.has("final")) { toast.error("هذه المادة تقويم مستمر أو لم يُحدَّد لها نوع تقويم ختامي"); return; }
+    if (!isMakeupEdit && ministry && (!Number.isFinite(Number(examMaxGrade)) || Number(examMaxGrade) < 1 || Number(examMaxGrade) > 100)) { toast.error("الدرجة العظمى للاختبار يجب أن تكون بين 1 و100"); return; }
     if (!validate()) {
       toast.error("راجع البيانات المطلوبة قبل الحفظ");
       return;
     }
 
     if (
-      !ministry && criteriaChecked &&
+      !isMakeupEdit && !ministry && criteriaChecked &&
       !hasGradesCriteria
     ) {
       toast.error(
@@ -1123,13 +1132,15 @@ const TeacherExamAdd = () => {
     const markValidation = marksError(questions);
     if (markValidation) { toast.error(markValidation); return; }
     const payload = {
-      subjectOfferingId,
-      classIds: examType === "final" ? availableClasses.slice(0, 1).map(normalizeId) : classIds,
-      examType,
+      ...(!isMakeupEdit ? {
+        subjectOfferingId,
+        classIds: examType === "final" ? availableClasses.slice(0, 1).map(normalizeId) : classIds,
+        examType,
+      } : {}),
       startDate,
       endDate,
       duration: Number(duration),
-      ...(ministry && !isEdit ? { grade: Number(examMaxGrade) } : {}),
+      ...(!isMakeupEdit && ministry && !isEdit ? { grade: Number(examMaxGrade) } : {}),
       questions: questions.map(serializeQuestion),
     };
 
@@ -1328,10 +1339,10 @@ const TeacherExamAdd = () => {
                   saving ||
                   loadingOptions ||
                   loadingExam ||
-                  criteriaLoading ||
-                  !offerings.length ||
-                  (!ministry && criteriaChecked &&
-                    !hasGradesCriteria)
+                  (isEdit && loadedExamId !== id) ||
+                  (!isMakeupEdit && (criteriaLoading ||
+                    !offerings.length ||
+                    (!ministry && criteriaChecked && !hasGradesCriteria)))
                 }
                 variant="contained"
                 startIcon={
@@ -1428,9 +1439,11 @@ const TeacherExamAdd = () => {
                 </Box>
               ) : (
                 <Stack spacing={1.2}>
+                  {isMakeupEdit && <Alert severity="info">المادة والفصول والنوع والدرجة موروثة من الاختبار الأصلي ولا يمكن تعديلها.</Alert>}
                   <TextField
                     select
                     label="المادة الدراسية"
+                    disabled={isMakeupEdit}
                     value={subjectOfferingId}
                     onChange={(event) => {
                       setSubjectOfferingId(event.target.value);
@@ -1463,7 +1476,7 @@ const TeacherExamAdd = () => {
                   </TextField>
 
                   {ministry && !isEdit && <TextField fullWidth size="small" type="number" label="الدرجة العظمى للاختبار" value={examMaxGrade} inputProps={{min:1,max:100}} onChange={e=>setExamMaxGrade(e.target.value)} helperText={examType === "final" ? "النهائي افتراضيًا من 40" : "الافتراضي للاختبارات الأخرى 10"} />}
-                  {subjectOfferingId && !ministry &&
+                  {!isMakeupEdit && subjectOfferingId && !ministry &&
                     criteriaLoading && (
                     <Alert
                       severity="info"
@@ -1476,7 +1489,7 @@ const TeacherExamAdd = () => {
                     </Alert>
                   )}
 
-                  {subjectOfferingId &&
+                  {!isMakeupEdit && subjectOfferingId &&
                     !criteriaLoading &&
                     !ministry && criteriaChecked &&
                     !hasGradesCriteria && (
@@ -1491,7 +1504,7 @@ const TeacherExamAdd = () => {
                     </Alert>
                   )}
 
-                  {subjectOfferingId &&
+                  {!isMakeupEdit && subjectOfferingId &&
                     !criteriaLoading &&
                     criteriaError && (
                     <Alert
@@ -1508,6 +1521,7 @@ const TeacherExamAdd = () => {
                   <TextField
                     select
                     label="نوع الاختبار"
+                    disabled={isMakeupEdit}
                     value={examType}
                     onChange={(event) => { setExamType(event.target.value); if(ministry && !isEdit) setExamMaxGrade(event.target.value === "final" ? 40 : 10); }}
                     error={Boolean(validationErrors.examType)}
@@ -1600,7 +1614,7 @@ const TeacherExamAdd = () => {
               <SectionTitle
                 icon={<SchoolRounded />}
                 title="الفصول المستهدفة"
-                description="حدد الفصول التي سيظهر لها الاختبار."
+                description={isMakeupEdit ? "الفصول موروثة من الاختبار الأصلي ولا يمكن تعديلها." : "حدد الفصول التي سيظهر لها الاختبار."}
                 endContent={
                   <Chip
                     label={`${classIds.length} محدد`}
@@ -1637,7 +1651,7 @@ const TeacherExamAdd = () => {
                           sx={{
                             px: 1.1,
                             py: 0.65,
-                            cursor: "pointer",
+                            cursor: isMakeupEdit ? "default" : "pointer",
                             border: checked
                               ? "1px solid rgba(183,132,48,.4)"
                               : "1px solid rgba(36,74,112,.08)",
@@ -1650,6 +1664,7 @@ const TeacherExamAdd = () => {
                             control={
                               <Checkbox
                                 checked={checked}
+                                disabled={isMakeupEdit}
                                 onChange={() => toggleClass(classId)}
                                 sx={{
                                   color: "#B78430",
@@ -1999,10 +2014,10 @@ const TeacherExamAdd = () => {
                   saving ||
                   loadingOptions ||
                   loadingExam ||
-                  criteriaLoading ||
-                  !offerings.length ||
-                  (!ministry && criteriaChecked &&
-                    !hasGradesCriteria)
+                  (isEdit && loadedExamId !== id) ||
+                  (!isMakeupEdit && (criteriaLoading ||
+                    !offerings.length ||
+                    (!ministry && criteriaChecked && !hasGradesCriteria)))
                 }
               variant="contained"
               startIcon={
