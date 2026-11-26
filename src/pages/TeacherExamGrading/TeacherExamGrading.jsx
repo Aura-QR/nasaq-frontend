@@ -451,7 +451,8 @@ const getAnswerQuestionId = (answer) =>
 
 const getAnswerValue = (answer) =>
   String(
-    answer?.answer ??
+    answer?.studentAnswer ??
+      answer?.answer ??
       answer?.value ??
       answer?.selectedOption ??
       answer?.response ??
@@ -1071,17 +1072,33 @@ const TeacherExamGrading = () => {
       const questionId = getQuestionId(question);
       const answer = answerMap.get(questionId);
 
+      const essay = (answer?.type || question?.type) === "essay";
+      const marks = answer?.marks ?? question?.marks;
+      const earned = answer?.earned;
+
       return {
         id: questionId || index,
         question: getQuestionText(question, index),
-        studentAnswer: answer
+        essay,
+        studentAnswer: answer && getAnswerValue(answer).trim()
           ? getAnswerValue(answer)
           : "لم تُسجل إجابة",
-        correctAnswer: String(
-          question?.correctAnswer ??
-            question?.answer ??
-            "غير محددة"
-        ),
+        // An essay has no key; the teacher reads it against the model answer.
+        correctAnswer: essay
+          ? String(answer?.modelAnswer ?? question?.modelAnswer ?? "لا توجد إجابة نموذجية")
+          : String(
+              answer?.correctAnswer ??
+                question?.correctAnswer ??
+                question?.answer ??
+                "غير محددة"
+            ),
+        score:
+          marks == null
+            ? ""
+            : earned == null
+              ? `بانتظار التصحيح · من ${marks}`
+              : `${earned} من ${marks}`,
+        feedback: answer?.feedback || "",
       };
     });
   }, [answerTarget, selectedDetail, selectedExam]);
@@ -1908,12 +1925,22 @@ const TeacherExamGrading = () => {
                   <Typography sx={{ fontSize: "10px", fontWeight: 900 }}>
                     {index + 1}. {row.question}
                   </Typography>
-                  <Typography sx={{ mt: 0.7, color: COLORS.muted, fontSize: "9px" }}>
+                  <Typography sx={{ mt: 0.7, color: COLORS.muted, fontSize: "9px", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
                     إجابة الطالب: <b>{row.studentAnswer}</b>
                   </Typography>
-                  <Typography sx={{ mt: 0.35, color: COLORS.green, fontSize: "9px" }}>
-                    الإجابة الصحيحة: <b>{row.correctAnswer}</b>
+                  <Typography sx={{ mt: 0.35, color: COLORS.green, fontSize: "9px", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                    {row.essay ? "الإجابة النموذجية" : "الإجابة الصحيحة"}: <b>{row.correctAnswer}</b>
                   </Typography>
+                  {row.score && (
+                    <Typography sx={{ mt: 0.35, fontSize: "9px", fontWeight: 800 }}>
+                      الدرجة: {row.score}
+                    </Typography>
+                  )}
+                  {row.feedback && (
+                    <Typography sx={{ mt: 0.35, color: COLORS.muted, fontSize: "9px" }}>
+                      ملاحظة المعلم: {row.feedback}
+                    </Typography>
+                  )}
                 </Paper>
               ))}
             </Stack>
